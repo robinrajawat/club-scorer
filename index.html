@@ -6,6 +6,13 @@
 <title>Club Scorer</title>
 <meta name="description" content="Ball-by-ball cricket scoring for friendly club games." />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABNklEQVR42mNkwAJ0A8T+M9AAXN7wihFdjJEeFuNzCBO9LUe3i4nelqM7golhgAHjQPgeGQx4CAy4A1jI0XR0zmGs4tYptrR1QOtr1V6HjfOKD/gn9d58/LgYw2HnDjPMNHJlWGT0g/qJEObrA/5JvTAxbI5IP7ebpNBgItbn6JYzMDAwqMvK9qKrnWnkysDAwMAQd46Deg6ABTuxwTrTyJUh/dxuohxBlANIsRw9JCh2QNw5DqxxjSsNYNNPlXIA3TJiLKd6NqSWpaNFMUkOWGT0A164kAJgegiVikyk5GtSLKdaNkT2BTGOQFZDTJ1AUoMk7hwHXt8hyxFbIZGUDRcZ/WBgwBMdpFpOUZMMWwlHisWjbUK4A7B1l+gFLm94xTg4SsKBCAWYnUz4eq706JwyDnT3HABBz5CyN3+9nQAAAABJRU5ErkJggg==" />
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAFEElEQVR42u3dPXLUWBhGYekWwayAjJiIxHsghhUQTMICZh0swCkrcE4yK3DiiJjMKyBjgqmummnU1r907/c9J8fdVh2fftWoW31XAe8+vv7VoXmeHp77s59DT2BEErwnMSLJ3ZMYkeTuiYxIYhcyI9KbAT2REanWhcyIVOueyIhU60JmRKp1ITMiSV3IjEhSFzIjktSFzIgkdSEzIkldyIxIUheHCZEo6oxIlS5kRiSpTQ7EnxzqjFYrXciMSFKbHIg7OdQZrVdaoRH/pBBoXmhzAxFmh0LD5ACqFtrcQJTZodAwOQBCAwfQ289QaIDQAKEBQoPQAKEBQgOEBggNQgNt88oh2JZPj3/M/jdf7346cISuT97Pj9+W/aC79yTfCBcnrZB4scAj3F8JTm6F3kXivQS+5rfH+Y/g5FboQ0W+H5gPs+Sd+LOJTejNRZ4r71aSE5vQm4m8l8RL5CY2oReJfLTEc+UmNqH/J3PtIs8VO7PUqYW+JfNFjLdv3nx56d9///Hjr9rEzi51SqFvTYz7u/ejEtco99DvkXWCpBP6VpX//vDnl60e4wy51fpfCpm3lXnKVNmDob1/+V2XXF+i0A3KvLXItcyQWxMkQ6lTCH2GzLVNkCxSFzLvTw0TJMv8KGSOS0apC5njVjqj1Gne5aihzLVIbXI0XueaZkYNUkeudIkuM4aJKnWJLnOml1t7OviGXnNtRsTZkeEPPIzQ13VW5px72hfNQKFbqXONc6OG2RG50goNhbadbWlCA4RWZ5VWaCh0jMJg3XGMcCyb/cTKlJfFmt+267rzvwZhjBY/3RJ6ctQsTO0ymxwAofebG8h5nMMXusaXdnOD0AChQWizw9wgdAsnKjWI1KLMrZ0YppocZwqlzIQGCF1jKdX5OFLeePMi2N7XehBZocOUk8yEDiM1mU2OaqRu8aZBIPQmcpOY0DY2bGiA0CA0QOiDyXxjdsdboaHQAKEBQgOEdmLoOCs0FLohPj9+c2/ClceP0JW8HBJ5nyi0OutMDpgcNTH0DfRYNjcifD9000J7t8NxDTk5VFqdwwit0o5nyJNClVbnMEKrtOMYrtAqrc6hhB6qC6m7ycckyqtcuP9YuS4OqW8fi4j3eAwl9KUybsY57w8/0jlIuEIPSa3St3dztBPqkNdy2NO5dnN4oe3pXLs5hdC39nQmqV+SOep796ELnVnqjDKHFzqr1Fll7rqu6999fP0rw8vv5fZkQyJH2ZVjv1uGSwTSfGLlpfeoI9SazMkKfV3qSO8AjP0emS7eSif0mNQtiT3luWe7EjGl0FN2dc1iT3m+WS+pTS30lFrXJPbU55f5+vD0Ql9LPXaSeLTcc59L9g87EHqh2HvKveRxfWqH0JuJvUbytT+byIQ+ROwtITKhdxV7b8FfqjyRCX2I3GsEH5spJCb06XKvhcSEblZy8hIaGMT3Q4PQAKEBQgOEBqEBQgOEBggNTBX66eG5dxgQgaeH516hYXIAhAaOEtqORoT9rNAwOYAmhDY70PrcUGiYHEAzQpsdaHluKDTiTw6VRqt1vlloUqNFmU0OxJ8cKo1W6zxaaFKjJZlNDuSZHCqN1uo8udCkRgsyz5ocpEbtMs/e0KRGzTIvOikkNWqVeZHQpEatMi8WmtSoUeau67pNpHRbC5wt8upCqzVqk3mzQqs1aolhqf0JgsynFlqtcWb0DqspuUl8xOOcMg/ITeJQQhOcwHvxD4PkFz71rXJVAAAAAElFTkSuQmCC" />
+<link rel="icon" type="image/png" sizes="512x512" href="data:image/png;base64,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" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Club Scorer" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#2d5016" />
 <style>
   html, body { margin: 0; padding: 0; }
   @page { margin: 14mm; }
@@ -136,6 +143,16 @@ const Download = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/Rea
   points: "7 10 12 15 17 10"
 }), /*#__PURE__*/React.createElement("path", {
   d: "M5 21h14"
+}));
+const Printer = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "6 9 6 2 18 2 18 9"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+}), /*#__PURE__*/React.createElement("rect", {
+  x: "6",
+  y: "14",
+  width: "12",
+  height: "8"
 }));
 const ArrowLeftRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "16 3 21 8 16 13"
@@ -446,6 +463,28 @@ async function saveTeams(teams) {
     console.error("save teams failed", e);
   }
 }
+
+// ---------- Account profile (display name override) ----------
+async function loadProfile() {
+  if (!auth.currentUser) return null;
+  try {
+    const doc = await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("profile").get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    console.error("profile load failed", e);
+    return null;
+  }
+}
+async function saveProfile(profile) {
+  if (!auth.currentUser) return;
+  try {
+    await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("profile").set(profile, {
+      merge: true
+    });
+  } catch (e) {
+    console.error("profile save failed", e);
+  }
+}
 function rosterFor(match, teamName) {
   const roster = teamName === match.teamA ? match.teamARoster : match.teamBRoster;
   return roster || [];
@@ -570,6 +609,7 @@ function applyBall(inning, event) {
     bowler.runs += runsThisBall;
     cur.extras.wide += runsThisBall;
     display = event.runs ? `Wd+${event.runs}` : "Wd";
+    if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
     legalBall = false;
     runsThisBall = 1 + (event.runs || 0);
@@ -714,6 +754,84 @@ function BallBadge({
     }
   }, ev.display);
 }
+function OversHistoryCard({
+  overs
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (overs.length === 0) return null;
+  const shown = expanded ? overs : overs.slice(0, 3);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      textTransform: "uppercase"
+    }
+  }, "Overs"), shown.map(o => /*#__PURE__*/React.createElement("div", {
+    key: o.number,
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 700,
+      color: COLORS.ink
+    }
+  }, "Over ", o.number), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      color: COLORS.inkSoft
+    }
+  }, o.runs, " run", o.runs === 1 ? "" : "s", o.wickets ? ` · ${o.wickets} wkt${o.wickets === 1 ? "" : "s"}` : "")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, o.balls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
+    key: i,
+    ev: ev
+  }))))), overs.length > 3 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn",
+    onClick: () => setExpanded(e => !e),
+    style: {
+      display: "block",
+      margin: "4px auto 0",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      textDecoration: "underline",
+      textUnderlineOffset: 3,
+      cursor: "pointer"
+    }
+  }, expanded ? "Show fewer overs" : `Show all ${overs.length} overs`));
+}
+
 function RoleBadge({
   isCaptain,
   isKeeper
@@ -1065,6 +1183,9 @@ function PlayerPicker({
     }, pool.map(name => {
       const active = value === name;
       return /*#__PURE__*/React.createElement("button", {
+        key: name,
+        type: "button",
+        onClick: () => onChange(name),
         className: "cs-btn cs-shine",
         style: {
           padding: "9px 14px",
@@ -1104,82 +1225,308 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 }));
 function AuthBar({
   user,
-  onSignIn,
-  onSignOut
+  profile,
+  onOpenAccount
 }) {
-  const [busy, setBusy] = useState(false);
-  if (user) {
-    return /*#__PURE__*/React.createElement("button", {
-      className: "cs-btn",
-      onClick: async () => {
-        setBusy(true);
-        await onSignOut();
-        setBusy(false);
-      },
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 7,
-        background: "#fff",
-        border: `1.5px solid ${COLORS.creamDark}`,
-        borderRadius: 20,
-        padding: "5px 12px 5px 5px",
-        cursor: "pointer",
-        fontFamily: "'Inter'",
-        fontSize: 12,
-        fontWeight: 600,
-        color: COLORS.inkSoft
-      }
-    }, user.photoURL ? /*#__PURE__*/React.createElement("img", {
-      src: user.photoURL,
-      alt: "",
-      style: {
-        width: 22,
-        height: 22,
-        borderRadius: "50%"
-      }
-    }) : /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: 22,
-        height: 22,
-        borderRadius: "50%",
-        background: COLORS.willow,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#fff",
-        fontSize: 11,
-        fontWeight: 700
-      }
-    }, (user.displayName || user.email || "?").charAt(0).toUpperCase()), busy ? "Signing out…" : `${(user.displayName || "Synced").split(" ")[0]} · Sign out`);
-  }
+  const label = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "Account").split(" ")[0] : "Sign in";
   return /*#__PURE__*/React.createElement("button", {
+    type: "button",
     className: "cs-btn cs-shine",
-    onClick: async () => {
-      setBusy(true);
-      await onSignIn();
-      setBusy(false);
-    },
-    disabled: busy,
+    onClick: onOpenAccount,
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 6,
+      gap: 7,
       background: "#fff",
       border: `1.5px solid ${COLORS.creamDark}`,
       borderRadius: 20,
-      padding: "7px 14px",
-      cursor: busy ? "default" : "pointer",
+      padding: user ? "5px 12px 5px 5px" : "7px 14px",
+      cursor: "pointer",
       fontFamily: "'Inter'",
       fontSize: 12.5,
       fontWeight: 700,
-      color: COLORS.ink,
+      color: user ? COLORS.inkSoft : COLORS.ink,
       boxShadow: "0 1px 2px rgba(42,36,32,0.08)"
     }
-  }, /*#__PURE__*/React.createElement(LogIn, {
+  }, user ? user.photoURL ? /*#__PURE__*/React.createElement("img", {
+    src: user.photoURL,
+    alt: "",
+    style: {
+      width: 22,
+      height: 22,
+      borderRadius: "50%"
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 22,
+      height: 22,
+      borderRadius: "50%",
+      background: COLORS.willow,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, label.charAt(0).toUpperCase()) : /*#__PURE__*/React.createElement(LogIn, {
     size: 14
-  }), busy ? "Opening Google…" : "Sign in to sync");
+  }), label);
 }
+function AccountScreen({
+  user,
+  profile,
+  onSignIn,
+  onSignOut,
+  onSaveProfile,
+  onBack
+}) {
+  const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const currentName = profile && profile.displayName || user && user.displayName || "";
+  const dirty = nameDraft.trim() !== currentName.trim();
+  async function handleSignIn() {
+    setBusy(true);
+    await onSignIn();
+    setBusy(false);
+  }
+  async function handleSignOut() {
+    setBusy(true);
+    await onSignOut();
+    setBusy(false);
+  }
+  async function handleSaveName() {
+    setBusy(true);
+    await onSaveProfile({
+      displayName: nameDraft.trim()
+    });
+    setBusy(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 40px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginBottom: 20
+    }
+  }, "Sign in to sync your matches and teams across devices."), user ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 18
+    }
+  }, user.photoURL ? /*#__PURE__*/React.createElement("img", {
+    src: user.photoURL,
+    alt: "",
+    style: {
+      width: 52,
+      height: 52,
+      borderRadius: "50%"
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 52,
+      height: 52,
+      borderRadius: "50%",
+      background: COLORS.willow,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontSize: 20,
+      fontWeight: 700,
+      flexShrink: 0
+    }
+  }, (currentName || "?").charAt(0).toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 16,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, currentName || "Signed in"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, user.email))), /*#__PURE__*/React.createElement(Field, {
+    label: "Display name"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: nameDraft,
+    onChange: setNameDraft,
+    placeholder: "Your name"
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleSaveName,
+    disabled: !dirty || busy,
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, saved ? "Saved" : "Save")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 6
+    }
+  }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Your matches and teams sync to this account and follow you to any device you sign into."), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleSignOut,
+    disabled: busy,
+    style: {
+      width: "100%"
+    }
+  }, busy ? "Signing out…" : "Sign out")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 14,
+      textAlign: "center",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 52,
+      height: 52,
+      borderRadius: "50%",
+      margin: "4px auto 14px",
+      background: COLORS.creamDark,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 24,
+    style: {
+      color: COLORS.inkSoft
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "Not signed in — matches and teams are only saved on this device."), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: handleSignIn,
+    disabled: busy,
+    style: {
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement(LogIn, {
+    size: 16
+  }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginTop: 12,
+      lineHeight: 1.5
+    }
+  }, "We only get your name, email and photo — never your password. You can revoke access anytime at myaccount.google.com/permissions.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(255,255,255,0.5)",
+      borderRadius: 16,
+      padding: 16,
+      border: `1.5px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 8
+    }
+  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required.")));
+}
+
 function JoinCodeBar({
   onJoin
 }) {
@@ -1322,8 +1669,8 @@ function HomeScreen({
   onDelete,
   onManageTeams,
   user,
-  onSignIn,
-  onSignOut,
+  profile,
+  onOpenAccount,
   onJoinCode
 }) {
   return /*#__PURE__*/React.createElement("div", {
@@ -1340,8 +1687,8 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
-    onSignIn: onSignIn,
-    onSignOut: onSignOut
+    profile: profile,
+    onOpenAccount: onOpenAccount
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -1555,6 +1902,96 @@ function TeamChips({
     }
   }, "+ One-off"));
 }
+function PlayingXIPicker({
+  label,
+  squad,
+  captain,
+  keeper,
+  selected,
+  onToggle,
+  required
+}) {
+  const count = selected.length;
+  const atLimit = count >= required;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      fontWeight: 700,
+      color: count === required ? COLORS.turf : COLORS.inkSoft
+    }
+  }, count, "/", required, " selected")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, squad.map(name => {
+    const checked = selected.includes(name);
+    const disabled = !checked && atLimit;
+    return /*#__PURE__*/React.createElement("button", {
+      key: name,
+      type: "button",
+      className: "cs-btn cs-shine",
+      disabled: disabled,
+      onClick: () => onToggle(name),
+      style: {
+        padding: "8px 12px 8px 10px",
+        borderRadius: 20,
+        border: "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        background: checked ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        color: checked ? "#fff" : disabled ? COLORS.inkSoft : COLORS.ink,
+        opacity: disabled ? 0.45 : 1,
+        boxShadow: checked ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 15,
+        height: 15,
+        borderRadius: 4,
+        flexShrink: 0,
+        border: checked ? "none" : `1.5px solid ${COLORS.creamDark}`,
+        background: checked ? "rgba(255,255,255,0.25)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, checked && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        lineHeight: 1
+      }
+    }, "✓")), name, /*#__PURE__*/React.createElement(RoleBadge, {
+      isCaptain: name === captain,
+      isKeeper: name === keeper
+    }));
+  })));
+}
 function SetupScreen({
   onStart,
   onCancel,
@@ -1562,30 +1999,38 @@ function SetupScreen({
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
-  const [teamARoster, setTeamARoster] = useState([]);
+  const [teamASquad, setTeamASquad] = useState([]); // full saved roster, if a saved team was picked
+  const [teamAPlayingXI, setTeamAPlayingXI] = useState([]); // subset actually playing this match
   const [teamACaptain, setTeamACaptain] = useState("");
   const [teamAKeeper, setTeamAKeeper] = useState("");
   const [teamBId, setTeamBId] = useState(null);
   const [teamBName, setTeamBName] = useState("");
-  const [teamBRoster, setTeamBRoster] = useState([]);
+  const [teamBSquad, setTeamBSquad] = useState([]);
+  const [teamBPlayingXI, setTeamBPlayingXI] = useState([]);
   const [teamBCaptain, setTeamBCaptain] = useState("");
   const [teamBKeeper, setTeamBKeeper] = useState("");
   const [overs, setOvers] = useState("20");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
   const [bowlerB, setBowlerB] = useState("");
+  function defaultXI(players) {
+    return players.slice(0, Math.min(11, players.length));
+  }
   function selectTeamA(team) {
     if (!team) {
       setTeamAId(null);
       setTeamAName("");
-      setTeamARoster([]);
+      setTeamASquad([]);
+      setTeamAPlayingXI([]);
       setTeamACaptain("");
       setTeamAKeeper("");
     } else {
       const label = team.name === teamBName ? `${team.name} (A)` : team.name;
+      const players = team.players || [];
       setTeamAId(team.id);
       setTeamAName(label);
-      setTeamARoster(team.players || []);
+      setTeamASquad(players);
+      setTeamAPlayingXI(defaultXI(players));
       setTeamACaptain(team.captain || "");
       setTeamAKeeper(team.keeper || "");
     }
@@ -1596,21 +2041,47 @@ function SetupScreen({
     if (!team) {
       setTeamBId(null);
       setTeamBName("");
-      setTeamBRoster([]);
+      setTeamBSquad([]);
+      setTeamBPlayingXI([]);
       setTeamBCaptain("");
       setTeamBKeeper("");
     } else {
       const label = team.name === teamAName ? `${team.name} (B)` : team.name;
+      const players = team.players || [];
       setTeamBId(team.id);
       setTeamBName(label);
-      setTeamBRoster(team.players || []);
+      setTeamBSquad(players);
+      setTeamBPlayingXI(defaultXI(players));
       setTeamBCaptain(team.captain || "");
       setTeamBKeeper(team.keeper || "");
     }
     setBowlerB("");
   }
+  function toggleAXI(name) {
+    setTeamAPlayingXI(xi => {
+      if (xi.includes(name)) return xi.filter(n => n !== name);
+      if (xi.length >= Math.min(11, teamASquad.length)) return xi;
+      return [...xi, name];
+    });
+    setStrikerA("");
+    setNonStrikerA("");
+  }
+  function toggleBXI(name) {
+    setTeamBPlayingXI(xi => {
+      if (xi.includes(name)) return xi.filter(n => n !== name);
+      if (xi.length >= Math.min(11, teamBSquad.length)) return xi;
+      return [...xi, name];
+    });
+    setBowlerB("");
+  }
+  // roster actually offered to the opening line-up pickers: the chosen Playing XI when a saved
+  // squad is in play, otherwise empty (falls back to free-text entry via PlayerPicker)
+  const teamARoster = teamASquad.length ? teamAPlayingXI : [];
+  const teamBRoster = teamBSquad.length ? teamBPlayingXI : [];
+  const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
+  const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
-  const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
+  const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
   const cardStyle = {
     background: "#fff",
     borderRadius: 16,
@@ -1687,7 +2158,30 @@ function SetupScreen({
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
     placeholder: "20"
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.03s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Playing XI"), teamASquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
+    label: `${teamAName || "Team A"} — pick who's playing`,
+    squad: teamASquad,
+    captain: teamACaptain,
+    keeper: teamAKeeper,
+    selected: teamAPlayingXI,
+    onToggle: toggleAXI,
+    required: Math.min(11, teamASquad.length)
+  }), teamBSquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
+    label: `${teamBName || "Team B"} — pick who's playing`,
+    squad: teamBSquad,
+    captain: teamBCaptain,
+    keeper: teamBKeeper,
+    selected: teamBPlayingXI,
+    onToggle: toggleBXI,
+    required: Math.min(11, teamBSquad.length)
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -1758,6 +2252,7 @@ function SetupScreen({
     })
   }, "Start Match")));
 }
+
 function Field({
   label,
   children
@@ -2553,7 +3048,7 @@ function ExportPdfButton({
       gap: 5,
       ...style
     }
-  }, /*#__PURE__*/React.createElement(Download, {
+  }, /*#__PURE__*/React.createElement(Printer, {
     size: 14
   }), " Export PDF");
 }
@@ -2880,6 +3375,12 @@ function MatchScreen({
     });
   }
   const currentOverBalls = inning.overs[inning.overs.length - 1] || [];
+  const completedOvers = inning.overs.slice(0, -1).map((balls, i) => ({
+    number: i + 1,
+    balls,
+    runs: balls.reduce((s, b) => s + (b.runs || 0), 0),
+    wickets: balls.filter(b => b.kind === "wicket").length
+  })).reverse();
   const wicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3150,7 +3651,9 @@ function MatchScreen({
   }, "Over not started"), currentOverBalls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
     key: i,
     ev: ev
-  })))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement(OversHistoryCard, {
+    overs: completedOvers
+  }), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: 0,
@@ -3540,6 +4043,7 @@ const SCREEN_DEPTH = {
   setup: 1,
   teams: 1,
   match: 1,
+  account: 1,
   "team-edit": 2
 };
 function CricketScorer() {
@@ -3551,6 +4055,7 @@ function CricketScorer() {
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
   function setScreen(next) {
@@ -3574,15 +4079,17 @@ function CricketScorer() {
       setUser(u);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
-        Promise.all([loadIndex(), loadTeams()]).then(([idx, teamList]) => {
+        Promise.all([loadIndex(), loadTeams(), loadProfile()]).then(([idx, teamList, prof]) => {
           setMatches(idx);
           setTeams(teamList);
+          setProfile(prof);
         });
       }
     });
-    Promise.all([loadIndex(), loadTeams()]).then(([idx, teamList]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile()]).then(([idx, teamList, prof]) => {
       setMatches(idx);
       setTeams(teamList);
+      setProfile(prof);
       setLoading(false);
       initialLoadDone.current = true;
     });
@@ -3590,6 +4097,10 @@ function CricketScorer() {
   }, []);
   async function refreshIndex() {
     setMatches(await loadIndex());
+  }
+  async function handleSaveProfile(p) {
+    await saveProfile(p);
+    setProfile(p);
   }
   async function handleJoinCode(code) {
     const m = await fetchSharedMatch(code);
@@ -3702,8 +4213,8 @@ function CricketScorer() {
     onDelete: handleDelete,
     onManageTeams: () => setScreen("teams"),
     user: user,
-    onSignIn: signInGoogle,
-    onSignOut: signOutUser,
+    profile: profile,
+    onOpenAccount: () => setScreen("account"),
     onJoinCode: handleJoinCode
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
@@ -3734,6 +4245,16 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDelete: handleDeleteTeam,
+    onBack: () => setScreen("home")
+  })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "account",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(AccountScreen, {
+    user: user,
+    profile: profile,
+    onSignIn: signInGoogle,
+    onSignOut: signOutUser,
+    onSaveProfile: handleSaveProfile,
     onBack: () => setScreen("home")
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",

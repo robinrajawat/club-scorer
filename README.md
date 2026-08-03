@@ -13,7 +13,7 @@ Ball-by-ball cricket scoring for friendly club games — single-file, no build s
 ## Notes
 
 - **Data storage:** by default, matches and teams are saved in the browser's `localStorage`, tied to that specific browser on that specific device. Two ways to sync across devices:
-  - **Sign in with Google** (top-right on the home screen) — your matches and teams sync to your account and follow you to any device you sign into. No password is ever seen by this app.
+  - **Sign in with Google** — tap the account button (top-right on the home screen) to open the Account screen, sign in, and optionally set a display name. Your matches and teams then sync to your account and follow you to any device you sign into. No password is ever seen by this app.
   - **Match codes** — no sign-in needed. Tap "Get Code" on an in-progress match to generate an 8-character code; a teammate enters it under "Have a match code?" on their home screen to pick up scoring on their phone. Anyone with the code can read/write that match, so treat it like a shareable link.
   If you don't use either, everything stays local and won't sync, and clearing Safari's site data will wipe it.
 - **Add to Home Screen (iPhone):** open the published URL in Safari → tap Share → **Add to Home Screen**. It'll behave like a native app icon.
