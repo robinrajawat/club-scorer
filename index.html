@@ -735,7 +735,8 @@ function ensureBowler(inning, name) {
     inning.bowlers[name] = {
       ballsBowled: 0,
       runs: 0,
-      wickets: 0
+      wickets: 0,
+      maidens: 0
     };
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
@@ -891,6 +892,14 @@ function applyBall(inning, event) {
     cur.legalBalls += 1;
     cur.freeHitActive = false; // a fair (or fair-but-illegal-for-batsman... i.e. any counted) ball consumes the free hit
     if (cur.legalBalls % (cur.ballsPerOver || 6) === 0 && cur.wickets < 10) {
+      const finishedOver = cur.overs[lastOverIdx];
+      const bowlerRunsThisOver = finishedOver.reduce((s, b) => s + (b.kind === "bye" || b.kind === "legbye" ? 0 : b.runs || 0), 0);
+      if (bowlerRunsThisOver === 0 && cur.bowlers[cur.bowlerName]) {
+        cur.bowlers[cur.bowlerName] = {
+          ...cur.bowlers[cur.bowlerName],
+          maidens: (cur.bowlers[cur.bowlerName].maidens || 0) + 1
+        };
+      }
       cur.overs = [...cur.overs, []];
       cur.lastBowlerName = cur.bowlerName;
       cur.bowlerName = "";
@@ -3475,7 +3484,7 @@ function InningScorecard({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr",
+      gridTemplateColumns: "2fr 0.55fr 0.5fr 0.55fr 0.55fr 0.65fr",
       gap: 4,
       fontSize: 10.5,
       fontWeight: 700,
@@ -3490,6 +3499,10 @@ function InningScorecard({
       textAlign: "right"
     }
   }, "O"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "M"), /*#__PURE__*/React.createElement("span", {
     style: {
       textAlign: "right"
     }
@@ -3510,7 +3523,7 @@ function InningScorecard({
       key: name,
       style: {
         display: "grid",
-        gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr",
+        gridTemplateColumns: "2fr 0.55fr 0.5fr 0.55fr 0.55fr 0.65fr",
         gap: 4,
         fontSize: 13,
         padding: "6px 2px",
@@ -3535,6 +3548,12 @@ function InningScorecard({
         fontFamily: "'IBM Plex Mono', monospace"
       }
     }, oversLabel(bw.ballsBowled, inning.ballsPerOver)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, bw.maidens || 0), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace"
@@ -4360,7 +4379,8 @@ function MatchScreen({
     excludeList: Object.keys(inning.batsmen),
     placeholder: "Batsman name",
     captain: captainFor(match, inning.battingTeam),
-    keeper: keeperFor(match, inning.battingTeam)
+    keeper: keeperFor(match, inning.battingTeam),
+    numbers: numbersFor(match, inning.battingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !newBatsmanName.trim(),
@@ -4383,7 +4403,8 @@ function MatchScreen({
     exclude: inning.lastBowlerName,
     placeholder: "Bowler name",
     captain: captainFor(match, inning.bowlingTeam),
-    keeper: keeperFor(match, inning.bowlingTeam)
+    keeper: keeperFor(match, inning.bowlingTeam),
+    numbers: numbersFor(match, inning.bowlingTeam)
   }), rosterFor(match, inning.bowlingTeam).length === 0 && newBowlerName.trim() && newBowlerName.trim() === inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -4488,7 +4509,8 @@ function MatchScreen({
     onChange: setFielderDraftName,
     placeholder: "Fielder name",
     captain: captainFor(match, inning.bowlingTeam),
-    keeper: keeperFor(match, inning.bowlingTeam)
+    keeper: keeperFor(match, inning.bowlingTeam),
+    numbers: numbersFor(match, inning.bowlingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !fielderDraftName.trim(),
@@ -4573,7 +4595,8 @@ function SecondInningsSetup({
     exclude: nonStriker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
-    keeper: keeperFor(match, inn.battingTeam)
+    keeper: keeperFor(match, inn.battingTeam),
+    numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
     label: `Opening non-striker (${inn.battingTeam})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
@@ -4583,7 +4606,8 @@ function SecondInningsSetup({
     exclude: striker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
-    keeper: keeperFor(match, inn.battingTeam)
+    keeper: keeperFor(match, inn.battingTeam),
+    numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
     label: `Opening bowler (${inn.bowlingTeam})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
@@ -4592,7 +4616,8 @@ function SecondInningsSetup({
     onChange: setBowler,
     placeholder: "Bowler name",
     captain: captainFor(match, inn.bowlingTeam),
-    keeper: keeperFor(match, inn.bowlingTeam)
+    keeper: keeperFor(match, inn.bowlingTeam),
+    numbers: numbersFor(match, inn.bowlingTeam)
   }))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canStart,
