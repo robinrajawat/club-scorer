@@ -180,6 +180,16 @@ const GLOBAL_CSS = `
   @keyframes cs-navInRight { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes cs-navInLeft { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes cs-sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes cs-boundaryPop {
+    0% { transform: scale(0.4) rotate(-3deg); opacity: 0; }
+    18% { transform: scale(1.1) rotate(1deg); opacity: 1; }
+    28% { transform: scale(1) rotate(0deg); opacity: 1; }
+    78% { transform: scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: scale(0.94) translateY(-16px); opacity: 0; }
+  }
+  @keyframes cs-digitRoll { from { transform: translateY(65%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes cs-ballSpin { to { transform: rotate(360deg); } }
+  @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
   .cs-shine { position: relative; overflow: hidden; }
@@ -593,6 +603,226 @@ function RoleBadge({
     }
   }, label);
 }
+function BoundaryCelebration({
+  celebration
+}) {
+  if (!celebration) return null;
+  const isSix = celebration.type === 6;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      pointerEvents: "none",
+      zIndex: 80
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    key: celebration.key,
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 46,
+      color: "#fff",
+      padding: "16px 38px",
+      borderRadius: 22,
+      letterSpacing: 1,
+      background: isSix ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})` : `linear-gradient(160deg, #5c9436, ${COLORS.turf})`,
+      boxShadow: isSix ? "0 16px 44px rgba(45,80,22,0.55)" : "0 16px 44px rgba(74,124,46,0.45)",
+      animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
+    }
+  }, isSix ? "SIX!" : "FOUR!"));
+}
+function OdometerScore({
+  text,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      ...style
+    }
+  }, text.split("").map((ch, i) => /*#__PURE__*/React.createElement("span", {
+    key: `slot${i}`,
+    style: {
+      display: "inline-block",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    key: `pos${i}-${ch}`,
+    style: {
+      display: "inline-block",
+      animation: "cs-digitRoll 0.32s cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  }, ch))));
+}
+function SwipeableRow({
+  children,
+  onDelete,
+  deleteLabel = "Delete"
+}) {
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(0);
+  const startDragX = useRef(0);
+  const moved = useRef(false);
+  const REVEAL = 78;
+  function pointerX(e) {
+    return e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
+  }
+  function onPointerDown(e) {
+    startX.current = pointerX(e);
+    startDragX.current = dragX;
+    moved.current = false;
+    setDragging(true);
+  }
+  function onPointerMove(e) {
+    if (!dragging) return;
+    const delta = pointerX(e) - startX.current;
+    if (Math.abs(delta) > 4) moved.current = true;
+    let next = startDragX.current + delta;
+    next = Math.max(-REVEAL - 24, Math.min(0, next));
+    setDragX(next);
+  }
+  function endDrag() {
+    if (!dragging) return;
+    setDragging(false);
+    setDragX(dragX < -REVEAL * 0.55 ? -REVEAL : 0);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      overflow: "hidden",
+      borderRadius: 14,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      justifyContent: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onDelete();
+      setDragX(0);
+    },
+    className: "cs-btn",
+    style: {
+      width: REVEAL,
+      background: `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`,
+      color: "#fff",
+      border: "none",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Trash2, {
+    size: 16
+  }), deleteLabel)), /*#__PURE__*/React.createElement("div", {
+    onPointerDown: onPointerDown,
+    onPointerMove: onPointerMove,
+    onPointerUp: endDrag,
+    onPointerLeave: endDrag,
+    onPointerCancel: endDrag,
+    onClickCapture: e => {
+      if (moved.current || dragX !== 0) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+    style: {
+      position: "relative",
+      zIndex: 1,
+      background: COLORS.cream,
+      transform: `translateX(${dragX}px)`,
+      transition: dragging ? "none" : "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+      touchAction: "pan-y"
+    }
+  }, children));
+}
+function EmptyStateBallIllustration() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "52",
+    height: "52",
+    viewBox: "0 0 52 52",
+    fill: "none",
+    style: {
+      margin: "0 auto",
+      display: "block"
+    }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "26",
+    cy: "26",
+    r: "19",
+    stroke: COLORS.willow,
+    strokeWidth: "1.6",
+    fill: "rgba(201,168,118,0.08)"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M14 15 C 20 22, 20 30, 14 37",
+    stroke: COLORS.willow,
+    strokeWidth: "1.4",
+    fill: "none",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M38 15 C 32 22, 32 30, 38 37",
+    stroke: COLORS.willow,
+    strokeWidth: "1.4",
+    fill: "none",
+    strokeLinecap: "round"
+  }));
+}
+function LoadingBallIllustration() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "44",
+    height: "44",
+    viewBox: "0 0 44 44",
+    fill: "none",
+    style: {
+      margin: "0 auto 12px",
+      display: "block",
+      animation: "cs-ballSpin 0.9s linear infinite"
+    }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "22",
+    cy: "22",
+    r: "16",
+    fill: `url(#cs-ball-grad)`,
+    stroke: COLORS.ball,
+    strokeWidth: "1"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 10 C 17 16, 17 28, 12 34",
+    stroke: "#f5ded9",
+    strokeWidth: "1.3",
+    fill: "none",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M32 10 C 27 16, 27 28, 32 34",
+    stroke: "#f5ded9",
+    strokeWidth: "1.3",
+    fill: "none",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+    id: "cs-ball-grad",
+    x1: "0",
+    y1: "0",
+    x2: "1",
+    y2: "1"
+  }, /*#__PURE__*/React.createElement("stop", {
+    offset: "0%",
+    stopColor: COLORS.ballLight
+  }), /*#__PURE__*/React.createElement("stop", {
+    offset: "100%",
+    stopColor: COLORS.ball
+  }))));
+}
 function Btn({
   children,
   onClick,
@@ -812,27 +1042,44 @@ function HomeScreen({
     size: 17
   }), " Teams")), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       fontWeight: 700,
       letterSpacing: 1.2,
       color: COLORS.inkSoft,
-      marginBottom: 12,
       textTransform: "uppercase"
     }
-  }, "Saved Matches"), matches.map((m, i) => /*#__PURE__*/React.createElement("div", {
+  }, "Saved Matches"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      opacity: 0.7
+    }
+  }, "← swipe to delete")), matches.map((m, i) => /*#__PURE__*/React.createElement("div", {
     key: m.id,
+    style: {
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement(SwipeableRow, {
+    onDelete: () => onDelete(m.id),
+    deleteLabel: "Delete"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
       background: "#fff",
-      borderRadius: 14,
       padding: "14px 14px",
-      marginBottom: 10,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     onClick: () => onOpen(m.id),
@@ -871,35 +1118,21 @@ function HomeScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress"))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => onDelete(m.id),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex"
-    },
-    "aria-label": "Delete match"
-  }, /*#__PURE__*/React.createElement(Trash2, {
-    size: 16
-  }))))) : /*#__PURE__*/React.createElement("div", {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress")))))))) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "36px 20px",
+      padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
       background: "rgba(255,255,255,0.4)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
       color: COLORS.inkSoft,
-      lineHeight: 1.6
+      lineHeight: 1.6,
+      marginTop: 14
     }
   }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")));
 }
@@ -1237,17 +1470,21 @@ function TeamsScreen({
     strokeWidth: 2.5
   }), " New Team"), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
+    style: {
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement(SwipeableRow, {
+    onDelete: () => onDelete(t.id),
+    deleteLabel: "Delete"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
       background: "#fff",
-      borderRadius: 14,
       padding: "14px 14px",
-      marginBottom: 10,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     onClick: () => onEdit(t),
@@ -1269,12 +1506,7 @@ function TeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEdit(t),
     className: "cs-btn",
     style: {
@@ -1289,35 +1521,21 @@ function TeamsScreen({
     "aria-label": "Edit team"
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 16
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => onDelete(t.id),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex"
-    },
-    "aria-label": "Delete team"
-  }, /*#__PURE__*/React.createElement(Trash2, {
-    size: 16
-  }))))) : /*#__PURE__*/React.createElement("div", {
+  })))))) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "36px 20px",
+      padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
       background: "rgba(255,255,255,0.4)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
       color: COLORS.inkSoft,
-      lineHeight: 1.6
+      lineHeight: 1.6,
+      marginTop: 14
     }
   }, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")));
 }
@@ -2085,6 +2303,7 @@ function MatchScreen({
   const [newBowlerName, setNewBowlerName] = useState("");
   const [history, setHistory] = useState([]);
   const [showScorecard, setShowScorecard] = useState(false);
+  const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
@@ -2129,6 +2348,16 @@ function MatchScreen({
       runs: n
     }));
     setShowRuns(false);
+    if (n === 4 || n === 6) {
+      const key = Date.now();
+      setCelebration({
+        type: n,
+        key
+      });
+      setTimeout(() => {
+        setCelebration(c => c && c.key === key ? null : c);
+      }, 1000);
+    }
   }
   function handleExtra(kind, n) {
     pushHistory();
@@ -2137,6 +2366,16 @@ function MatchScreen({
       runs: n
     }));
     setShowExtra(null);
+    if (kind === "noball" && (n === 4 || n === 6)) {
+      const key = Date.now();
+      setCelebration({
+        type: n,
+        key
+      });
+      setTimeout(() => {
+        setCelebration(c => c && c.key === key ? null : c);
+      }, 1000);
+    }
   }
   function handleWicket(wicketType, legal = true) {
     const isLast = inning.wickets + 1 >= 10;
@@ -2268,7 +2507,9 @@ function MatchScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(BoundaryCelebration, {
+    celebration: celebration
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
       padding: "16px 16px 22px",
@@ -2355,17 +2596,16 @@ function MatchScreen({
       alignItems: "baseline",
       gap: 10
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    key: `${inning.runs}-${inning.wickets}`,
+  }, /*#__PURE__*/React.createElement(OdometerScore, {
+    text: `${inning.runs}-${inning.wickets}`,
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
       fontWeight: 700,
       fontSize: 48,
       letterSpacing: -1,
-      textShadow: "0 2px 8px rgba(0,0,0,0.2)",
-      animation: "cs-pulse 0.3s ease"
+      textShadow: "0 2px 8px rgba(0,0,0,0.2)"
     }
-  }, inning.runs, "-", inning.wickets), /*#__PURE__*/React.createElement("span", {
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
       fontSize: 18,
@@ -3031,23 +3271,13 @@ function CricketScorer() {
       style: {
         textAlign: "center"
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: 40,
-        height: 40,
-        borderRadius: "50%",
-        margin: "0 auto 12px",
-        border: `3px solid ${COLORS.creamDark}`,
-        borderTopColor: COLORS.pitch,
-        animation: "cs-spin 0.7s linear infinite"
-      }
-    }), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, null), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'Inter'",
         color: COLORS.inkSoft,
         fontSize: 13
       }
-    }, "Loading…")), /*#__PURE__*/React.createElement("style", null, "@keyframes cs-spin { to { transform: rotate(360deg); } }"));
+    }, "Loading…")));
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: wrapStyle,

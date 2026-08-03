@@ -1,4 +1,4 @@
-# Cricket Scorer
+# Club Scorer
 
 Ball-by-ball cricket scoring for friendly club games — single-file, no build step.
 
