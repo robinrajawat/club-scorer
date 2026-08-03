@@ -613,6 +613,17 @@ function captainFor(match, teamName) {
 function keeperFor(match, teamName) {
   return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
 }
+function numberFor(match, teamName, playerName) {
+  const map = teamName === match.teamA ? match.teamANumbers : match.teamBNumbers;
+  return map && map[playerName] ? map[playerName] : "";
+}
+function numbersFor(match, teamName) {
+  return (teamName === match.teamA ? match.teamANumbers : match.teamBNumbers) || {};
+}
+function playerLabel(match, teamName, playerName) {
+  const num = numberFor(match, teamName, playerName);
+  return num ? `#${num} ${playerName}` : playerName;
+}
 
 // ---------- Match model ----------
 const DEFAULT_RULES = {
@@ -1348,7 +1359,8 @@ function PlayerPicker({
   excludeList,
   placeholder,
   captain,
-  keeper
+  keeper,
+  numbers
 }) {
   const excluded = new Set([exclude, ...(excludeList || [])].filter(Boolean));
   const pool = roster && roster.length ? roster.filter(n => !excluded.has(n)) : null;
@@ -1361,6 +1373,7 @@ function PlayerPicker({
       }
     }, pool.map(name => {
       const active = value === name;
+      const num = numbers && numbers[name];
       return /*#__PURE__*/React.createElement("button", {
         key: name,
         type: "button",
@@ -1378,7 +1391,7 @@ function PlayerPicker({
           fontWeight: 600,
           fontSize: 13
         }
-      }, name, /*#__PURE__*/React.createElement(RoleBadge, {
+      }, num ? `#${num} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
         isCaptain: name === captain,
         isKeeper: name === keeper
       }));
@@ -2227,7 +2240,8 @@ function PlayingXIPicker({
       flexWrap: "wrap",
       gap: 8
     }
-  }, squad.map(name => {
+  }, squad.map(p => {
+    const name = p.name;
     const checked = selected.includes(name);
     const disabled = !checked && atLimit;
     return /*#__PURE__*/React.createElement("button", {
@@ -2269,7 +2283,7 @@ function PlayingXIPicker({
         fontSize: 10,
         lineHeight: 1
       }
-    }, "✓")), name, /*#__PURE__*/React.createElement(RoleBadge, {
+    }, "✓")), p.number ? `#${p.number} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captain,
       isKeeper: name === keeper
     }));
@@ -2304,8 +2318,15 @@ function SetupScreen({
     ...DEFAULT_RULES,
     ...rules
   });
+  function normalizePlayers(players) {
+    // older saved teams may still have plain name strings instead of {name, number}
+    return (players || []).map(p => typeof p === "string" ? {
+      name: p,
+      number: ""
+    } : p);
+  }
   function defaultXI(players) {
-    return players.slice(0, Math.min(11, players.length));
+    return players.map(p => p.name).slice(0, Math.min(11, players.length));
   }
   function selectTeamA(team) {
     if (!team) {
@@ -2317,7 +2338,7 @@ function SetupScreen({
       setTeamAKeeper("");
     } else {
       const label = team.name === teamBName ? `${team.name} (A)` : team.name;
-      const players = team.players || [];
+      const players = normalizePlayers(team.players);
       setTeamAId(team.id);
       setTeamAName(label);
       setTeamASquad(players);
@@ -2338,7 +2359,7 @@ function SetupScreen({
       setTeamBKeeper("");
     } else {
       const label = team.name === teamAName ? `${team.name} (B)` : team.name;
-      const players = team.players || [];
+      const players = normalizePlayers(team.players);
       setTeamBId(team.id);
       setTeamBName(label);
       setTeamBSquad(players);
@@ -2386,6 +2407,8 @@ function SetupScreen({
   // squad is in play, otherwise empty (falls back to free-text entry via PlayerPicker)
   const teamARoster = teamASquad.length ? teamAPlayingXI : [];
   const teamBRoster = teamBSquad.length ? teamBPlayingXI : [];
+  const teamANumbers = Object.fromEntries(teamASquad.filter(p => p.number).map(p => [p.name, p.number]));
+  const teamBNumbers = Object.fromEntries(teamBSquad.filter(p => p.number).map(p => [p.name, p.number]));
   const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
   const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
@@ -2684,7 +2707,8 @@ function SetupScreen({
     exclude: nonStrikerA,
     placeholder: "Batsman name",
     captain: teamACaptain,
-    keeper: teamAKeeper
+    keeper: teamAKeeper,
+    numbers: teamANumbers
   })), /*#__PURE__*/React.createElement(Field, {
     label: `Non-striker (${teamAName || "Team A"})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
@@ -2694,7 +2718,8 @@ function SetupScreen({
     exclude: strikerA,
     placeholder: "Batsman name",
     captain: teamACaptain,
-    keeper: teamAKeeper
+    keeper: teamAKeeper,
+    numbers: teamANumbers
   })), /*#__PURE__*/React.createElement(Field, {
     label: `Bowler (${teamBName || "Team B"})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
@@ -2703,7 +2728,8 @@ function SetupScreen({
     onChange: setBowlerB,
     placeholder: "Bowler name",
     captain: teamBCaptain,
-    keeper: teamBKeeper
+    keeper: teamBKeeper,
+    numbers: teamBNumbers
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -2736,6 +2762,8 @@ function SetupScreen({
       teamAKeeper,
       teamBCaptain,
       teamBKeeper,
+      teamANumbers,
+      teamBNumbers,
       rules: matchRules,
       toss: tossWonBy ? {
         wonBy: tossWonBy,
@@ -2905,20 +2933,37 @@ function TeamEditScreen({
   onCancel
 }) {
   const [name, setName] = useState(team ? team.name : "");
-  const [players, setPlayers] = useState(team ? [...team.players] : []);
+  const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
+    name: p,
+    number: ""
+  } : {
+    name: p.name,
+    number: p.number || ""
+  }) : []);
   const [newPlayer, setNewPlayer] = useState("");
+  const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
   function addPlayer() {
     const n = newPlayer.trim();
-    if (!n || players.includes(n)) return;
-    setPlayers(p => [...p, n]);
+    if (!n || players.some(p => p.name === n)) return;
+    setPlayers(p => [...p, {
+      name: n,
+      number: newNumber.trim()
+    }]);
     setNewPlayer("");
+    setNewNumber("");
   }
   function removePlayer(n) {
-    setPlayers(p => p.filter(x => x !== n));
+    setPlayers(p => p.filter(x => x.name !== n));
     if (captain === n) setCaptain("");
     if (keeper === n) setKeeper("");
+  }
+  function updateNumber(n, num) {
+    setPlayers(p => p.map(x => x.name === n ? {
+      ...x,
+      number: num
+    } : x));
   }
   const canSave = name.trim() && players.length > 0;
   return /*#__PURE__*/React.createElement("div", {
@@ -2995,7 +3040,19 @@ function TeamEditScreen({
     value: newPlayer,
     onChange: setNewPlayer,
     placeholder: "Player name"
-  }), /*#__PURE__*/React.createElement(Btn, {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: newNumber,
+    onChange: v => setNewNumber(v.replace(/[^0-9]/g, "").slice(0, 3)),
+    placeholder: "#",
+    style: {
+      textAlign: "center"
+    }
+  })), /*#__PURE__*/React.createElement(Btn, {
     onClick: addPlayer,
     style: {
       flexShrink: 0,
@@ -3013,35 +3070,63 @@ function TeamEditScreen({
   }, "No players added yet") : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      flexWrap: "wrap",
-      gap: 8
+      flexDirection: "column",
+      gap: 6
     }
-  }, players.map(p => /*#__PURE__*/React.createElement("span", {
-    key: p,
+  }, players.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.name,
     style: {
-      display: "inline-flex",
+      display: "flex",
       alignItems: "center",
-      gap: 6,
-      padding: "7px 8px 7px 14px",
-      borderRadius: 20,
-      background: COLORS.creamDark,
+      gap: 8,
+      padding: "7px 8px 7px 6px",
+      borderRadius: 12,
+      background: COLORS.creamDark
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 44,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: p.number,
+    onChange: e => updateNumber(p.name, e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
+    placeholder: "#",
+    style: {
+      width: "100%",
+      textAlign: "center",
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13,
+      fontWeight: 700,
+      color: COLORS.turf,
+      background: "#fff",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      padding: "5px 2px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 13,
-      color: COLORS.ink
+      fontSize: 13.5,
+      color: COLORS.ink,
+      display: "flex",
+      alignItems: "center",
+      gap: 6
     }
-  }, p, /*#__PURE__*/React.createElement(RoleBadge, {
-    isCaptain: p === captain,
-    isKeeper: p === keeper
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: () => removePlayer(p),
+  }, p.name, /*#__PURE__*/React.createElement(RoleBadge, {
+    isCaptain: p.name === captain,
+    isKeeper: p.name === keeper
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => removePlayer(p.name),
     className: "cs-btn",
     style: {
       background: "rgba(42,36,32,0.12)",
       border: "none",
       borderRadius: "50%",
-      width: 18,
-      height: 18,
+      width: 22,
+      height: 22,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -3049,9 +3134,10 @@ function TeamEditScreen({
       color: COLORS.ink,
       fontSize: 12,
       lineHeight: 1,
-      padding: 0
+      padding: 0,
+      flexShrink: 0
     },
-    "aria-label": `Remove ${p}`
+    "aria-label": `Remove ${p.name}`
   }, "✕"))))), players.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
@@ -3084,11 +3170,11 @@ function TeamEditScreen({
       marginBottom: 16
     }
   }, players.map(p => {
-    const active = captain === p;
+    const active = captain === p.name;
     return /*#__PURE__*/React.createElement("button", {
-      key: p,
+      key: p.name,
       type: "button",
-      onClick: () => setCaptain(active ? "" : p),
+      onClick: () => setCaptain(active ? "" : p.name),
       className: "cs-btn cs-shine",
       style: {
         padding: "8px 13px",
@@ -3102,7 +3188,7 @@ function TeamEditScreen({
         fontWeight: 600,
         fontSize: 12.5
       }
-    }, p);
+    }, p.number ? `#${p.number} ` : "", p.name);
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -3126,11 +3212,11 @@ function TeamEditScreen({
       gap: 8
     }
   }, players.map(p => {
-    const active = keeper === p;
+    const active = keeper === p.name;
     return /*#__PURE__*/React.createElement("button", {
-      key: p,
+      key: p.name,
       type: "button",
-      onClick: () => setKeeper(active ? "" : p),
+      onClick: () => setKeeper(active ? "" : p.name),
       className: "cs-btn cs-shine",
       style: {
         padding: "8px 13px",
@@ -3144,7 +3230,7 @@ function TeamEditScreen({
         fontWeight: 600,
         fontSize: 12.5
       }
-    }, p);
+    }, p.number ? `#${p.number} ` : "", p.name);
   }))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
@@ -3160,6 +3246,7 @@ function TeamEditScreen({
     }
   }, "Save Team"));
 }
+
 function Modal({
   children,
   onClose
@@ -3203,7 +3290,9 @@ function InningScorecard({
   battingCaptain,
   battingKeeper,
   bowlingCaptain,
-  bowlingKeeper
+  bowlingKeeper,
+  battingNumbers,
+  bowlingNumbers
 }) {
   const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye;
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
@@ -3292,7 +3381,12 @@ function InningScorecard({
         fontWeight: isBatting ? 700 : 500,
         color: COLORS.ink
       }
-    }, name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
+    }, (battingNumbers && battingNumbers[name]) && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.turf,
+        fontWeight: 700
+      }
+    }, "#", battingNumbers[name], " "), name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === battingCaptain,
       isKeeper: name === battingKeeper
     })), /*#__PURE__*/React.createElement("span", {
@@ -3427,7 +3521,12 @@ function InningScorecard({
         fontWeight: isBowling ? 700 : 500,
         color: COLORS.ink
       }
-    }, name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
+    }, (bowlingNumbers && bowlingNumbers[name]) && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.turf,
+        fontWeight: 700
+      }
+    }, "#", bowlingNumbers[name], " "), name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === bowlingCaptain,
       isKeeper: name === bowlingKeeper
     })), /*#__PURE__*/React.createElement("span", {
@@ -3527,7 +3626,9 @@ function PrintReport({
     battingCaptain: captainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
-    bowlingKeeper: keeperFor(match, inn.bowlingTeam)
+    bowlingKeeper: keeperFor(match, inn.bowlingTeam),
+    battingNumbers: numbersFor(match, inn.battingTeam),
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   })) : null));
 }
 function ExportPdfButton({
@@ -3679,7 +3780,9 @@ function ScorecardOverlay({
     battingCaptain: captainFor(match, match.innings[tab].battingTeam),
     battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
-    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam)
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
+    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
   }))));
 }
 function MatchScreen({
@@ -4125,7 +4228,15 @@ function MatchScreen({
       style: {
         marginLeft: isStriker ? 0 : 13
       }
-    }, name, /*#__PURE__*/React.createElement(RoleBadge, {
+    }, numberFor(match, inning.battingTeam, name) && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        fontWeight: 700,
+        color: COLORS.turf,
+        marginRight: 2
+      }
+    }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
       isKeeper: name === keeperFor(match, inning.battingTeam)
     }))), /*#__PURE__*/React.createElement("span", {
@@ -4159,7 +4270,15 @@ function MatchScreen({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
+  }, numberFor(match, inning.bowlingTeam, inning.bowlerName) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.turf,
+      marginRight: 2
+    }
+  }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
     isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam)
   })), /*#__PURE__*/React.createElement("span", {
@@ -4732,7 +4851,9 @@ function ResultScreen({
     battingCaptain: captainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
-    bowlingKeeper: keeperFor(match, inn.bowlingTeam)
+    bowlingKeeper: keeperFor(match, inn.bowlingTeam),
+    battingNumbers: numbersFor(match, inn.battingTeam),
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   }))));
 }
 
@@ -4843,6 +4964,8 @@ function CricketScorer() {
       teamAKeeper: setup.teamAKeeper || "",
       teamBCaptain: setup.teamBCaptain || "",
       teamBKeeper: setup.teamBKeeper || "",
+      teamANumbers: setup.teamANumbers || {},
+      teamBNumbers: setup.teamBNumbers || {},
       oversLimit: setup.oversLimit,
       currentInningIndex: 0,
       status: "in-progress",
