@@ -1,0 +1,3110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Club Scorer</title>
+<meta name="description" content="Ball-by-ball cricket scoring for friendly club games." />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
+<style>
+  html, body { margin: 0; padding: 0; }
+  @page { margin: 14mm; }
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const {
+  useState,
+  useEffect,
+  useRef
+} = React;
+
+// ---------- Inline icons (no external icon library needed) ----------
+function Icon({
+  children,
+  size = 18,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: {
+      flexShrink: 0,
+      ...style
+    }
+  }, children);
+}
+const ChevronLeft = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "15 18 9 12 15 6"
+}));
+const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
+  x: "3",
+  y: "3",
+  width: "18",
+  height: "18",
+  rx: "2"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "3",
+  y1: "9",
+  x2: "21",
+  y2: "9"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "3",
+  y1: "15",
+  x2: "21",
+  y2: "15"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "3",
+  x2: "12",
+  y2: "21"
+}));
+const Undo2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M9 14 4 9l5-5"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
+}));
+const Trash2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M3 6h18"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "10",
+  y1: "11",
+  x2: "10",
+  y2: "17"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "14",
+  y1: "11",
+  x2: "14",
+  y2: "17"
+}));
+const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M8 21h8"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M12 17v4"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7 4h10v5a5 5 0 0 1-10 0V4z"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7 5H4.5a2 2 0 0 0 0 4H6"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M17 5h2.5a2 2 0 0 1 0 4H18"
+}));
+const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "5",
+  x2: "12",
+  y2: "19"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "5",
+  y1: "12",
+  x2: "19",
+  y2: "12"
+}));
+const Circle = ({
+  size = 18,
+  fill = "currentColor",
+  style
+}) => /*#__PURE__*/React.createElement("svg", {
+  width: size,
+  height: size,
+  viewBox: "0 0 24 24",
+  style: style
+}, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "9",
+  fill: fill
+}));
+const Download = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M12 3v12"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "7 10 12 15 17 10"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M5 21h14"
+}));
+const ArrowLeftRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "16 3 21 8 16 13"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "21",
+  y1: "8",
+  x2: "3",
+  y2: "8"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "8 11 3 16 8 21"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "3",
+  y1: "16",
+  x2: "21",
+  y2: "16"
+}));
+const Users = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "9",
+  cy: "7",
+  r: "4"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M23 21v-2a4 4 0 0 0-3-3.87"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M16 3.13a4 4 0 0 1 0 7.75"
+}));
+const Pencil = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
+}));
+
+// ---------- Design tokens ----------
+// Pitch green header, scorecard-cream body, willow tan accents, ball-red for wickets.
+// Display: "DM Serif Display" (scorebook headers) / Numbers: "IBM Plex Mono" (the signature scoreboard digits)
+// Body/UI: "Inter"
+
+const FONT_LINK = "https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap";
+const GLOBAL_CSS = `
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  @keyframes cs-pulse { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
+  @keyframes cs-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes cs-slideUp { from { transform: translateY(28px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes cs-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes cs-scrim { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes cs-navInRight { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes cs-navInLeft { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes cs-sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
+  .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
+  .cs-shine { position: relative; overflow: hidden; }
+  .cs-shine::before {
+    content: ""; position: absolute; inset: 0 0 55% 0; border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  .cs-shine:active::before { opacity: 0.4; }
+  .cs-row { transition: background 0.12s ease, transform 0.12s ease; }
+  .cs-row:active { background: rgba(45,80,22,0.05) !important; transform: scale(0.99); }
+  .cs-focus:focus-visible { outline: 2px solid #b8892b; outline-offset: 2px; }
+  input:focus { outline: 2px solid #b8892b44; }
+  .print-only { display: none; }
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    body, html { background: #fff !important; }
+    .print-only * { box-shadow: none !important; animation: none !important; }
+  }
+`;
+function NavWrap({
+  navKey,
+  direction,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    key: navKey,
+    style: {
+      animation: `${direction === "back" ? "cs-navInLeft" : "cs-navInRight"} 0.32s cubic-bezier(0.22, 1, 0.36, 1) both`
+    }
+  }, children);
+}
+const COLORS = {
+  pitch: "#2d5016",
+  pitchDark: "#1f3a0f",
+  turf: "#4a7c2e",
+  cream: "#f2ecd9",
+  creamDark: "#e5dcc1",
+  willow: "#c9a876",
+  ink: "#2a2420",
+  inkSoft: "#5c5347",
+  ball: "#8b1e1e",
+  ballLight: "#b23b3b",
+  gold: "#b8892b"
+};
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+// ---------- Storage helpers (browser localStorage — data stays on this device/browser) ----------
+const LS_PREFIX = "cricket-scorer:";
+async function saveMatch(match) {
+  try {
+    localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+    let idx = [];
+    try {
+      idx = JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
+    } catch (e) {
+      idx = [];
+    }
+    idx = idx.filter(m => m.id !== match.id);
+    idx.unshift({
+      id: match.id,
+      teamA: match.teamA,
+      teamB: match.teamB,
+      teamAId: match.teamAId || null,
+      teamBId: match.teamBId || null,
+      oversLimit: match.oversLimit,
+      updatedAt: Date.now(),
+      status: match.status
+    });
+    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
+  } catch (e) {
+    console.error("save failed", e);
+  }
+}
+async function loadIndex() {
+  try {
+    return JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+async function loadMatch(id) {
+  try {
+    const raw = localStorage.getItem(`${LS_PREFIX}match:${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+async function deleteMatch(id) {
+  try {
+    localStorage.removeItem(`${LS_PREFIX}match:${id}`);
+    let idx = [];
+    try {
+      idx = JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
+    } catch (e) {
+      idx = [];
+    }
+    idx = idx.filter(m => m.id !== id);
+    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx));
+  } catch (e) {
+    console.error("delete failed", e);
+  }
+}
+
+// ---------- Team roster storage ----------
+async function loadTeams() {
+  try {
+    return JSON.parse(localStorage.getItem(`${LS_PREFIX}teams`) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+async function saveTeams(teams) {
+  try {
+    localStorage.setItem(`${LS_PREFIX}teams`, JSON.stringify(teams));
+  } catch (e) {
+    console.error("save teams failed", e);
+  }
+}
+function rosterFor(match, teamName) {
+  const roster = teamName === match.teamA ? match.teamARoster : match.teamBRoster;
+  return roster || [];
+}
+function captainFor(match, teamName) {
+  return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
+}
+function keeperFor(match, teamName) {
+  return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
+}
+
+// ---------- Match model ----------
+function newInning(battingTeam, bowlingTeam) {
+  return {
+    battingTeam,
+    bowlingTeam,
+    runs: 0,
+    wickets: 0,
+    legalBalls: 0,
+    overs: [[]],
+    // array of overs, each an array of ball events
+    batsmen: {},
+    // name -> {runs, balls, out, how}
+    battingOrder: [],
+    bowlers: {},
+    // name -> {ballsBowled, runs, wickets, maidens}
+    bowlingOrder: [],
+    extras: {
+      wide: 0,
+      noball: 0,
+      bye: 0,
+      legbye: 0
+    },
+    strikerName: "",
+    nonStrikerName: "",
+    bowlerName: "",
+    lastBowlerName: "",
+    fallOfWickets: [],
+    // {score, wicket, over, batsman}
+    complete: false
+  };
+}
+function ensureBatsman(inning, name) {
+  if (!name) return;
+  if (!inning.batsmen[name]) {
+    inning.batsmen[name] = {
+      runs: 0,
+      balls: 0,
+      out: false,
+      how: "",
+      fours: 0,
+      sixes: 0
+    };
+    inning.battingOrder = [...inning.battingOrder, name];
+  }
+}
+function ensureBowler(inning, name) {
+  if (!name) return;
+  if (!inning.bowlers[name]) {
+    inning.bowlers[name] = {
+      ballsBowled: 0,
+      runs: 0,
+      wickets: 0
+    };
+    inning.bowlingOrder = [...inning.bowlingOrder, name];
+  }
+}
+function oversLabel(legalBalls) {
+  const o = Math.floor(legalBalls / 6);
+  const b = legalBalls % 6;
+  return `${o}.${b}`;
+}
+function crr(runs, legalBalls) {
+  if (legalBalls === 0) return "0.00";
+  return (runs / legalBalls * 6).toFixed(2);
+}
+
+// ---------- Ball event application ----------
+// event: { kind: 'run'|'wide'|'noball'|'bye'|'legbye'|'wicket', runs, wicketType, newBatsman }
+function applyBall(inning, event) {
+  const cur = {
+    ...inning
+  };
+  cur.overs = cur.overs.map(o => [...o]);
+  cur.batsmen = {
+    ...cur.batsmen
+  };
+  cur.bowlers = {
+    ...cur.bowlers
+  };
+  cur.extras = {
+    ...cur.extras
+  };
+  ensureBatsman(cur, cur.strikerName);
+  ensureBatsman(cur, cur.nonStrikerName);
+  ensureBowler(cur, cur.bowlerName);
+  const bowler = {
+    ...cur.bowlers[cur.bowlerName]
+  };
+  let legalBall = true;
+  let runsThisBall = 0;
+  let display = "";
+  let strikeChanges = false;
+  if (event.kind === "run") {
+    runsThisBall = event.runs;
+    cur.runs += event.runs;
+    cur.batsmen[cur.strikerName] = {
+      ...cur.batsmen[cur.strikerName],
+      runs: cur.batsmen[cur.strikerName].runs + event.runs,
+      balls: cur.batsmen[cur.strikerName].balls + 1,
+      fours: cur.batsmen[cur.strikerName].fours + (event.runs === 4 ? 1 : 0),
+      sixes: cur.batsmen[cur.strikerName].sixes + (event.runs === 6 ? 1 : 0)
+    };
+    bowler.runs += event.runs;
+    bowler.ballsBowled += 1;
+    display = String(event.runs);
+    if (event.runs % 2 === 1) strikeChanges = true;
+  } else if (event.kind === "wide") {
+    legalBall = false;
+    runsThisBall = 1 + (event.runs || 0);
+    cur.runs += runsThisBall;
+    bowler.runs += runsThisBall;
+    cur.extras.wide += runsThisBall;
+    display = event.runs ? `Wd+${event.runs}` : "Wd";
+  } else if (event.kind === "noball") {
+    legalBall = false;
+    runsThisBall = 1 + (event.runs || 0);
+    cur.runs += runsThisBall;
+    bowler.runs += runsThisBall;
+    cur.extras.noball += 1;
+    cur.batsmen[cur.strikerName] = {
+      ...cur.batsmen[cur.strikerName],
+      runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
+      fours: cur.batsmen[cur.strikerName].fours + (event.runs === 4 ? 1 : 0),
+      sixes: cur.batsmen[cur.strikerName].sixes + (event.runs === 6 ? 1 : 0)
+    };
+    display = event.runs ? `Nb+${event.runs}` : "Nb";
+    if ((event.runs || 0) % 2 === 1) strikeChanges = true;
+  } else if (event.kind === "bye" || event.kind === "legbye") {
+    runsThisBall = event.runs;
+    cur.runs += event.runs;
+    cur.extras[event.kind] += event.runs;
+    cur.batsmen[cur.strikerName] = {
+      ...cur.batsmen[cur.strikerName],
+      balls: cur.batsmen[cur.strikerName].balls + 1
+    };
+    bowler.ballsBowled += 1;
+    display = `${event.kind === "bye" ? "B" : "Lb"}${event.runs}`;
+    if (event.runs % 2 === 1) strikeChanges = true;
+  } else if (event.kind === "wicket") {
+    cur.wickets += 1;
+    legalBall = event.legal !== false;
+    const dismissedName = cur.strikerName;
+    const wt = event.wicketType || "out";
+    const creditsBowler = !["Run out"].includes(wt);
+    let howText;
+    if (wt === "Run out") {
+      howText = "run out";
+    } else if (wt === "Caught") {
+      const fielder = event.fielderName || cur.bowlerName;
+      howText = fielder === cur.bowlerName ? `c & b ${cur.bowlerName}` : `c ${fielder} b ${cur.bowlerName}`;
+    } else {
+      const prefix = {
+        Bowled: "b",
+        LBW: "lbw b",
+        Stumped: "st b",
+        "Hit wicket": "hit wkt b"
+      }[wt] || "b";
+      howText = `${prefix} ${cur.bowlerName}`;
+    }
+    if (legalBall) {
+      cur.batsmen[cur.strikerName] = {
+        ...cur.batsmen[cur.strikerName],
+        balls: cur.batsmen[cur.strikerName].balls + 1,
+        out: true,
+        how: howText
+      };
+      bowler.ballsBowled += 1;
+      if (creditsBowler) bowler.wickets += 1;
+    } else {
+      cur.batsmen[cur.strikerName] = {
+        ...cur.batsmen[cur.strikerName],
+        out: true,
+        how: howText
+      };
+    }
+    cur.fallOfWickets = [...cur.fallOfWickets, {
+      score: cur.runs,
+      wicket: cur.wickets,
+      over: oversLabel(cur.legalBalls + (legalBall ? 1 : 0)),
+      batsman: dismissedName
+    }];
+    display = "W";
+    cur.strikerName = event.newBatsman || "";
+  }
+  cur.bowlers[cur.bowlerName] = bowler;
+  const lastOverIdx = cur.overs.length - 1;
+  cur.overs[lastOverIdx] = [...cur.overs[lastOverIdx], {
+    display,
+    kind: event.kind,
+    runs: runsThisBall
+  }];
+  if (legalBall) {
+    cur.legalBalls += 1;
+    if (cur.legalBalls % 6 === 0 && cur.wickets < 10) {
+      cur.overs = [...cur.overs, []];
+      cur.lastBowlerName = cur.bowlerName;
+      cur.bowlerName = "";
+      strikeChanges = !strikeChanges; // extra swap at end of over (net effect: swap unless odd run already swapped -> then no swap)
+    }
+  }
+  if (strikeChanges) {
+    const tmp = cur.strikerName;
+    cur.strikerName = cur.nonStrikerName;
+    cur.nonStrikerName = tmp;
+  }
+  return cur;
+}
+
+// ---------- UI atoms ----------
+function BallBadge({
+  ev
+}) {
+  let bg = "#fff",
+    color = COLORS.inkSoft,
+    shadow = "0 1px 2px rgba(42,36,32,0.12)",
+    border = `1px solid ${COLORS.creamDark}`;
+  if (ev.kind === "wicket") {
+    bg = `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`;
+    color = "#fff";
+    border = "none";
+    shadow = "0 2px 6px rgba(139,30,30,0.4)";
+  } else if (ev.kind === "wide" || ev.kind === "noball") {
+    bg = `linear-gradient(160deg, #d4a544, ${COLORS.gold})`;
+    color = "#fff";
+    border = "none";
+    shadow = "0 2px 6px rgba(184,137,43,0.35)";
+  } else if (ev.runs === 4) {
+    bg = `linear-gradient(160deg, #5c9436, ${COLORS.turf})`;
+    color = "#fff";
+    border = "none";
+    shadow = "0 2px 6px rgba(74,124,46,0.35)";
+  } else if (ev.runs === 6) {
+    bg = `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`;
+    color = "#fff";
+    border = "none";
+    shadow = "0 2px 6px rgba(45,80,22,0.4)";
+  }
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 28,
+      height: 28,
+      borderRadius: "50%",
+      background: bg,
+      color,
+      border,
+      boxShadow: shadow,
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      fontWeight: 700,
+      padding: "0 4px",
+      animation: "cs-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
+    }
+  }, ev.display);
+}
+function RoleBadge({
+  isCaptain,
+  isKeeper
+}) {
+  if (!isCaptain && !isKeeper) return null;
+  const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-block",
+      marginLeft: 5,
+      padding: "1px 5px",
+      borderRadius: 5,
+      background: isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)",
+      color: isCaptain ? COLORS.gold : COLORS.turf,
+      fontSize: 9.5,
+      fontWeight: 800,
+      letterSpacing: 0.3,
+      verticalAlign: "middle",
+      fontFamily: "'Inter'"
+    }
+  }, label);
+}
+function Btn({
+  children,
+  onClick,
+  variant = "default",
+  disabled,
+  style
+}) {
+  const base = {
+    fontFamily: "'Inter', sans-serif",
+    fontWeight: 600,
+    fontSize: 15,
+    borderRadius: 14,
+    padding: "14px 14px",
+    minHeight: 48,
+    cursor: disabled ? "not-allowed" : "pointer",
+    border: "none",
+    opacity: disabled ? 0.45 : 1,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6
+  };
+  const variants = {
+    default: {
+      background: "#fff",
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
+    },
+    primary: {
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(45,80,22,0.4)"
+    },
+    danger: {
+      background: `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(139,30,30,0.35)"
+    },
+    gold: {
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
+    },
+    ghost: {
+      background: "rgba(242,236,217,0.1)",
+      color: COLORS.cream,
+      border: "1.5px solid rgba(242,236,217,0.35)"
+    }
+  };
+  return /*#__PURE__*/React.createElement("button", {
+    className: variant === "ghost" ? "cs-btn" : "cs-btn cs-shine",
+    onClick: onClick,
+    disabled: disabled,
+    style: {
+      ...base,
+      ...variants[variant],
+      ...style
+    }
+  }, children);
+}
+function TextField({
+  value,
+  onChange,
+  placeholder,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("input", {
+    value: value,
+    onChange: e => onChange(e.target.value),
+    placeholder: placeholder,
+    style: {
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 15,
+      padding: "12px 14px",
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: "#fff",
+      color: COLORS.ink,
+      width: "100%",
+      boxSizing: "border-box",
+      boxShadow: "inset 0 1px 2px rgba(42,36,32,0.05)",
+      ...style
+    }
+  });
+}
+function PlayerPicker({
+  roster,
+  value,
+  onChange,
+  exclude,
+  excludeList,
+  placeholder,
+  captain,
+  keeper
+}) {
+  const excluded = new Set([exclude, ...(excludeList || [])].filter(Boolean));
+  const pool = roster && roster.length ? roster.filter(n => !excluded.has(n)) : null;
+  if (pool && pool.length > 0) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8
+      }
+    }, pool.map(name => {
+      const active = value === name;
+      return /*#__PURE__*/React.createElement("button", {
+        className: "cs-btn cs-shine",
+        style: {
+          padding: "9px 14px",
+          borderRadius: 20,
+          border: "none",
+          cursor: "pointer",
+          background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+          color: active ? "#fff" : COLORS.ink,
+          boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+          fontFamily: "'Inter'",
+          fontWeight: 600,
+          fontSize: 13
+        }
+      }, name, /*#__PURE__*/React.createElement(RoleBadge, {
+        isCaptain: name === captain,
+        isKeeper: name === keeper
+      }));
+    }));
+  }
+  return /*#__PURE__*/React.createElement(TextField, {
+    value: value,
+    onChange: onChange,
+    placeholder: placeholder
+  });
+}
+
+// ---------- Screens ----------
+
+function HomeScreen({
+  matches,
+  onNew,
+  onOpen,
+  onDelete,
+  onManageTeams
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "28px 16px 40px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginBottom: 30
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 56,
+      height: 56,
+      borderRadius: "50%",
+      margin: "0 auto 14px",
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
+    }
+  }, /*#__PURE__*/React.createElement(Circle, {
+    size: 26,
+    color: COLORS.cream,
+    strokeWidth: 2.5,
+    fill: COLORS.ball,
+    style: {
+      color: COLORS.cream
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 32,
+      color: COLORS.pitch,
+      letterSpacing: -0.5
+    }
+  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginTop: 5
+    }
+  }, "Ball-by-ball scoring for friendly games")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 28
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onNew,
+    style: {
+      flex: 2,
+      padding: "15px",
+      fontSize: 16,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 19,
+    strokeWidth: 2.5
+  }), " New Match"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onManageTeams,
+    style: {
+      flex: 1,
+      padding: "15px",
+      fontSize: 14,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 17
+  }), " Teams")), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      textTransform: "uppercase"
+    }
+  }, "Saved Matches"), matches.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    className: "cs-row",
+    style: {
+      background: "#fff",
+      borderRadius: 14,
+      padding: "14px 14px",
+      marginBottom: 10,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => onOpen(m.id),
+    style: {
+      cursor: "pointer",
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      flexShrink: 0,
+      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turf,
+      boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
+    }
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink
+    }
+  }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontWeight: 500
+    }
+  }, "vs"), " ", m.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDelete(m.id),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex"
+    },
+    "aria-label": "Delete match"
+  }, /*#__PURE__*/React.createElement(Trash2, {
+    size: 16
+  }))))) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "36px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: "rgba(255,255,255,0.4)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")));
+}
+function TeamChips({
+  teams,
+  selectedId,
+  onSelect
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, teams.map(t => {
+    const active = selectedId === t.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      type: "button",
+      onClick: () => onSelect(t),
+      className: "cs-btn cs-shine",
+      style: {
+        padding: "9px 14px",
+        borderRadius: 20,
+        border: "none",
+        cursor: "pointer",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        color: active ? "#fff" : COLORS.ink,
+        boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, t.name);
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onSelect(null),
+    className: "cs-btn",
+    style: {
+      padding: "9px 14px",
+      borderRadius: 20,
+      border: `1.5px dashed ${COLORS.willow}`,
+      cursor: "pointer",
+      background: selectedId === null ? COLORS.creamDark : "transparent",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "+ One-off"));
+}
+function SetupScreen({
+  onStart,
+  onCancel,
+  teams
+}) {
+  const [teamAId, setTeamAId] = useState(null);
+  const [teamAName, setTeamAName] = useState("");
+  const [teamARoster, setTeamARoster] = useState([]);
+  const [teamACaptain, setTeamACaptain] = useState("");
+  const [teamAKeeper, setTeamAKeeper] = useState("");
+  const [teamBId, setTeamBId] = useState(null);
+  const [teamBName, setTeamBName] = useState("");
+  const [teamBRoster, setTeamBRoster] = useState([]);
+  const [teamBCaptain, setTeamBCaptain] = useState("");
+  const [teamBKeeper, setTeamBKeeper] = useState("");
+  const [overs, setOvers] = useState("20");
+  const [strikerA, setStrikerA] = useState("");
+  const [nonStrikerA, setNonStrikerA] = useState("");
+  const [bowlerB, setBowlerB] = useState("");
+  function selectTeamA(team) {
+    if (!team) {
+      setTeamAId(null);
+      setTeamAName("");
+      setTeamARoster([]);
+      setTeamACaptain("");
+      setTeamAKeeper("");
+    } else {
+      const label = team.name === teamBName ? `${team.name} (A)` : team.name;
+      setTeamAId(team.id);
+      setTeamAName(label);
+      setTeamARoster(team.players || []);
+      setTeamACaptain(team.captain || "");
+      setTeamAKeeper(team.keeper || "");
+    }
+    setStrikerA("");
+    setNonStrikerA("");
+  }
+  function selectTeamB(team) {
+    if (!team) {
+      setTeamBId(null);
+      setTeamBName("");
+      setTeamBRoster([]);
+      setTeamBCaptain("");
+      setTeamBKeeper("");
+    } else {
+      const label = team.name === teamAName ? `${team.name} (B)` : team.name;
+      setTeamBId(team.id);
+      setTeamBName(label);
+      setTeamBRoster(team.players || []);
+      setTeamBCaptain(team.captain || "");
+      setTeamBKeeper(team.keeper || "");
+    }
+    setBowlerB("");
+  }
+  const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
+  const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
+  const cardStyle = {
+    background: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  };
+  const sectionLabel = {
+    fontFamily: "'Inter'",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 1,
+    color: COLORS.inkSoft,
+    textTransform: "uppercase",
+    marginBottom: 12
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 20
+    }
+  }, "New Match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Teams & Format"), /*#__PURE__*/React.createElement(Field, {
+    label: "Batting team"
+  }, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
+    teams: teams,
+    selectedId: teamAId,
+    onSelect: selectTeamA
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: teamAName,
+    onChange: setTeamAName,
+    placeholder: "e.g. Willow CC",
+    style: teams.length > 0 ? {
+      marginTop: 8
+    } : {}
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Bowling team"
+  }, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
+    teams: teams,
+    selectedId: teamBId,
+    onSelect: selectTeamB
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: teamBName,
+    onChange: setTeamBName,
+    placeholder: "e.g. Riverside XI",
+    style: teams.length > 0 ? {
+      marginTop: 8
+    } : {}
+  })), sameLabel && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginTop: -4,
+      marginBottom: 12
+    }
+  }, "Both sides have the same name — playing the same squad against itself? Edit one label above (e.g. \"", teamAName.trim(), " A\" / \"", teamAName.trim(), " B\") so the app can tell them apart."), /*#__PURE__*/React.createElement(Field, {
+    label: "Overs per innings"
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: overs,
+    onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
+    placeholder: "20"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.06s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Opening Line-up"), /*#__PURE__*/React.createElement(Field, {
+    label: `Striker (${teamAName || "Team A"})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: teamARoster,
+    value: strikerA,
+    onChange: setStrikerA,
+    exclude: nonStrikerA,
+    placeholder: "Batsman name",
+    captain: teamACaptain,
+    keeper: teamAKeeper
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: `Non-striker (${teamAName || "Team A"})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: teamARoster,
+    value: nonStrikerA,
+    onChange: setNonStrikerA,
+    exclude: strikerA,
+    placeholder: "Batsman name",
+    captain: teamACaptain,
+    keeper: teamAKeeper
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: `Bowler (${teamBName || "Team B"})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: teamBRoster,
+    value: bowlerB,
+    onChange: setBowlerB,
+    placeholder: "Bowler name",
+    captain: teamBCaptain,
+    keeper: teamBKeeper
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onCancel,
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !canStart,
+    style: {
+      flex: 2
+    },
+    onClick: () => onStart({
+      teamA: teamAName.trim(),
+      teamB: teamBName.trim(),
+      teamAId,
+      teamBId,
+      oversLimit: parseInt(overs || "0", 10),
+      strikerA: strikerA.trim(),
+      nonStrikerA: nonStrikerA.trim(),
+      bowlerB: bowlerB.trim(),
+      teamARoster,
+      teamBRoster,
+      teamACaptain,
+      teamAKeeper,
+      teamBCaptain,
+      teamBKeeper
+    })
+  }, "Start Match")));
+}
+function Field({
+  label,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, label), children);
+}
+function TeamsScreen({
+  teams,
+  matches,
+  onNew,
+  onEdit,
+  onDelete,
+  onBack
+}) {
+  function matchCount(teamId) {
+    return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 40px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Teams"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginBottom: 20
+    }
+  }, "Save squads once, then pick players from a list during scoring."), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onNew,
+    style: {
+      width: "100%",
+      padding: "14px",
+      fontSize: 15,
+      marginBottom: 20,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 18,
+    strokeWidth: 2.5
+  }), " New Team"), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+    key: t.id,
+    className: "cs-row",
+    style: {
+      background: "#fff",
+      borderRadius: 14,
+      padding: "14px 14px",
+      marginBottom: 10,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => onEdit(t),
+    style: {
+      cursor: "pointer",
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink
+    }
+  }, t.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onEdit(t),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex"
+    },
+    "aria-label": "Edit team"
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 16
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDelete(t.id),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex"
+    },
+    "aria-label": "Delete team"
+  }, /*#__PURE__*/React.createElement(Trash2, {
+    size: 16
+  }))))) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "36px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: "rgba(255,255,255,0.4)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")));
+}
+function TeamEditScreen({
+  team,
+  onSave,
+  onCancel
+}) {
+  const [name, setName] = useState(team ? team.name : "");
+  const [players, setPlayers] = useState(team ? [...team.players] : []);
+  const [newPlayer, setNewPlayer] = useState("");
+  const [captain, setCaptain] = useState(team ? team.captain || "" : "");
+  const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
+  function addPlayer() {
+    const n = newPlayer.trim();
+    if (!n || players.includes(n)) return;
+    setPlayers(p => [...p, n]);
+    setNewPlayer("");
+  }
+  function removePlayer(n) {
+    setPlayers(p => p.filter(x => x !== n));
+    if (captain === n) setCaptain("");
+    if (keeper === n) setKeeper("");
+  }
+  const canSave = name.trim() && players.length > 0;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onCancel,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Teams"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 18
+    }
+  }, team ? "Edit Team" : "New Team"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Team name"
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: name,
+    onChange: setName,
+    placeholder: "e.g. Willow CC"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 12
+    }
+  }, "Players"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: newPlayer,
+    onChange: setNewPlayer,
+    placeholder: "Player name"
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: addPlayer,
+    style: {
+      flexShrink: 0,
+      padding: "0 16px"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 17
+  }))), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No players added yet") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, players.map(p => /*#__PURE__*/React.createElement("span", {
+    key: p,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "7px 8px 7px 14px",
+      borderRadius: 20,
+      background: COLORS.creamDark,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      color: COLORS.ink
+    }
+  }, p, /*#__PURE__*/React.createElement(RoleBadge, {
+    isCaptain: p === captain,
+    isKeeper: p === keeper
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => removePlayer(p),
+    className: "cs-btn",
+    style: {
+      background: "rgba(42,36,32,0.12)",
+      border: "none",
+      borderRadius: "50%",
+      width: 18,
+      height: 18,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      color: COLORS.ink,
+      fontSize: 12,
+      lineHeight: 1,
+      padding: 0
+    },
+    "aria-label": `Remove ${p}`
+  }, "✕"))))), players.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Captain ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 500,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "(optional — tap again to clear)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16
+    }
+  }, players.map(p => {
+    const active = captain === p;
+    return /*#__PURE__*/React.createElement("button", {
+      key: p,
+      type: "button",
+      onClick: () => setCaptain(active ? "" : p),
+      className: "cs-btn cs-shine",
+      style: {
+        padding: "8px 13px",
+        borderRadius: 18,
+        border: "none",
+        cursor: "pointer",
+        background: active ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "#fff",
+        color: active ? "#fff" : COLORS.ink,
+        boxShadow: active ? "0 2px 8px rgba(184,137,43,0.35)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12.5
+      }
+    }, p);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Wicketkeeper ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 500,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "(optional — tap again to clear)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, players.map(p => {
+    const active = keeper === p;
+    return /*#__PURE__*/React.createElement("button", {
+      key: p,
+      type: "button",
+      onClick: () => setKeeper(active ? "" : p),
+      className: "cs-btn cs-shine",
+      style: {
+        padding: "8px 13px",
+        borderRadius: 18,
+        border: "none",
+        cursor: "pointer",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        color: active ? "#fff" : COLORS.ink,
+        boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12.5
+      }
+    }, p);
+  }))), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !canSave,
+    onClick: () => onSave({
+      id: team ? team.id : uid(),
+      name: name.trim(),
+      players,
+      captain,
+      keeper
+    }),
+    style: {
+      width: "100%"
+    }
+  }, "Save Team"));
+}
+function Modal({
+  children,
+  onClose
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(31,58,15,0.55)",
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      zIndex: 50,
+      animation: "cs-scrim 0.2s ease"
+    },
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: COLORS.cream,
+      borderRadius: "20px 20px 0 0",
+      padding: "22px 18px 30px",
+      width: "100%",
+      maxWidth: 560,
+      boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
+      animation: "cs-slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      background: COLORS.willow,
+      margin: "0 auto 16px",
+      opacity: 0.6
+    }
+  }), children));
+}
+function InningScorecard({
+  inning,
+  battingCaptain,
+  battingKeeper,
+  bowlingCaptain,
+  bowlingKeeper
+}) {
+  const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye;
+  const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
+  const bowlingOrder = inning.bowlingOrder.length ? inning.bowlingOrder : Object.keys(inning.bowlers);
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, inning.battingTeam), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 18,
+      fontWeight: 700,
+      color: COLORS.ink
+    }
+  }, inning.runs, "-", inning.wickets, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: COLORS.inkSoft
+    }
+  }, "(", oversLabel(inning.legalBalls), ")"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "2.2fr 1.6fr 0.5fr 0.5fr 0.5fr 0.5fr 0.6fr",
+      gap: 4,
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      padding: "0 2px 6px",
+      borderBottom: `1.5px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Batsman"), /*#__PURE__*/React.createElement("span", null, "Dismissal"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "R"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "B"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "4s"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "6s"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "SR")), battingOrder.map(name => {
+    const b = inning.batsmen[name];
+    if (!b) return null;
+    const isBatting = (name === inning.strikerName || name === inning.nonStrikerName) && !inning.complete;
+    const sr = b.balls > 0 ? (b.runs / b.balls * 100).toFixed(1) : "0.0";
+    return /*#__PURE__*/React.createElement("div", {
+      key: name,
+      style: {
+        display: "grid",
+        gridTemplateColumns: "2.2fr 1.6fr 0.5fr 0.5fr 0.5fr 0.5fr 0.6fr",
+        gap: 4,
+        fontSize: 13,
+        padding: "6px 2px",
+        borderBottom: `1px dashed ${COLORS.creamDark}`,
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: isBatting ? 700 : 500,
+        color: COLORS.ink
+      }
+    }, name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
+      isCaptain: name === battingCaptain,
+      isKeeper: name === battingKeeper
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        fontStyle: b.out ? "normal" : "italic"
+      }
+    }, b.out ? b.how : "not out"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace"
+      }
+    }, b.runs), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, b.balls), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, b.fours), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, b.sixes), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, sr));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      padding: "8px 2px",
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft
+    }
+  }, "Extras: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, totalExtras), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 11.5
+    }
+  }, " ", "(wd ", inning.extras.wide, ", nb ", inning.extras.noball, ", b ", inning.extras.bye, ", lb ", inning.extras.legbye, ")")))), inning.fallOfWickets.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 5
+    }
+  }, "Fall of Wickets"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      lineHeight: 1.7
+    }
+  }, inning.fallOfWickets.map((fw, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, fw.wicket, "-", fw.score, " (", fw.batsman, ", ", fw.over, " ov)", i < inning.fallOfWickets.length - 1 ? "  ·  " : "")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr",
+      gap: 4,
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      padding: "0 2px 6px",
+      borderBottom: `1.5px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Bowler"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "O"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "R"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "W"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      textAlign: "right"
+    }
+  }, "Econ")), bowlingOrder.map(name => {
+    const bw = inning.bowlers[name];
+    if (!bw) return null;
+    const isBowling = name === inning.bowlerName && !inning.complete;
+    const econ = bw.ballsBowled > 0 ? (bw.runs / bw.ballsBowled * 6).toFixed(2) : "0.00";
+    return /*#__PURE__*/React.createElement("div", {
+      key: name,
+      style: {
+        display: "grid",
+        gridTemplateColumns: "2.2fr 0.7fr 0.6fr 0.6fr 0.6fr",
+        gap: 4,
+        fontSize: 13,
+        padding: "6px 2px",
+        borderBottom: `1px dashed ${COLORS.creamDark}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: isBowling ? 700 : 500,
+        color: COLORS.ink
+      }
+    }, name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
+      isCaptain: name === bowlingCaptain,
+      isKeeper: name === bowlingKeeper
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace"
+      }
+    }, oversLabel(bw.ballsBowled)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace"
+      }
+    }, bw.runs), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontWeight: 700,
+        color: bw.wickets > 0 ? COLORS.ball : COLORS.ink
+      }
+    }, bw.wickets), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: "right",
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: COLORS.inkSoft
+      }
+    }, econ));
+  })));
+}
+function PrintReport({
+  match
+}) {
+  if (!match) return null;
+  let resultText = null;
+  if (match.status === "complete" && match.innings.length > 1) {
+    const [i1, i2] = match.innings;
+    if (i2.runs >= i1.runs + 1) resultText = `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;else if (i2.runs === i1.runs) resultText = "Match tied";else resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "print-only",
+    style: {
+      padding: 24,
+      fontFamily: "'Inter', sans-serif",
+      color: "#000",
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      marginBottom: 2
+    }
+  }, match.teamA, " vs ", match.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), resultText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 14
+    }
+  }, resultText), !resultText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 14,
+      fontStyle: "italic"
+    }
+  }, "Match in progress"), match.innings.map((inn, idx) => inn.battingOrder && inn.battingOrder.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    style: {
+      marginBottom: 20,
+      pageBreakInside: "avoid"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: inn,
+    battingCaptain: captainFor(match, inn.battingTeam),
+    battingKeeper: keeperFor(match, inn.battingTeam),
+    bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingKeeper: keeperFor(match, inn.bowlingTeam)
+  })) : null));
+}
+function ExportPdfButton({
+  match,
+  style
+}) {
+  function handleExport() {
+    const prevTitle = document.title;
+    document.title = `${match.teamA} vs ${match.teamB} — Scorecard`;
+    window.print();
+    setTimeout(() => {
+      document.title = prevTitle;
+    }, 500);
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: handleExport,
+    className: "cs-btn",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "7px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement(Download, {
+    size: 14
+  }), " Export PDF");
+}
+function ScorecardOverlay({
+  match,
+  onClose
+}) {
+  const [tab, setTab] = useState(match.innings.length - 1);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: COLORS.cream,
+      zIndex: 60,
+      overflowY: "auto",
+      animation: "cs-sheetIn 0.34s cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "sticky",
+      top: 0,
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      color: COLORS.cream,
+      padding: "16px 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+      zIndex: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19
+    }
+  }, /*#__PURE__*/React.createElement(Table2, {
+    size: 18
+  }), " Scorecard"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(ExportPdfButton, {
+    match: match
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "cs-btn",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      padding: "6px 10px"
+    }
+  }, "Close"))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      padding: "14px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: () => setTab(i),
+    className: "cs-btn cs-shine",
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      borderRadius: 10,
+      border: "none",
+      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tab === i ? "#fff" : COLORS.ink,
+      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: match.innings[tab],
+    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
+    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam)
+  }))));
+}
+function MatchScreen({
+  match,
+  setMatch,
+  onExit
+}) {
+  const [showRuns, setShowRuns] = useState(false);
+  const [showExtra, setShowExtra] = useState(null); // 'wide'|'noball'|'bye'|'legbye'
+  const [showWicket, setShowWicket] = useState(false);
+  const [newBatsmanName, setNewBatsmanName] = useState("");
+  const [newBowlerPrompt, setNewBowlerPrompt] = useState(false);
+  const [newBowlerName, setNewBowlerName] = useState("");
+  const [history, setHistory] = useState([]);
+  const [showScorecard, setShowScorecard] = useState(false);
+  const inningIdx = match.currentInningIndex;
+  const inning = match.innings[inningIdx];
+  const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
+  const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % 6 === 0 && !inning.bowlerName && !inning.complete;
+  const target = inningIdx === 1 ? match.innings[0].runs + 1 : null;
+  const isChasing = inningIdx === 1;
+  const ballsLeft = match.oversLimit * 6 - inning.legalBalls;
+  const runsNeeded = target ? target - inning.runs : null;
+  const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * 6).toFixed(2) : null;
+  function pushHistory() {
+    setHistory(h => [...h, JSON.parse(JSON.stringify(match))]);
+  }
+  function commit(newInningState, extra) {
+    const updated = {
+      ...match,
+      innings: match.innings.map((inn, i) => i === inningIdx ? newInningState : inn)
+    };
+    checkInningEnd(updated);
+    setMatch(updated);
+    saveMatch(updated);
+  }
+  function checkInningEnd(updated) {
+    const inn = updated.innings[updated.currentInningIndex];
+    const oversDone = inn.legalBalls >= updated.oversLimit * 6;
+    const allOut = inn.wickets >= 10;
+    const chaseWon = updated.currentInningIndex === 1 && inn.runs >= updated.innings[0].runs + 1;
+    if (oversDone || allOut || chaseWon) {
+      inn.complete = true;
+      if (updated.currentInningIndex === 0) {
+        updated.currentInningIndex = 1;
+        updated.innings[1] = newInning(inn.bowlingTeam, inn.battingTeam);
+        updated.awaitingSecondInningsSetup = true;
+      } else {
+        updated.status = "complete";
+      }
+    }
+  }
+  function handleRun(n) {
+    pushHistory();
+    commit(applyBall(inning, {
+      kind: "run",
+      runs: n
+    }));
+    setShowRuns(false);
+  }
+  function handleExtra(kind, n) {
+    pushHistory();
+    commit(applyBall(inning, {
+      kind,
+      runs: n
+    }));
+    setShowExtra(null);
+  }
+  function handleWicket(wicketType, legal = true) {
+    const isLast = inning.wickets + 1 >= 10;
+    if (wicketType === "Caught") {
+      setShowWicket(false);
+      setCatchDraft({
+        wicketType,
+        legal,
+        isLast
+      });
+      setFielderDraftName("");
+      return;
+    }
+    pushHistory();
+    if (isLast) {
+      commit(applyBall(inning, {
+        kind: "wicket",
+        wicketType,
+        legal,
+        newBatsman: ""
+      }));
+      setShowWicket(false);
+    } else {
+      setShowWicket(false);
+      setPendingWicket({
+        wicketType,
+        legal
+      });
+    }
+  }
+  const [pendingWicket, setPendingWicket] = useState(null);
+  const [catchDraft, setCatchDraft] = useState(null); // {wicketType, legal, isLast} — waiting on fielder name
+  const [fielderDraftName, setFielderDraftName] = useState("");
+  function confirmFielder() {
+    if (!fielderDraftName.trim()) return;
+    const {
+      wicketType,
+      legal,
+      isLast
+    } = catchDraft;
+    if (isLast) {
+      pushHistory();
+      commit(applyBall(inning, {
+        kind: "wicket",
+        wicketType,
+        legal,
+        newBatsman: "",
+        fielderName: fielderDraftName.trim()
+      }));
+    } else {
+      setPendingWicket({
+        wicketType,
+        legal,
+        fielderName: fielderDraftName.trim()
+      });
+    }
+    setCatchDraft(null);
+    setFielderDraftName("");
+  }
+  function confirmNewBatsman() {
+    if (!newBatsmanName.trim()) return;
+    if (pendingWicket) {
+      pushHistory();
+      commit(applyBall(inning, {
+        kind: "wicket",
+        wicketType: pendingWicket.wicketType,
+        legal: pendingWicket.legal,
+        newBatsman: newBatsmanName.trim(),
+        fielderName: pendingWicket.fielderName
+      }));
+      setPendingWicket(null);
+    } else {
+      const updated = {
+        ...inning,
+        strikerName: newBatsmanName.trim()
+      };
+      ensureBatsman(updated, updated.strikerName);
+      commit(updated);
+    }
+    setNewBatsmanName("");
+  }
+  function confirmNewBowler() {
+    if (!newBowlerName.trim()) return;
+    const updated = {
+      ...inning,
+      bowlerName: newBowlerName.trim()
+    };
+    ensureBowler(updated, updated.bowlerName);
+    commit(updated);
+    setNewBowlerName("");
+    setNewBowlerPrompt(false);
+  }
+  function undo() {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setMatch(prev);
+    saveMatch(prev);
+  }
+  function swapStrike() {
+    if (!inning.strikerName || !inning.nonStrikerName) return;
+    pushHistory();
+    const updated = {
+      ...inning,
+      strikerName: inning.nonStrikerName,
+      nonStrikerName: inning.strikerName
+    };
+    commit(updated);
+  }
+
+  // Second innings setup (openers + bowler)
+  if (match.awaitingSecondInningsSetup) {
+    return /*#__PURE__*/React.createElement(SecondInningsSetup, {
+      match: match,
+      setMatch: setMatch
+    });
+  }
+  if (match.status === "complete") {
+    return /*#__PURE__*/React.createElement(ResultScreen, {
+      match: match,
+      onExit: onExit
+    });
+  }
+  const currentOverBalls = inning.overs[inning.overs.length - 1] || [];
+  const wicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      paddingBottom: 140,
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
+      padding: "16px 16px 22px",
+      color: COLORS.cream,
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      opacity: 0.5,
+      pointerEvents: "none",
+      background: "radial-gradient(circle at 15% 0%, rgba(255,255,255,0.10), transparent 55%)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onExit,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer",
+      opacity: 0.85,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Matches"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowScorecard(true),
+    className: "cs-btn",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: `1px solid rgba(242,236,217,0.35)`,
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "7px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, /*#__PURE__*/React.createElement(Table2, {
+    size: 14
+  }), " Scorecard"), /*#__PURE__*/React.createElement(ExportPdfButton, {
+    match: match
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.75,
+      marginBottom: 2,
+      fontWeight: 600,
+      letterSpacing: 0.3
+    }
+  }, inning.battingTeam.toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    key: `${inning.runs}-${inning.wickets}`,
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontWeight: 700,
+      fontSize: 48,
+      letterSpacing: -1,
+      textShadow: "0 2px 8px rgba(0,0,0,0.2)",
+      animation: "cs-pulse 0.3s ease"
+    }
+  }, inning.runs, "-", inning.wickets), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 18,
+      opacity: 0.75
+    }
+  }, "(", oversLabel(inning.legalBalls), "/", match.oversLimit, ")")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 16,
+      marginTop: 8,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      opacity: 0.9,
+      fontWeight: 500
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", oversLabel(ballsLeft), " ov"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      margin: "-10px 12px 0",
+      borderRadius: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.07), 0 6px 18px rgba(42,36,32,0.06)",
+      padding: "14px 14px",
+      position: "relative",
+      zIndex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "flex-end",
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: swapStrike,
+    disabled: !inning.strikerName || !inning.nonStrikerName,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.gold,
+      cursor: !inning.strikerName || !inning.nonStrikerName ? "not-allowed" : "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      padding: "2px 2px",
+      opacity: !inning.strikerName || !inning.nonStrikerName ? 0.4 : 1
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 12
+  }), " Swap Strike")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
+    const b = inning.batsmen[name] || {
+      runs: 0,
+      balls: 0
+    };
+    const isStriker = name === inning.strikerName;
+    return /*#__PURE__*/React.createElement("div", {
+      key: name,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "5px 0",
+        fontFamily: "'Inter'"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        fontSize: 14.5,
+        fontWeight: isStriker ? 700 : 500,
+        color: isStriker ? COLORS.ink : COLORS.inkSoft
+      }
+    }, isStriker && /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 6,
+        height: 6,
+        borderRadius: "50%",
+        background: COLORS.gold,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        marginLeft: isStriker ? 0 : 13
+      }
+    }, name, /*#__PURE__*/React.createElement(RoleBadge, {
+      isCaptain: name === captainFor(match, inning.battingTeam),
+      isKeeper: name === keeperFor(match, inning.battingTeam)
+    }))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 13.5,
+        fontWeight: 600,
+        color: COLORS.inkSoft
+      }
+    }, b.runs, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        opacity: 0.6,
+        fontWeight: 400
+      }
+    }, "(", b.balls, ")")));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "9px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      color: COLORS.inkSoft,
+      fontWeight: 500
+    }
+  }, inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
+    isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
+    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam)
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "14px 12px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      marginBottom: 8,
+      textTransform: "uppercase"
+    }
+  }, "This Over"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 7,
+      flexWrap: "wrap"
+    }
+  }, currentOverBalls.length === 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "Over not started"), currentOverBalls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
+    key: i,
+    ev: ev
+  })))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      background: COLORS.cream,
+      borderRadius: "18px 18px 0 0",
+      boxShadow: "0 -6px 24px rgba(42,36,32,0.12)",
+      padding: "14px 12px calc(12px + env(safe-area-inset-bottom))"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 536,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 9,
+      marginBottom: 9
+    }
+  }, [0, 1, 2, 3, 4, 6].map(n => /*#__PURE__*/React.createElement(Btn, {
+    key: n,
+    variant: n === 4 ? "primary" : n === 6 ? "gold" : "default",
+    onClick: () => handleRun(n)
+  }, n)), /*#__PURE__*/React.createElement(Btn, {
+    variant: "default",
+    onClick: () => setShowExtra("choose")
+  }, "Extra"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: () => setShowWicket(true)
+  }, "Wicket")), /*#__PURE__*/React.createElement(Btn, {
+    onClick: undo,
+    disabled: history.length === 0,
+    style: {
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 15
+  }), " Undo last ball"))), (needsNewBatsman || pendingWicket) && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Next batsman"), /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inning.battingTeam),
+    value: newBatsmanName,
+    onChange: setNewBatsmanName,
+    excludeList: Object.keys(inning.batsmen),
+    placeholder: "Batsman name",
+    captain: captainFor(match, inning.battingTeam),
+    keeper: keeperFor(match, inning.battingTeam)
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !newBatsmanName.trim(),
+    onClick: confirmNewBatsman,
+    style: {
+      width: "100%",
+      marginTop: 10
+    }
+  }, "Confirm")), needsNewBowler && !needsNewBatsman && !pendingWicket && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Over complete — next bowler"), /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inning.bowlingTeam),
+    value: newBowlerName,
+    onChange: setNewBowlerName,
+    exclude: inning.lastBowlerName,
+    placeholder: "Bowler name",
+    captain: captainFor(match, inning.bowlingTeam),
+    keeper: keeperFor(match, inning.bowlingTeam)
+  }), rosterFor(match, inning.bowlingTeam).length === 0 && newBowlerName.trim() && newBowlerName.trim() === inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginTop: 8
+    }
+  }, "Same bowler can't bowl two overs in a row."), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !newBowlerName.trim() || newBowlerName.trim() === inning.lastBowlerName,
+    onClick: confirmNewBowler,
+    style: {
+      width: "100%",
+      marginTop: 10
+    }
+  }, "Confirm")), showExtra && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowExtra(null)
+  }, showExtra === "choose" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Extra"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowExtra("wide")
+  }, "Wide"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowExtra("noball")
+  }, "No Ball"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowExtra("bye")
+  }, "Bye"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowExtra("legbye")
+  }, "Leg Bye"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, {
+    wide: "Wide",
+    noball: "No Ball",
+    bye: "Bye",
+    legbye: "Leg Bye"
+  }[showExtra], " — runs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 8
+    }
+  }, [0, 1, 2, 3, 4].map(n => /*#__PURE__*/React.createElement(Btn, {
+    key: n,
+    onClick: () => handleExtra(showExtra, n)
+  }, n))))), showWicket && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowWicket(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "How out?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 8
+    }
+  }, wicketTypes.map(w => /*#__PURE__*/React.createElement(Btn, {
+    key: w,
+    variant: "danger",
+    onClick: () => handleWicket(w, w !== "Run out")
+  }, w)))), catchDraft && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => {
+      setCatchDraft(null);
+      setFielderDraftName("");
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Who took the catch?"), /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inning.bowlingTeam),
+    value: fielderDraftName,
+    onChange: setFielderDraftName,
+    placeholder: "Fielder name",
+    captain: captainFor(match, inning.bowlingTeam),
+    keeper: keeperFor(match, inning.bowlingTeam)
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !fielderDraftName.trim(),
+    onClick: confirmFielder,
+    style: {
+      width: "100%",
+      marginTop: 10
+    }
+  }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
+    match: match,
+    onClose: () => setShowScorecard(false)
+  }));
+}
+function SecondInningsSetup({
+  match,
+  setMatch
+}) {
+  const [striker, setStriker] = useState("");
+  const [nonStriker, setNonStriker] = useState("");
+  const [bowler, setBowler] = useState("");
+  const inn = match.innings[1];
+  const target = match.innings[0].runs + 1;
+  const canStart = striker.trim() && nonStriker.trim() && striker.trim() !== nonStriker.trim() && bowler.trim();
+  function start() {
+    const updated = {
+      ...inn,
+      strikerName: striker.trim(),
+      nonStrikerName: nonStriker.trim(),
+      bowlerName: bowler.trim()
+    };
+    ensureBatsman(updated, updated.strikerName);
+    ensureBatsman(updated, updated.nonStrikerName);
+    ensureBowler(updated, updated.bowlerName);
+    const updatedMatch = {
+      ...match,
+      innings: [match.innings[0], updated],
+      awaitingSecondInningsSetup: false
+    };
+    setMatch(updatedMatch);
+    saveMatch(updatedMatch);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "24px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto",
+      animation: "cs-fadeIn 0.3s ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 6
+    }
+  }, "Innings Break"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 14,
+      color: COLORS.inkSoft,
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, inn.battingTeam, " need ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: `Opening striker (${inn.battingTeam})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inn.battingTeam),
+    value: striker,
+    onChange: setStriker,
+    exclude: nonStriker,
+    placeholder: "Batsman name",
+    captain: captainFor(match, inn.battingTeam),
+    keeper: keeperFor(match, inn.battingTeam)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: `Opening non-striker (${inn.battingTeam})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inn.battingTeam),
+    value: nonStriker,
+    onChange: setNonStriker,
+    exclude: striker,
+    placeholder: "Batsman name",
+    captain: captainFor(match, inn.battingTeam),
+    keeper: keeperFor(match, inn.battingTeam)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: `Opening bowler (${inn.bowlingTeam})`
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, inn.bowlingTeam),
+    value: bowler,
+    onChange: setBowler,
+    placeholder: "Bowler name",
+    captain: captainFor(match, inn.bowlingTeam),
+    keeper: keeperFor(match, inn.bowlingTeam)
+  }))), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !canStart,
+    onClick: start,
+    style: {
+      width: "100%"
+    }
+  }, "Start 2nd Innings"));
+}
+function ResultScreen({
+  match,
+  onExit
+}) {
+  const [i1, i2] = match.innings;
+  let resultText = "";
+  if (i2.runs >= i1.runs + 1) {
+    resultText = `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;
+  } else if (i2.runs === i1.runs) {
+    resultText = "Match tied";
+  } else {
+    resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "24px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto",
+      animation: "cs-fadeIn 0.3s ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onExit,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Matches"), /*#__PURE__*/React.createElement(ExportPdfButton, {
+    match: match,
+    style: {
+      background: COLORS.pitch,
+      border: "none",
+      color: "#fff"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      color: COLORS.cream,
+      borderRadius: 18,
+      padding: "26px 20px",
+      textAlign: "center",
+      marginBottom: 22,
+      boxShadow: "0 8px 24px rgba(45,80,22,0.3)",
+      animation: "cs-slideUp 0.35s ease"
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 30,
+    strokeWidth: 1.8,
+    style: {
+      marginBottom: 10,
+      opacity: 0.95
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 21,
+      lineHeight: 1.3
+    }
+  }, resultText)), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)",
+      animation: `cs-slideUp 0.3s ease ${0.08 + idx * 0.06}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: inn,
+    battingCaptain: captainFor(match, inn.battingTeam),
+    battingKeeper: keeperFor(match, inn.battingTeam),
+    bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingKeeper: keeperFor(match, inn.bowlingTeam)
+  }))));
+}
+
+// ---------- Root ----------
+const SCREEN_DEPTH = {
+  home: 0,
+  setup: 1,
+  teams: 1,
+  match: 1,
+  "team-edit": 2
+};
+function CricketScorer() {
+  const [screen, setScreenRaw] = useState("home"); // home | setup | match | teams | team-edit
+  const [navDirection, setNavDirection] = useState("forward");
+  const [matches, setMatches] = useState([]);
+  const [match, setMatch] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [editingTeam, setEditingTeam] = useState(null); // null = new team
+  const [loading, setLoading] = useState(true);
+  const fontLoaded = useRef(false);
+  function setScreen(next) {
+    setScreenRaw(current => {
+      const from = SCREEN_DEPTH[current] ?? 0;
+      const to = SCREEN_DEPTH[next] ?? 0;
+      setNavDirection(to >= from ? "forward" : "back");
+      return next;
+    });
+  }
+  useEffect(() => {
+    if (!fontLoaded.current) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = FONT_LINK;
+      document.head.appendChild(link);
+      fontLoaded.current = true;
+    }
+    Promise.all([loadIndex(), loadTeams()]).then(([idx, teamList]) => {
+      setMatches(idx);
+      setTeams(teamList);
+      setLoading(false);
+    });
+  }, []);
+  async function refreshIndex() {
+    setMatches(await loadIndex());
+  }
+  function startNewMatch(setup) {
+    const m = {
+      id: uid(),
+      teamA: setup.teamA,
+      teamB: setup.teamB,
+      teamAId: setup.teamAId || null,
+      teamBId: setup.teamBId || null,
+      teamARoster: setup.teamARoster || [],
+      teamBRoster: setup.teamBRoster || [],
+      teamACaptain: setup.teamACaptain || "",
+      teamAKeeper: setup.teamAKeeper || "",
+      teamBCaptain: setup.teamBCaptain || "",
+      teamBKeeper: setup.teamBKeeper || "",
+      oversLimit: setup.oversLimit,
+      currentInningIndex: 0,
+      status: "in-progress",
+      innings: [newInning(setup.teamA, setup.teamB)],
+      awaitingSecondInningsSetup: false
+    };
+    m.innings[0].strikerName = setup.strikerA;
+    m.innings[0].nonStrikerName = setup.nonStrikerA;
+    m.innings[0].bowlerName = setup.bowlerB;
+    ensureBatsman(m.innings[0], setup.strikerA);
+    ensureBatsman(m.innings[0], setup.nonStrikerA);
+    ensureBowler(m.innings[0], setup.bowlerB);
+    setMatch(m);
+    saveMatch(m);
+    setScreen("match");
+  }
+  async function openMatch(id) {
+    const m = await loadMatch(id);
+    if (m) {
+      setMatch(m);
+      setScreen("match");
+    }
+  }
+  async function handleDelete(id) {
+    await deleteMatch(id);
+    refreshIndex();
+  }
+  function exitToHome() {
+    setMatch(null);
+    setScreen("home");
+    refreshIndex();
+  }
+  async function handleSaveTeam(team) {
+    const updated = teams.filter(t => t.id !== team.id);
+    updated.push(team);
+    updated.sort((a, b) => a.name.localeCompare(b.name));
+    setTeams(updated);
+    await saveTeams(updated);
+    setScreen("teams");
+    setEditingTeam(null);
+  }
+  async function handleDeleteTeam(id) {
+    const updated = teams.filter(t => t.id !== id);
+    setTeams(updated);
+    await saveTeams(updated);
+  }
+  const wrapStyle = {
+    minHeight: "100vh",
+    background: COLORS.cream,
+    backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(42,36,32,0.045) 28px)",
+    WebkitTextSizeAdjust: "100%",
+    touchAction: "manipulation"
+  };
+  if (loading) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...wrapStyle,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 40,
+        height: 40,
+        borderRadius: "50%",
+        margin: "0 auto 12px",
+        border: `3px solid ${COLORS.creamDark}`,
+        borderTopColor: COLORS.pitch,
+        animation: "cs-spin 0.7s linear infinite"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        color: COLORS.inkSoft,
+        fontSize: 13
+      }
+    }, "Loading…")), /*#__PURE__*/React.createElement("style", null, "@keyframes cs-spin { to { transform: rotate(360deg); } }"));
+  }
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: wrapStyle,
+    className: "no-print"
+  }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "home",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(HomeScreen, {
+    matches: matches,
+    onNew: () => setScreen("setup"),
+    onOpen: openMatch,
+    onDelete: handleDelete,
+    onManageTeams: () => setScreen("teams")
+  })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "setup",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(SetupScreen, {
+    onStart: startNewMatch,
+    onCancel: () => setScreen("home"),
+    teams: teams
+  })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "match",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(MatchScreen, {
+    match: match,
+    setMatch: setMatch,
+    onExit: exitToHome
+  })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "teams",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(TeamsScreen, {
+    teams: teams,
+    matches: matches,
+    onNew: () => {
+      setEditingTeam(null);
+      setScreen("team-edit");
+    },
+    onEdit: t => {
+      setEditingTeam(t);
+      setScreen("team-edit");
+    },
+    onDelete: handleDeleteTeam,
+    onBack: () => setScreen("home")
+  })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "team-edit",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(TeamEditScreen, {
+    team: editingTeam,
+    onSave: handleSaveTeam,
+    onCancel: () => setScreen("teams")
+  }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
+    match: match
+  }));
+}
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(/*#__PURE__*/React.createElement(CricketScorer, null));
+
+</script>
+</body>
+</html>
