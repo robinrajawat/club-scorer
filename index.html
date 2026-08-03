@@ -12,6 +12,9 @@
 </style>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -240,66 +243,186 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-// ---------- Storage helpers (browser localStorage — data stays on this device/browser) ----------
-const LS_PREFIX = "cricket-scorer:";
-async function saveMatch(match) {
+// ---------- Firebase (accounts + cross-device match codes) ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyD57hwAbN_GfWLB-kFGf7hsmOjOgT7gIMg",
+  authDomain: "cricket-scorer-cfd67.firebaseapp.com",
+  projectId: "cricket-scorer-cfd67",
+  storageBucket: "cricket-scorer-cfd67.firebasestorage.app",
+  messagingSenderId: "485520099375",
+  appId: "1:485520099375:web:00ece21a792acb51f31eda",
+  measurementId: "G-533VCBXGPH"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+async function signInGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
   try {
-    localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
-    let idx = [];
-    try {
-      idx = JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
-    } catch (e) {
-      idx = [];
-    }
-    idx = idx.filter(m => m.id !== match.id);
-    idx.unshift({
-      id: match.id,
-      teamA: match.teamA,
-      teamB: match.teamB,
-      teamAId: match.teamAId || null,
-      teamBId: match.teamBId || null,
-      oversLimit: match.oversLimit,
-      updatedAt: Date.now(),
-      status: match.status
-    });
-    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
+    // redirect (not popup) — works inside "Add to Home Screen" standalone mode on iOS/Android,
+    // where popups are frequently blocked or silently swallowed
+    await auth.signInWithRedirect(provider);
   } catch (e) {
-    console.error("save failed", e);
+    console.error("sign-in failed", e);
   }
 }
-async function loadIndex() {
+async function signOutUser() {
+  try {
+    await auth.signOut();
+  } catch (e) {
+    console.error("sign-out failed", e);
+  }
+}
+function genMatchCode() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+  let s = "";
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+// ---------- Storage helpers ----------
+// Three tiers, chosen per-match / per-call:
+//  1. Signed in (Google account): matches + teams live in Firestore under /users/{uid}/...
+//     — syncs automatically across any device the user signs into.
+//  2. Guest with a match code (match.shareCode set): that single match lives in the open
+//     /sharedMatches/{code} doc, so a teammate can resume it on another phone with just the code.
+//  3. Otherwise: localStorage, exactly as before — device-local, no login needed.
+// A lightweight pointer for every match (wherever it lives) is always mirrored into the local
+// index so the Home screen can render the list instantly without a network round trip.
+const LS_PREFIX = "cricket-scorer:";
+function lsGetIndex() {
   try {
     return JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
   } catch (e) {
     return [];
   }
 }
-async function loadMatch(id) {
+function lsSetIndex(idx) {
   try {
-    const raw = localStorage.getItem(`${LS_PREFIX}match:${id}`);
-    return raw ? JSON.parse(raw) : null;
+    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
   } catch (e) {
+    console.error("index save failed", e);
+  }
+}
+function upsertLocalPointer(match, extra) {
+  let idx = lsGetIndex().filter(m => m.id !== match.id);
+  idx.unshift({
+    id: match.id,
+    teamA: match.teamA,
+    teamB: match.teamB,
+    teamAId: match.teamAId || null,
+    teamBId: match.teamBId || null,
+    oversLimit: match.oversLimit,
+    updatedAt: Date.now(),
+    status: match.status,
+    shareCode: match.shareCode || null,
+    ...extra
+  });
+  lsSetIndex(idx);
+}
+async function saveMatch(match) {
+  try {
+    if (match.shareCode) {
+      await db.collection("sharedMatches").doc(match.shareCode).set({
+        ...match,
+        updatedAt: Date.now()
+      });
+      upsertLocalPointer(match, {
+        cloud: false
+      });
+    } else if (auth.currentUser) {
+      await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id).set({
+        ...match,
+        updatedAt: Date.now()
+      });
+      upsertLocalPointer(match, {
+        cloud: true
+      });
+    } else {
+      localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+      upsertLocalPointer(match, {
+        cloud: false
+      });
+    }
+  } catch (e) {
+    console.error("save failed, falling back to local", e);
+    localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+    upsertLocalPointer(match, {
+      cloud: false
+    });
+  }
+}
+async function loadIndex() {
+  const local = lsGetIndex();
+  if (!auth.currentUser) return local;
+  try {
+    const snap = await db.collection("users").doc(auth.currentUser.uid).collection("matches").orderBy("updatedAt", "desc").limit(50).get();
+    const cloud = snap.docs.map(d => ({
+      ...d.data(),
+      cloud: true
+    }));
+    const cloudIds = new Set(cloud.map(m => m.id));
+    const localOnly = local.filter(m => !cloudIds.has(m.id)); // shared/guest matches this device knows about
+    return [...cloud, ...localOnly].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 50);
+  } catch (e) {
+    console.error("cloud index load failed, showing local only", e);
+    return local;
+  }
+}
+async function loadMatch(id) {
+  const pointer = lsGetIndex().find(m => m.id === id);
+  try {
+    if (pointer && pointer.shareCode) {
+      const doc = await db.collection("sharedMatches").doc(pointer.shareCode).get();
+      if (doc.exists) return doc.data();
+    } else if ((pointer && pointer.cloud || !pointer) && auth.currentUser) {
+      const doc = await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(id).get();
+      if (doc.exists) return doc.data();
+    }
+  } catch (e) {
+    console.error("cloud load failed, trying local fallback", e);
+  }
+  const raw = localStorage.getItem(`${LS_PREFIX}match:${id}`);
+  return raw ? JSON.parse(raw) : null;
+}
+async function fetchSharedMatch(code) {
+  try {
+    const doc = await db.collection("sharedMatches").doc(code).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    console.error("join by code failed", e);
     return null;
   }
 }
 async function deleteMatch(id) {
+  const pointer = lsGetIndex().find(m => m.id === id);
+  try {
+    if (pointer && pointer.shareCode) {
+      await db.collection("sharedMatches").doc(pointer.shareCode).delete();
+    } else if ((!pointer || pointer.cloud) && auth.currentUser) {
+      await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(id).delete();
+    }
+  } catch (e) {
+    console.error("cloud delete failed", e);
+  }
   try {
     localStorage.removeItem(`${LS_PREFIX}match:${id}`);
-    let idx = [];
-    try {
-      idx = JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
-    } catch (e) {
-      idx = [];
-    }
-    idx = idx.filter(m => m.id !== id);
-    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx));
+    lsSetIndex(lsGetIndex().filter(m => m.id !== id));
   } catch (e) {
-    console.error("delete failed", e);
+    console.error("local delete failed", e);
   }
 }
 
 // ---------- Team roster storage ----------
 async function loadTeams() {
+  if (auth.currentUser) {
+    try {
+      const doc = await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("teams").get();
+      return doc.exists ? doc.data().list || [] : [];
+    } catch (e) {
+      console.error("cloud teams load failed, falling back to local", e);
+    }
+  }
   try {
     return JSON.parse(localStorage.getItem(`${LS_PREFIX}teams`) || "[]");
   } catch (e) {
@@ -307,6 +430,16 @@ async function loadTeams() {
   }
 }
 async function saveTeams(teams) {
+  if (auth.currentUser) {
+    try {
+      await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("teams").set({
+        list: teams
+      });
+      return;
+    } catch (e) {
+      console.error("cloud teams save failed, falling back to local", e);
+    }
+  }
   try {
     localStorage.setItem(`${LS_PREFIX}teams`, JSON.stringify(teams));
   } catch (e) {
@@ -958,6 +1091,228 @@ function PlayerPicker({
   });
 }
 
+// ---------- Account sync: sign-in, match codes ----------
+const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "10 17 15 12 10 7"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "15",
+  y1: "12",
+  x2: "3",
+  y2: "12"
+}));
+function AuthBar({
+  user,
+  onSignIn,
+  onSignOut
+}) {
+  const [busy, setBusy] = useState(false);
+  if (user) {
+    return /*#__PURE__*/React.createElement("button", {
+      className: "cs-btn",
+      onClick: async () => {
+        setBusy(true);
+        await onSignOut();
+        setBusy(false);
+      },
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        background: "#fff",
+        border: `1.5px solid ${COLORS.creamDark}`,
+        borderRadius: 20,
+        padding: "5px 12px 5px 5px",
+        cursor: "pointer",
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.inkSoft
+      }
+    }, user.photoURL ? /*#__PURE__*/React.createElement("img", {
+      src: user.photoURL,
+      alt: "",
+      style: {
+        width: 22,
+        height: 22,
+        borderRadius: "50%"
+      }
+    }) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        background: COLORS.willow,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#fff",
+        fontSize: 11,
+        fontWeight: 700
+      }
+    }, (user.displayName || user.email || "?").charAt(0).toUpperCase()), busy ? "Signing out…" : `${(user.displayName || "Synced").split(" ")[0]} · Sign out`);
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn cs-shine",
+    onClick: async () => {
+      setBusy(true);
+      await onSignIn();
+      setBusy(false);
+    },
+    disabled: busy,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: "#fff",
+      border: `1.5px solid ${COLORS.creamDark}`,
+      borderRadius: 20,
+      padding: "7px 14px",
+      cursor: busy ? "default" : "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 700,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)"
+    }
+  }, /*#__PURE__*/React.createElement(LogIn, {
+    size: 14
+  }), busy ? "Opening Google…" : "Sign in to sync");
+}
+function JoinCodeBar({
+  onJoin
+}) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    if (!code.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    const ok = await onJoin(code.trim().toUpperCase());
+    setBusy(false);
+    if (!ok) setError("No match found for that code — check it and try again.");
+  }
+  if (!open) {
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "cs-btn",
+      onClick: () => setOpen(true),
+      style: {
+        display: "block",
+        margin: "0 auto 24px",
+        background: "none",
+        border: "none",
+        color: COLORS.inkSoft,
+        fontFamily: "'Inter'",
+        fontSize: 12.5,
+        fontWeight: 600,
+        textDecoration: "underline",
+        textUnderlineOffset: 3,
+        cursor: "pointer"
+      }
+    }, "Have a match code from a teammate?");
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: code,
+    onChange: v => setCode(v.toUpperCase()),
+    placeholder: "Enter code, e.g. 7GQK4RTP",
+    style: {
+      textTransform: "uppercase",
+      letterSpacing: 1
+    }
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submit,
+    disabled: busy,
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, busy ? "Joining…" : "Join")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12,
+      fontFamily: "'Inter'",
+      marginTop: 8
+    }
+  }, error));
+}
+function ShareCodeButton({
+  match,
+  onGetCode
+}) {
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  if (match.shareCode) {
+    return /*#__PURE__*/React.createElement("button", {
+      className: "cs-btn",
+      onClick: () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(match.shareCode).catch(() => {});
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      title: "Tap to copy — share this code so a teammate can continue scoring on their phone",
+      style: {
+        background: "rgba(242,236,217,0.14)",
+        border: `1px solid rgba(242,236,217,0.35)`,
+        borderRadius: 8,
+        color: COLORS.cream,
+        fontFamily: "'IBM Plex Mono'",
+        fontWeight: 600,
+        fontSize: 12.5,
+        cursor: "pointer",
+        padding: "7px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        letterSpacing: 0.5
+      }
+    }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+      size: 13
+    }), " ", copied ? "Copied!" : match.shareCode);
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: async () => {
+      setBusy(true);
+      await onGetCode();
+      setBusy(false);
+    },
+    disabled: busy,
+    title: "Get a code so this match can continue on another phone",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: `1px solid rgba(242,236,217,0.35)`,
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: busy ? "default" : "pointer",
+      padding: "7px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 14
+  }), " ", busy ? "…" : "Get Code");
+}
+
 // ---------- Screens ----------
 
 function HomeScreen({
@@ -965,7 +1320,11 @@ function HomeScreen({
   onNew,
   onOpen,
   onDelete,
-  onManageTeams
+  onManageTeams,
+  user,
+  onSignIn,
+  onSignOut,
+  onJoinCode
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -974,6 +1333,16 @@ function HomeScreen({
       margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "flex-end",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    onSignIn: onSignIn,
+    onSignOut: onSignOut
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginBottom: 30
@@ -1040,7 +1409,9 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(Users, {
     size: 17
-  }), " Teams")), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }), " Teams")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+    onJoin: onJoinCode
+  }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -1118,7 +1489,7 @@ function HomeScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress")))))))) : /*#__PURE__*/React.createElement("div", {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "")))))))) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
@@ -2325,6 +2696,15 @@ function MatchScreen({
     setMatch(updated);
     saveMatch(updated);
   }
+  async function handleGetCode() {
+    if (match.shareCode) return;
+    const updated = {
+      ...match,
+      shareCode: genMatchCode()
+    };
+    setMatch(updated);
+    await saveMatch(updated);
+  }
   function checkInningEnd(updated) {
     const inn = updated.innings[updated.currentInningIndex];
     const oversDone = inn.legalBalls >= updated.oversLimit * 6;
@@ -2579,7 +2959,10 @@ function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement(Table2, {
     size: 14
-  }), " Scorecard"), /*#__PURE__*/React.createElement(ExportPdfButton, {
+  }), " Scorecard"), /*#__PURE__*/React.createElement(ShareCodeButton, {
+    match: match,
+    onGetCode: handleGetCode
+  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3167,7 +3550,9 @@ function CricketScorer() {
   const [teams, setTeams] = useState([]);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   const fontLoaded = useRef(false);
+  const initialLoadDone = useRef(false);
   function setScreen(next) {
     setScreenRaw(current => {
       const from = SCREEN_DEPTH[current] ?? 0;
@@ -3184,14 +3569,39 @@ function CricketScorer() {
       document.head.appendChild(link);
       fontLoaded.current = true;
     }
+    auth.getRedirectResult().catch(e => console.error("sign-in redirect error", e));
+    const unsubAuth = auth.onAuthStateChanged(u => {
+      setUser(u);
+      if (initialLoadDone.current) {
+        // account state changed after first load (sign in/out) — re-fetch from the right source
+        Promise.all([loadIndex(), loadTeams()]).then(([idx, teamList]) => {
+          setMatches(idx);
+          setTeams(teamList);
+        });
+      }
+    });
     Promise.all([loadIndex(), loadTeams()]).then(([idx, teamList]) => {
       setMatches(idx);
       setTeams(teamList);
       setLoading(false);
+      initialLoadDone.current = true;
     });
+    return unsubAuth;
   }, []);
   async function refreshIndex() {
     setMatches(await loadIndex());
+  }
+  async function handleJoinCode(code) {
+    const m = await fetchSharedMatch(code);
+    if (!m) return false;
+    upsertLocalPointer(m, {
+      shareCode: code,
+      cloud: false
+    });
+    setMatch(m);
+    setScreen("match");
+    refreshIndex();
+    return true;
   }
   function startNewMatch(setup) {
     const m = {
@@ -3290,7 +3700,11 @@ function CricketScorer() {
     onNew: () => setScreen("setup"),
     onOpen: openMatch,
     onDelete: handleDelete,
-    onManageTeams: () => setScreen("teams")
+    onManageTeams: () => setScreen("teams"),
+    user: user,
+    onSignIn: signInGoogle,
+    onSignOut: signOutUser,
+    onJoinCode: handleJoinCode
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
