@@ -621,6 +621,48 @@ const DEFAULT_RULES = {
   noballRuns: 1,
   freeHit: false
 };
+function nonStandardRulesText(rules) {
+  if (!rules) return null;
+  const bits = [];
+  if (rules.ballsPerOver && rules.ballsPerOver !== DEFAULT_RULES.ballsPerOver) bits.push(`${rules.ballsPerOver}-ball overs`);
+  if (rules.wideRuns && rules.wideRuns !== DEFAULT_RULES.wideRuns) bits.push(`${rules.wideRuns} runs on a wide`);
+  if (rules.noballRuns && rules.noballRuns !== DEFAULT_RULES.noballRuns) bits.push(`${rules.noballRuns} runs on a no-ball`);
+  if (rules.freeHit) bits.push("Free Hit enabled");
+  return bits.length ? bits.join(" · ") : null;
+}
+function tossText(toss) {
+  if (!toss || !toss.wonBy) return null;
+  return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
+}
+function suggestPlayerOfMatch(match) {
+  // simple, transparent heuristic: runs scored + 20 per wicket taken, combined across both innings
+  const scores = {};
+  match.innings.forEach(inn => {
+    Object.entries(inn.batsmen || {}).forEach(([name, b]) => {
+      scores[name] = (scores[name] || 0) + (b.runs || 0);
+    });
+    Object.entries(inn.bowlers || {}).forEach(([name, bw]) => {
+      scores[name] = (scores[name] || 0) + (bw.wickets || 0) * 20;
+    });
+  });
+  let best = null,
+    bestScore = -1;
+  Object.entries(scores).forEach(([name, s]) => {
+    if (s > bestScore) {
+      bestScore = s;
+      best = name;
+    }
+  });
+  return best;
+}
+function allMatchPlayers(match) {
+  const names = new Set();
+  match.innings.forEach(inn => {
+    (inn.battingOrder || []).forEach(n => names.add(n));
+    (inn.bowlingOrder || []).forEach(n => names.add(n));
+  });
+  return Array.from(names);
+}
 function newInning(battingTeam, bowlingTeam, rules) {
   const r = {
     ...DEFAULT_RULES,
@@ -900,6 +942,69 @@ function BallBadge({
       animation: "cs-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
   }, ev.display);
+}
+
+function OversStrip({
+  overs,
+  ballsPerOver
+}) {
+  const scrollRef = useRef(null);
+  const totalBalls = overs.reduce((s, o) => s + o.length, 0);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [totalBalls, overs.length]);
+  return /*#__PURE__*/React.createElement("div", null, overs.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginBottom: 6,
+      fontStyle: "italic"
+    }
+  }, "← scroll for previous overs"), /*#__PURE__*/React.createElement("div", {
+    ref: scrollRef,
+    style: {
+      display: "flex",
+      gap: 16,
+      overflowX: "auto",
+      paddingBottom: 4
+    }
+  }, overs.map((balls, i) => {
+    const isCurrent = i === overs.length - 1;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        flexShrink: 0,
+        minWidth: 64
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        color: isCurrent ? COLORS.turf : COLORS.inkSoft,
+        marginBottom: 5
+      }
+    }, isCurrent ? "THIS OVER" : `OVER ${i + 1}`), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, balls.length === 0 ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12.5,
+        color: COLORS.inkSoft,
+        fontStyle: "italic"
+      }
+    }, "Not started") : balls.map((ev, bi) => /*#__PURE__*/React.createElement(BallBadge, {
+      key: bi,
+      ev: ev
+    }))));
+  })));
 }
 
 function RoleBadge({
@@ -1396,9 +1501,7 @@ function AccountScreen({
   onSignOut,
   onSaveProfile,
   onBack,
-  redirectError,
-  rules,
-  onSaveRules
+  redirectError
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
@@ -1407,12 +1510,6 @@ function AccountScreen({
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
-  function updateRule(patch) {
-    onSaveRules({
-      ...rules,
-      ...patch
-    });
-  }
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -1645,103 +1742,6 @@ function AccountScreen({
     }
   }, "We only get your name, email and photo — never your password. You can revoke access anytime at myaccount.google.com/permissions.")), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 4
-    }
-  }, "Match Rules"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginBottom: 16,
-      lineHeight: 1.5
-    }
-  }, "Applied to new matches you start — handy for junior/short formats. A match already in progress keeps the rules it started with."), /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Balls per over",
-    value: rules.ballsPerOver,
-    onChange: v => updateRule({
-      ballsPerOver: v
-    }),
-    options: [{
-      value: 4,
-      label: "4 (kids)"
-    }, {
-      value: 5,
-      label: "5"
-    }, {
-      value: 6,
-      label: "6 (standard)"
-    }, {
-      value: 8,
-      label: "8"
-    }]
-  }), /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Runs on a wide",
-    value: rules.wideRuns,
-    onChange: v => updateRule({
-      wideRuns: v
-    }),
-    options: [{
-      value: 1,
-      label: "1 (standard)"
-    }, {
-      value: 2,
-      label: "2"
-    }]
-  }), /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Runs on a no-ball",
-    value: rules.noballRuns,
-    onChange: v => updateRule({
-      noballRuns: v
-    }),
-    options: [{
-      value: 1,
-      label: "1 (standard)"
-    }, {
-      value: 2,
-      label: "2"
-    }]
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => updateRule({
-      freeHit: !rules.freeHit
-    }),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: rules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
-      color: rules.freeHit ? "#fff" : COLORS.ink,
-      boxShadow: rules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, rules.freeHit ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
-    style: {
       background: "rgba(255,255,255,0.5)",
       borderRadius: 16,
       padding: 16,
@@ -1764,7 +1764,7 @@ function AccountScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required.")));
+  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")));
 }
 
 function JoinCodeBar({
@@ -2293,6 +2293,13 @@ function SetupScreen({
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
   const [bowlerB, setBowlerB] = useState("");
+  const [tossWonBy, setTossWonBy] = useState("");
+  const [tossDecision, setTossDecision] = useState("");
+  const [flipping, setFlipping] = useState(false);
+  const [matchRules, setMatchRules] = useState({
+    ...DEFAULT_RULES,
+    ...rules
+  });
   function defaultXI(players) {
     return players.slice(0, Math.min(11, players.length));
   }
@@ -2354,6 +2361,23 @@ function SetupScreen({
     });
     setBowlerB("");
   }
+  function flipCoin() {
+    if (!teamAName.trim() || !teamBName.trim() || flipping) return;
+    setFlipping(true);
+    setTossWonBy("");
+    // brief suspense before revealing — purely cosmetic, the actual pick is one call to Math.random
+    let ticks = 0;
+    const iv = setInterval(() => {
+      setTossWonBy(ticks % 2 === 0 ? teamAName.trim() : teamBName.trim());
+      ticks++;
+      if (ticks > 8) {
+        clearInterval(iv);
+        setTossWonBy(Math.random() < 0.5 ? teamAName.trim() : teamBName.trim());
+        setFlipping(false);
+      }
+    }, 90);
+  }
+
   // roster actually offered to the opening line-up pickers: the chosen Playing XI when a saved
   // squad is in play, otherwise empty (falls back to free-text entry via PlayerPicker)
   const teamARoster = teamASquad.length ? teamAPlayingXI : [];
@@ -2438,10 +2462,189 @@ function SetupScreen({
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
     placeholder: "20"
-  }))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
-      animation: "cs-slideUp 0.3s ease 0.03s backwards"
+      animation: "cs-slideUp 0.3s ease 0.02s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...sectionLabel,
+      marginBottom: 0
+    }
+  }, "Toss (optional)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: flipCoin,
+    disabled: !teamAName.trim() || !teamBName.trim() || flipping,
+    style: {
+      background: "none",
+      border: `1.5px solid ${COLORS.creamDark}`,
+      borderRadius: 20,
+      padding: "5px 12px",
+      cursor: teamAName.trim() && teamBName.trim() ? "pointer" : "default",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      opacity: !teamAName.trim() || !teamBName.trim() ? 0.4 : 1
+    }
+  }, flipping ? "Flipping…" : "🪙 Flip coin")), /*#__PURE__*/React.createElement(Field, {
+    label: "Won the toss"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, [teamAName, teamBName].filter(n => n.trim()).map(name => /*#__PURE__*/React.createElement("button", {
+    key: name,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setTossWonBy(name.trim()),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: tossWonBy === name.trim() ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tossWonBy === name.trim() ? "#fff" : COLORS.ink,
+      boxShadow: tossWonBy === name.trim() ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, name.trim())), ![teamAName, teamBName].some(n => n.trim()) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "Name both teams above first."))), tossWonBy && /*#__PURE__*/React.createElement(Field, {
+    label: `${tossWonBy} chose to`
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, ["Bat", "Bowl"].map(d => /*#__PURE__*/React.createElement("button", {
+    key: d,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setTossDecision(d),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: tossDecision === d ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tossDecision === d ? "#fff" : COLORS.ink,
+      boxShadow: tossDecision === d ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, d))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.04s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Match Rules"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "Standard by default — adjust for junior or short formats."), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Balls per over",
+    value: matchRules.ballsPerOver,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      ballsPerOver: v
+    })),
+    options: [{
+      value: 4,
+      label: "4 (kids)"
+    }, {
+      value: 5,
+      label: "5"
+    }, {
+      value: 6,
+      label: "6 (standard)"
+    }, {
+      value: 8,
+      label: "8"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a wide",
+    value: matchRules.wideRuns,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      wideRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a no-ball",
+    value: matchRules.noballRuns,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      noballRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      freeHit: !r.freeHit
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: matchRules.freeHit ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.freeHit ? "On" : "Off"))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.06s backwards"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabel
@@ -2464,7 +2667,7 @@ function SetupScreen({
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
-      animation: "cs-slideUp 0.3s ease 0.06s backwards"
+      animation: "cs-slideUp 0.3s ease 0.08s backwards"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabel
@@ -2529,10 +2732,16 @@ function SetupScreen({
       teamAKeeper,
       teamBCaptain,
       teamBKeeper,
-      rules
+      rules: matchRules,
+      toss: tossWonBy ? {
+        wonBy: tossWonBy,
+        decision: tossDecision || null
+      } : null
     })
   }, "Start Match")));
 }
+
+
 
 function Field({
   label,
@@ -3272,13 +3481,31 @@ function PrintReport({
       color: "#555",
       marginBottom: 4
     }
-  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), resultText && /*#__PURE__*/React.createElement("div", {
+  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), tossText(match.toss) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, tossText(match.toss)), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4,
+      fontStyle: "italic"
+    }
+  }, "House rules: ", nonStandardRulesText(match.rules)), resultText && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       fontWeight: 700,
       marginBottom: 14
     }
-  }, resultText), !resultText && /*#__PURE__*/React.createElement("div", {
+  }, resultText), match.playerOfMatch && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      marginBottom: 14
+    }
+  }, "Player of the Match: ", /*#__PURE__*/React.createElement("strong", null, match.playerOfMatch)), !resultText && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: "#555",
@@ -3391,7 +3618,21 @@ function ScorecardOverlay({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Close"))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, "Close"))), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, tossText(match.toss), tossText(match.toss) && nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("br", null), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "House rules: ", nonStandardRulesText(match.rules))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -3668,6 +3909,7 @@ function MatchScreen({
   if (match.status === "complete") {
     return /*#__PURE__*/React.createElement(ResultScreen, {
       match: match,
+      setMatch: setMatch,
       onExit: onExit
     });
   }
@@ -3937,23 +4179,15 @@ function MatchScreen({
       marginBottom: 8,
       textTransform: "uppercase"
     }
-  }, "This Over"), /*#__PURE__*/React.createElement("div", {
+  }, "Overs"), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      gap: 7,
-      flexWrap: "wrap"
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch"
     }
-  }, currentOverBalls.length === 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, "Over not started"), currentOverBalls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
-    key: i,
-    ev: ev
-  })))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(OversStrip, {
+    overs: inning.overs,
+    ballsPerOver: inning.ballsPerOver
+  }))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: 0,
@@ -4250,8 +4484,153 @@ function SecondInningsSetup({
     }
   }, "Start 2nd Innings"));
 }
+function PlayerOfMatchCard({
+  match,
+  setMatch
+}) {
+  const suggested = suggestPlayerOfMatch(match);
+  const players = allMatchPlayers(match);
+  const [picking, setPicking] = useState(false);
+  const current = match.playerOfMatch;
+  function pick(name) {
+    setMatch({
+      ...match,
+      playerOfMatch: name
+    });
+    saveMatch({
+      ...match,
+      playerOfMatch: name
+    });
+    setPicking(false);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Player of the Match"), current ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 18,
+    style: {
+      color: COLORS.gold
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 15,
+      color: COLORS.ink
+    }
+  }, current)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPicking(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Change")) : !picking ? /*#__PURE__*/React.createElement("div", null, suggested && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "Suggested, by runs + wickets: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, suggested)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, suggested && /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => pick(suggested),
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 15
+  }), " Confirm ", suggested), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setPicking(true),
+    style: {
+      flexShrink: 0
+    }
+  }, suggested ? "Pick someone else" : "Pick player of the match"))) : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, players.map(name => /*#__PURE__*/React.createElement("button", {
+    key: name,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => pick(name),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: "#fff",
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, name, name === suggested ? " ★" : ""))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPicking(false),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Cancel")));
+}
 function ResultScreen({
   match,
+  setMatch,
   onExit
 }) {
   const [i1, i2] = match.innings;
@@ -4263,6 +4642,8 @@ function ResultScreen({
   } else {
     resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
   }
+  const toss = tossText(match.toss);
+  const houseRules = nonStandardRulesText(match.rules);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -4326,7 +4707,18 @@ function ResultScreen({
       fontSize: 21,
       lineHeight: 1.3
     }
-  }, resultText)), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+  }, resultText), (toss || houseRules) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 10,
+      lineHeight: 1.6
+    }
+  }, toss, toss && houseRules && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", null, "House rules: ", houseRules))), /*#__PURE__*/React.createElement(PlayerOfMatchCard, {
+    match: match,
+    setMatch: setMatch
+  }), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       background: "#fff",
@@ -4344,6 +4736,7 @@ function ResultScreen({
     bowlingKeeper: keeperFor(match, inn.bowlingTeam)
   }))));
 }
+
 
 // ---------- Root ----------
 const SCREEN_DEPTH = {
@@ -4455,6 +4848,8 @@ function CricketScorer() {
       currentInningIndex: 0,
       status: "in-progress",
       rules: setup.rules || DEFAULT_RULES,
+      toss: setup.toss || null,
+      playerOfMatch: null,
       innings: [newInning(setup.teamA, setup.teamB, setup.rules)],
       awaitingSecondInningsSetup: false
     };
@@ -4467,6 +4862,7 @@ function CricketScorer() {
     setMatch(m);
     saveMatch(m);
     setScreen("match");
+    if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
   }
   async function openMatch(id) {
     const m = await loadMatch(id);
@@ -4582,9 +4978,7 @@ function CricketScorer() {
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
     onBack: () => setScreen("home"),
-    redirectError: authError,
-    rules: rules,
-    onSaveRules: handleSaveRules
+    redirectError: authError
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
