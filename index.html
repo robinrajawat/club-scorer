@@ -528,6 +528,45 @@ async function saveProfile(profile) {
     console.error("profile save failed", e);
   }
 }
+
+// ---------- House rules (balls/over, wide & no-ball run values, free hit) ----------
+// Device-local by default so guests (no sign-in required) can still set these; also synced into
+// the Firestore profile doc when signed in, so they follow the account across devices.
+function loadRulesLocal() {
+  try {
+    return {
+      ...DEFAULT_RULES,
+      ...JSON.parse(localStorage.getItem(`${LS_PREFIX}rules`) || "{}")
+    };
+  } catch (e) {
+    return DEFAULT_RULES;
+  }
+}
+function saveRulesLocal(rules) {
+  try {
+    localStorage.setItem(`${LS_PREFIX}rules`, JSON.stringify(rules));
+  } catch (e) {
+    console.error("save rules failed", e);
+  }
+}
+async function loadRules() {
+  if (auth.currentUser) {
+    const prof = await loadProfile();
+    if (prof && prof.rules) return {
+      ...DEFAULT_RULES,
+      ...prof.rules
+    };
+  }
+  return loadRulesLocal();
+}
+async function saveRules(rules) {
+  saveRulesLocal(rules);
+  if (auth.currentUser) {
+    await saveProfile({
+      rules
+    });
+  }
+}
 function rosterFor(match, teamName) {
   const roster = teamName === match.teamA ? match.teamARoster : match.teamBRoster;
   return roster || [];
@@ -540,7 +579,17 @@ function keeperFor(match, teamName) {
 }
 
 // ---------- Match model ----------
-function newInning(battingTeam, bowlingTeam) {
+const DEFAULT_RULES = {
+  ballsPerOver: 6,
+  wideRuns: 1,
+  noballRuns: 1,
+  freeHit: false
+};
+function newInning(battingTeam, bowlingTeam, rules) {
+  const r = {
+    ...DEFAULT_RULES,
+    ...rules
+  };
   return {
     battingTeam,
     bowlingTeam,
@@ -567,7 +616,14 @@ function newInning(battingTeam, bowlingTeam) {
     lastBowlerName: "",
     fallOfWickets: [],
     // {score, wicket, over, batsman}
-    complete: false
+    complete: false,
+    // house rules baked in at innings start, so a mid-match account-settings change never
+    // affects an innings already in progress
+    ballsPerOver: r.ballsPerOver,
+    wideRuns: r.wideRuns,
+    noballRuns: r.noballRuns,
+    freeHitEnabled: r.freeHit,
+    freeHitActive: false
   };
 }
 function ensureBatsman(inning, name) {
@@ -595,19 +651,29 @@ function ensureBowler(inning, name) {
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
 }
-function oversLabel(legalBalls) {
-  const o = Math.floor(legalBalls / 6);
-  const b = legalBalls % 6;
+function oversLabel(legalBalls, ballsPerOver) {
+  const bpo = ballsPerOver || 6;
+  const o = Math.floor(legalBalls / bpo);
+  const b = legalBalls % bpo;
   return `${o}.${b}`;
 }
-function crr(runs, legalBalls) {
+function crr(runs, legalBalls, ballsPerOver) {
   if (legalBalls === 0) return "0.00";
-  return (runs / legalBalls * 6).toFixed(2);
+  return (runs / legalBalls * (ballsPerOver || 6)).toFixed(2);
 }
 
 // ---------- Ball event application ----------
 // event: { kind: 'run'|'wide'|'noball'|'bye'|'legbye'|'wicket', runs, wicketType, newBatsman }
 function applyBall(inning, event) {
+  // Free hit: a non-run-out dismissal can't stand on a free-hit ball. Reroute it to a dot ball
+  // rather than crediting the wicket — the UI also hides the disallowed wicket types while a
+  // free hit is active, this is just a safety net.
+  if (inning.freeHitActive && event.kind === "wicket" && event.wicketType !== "Run out") {
+    event = {
+      kind: "run",
+      runs: 0
+    };
+  }
   const cur = {
     ...inning
   };
@@ -647,7 +713,7 @@ function applyBall(inning, event) {
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
     legalBall = false;
-    runsThisBall = 1 + (event.runs || 0);
+    runsThisBall = (cur.wideRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
     cur.extras.wide += runsThisBall;
@@ -655,7 +721,7 @@ function applyBall(inning, event) {
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
     legalBall = false;
-    runsThisBall = 1 + (event.runs || 0);
+    runsThisBall = (cur.noballRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
     cur.extras.noball += 1;
@@ -667,6 +733,7 @@ function applyBall(inning, event) {
     };
     display = event.runs ? `Nb+${event.runs}` : "Nb";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
+    if (cur.freeHitEnabled) cur.freeHitActive = true;
   } else if (event.kind === "bye" || event.kind === "legbye") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
@@ -718,7 +785,7 @@ function applyBall(inning, event) {
     cur.fallOfWickets = [...cur.fallOfWickets, {
       score: cur.runs,
       wicket: cur.wickets,
-      over: oversLabel(cur.legalBalls + (legalBall ? 1 : 0)),
+      over: oversLabel(cur.legalBalls + (legalBall ? 1 : 0), cur.ballsPerOver),
       batsman: dismissedName
     }];
     display = "W";
@@ -733,7 +800,8 @@ function applyBall(inning, event) {
   }];
   if (legalBall) {
     cur.legalBalls += 1;
-    if (cur.legalBalls % 6 === 0 && cur.wickets < 10) {
+    cur.freeHitActive = false; // a fair (or fair-but-illegal-for-batsman... i.e. any counted) ball consumes the free hit
+    if (cur.legalBalls % (cur.ballsPerOver || 6) === 0 && cur.wickets < 10) {
       cur.overs = [...cur.overs, []];
       cur.lastBowlerName = cur.bowlerName;
       cur.bowlerName = "";
@@ -752,10 +820,10 @@ function applyBall(inning, event) {
 function BallBadge({
   ev
 }) {
-  let bg = "#fff",
-    color = COLORS.inkSoft,
-    shadow = "0 1px 2px rgba(42,36,32,0.12)",
-    border = `1px solid ${COLORS.creamDark}`;
+  let bg = COLORS.creamDark,
+    color = COLORS.ink,
+    shadow = "0 1px 2px rgba(42,36,32,0.1)",
+    border = `1px solid ${COLORS.willow}`;
   if (ev.kind === "wicket") {
     bg = `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`;
     color = "#fff";
@@ -796,83 +864,6 @@ function BallBadge({
       animation: "cs-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
   }, ev.display);
-}
-function OversHistoryCard({
-  overs
-}) {
-  const [expanded, setExpanded] = useState(false);
-  if (overs.length === 0) return null;
-  const shown = expanded ? overs : overs.slice(0, 3);
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff",
-      borderRadius: 16,
-      padding: 16,
-      marginTop: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      marginBottom: 12,
-      textTransform: "uppercase"
-    }
-  }, "Overs"), shown.map(o => /*#__PURE__*/React.createElement("div", {
-    key: o.number,
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "baseline",
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      fontWeight: 700,
-      color: COLORS.ink
-    }
-  }, "Over ", o.number), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      color: COLORS.inkSoft
-    }
-  }, o.runs, " run", o.runs === 1 ? "" : "s", o.wickets ? ` · ${o.wickets} wkt${o.wickets === 1 ? "" : "s"}` : "")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap"
-    }
-  }, o.balls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
-    key: i,
-    ev: ev
-  }))))), overs.length > 3 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn",
-    onClick: () => setExpanded(e => !e),
-    style: {
-      display: "block",
-      margin: "4px auto 0",
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      textDecoration: "underline",
-      textUnderlineOffset: 3,
-      cursor: "pointer"
-    }
-  }, expanded ? "Show fewer overs" : `Show all ${overs.length} overs`));
 }
 
 function RoleBadge({
@@ -1316,6 +1307,52 @@ function AuthBar({
     size: 14
   }), label);
 }
+function RuleChoice({
+  label,
+  value,
+  options,
+  onChange
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, options.map(opt => {
+    const active = opt.value === value;
+    return /*#__PURE__*/React.createElement("button", {
+      key: opt.value,
+      type: "button",
+      className: "cs-btn cs-shine",
+      onClick: () => onChange(opt.value),
+      style: {
+        padding: "8px 14px",
+        borderRadius: 20,
+        border: "none",
+        cursor: "pointer",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        color: active ? "#fff" : COLORS.ink,
+        boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, opt.label);
+  })));
+}
 function AccountScreen({
   user,
   profile,
@@ -1323,7 +1360,9 @@ function AccountScreen({
   onSignOut,
   onSaveProfile,
   onBack,
-  redirectError
+  redirectError,
+  rules,
+  onSaveRules
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
@@ -1332,6 +1371,12 @@ function AccountScreen({
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
+  function updateRule(patch) {
+    onSaveRules({
+      ...rules,
+      ...patch
+    });
+  }
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -1564,6 +1609,103 @@ function AccountScreen({
     }
   }, "We only get your name, email and photo — never your password. You can revoke access anytime at myaccount.google.com/permissions.")), /*#__PURE__*/React.createElement("div", {
     style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Match Rules"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "Applied to new matches you start — handy for junior/short formats. A match already in progress keeps the rules it started with."), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Balls per over",
+    value: rules.ballsPerOver,
+    onChange: v => updateRule({
+      ballsPerOver: v
+    }),
+    options: [{
+      value: 4,
+      label: "4 (kids)"
+    }, {
+      value: 5,
+      label: "5"
+    }, {
+      value: 6,
+      label: "6 (standard)"
+    }, {
+      value: 8,
+      label: "8"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a wide",
+    value: rules.wideRuns,
+    onChange: v => updateRule({
+      wideRuns: v
+    }),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a no-ball",
+    value: rules.noballRuns,
+    onChange: v => updateRule({
+      noballRuns: v
+    }),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => updateRule({
+      freeHit: !rules.freeHit
+    }),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: rules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: rules.freeHit ? "#fff" : COLORS.ink,
+      boxShadow: rules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, rules.freeHit ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
+    style: {
       background: "rgba(255,255,255,0.5)",
       borderRadius: 16,
       padding: 16,
@@ -1684,7 +1826,8 @@ function ShareCodeButton({
         fontWeight: 600,
         fontSize: 12.5,
         cursor: "pointer",
-        padding: "7px 12px",
+        padding: "0 12px",
+        height: 38,
         display: "flex",
         alignItems: "center",
         gap: 5,
@@ -1703,23 +1846,22 @@ function ShareCodeButton({
     },
     disabled: busy,
     title: "Get a code so this match can continue on another phone",
+    "aria-label": "Get code",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: `1px solid rgba(242,236,217,0.35)`,
       borderRadius: 8,
       color: COLORS.cream,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
       cursor: busy ? "default" : "pointer",
-      padding: "7px 12px",
+      width: 38,
+      height: 38,
       display: "flex",
       alignItems: "center",
-      gap: 5
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
-    size: 14
-  }), " ", busy ? "…" : "Get Code");
+    size: 17
+  }));
 }
 
 // ---------- Screens ----------
@@ -2057,7 +2199,8 @@ function PlayingXIPicker({
 function SetupScreen({
   onStart,
   onCancel,
-  teams
+  teams,
+  rules
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -2310,7 +2453,8 @@ function SetupScreen({
       teamACaptain,
       teamAKeeper,
       teamBCaptain,
-      teamBKeeper
+      teamBKeeper,
+      rules
     })
   }, "Start Match")));
 }
@@ -2802,7 +2946,7 @@ function InningScorecard({
       fontWeight: 500,
       color: COLORS.inkSoft
     }
-  }, "(", oversLabel(inning.legalBalls), ")"))), /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), ")"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'"
     }
@@ -2979,7 +3123,7 @@ function InningScorecard({
     const bw = inning.bowlers[name];
     if (!bw) return null;
     const isBowling = name === inning.bowlerName && !inning.complete;
-    const econ = bw.ballsBowled > 0 ? (bw.runs / bw.ballsBowled * 6).toFixed(2) : "0.00";
+    const econ = bw.ballsBowled > 0 ? (bw.runs / bw.ballsBowled * (inning.ballsPerOver || 6)).toFixed(2) : "0.00";
     return /*#__PURE__*/React.createElement("div", {
       key: name,
       style: {
@@ -3003,7 +3147,7 @@ function InningScorecard({
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace"
       }
-    }, oversLabel(bw.ballsBowled)), /*#__PURE__*/React.createElement("span", {
+    }, oversLabel(bw.ballsBowled, inning.ballsPerOver)), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace"
@@ -3095,24 +3239,24 @@ function ExportPdfButton({
   return /*#__PURE__*/React.createElement("button", {
     onClick: handleExport,
     className: "cs-btn",
+    title: "Export PDF",
+    "aria-label": "Export PDF",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
       borderRadius: 8,
       color: COLORS.cream,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
       cursor: "pointer",
-      padding: "7px 12px",
+      width: 38,
+      height: 38,
       display: "flex",
       alignItems: "center",
-      gap: 5,
+      justifyContent: "center",
       ...style
     }
   }, /*#__PURE__*/React.createElement(Printer, {
-    size: 14
-  }), " Export PDF");
+    size: 17
+  }));
 }
 function ScorecardOverlay({
   match,
@@ -3235,12 +3379,12 @@ function MatchScreen({
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
-  const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % 6 === 0 && !inning.bowlerName && !inning.complete;
+  const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   const target = inningIdx === 1 ? match.innings[0].runs + 1 : null;
   const isChasing = inningIdx === 1;
-  const ballsLeft = match.oversLimit * 6 - inning.legalBalls;
+  const ballsLeft = match.oversLimit * (inning.ballsPerOver || 6) - inning.legalBalls;
   const runsNeeded = target ? target - inning.runs : null;
-  const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * 6).toFixed(2) : null;
+  const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * (inning.ballsPerOver || 6)).toFixed(2) : null;
   function pushHistory() {
     setHistory(h => [...h, JSON.parse(JSON.stringify(match))]);
   }
@@ -3264,14 +3408,19 @@ function MatchScreen({
   }
   function checkInningEnd(updated) {
     const inn = updated.innings[updated.currentInningIndex];
-    const oversDone = inn.legalBalls >= updated.oversLimit * 6;
+    const oversDone = inn.legalBalls >= updated.oversLimit * (inn.ballsPerOver || 6);
     const allOut = inn.wickets >= 10;
     const chaseWon = updated.currentInningIndex === 1 && inn.runs >= updated.innings[0].runs + 1;
     if (oversDone || allOut || chaseWon) {
       inn.complete = true;
       if (updated.currentInningIndex === 0) {
         updated.currentInningIndex = 1;
-        updated.innings[1] = newInning(inn.bowlingTeam, inn.battingTeam);
+        updated.innings[1] = newInning(inn.bowlingTeam, inn.battingTeam, {
+          ballsPerOver: inn.ballsPerOver,
+          wideRuns: inn.wideRuns,
+          noballRuns: inn.noballRuns,
+          freeHit: inn.freeHitEnabled
+        });
         updated.awaitingSecondInningsSetup = true;
       } else {
         updated.status = "complete";
@@ -3437,13 +3586,8 @@ function MatchScreen({
     });
   }
   const currentOverBalls = inning.overs[inning.overs.length - 1] || [];
-  const completedOvers = inning.overs.slice(0, -1).map((balls, i) => ({
-    number: i + 1,
-    balls,
-    runs: balls.reduce((s, b) => s + (b.runs || 0), 0),
-    wickets: balls.filter(b => b.kind === "wicket").length
-  })).reverse();
-  const wicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
+  const allWicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
+  const wicketTypes = inning.freeHitActive ? ["Run out"] : allWicketTypes;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: 140,
@@ -3506,23 +3650,23 @@ function MatchScreen({
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowScorecard(true),
     className: "cs-btn",
+    title: "Scorecard",
+    "aria-label": "Scorecard",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: `1px solid rgba(242,236,217,0.35)`,
       borderRadius: 8,
       color: COLORS.cream,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
       cursor: "pointer",
-      padding: "7px 12px",
+      width: 38,
+      height: 38,
       display: "flex",
       alignItems: "center",
-      gap: 5
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(Table2, {
-    size: 14
-  }), " Scorecard"), /*#__PURE__*/React.createElement(ShareCodeButton, {
+    size: 17
+  })), /*#__PURE__*/React.createElement(ShareCodeButton, {
     match: match,
     onGetCode: handleGetCode
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
@@ -3557,7 +3701,7 @@ function MatchScreen({
       fontSize: 18,
       opacity: 0.75
     }
-  }, "(", oversLabel(inning.legalBalls), "/", match.oversLimit, ")")), /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 16,
@@ -3567,7 +3711,17 @@ function MatchScreen({
       opacity: 0.9,
       fontWeight: 500
     }
-  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", oversLabel(ballsLeft), " ov"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate))))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", oversLabel(ballsLeft, inning.ballsPerOver), " ov"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate)), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: COLORS.gold,
+      color: "#fff",
+      fontWeight: 700,
+      padding: "2px 9px",
+      borderRadius: 20,
+      letterSpacing: 0.5,
+      fontSize: 11.5
+    }
+  }, "FREE HIT")))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       margin: "-10px 12px 0",
@@ -3683,7 +3837,7 @@ function MatchScreen({
       fontWeight: 600,
       color: COLORS.inkSoft
     }
-  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
+  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled, inning.ballsPerOver)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "14px 12px 0"
     }
@@ -3713,9 +3867,7 @@ function MatchScreen({
   }, "Over not started"), currentOverBalls.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
     key: i,
     ev: ev
-  })))), /*#__PURE__*/React.createElement(OversHistoryCard, {
-    overs: completedOvers
-  }), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+  })))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: 0,
@@ -3862,7 +4014,15 @@ function MatchScreen({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "How out?"), /*#__PURE__*/React.createElement("div", {
+  }, "How out?"), inning.freeHitActive && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "Free hit \u2014 only a run out counts here."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
@@ -4118,6 +4278,7 @@ function CricketScorer() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
@@ -4145,17 +4306,19 @@ function CricketScorer() {
       setUser(u);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
-        Promise.all([loadIndex(), loadTeams(), loadProfile()]).then(([idx, teamList, prof]) => {
+        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules()]).then(([idx, teamList, prof, r]) => {
           setMatches(idx);
           setTeams(teamList);
           setProfile(prof);
+          setRules(r);
         });
       }
     });
-    Promise.all([loadIndex(), loadTeams(), loadProfile()]).then(([idx, teamList, prof]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules()]).then(([idx, teamList, prof, r]) => {
       setMatches(idx);
       setTeams(teamList);
       setProfile(prof);
+      setRules(r);
       setLoading(false);
       initialLoadDone.current = true;
     });
@@ -4167,6 +4330,10 @@ function CricketScorer() {
   async function handleSaveProfile(p) {
     await saveProfile(p);
     setProfile(p);
+  }
+  async function handleSaveRules(r) {
+    await saveRules(r);
+    setRules(r);
   }
   async function handleJoinCode(code) {
     const m = await fetchSharedMatch(code);
@@ -4196,7 +4363,8 @@ function CricketScorer() {
       oversLimit: setup.oversLimit,
       currentInningIndex: 0,
       status: "in-progress",
-      innings: [newInning(setup.teamA, setup.teamB)],
+      rules: setup.rules || DEFAULT_RULES,
+      innings: [newInning(setup.teamA, setup.teamB, setup.rules)],
       awaitingSecondInningsSetup: false
     };
     m.innings[0].strikerName = setup.strikerA;
@@ -4288,7 +4456,8 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(SetupScreen, {
     onStart: startNewMatch,
     onCancel: () => setScreen("home"),
-    teams: teams
+    teams: teams,
+    rules: rules
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
@@ -4322,7 +4491,9 @@ function CricketScorer() {
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
     onBack: () => setScreen("home"),
-    redirectError: authError
+    redirectError: authError,
+    rules: rules,
+    onSaveRules: handleSaveRules
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
