@@ -390,6 +390,9 @@ async function saveMatch(match) {
       upsertLocalPointer(match, {
         cloud: false
       });
+      return {
+        ok: true
+      };
     } else if (auth.currentUser) {
       await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id).set({
         ...match,
@@ -398,18 +401,31 @@ async function saveMatch(match) {
       upsertLocalPointer(match, {
         cloud: true
       });
+      return {
+        ok: true
+      };
     } else {
       localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
       upsertLocalPointer(match, {
         cloud: false
       });
+      return {
+        ok: true
+      };
     }
   } catch (e) {
-    console.error("save failed, falling back to local", e);
+    console.error("cloud save failed", match.shareCode ? "(match code)" : "(account)", e.code, e.message);
+    // Still keep this device usable even when the cloud write fails, but a match-code save that
+    // only lands in localStorage is actively misleading — nothing exists for another phone to
+    // find — so this is surfaced as a real failure rather than silently treated as success.
     localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
     upsertLocalPointer(match, {
       cloud: false
     });
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
+    };
   }
 }
 async function loadIndex() {
@@ -448,10 +464,18 @@ async function loadMatch(id) {
 async function fetchSharedMatch(code) {
   try {
     const doc = await db.collection("sharedMatches").doc(code).get();
-    return doc.exists ? doc.data() : null;
+    return doc.exists ? {
+      found: true,
+      match: doc.data()
+    } : {
+      found: false
+    };
   } catch (e) {
-    console.error("join by code failed", e);
-    return null;
+    console.error("join by code failed", e.code, e.message);
+    return {
+      found: false,
+      error: e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
+    };
   }
 }
 async function deleteMatch(id) {
@@ -1742,9 +1766,9 @@ function JoinCodeBar({
     if (!code.trim() || busy) return;
     setBusy(true);
     setError("");
-    const ok = await onJoin(code.trim().toUpperCase());
+    const result = await onJoin(code.trim().toUpperCase());
     setBusy(false);
-    if (!ok) setError("No match found for that code — check it and try again.");
+    if (!result.ok) setError(result.error || "No match found for that code — check it and try again.");
   }
   if (!open) {
     return /*#__PURE__*/React.createElement("button", {
@@ -1806,6 +1830,7 @@ function ShareCodeButton({
 }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
   if (match.shareCode) {
     return /*#__PURE__*/React.createElement("button", {
       className: "cs-btn",
@@ -1837,12 +1862,18 @@ function ShareCodeButton({
       size: 13
     }), " ", copied ? "Copied!" : match.shareCode);
   }
-  return /*#__PURE__*/React.createElement("button", {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: async () => {
       setBusy(true);
-      await onGetCode();
+      setError("");
+      const result = await onGetCode();
       setBusy(false);
+      if (result && result.ok === false) setError(result.error || "Couldn't get a code.");
     },
     disabled: busy,
     title: "Get a code so this match can continue on another phone",
@@ -1861,8 +1892,40 @@ function ShareCodeButton({
     }
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 17
-  }));
+  })), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "calc(100% + 8px)",
+      right: 0,
+      width: 240,
+      background: COLORS.ink,
+      color: COLORS.cream,
+      borderRadius: 10,
+      padding: "10px 12px",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      lineHeight: 1.5,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+      zIndex: 20
+    }
+  }, error, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setError(""),
+    style: {
+      display: "block",
+      marginTop: 6,
+      background: "none",
+      border: "none",
+      color: COLORS.gold,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "Dismiss")));
 }
+
+
 
 // ---------- Screens ----------
 
@@ -3398,13 +3461,24 @@ function MatchScreen({
     saveMatch(updated);
   }
   async function handleGetCode() {
-    if (match.shareCode) return;
+    if (match.shareCode) return {
+      ok: true
+    };
     const updated = {
       ...match,
       shareCode: genMatchCode()
     };
-    setMatch(updated);
-    await saveMatch(updated);
+    const result = await saveMatch(updated);
+    if (result.ok) {
+      setMatch(updated);
+      return {
+        ok: true
+      };
+    }
+    return {
+      ok: false,
+      error: result.error
+    };
   }
   function checkInningEnd(updated) {
     const inn = updated.innings[updated.currentInningIndex];
@@ -4336,16 +4410,21 @@ function CricketScorer() {
     setRules(r);
   }
   async function handleJoinCode(code) {
-    const m = await fetchSharedMatch(code);
-    if (!m) return false;
-    upsertLocalPointer(m, {
+    const result = await fetchSharedMatch(code);
+    if (!result.found) return {
+      ok: false,
+      error: result.error || "No match found for that code."
+    };
+    upsertLocalPointer(result.match, {
       shareCode: code,
       cloud: false
     });
-    setMatch(m);
+    setMatch(result.match);
     setScreen("match");
     refreshIndex();
-    return true;
+    return {
+      ok: true
+    };
   }
   function startNewMatch(setup) {
     const m = {
