@@ -275,19 +275,62 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 async function signInGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
+  function friendlyError(err) {
+    if (err.code === "auth/unauthorized-domain") {
+      return "This site isn't yet authorized for sign-in \u2014 add it under Firebase Console \u2192 Authentication \u2192 Settings \u2192 Authorized domains.";
+    }
+    return err.message || "Sign-in failed.";
+  }
   try {
-    // redirect (not popup) — works inside "Add to Home Screen" standalone mode on iOS/Android,
-    // where popups are frequently blocked or silently swallowed
-    await auth.signInWithRedirect(provider);
+    // Popup first: no cross-page navigation, so it doesn't depend on the browser preserving
+    // pending-auth state in storage across a redirect round trip — the #1 cause of "no error,
+    // but signed-in state never happens" with signInWithRedirect (notably on iOS Safari /
+    // "Add to Home Screen" standalone mode, where that storage can silently fail to persist).
+    await auth.signInWithPopup(provider);
+    return {
+      ok: true
+    };
   } catch (e) {
-    console.error("sign-in failed", e);
+    console.error("popup sign-in failed", e.code, e.message);
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") {
+      return {
+        ok: false,
+        error: "Sign-in was cancelled."
+      };
+    }
+    const shouldFallbackToRedirect = e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment";
+    if (shouldFallbackToRedirect) {
+      try {
+        await auth.signInWithRedirect(provider);
+        return {
+          ok: true
+        }; // page is navigating away; nothing more to do here
+      } catch (e2) {
+        console.error("redirect sign-in failed", e2.code, e2.message);
+        return {
+          ok: false,
+          error: friendlyError(e2)
+        };
+      }
+    }
+    return {
+      ok: false,
+      error: friendlyError(e)
+    };
   }
 }
 async function signOutUser() {
   try {
     await auth.signOut();
+    return {
+      ok: true
+    };
   } catch (e) {
     console.error("sign-out failed", e);
+    return {
+      ok: false,
+      error: e.message || "Sign-out failed."
+    };
   }
 }
 function genMatchCode() {
@@ -1279,22 +1322,29 @@ function AccountScreen({
   onSignIn,
   onSignOut,
   onSaveProfile,
-  onBack
+  onBack,
+  redirectError
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
+  const displayedError = actionError || redirectError;
   async function handleSignIn() {
     setBusy(true);
-    await onSignIn();
+    setActionError("");
+    const result = await onSignIn();
     setBusy(false);
+    if (result && result.ok === false && result.error) setActionError(result.error);
   }
   async function handleSignOut() {
     setBusy(true);
-    await onSignOut();
+    setActionError("");
+    const result = await onSignOut();
     setBusy(false);
+    if (result && result.ok === false && result.error) setActionError(result.error);
   }
   async function handleSaveName() {
     setBusy(true);
@@ -1344,7 +1394,19 @@ function AccountScreen({
       color: COLORS.inkSoft,
       marginBottom: 20
     }
-  }, "Sign in to sync your matches and teams across devices."), user ? /*#__PURE__*/React.createElement("div", {
+  }, "Sign in to sync your matches and teams across devices."), displayedError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: `1.5px solid rgba(139,30,30,0.25)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, displayedError), user ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -4056,6 +4118,7 @@ function CricketScorer() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [authError, setAuthError] = useState("");
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
   function setScreen(next) {
@@ -4074,7 +4137,10 @@ function CricketScorer() {
       document.head.appendChild(link);
       fontLoaded.current = true;
     }
-    auth.getRedirectResult().catch(e => console.error("sign-in redirect error", e));
+    auth.getRedirectResult().catch(e => {
+      console.error("sign-in redirect error", e);
+      setAuthError(e.message || "Sign-in didn't complete. Please try again.");
+    });
     const unsubAuth = auth.onAuthStateChanged(u => {
       setUser(u);
       if (initialLoadDone.current) {
@@ -4255,7 +4321,8 @@ function CricketScorer() {
     onSignIn: signInGoogle,
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("home"),
+    redirectError: authError
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
