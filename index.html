@@ -5137,8 +5137,80 @@ function CricketScorer() {
     match: match
   }));
 }
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false
+    };
+  }
+  static getDerivedStateFromError() {
+    return {
+      hasError: true
+    };
+  }
+  componentDidCatch(error, info) {
+    console.error("Cricket Scorer crashed:", error, info && info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          textAlign: "center",
+          background: COLORS.cream,
+          fontFamily: "'Inter', sans-serif"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 40,
+          marginBottom: 12
+        }
+      }, "\uD83C\uDFCF"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: 22,
+          color: COLORS.pitch,
+          marginBottom: 8
+        }
+      }, "Something went wrong"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13.5,
+          color: COLORS.inkSoft,
+          marginBottom: 20,
+          maxWidth: 320,
+          lineHeight: 1.6
+        }
+      }, "The app hit an unexpected error. Your saved matches and teams are safe \u2014 reloading should fix this."), /*#__PURE__*/React.createElement("button", {
+        onClick: () => window.location.reload(),
+        style: {
+          background: COLORS.pitch,
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          padding: "12px 24px",
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+          fontFamily: "'Inter'"
+        }
+      }, "Reload"));
+    }
+    return this.props.children;
+  }
+}
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(/*#__PURE__*/React.createElement(CricketScorer, null));
+root.render(/*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(CricketScorer, null)));
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(e => console.error("Service worker registration failed", e));
+  });
+}
 
 </script>
 </body>
