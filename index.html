@@ -967,17 +967,19 @@ function OversStrip({
     ref: scrollRef,
     style: {
       display: "flex",
-      gap: 16,
       overflowX: "auto",
-      paddingBottom: 4
+      scrollSnapType: "x mandatory",
+      WebkitOverflowScrolling: "touch"
     }
   }, overs.map((balls, i) => {
     const isCurrent = i === overs.length - 1;
     return /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
-        flexShrink: 0,
-        minWidth: 64
+        flex: "0 0 100%",
+        width: "100%",
+        scrollSnapAlign: "start",
+        scrollSnapStop: "always"
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -991,7 +993,8 @@ function OversStrip({
     }, isCurrent ? "THIS OVER" : `OVER ${i + 1}`), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 6
+        gap: 6,
+        flexWrap: "wrap"
       }
     }, balls.length === 0 ? /*#__PURE__*/React.createElement("span", {
       style: {
@@ -1006,6 +1009,7 @@ function OversStrip({
     }))));
   })));
 }
+
 
 function RoleBadge({
   isCaptain,
@@ -4179,15 +4183,10 @@ function MatchScreen({
       marginBottom: 8,
       textTransform: "uppercase"
     }
-  }, "Overs"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      overflowX: "auto",
-      WebkitOverflowScrolling: "touch"
-    }
-  }, /*#__PURE__*/React.createElement(OversStrip, {
+  }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
     overs: inning.overs,
     ballsPerOver: inning.ballsPerOver
-  }))), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+  })), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: 0,
