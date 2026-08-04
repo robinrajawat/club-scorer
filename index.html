@@ -56,6 +56,9 @@ function Icon({
 const ChevronLeft = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "15 18 9 12 15 6"
 }));
+const ChevronRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "9 18 15 12 9 6"
+}));
 const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "3",
   y: "3",
@@ -228,6 +231,8 @@ const GLOBAL_CSS = `
   @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
+  .cs-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .cs-no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
   .cs-shine { position: relative; overflow: hidden; }
   .cs-shine::before {
     content: ""; position: absolute; inset: 0 0 55% 0; border-radius: inherit;
@@ -1041,21 +1046,64 @@ function OversStrip({
 }) {
   const scrollRef = useRef(null);
   const totalBalls = overs.reduce((s, o) => s + o.length, 0);
+  const lastIndex = overs.length - 1;
+  const [activeIndex, setActiveIndex] = useState(lastIndex);
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }
+    setActiveIndex(lastIndex);
   }, [totalBalls, overs.length]);
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el || el.clientWidth === 0) return;
+    setActiveIndex(Math.round(el.scrollLeft / el.clientWidth));
+  }
+  function jumpToNow() {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({
+      left: scrollRef.current.scrollWidth,
+      behavior: "smooth"
+    });
+    setActiveIndex(lastIndex);
+  }
   return /*#__PURE__*/React.createElement("div", null, overs.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
       color: COLORS.inkSoft,
-      marginBottom: 6,
       fontStyle: "italic"
     }
-  }, "← scroll for previous overs"), /*#__PURE__*/React.createElement("div", {
+  }, "← scroll for previous overs"), activeIndex !== lastIndex && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: jumpToNow,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.turf,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: 3
+    }
+  }, "Jump to now ", /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 13
+  }))), /*#__PURE__*/React.createElement("div", {
     ref: scrollRef,
+    onScroll: handleScroll,
+    className: "cs-no-scrollbar",
     style: {
       display: "flex",
       overflowX: "auto",
@@ -1063,7 +1111,7 @@ function OversStrip({
       WebkitOverflowScrolling: "touch"
     }
   }, overs.map((balls, i) => {
-    const isCurrent = i === overs.length - 1;
+    const isCurrent = i === lastIndex;
     return /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
