@@ -225,6 +225,21 @@ const Users = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 const Pencil = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
 }));
+const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "10"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "16",
+  x2: "12",
+  y2: "12"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "8",
+  x2: "12.01",
+  y2: "8"
+}));
 
 // ---------- Design tokens ----------
 // Pitch green header, scorecard-cream body, willow tan accents, ball-red for wickets.
@@ -2073,7 +2088,91 @@ function AccountScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")));
+  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 14,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "About")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 12
+    }
+  }, "Ball-by-ball cricket scoring for friendly club games — single-file, no build step, made by a fellow club scorer."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "12px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 12
+    }
+  }, "Open source under the ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, "MIT License"), " — free to use, copy, modify and share. \u00A9 2026 Robin Singh Rajawat."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer", "_blank", "noopener,noreferrer"),
+    style: {
+      flex: "1 1 auto",
+      minHeight: 40,
+      padding: "0 14px",
+      fontSize: 13
+    }
+  }, "View source"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
+    style: {
+      flex: "1 1 auto",
+      minHeight: 40,
+      padding: "0 14px",
+      fontSize: 13
+    }
+  }, "View license"))));
 }
 
 function StatsScreen({
