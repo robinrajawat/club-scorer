@@ -4774,6 +4774,160 @@ function RunRateChart({
   })));
 }
 
+function RunsPerOverChart({
+  match
+}) {
+  const innings = match.innings;
+  const hasData = innings.some(inn => inn.overs.some(o => o.length > 0));
+  if (!hasData) return null;
+  const seriesColors = [COLORS.turf, COLORS.gold];
+  const perOver = innings.map(inn => {
+    const arr = [];
+    inn.overs.forEach((balls, i) => {
+      if (balls.length === 0 && i === inn.overs.length - 1) return; // in-progress empty trailing over
+      arr[i] = balls.reduce((s, b) => s + (b.runs || 0), 0);
+    });
+    return arr;
+  });
+  const wicketsByOver = innings.map((inn, ii) => {
+    const m = {};
+    (inn.fallOfWickets || []).forEach(fow => {
+      const overNum = Math.max(1, Math.ceil(parseOverLabel(fow.over, inn.ballsPerOver)));
+      m[overNum] = (m[overNum] || 0) + 1;
+    });
+    return m;
+  });
+  const bowledOvers = Math.max(...perOver.map(arr => arr.length), 0);
+  const totalOvers = Math.max(match.oversLimit, bowledOvers, 1);
+  const maxOverRuns = Math.max(...perOver.flatMap(arr => arr.filter(v => v != null)), 6);
+  const colW = 24,
+    barW = 9,
+    barGap = 2,
+    padL = 6,
+    padR = 6,
+    padT = 18,
+    padB = 20,
+    plotH = 70;
+  const H = padT + plotH + padB;
+  const W = padL + totalOvers * colW + padR;
+  const baseY = padT + plotH;
+  const barH = runs => runs == null ? 0 : Math.max(2, runs / maxOverRuns * plotH);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10,
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Runs Per Over"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12
+    }
+  }, innings.map((inn, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 9,
+      height: 9,
+      borderRadius: 3,
+      background: seriesColors[i],
+      display: "inline-block"
+    }
+  }), inn.battingTeam)))), /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
+    style: {
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: W,
+    height: H,
+    viewBox: `0 0 ${W} ${H}`,
+    style: {
+      display: "block"
+    }
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    x2: W - padR,
+    y1: baseY,
+    y2: baseY,
+    stroke: COLORS.willow,
+    strokeWidth: "1.2"
+  }), Array.from({
+    length: totalOvers
+  }, (_, col) => {
+    const overNum = col + 1;
+    const colX = padL + col * colW;
+    const cx = colX + colW / 2;
+    const slots = innings.length > 1 ? [cx - barGap / 2 - barW, cx + barGap / 2] : [cx - barW / 2];
+    return /*#__PURE__*/React.createElement("g", {
+      key: col
+    }, /*#__PURE__*/React.createElement("title", null, `Over ${overNum}: ` + innings.map((inn, i) => perOver[i][col] != null ? `${inn.battingTeam} ${perOver[i][col]}${wicketsByOver[i][overNum] ? " (" + wicketsByOver[i][overNum] + "w)" : ""}` : null).filter(Boolean).join(", ")), innings.map((inn, i) => {
+      const runs = perOver[i][col];
+      if (runs == null) return null;
+      const h = barH(runs);
+      const bx = slots[i];
+      const wk = wicketsByOver[i][overNum] || 0;
+      return /*#__PURE__*/React.createElement("g", {
+        key: i
+      }, /*#__PURE__*/React.createElement("rect", {
+        x: bx,
+        y: baseY - h,
+        width: barW,
+        height: h,
+        rx: 1.5,
+        fill: seriesColors[i]
+      }), Array.from({
+        length: Math.min(wk, 3)
+      }, (_, k) => /*#__PURE__*/React.createElement("circle", {
+        key: k,
+        cx: bx + barW / 2,
+        cy: baseY - h - 5 - k * 5,
+        r: "2",
+        fill: COLORS.ball,
+        stroke: "#fff",
+        strokeWidth: "0.75"
+      })));
+    }), /*#__PURE__*/React.createElement("text", {
+      x: cx,
+      y: baseY + 12,
+      textAnchor: "middle",
+      fontSize: "7.5",
+      fontFamily: "'IBM Plex Mono', monospace",
+      fill: COLORS.inkSoft
+    }, overNum));
+  }))));
+}
+
 
 function ScorecardOverlay({
   match,
@@ -4879,6 +5033,8 @@ function ScorecardOverlay({
       margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
     match: match
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5125,6 +5281,8 @@ function FollowScreen({
       margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
     match: match
   }), /*#__PURE__*/React.createElement("div", {
     style: {
