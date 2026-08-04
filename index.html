@@ -6375,6 +6375,8 @@ function MatchScreen({
   const [showRuns, setShowRuns] = useState(false);
   const [showExtra, setShowExtra] = useState(null); // 'wide'|'noball'|'bye'|'legbye'
   const [showWicket, setShowWicket] = useState(false);
+  const [customRunsFor, setCustomRunsFor] = useState(null); // null | 'run' | 'wide' | 'noball' | 'bye' | 'legbye'
+  const [customRunsValue, setCustomRunsValue] = useState("");
   const [newBatsmanName, setNewBatsmanName] = useState("");
   const [newBowlerPrompt, setNewBowlerPrompt] = useState(false);
   const [newBowlerName, setNewBowlerName] = useState("");
@@ -6533,6 +6535,23 @@ function MatchScreen({
         setCelebration(c => c && c.key === key ? null : c);
       }, 1000);
     }
+  }
+  // The 0/1/2/3/4/6 (and 0-4 on extras) buttons cover the vast majority of deliveries, but an
+  // overthrow can push a ball's total past what any of those cover — e.g. a single completed plus
+  // a misfield running away for four more is 5, or three run plus an overthrown boundary is 7.
+  // This is the escape hatch for those: same commit path as the preset buttons (handleRun /
+  // handleExtra), just with a typed-in total instead of a fixed one, so nothing about how a ball
+  // is recorded downstream needs to know the total came from a preset or a custom entry.
+  function confirmCustomRuns() {
+    const n = parseInt(customRunsValue, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 24) return;
+    if (customRunsFor === "run") {
+      handleRun(n);
+    } else {
+      handleExtra(customRunsFor, n);
+    }
+    setCustomRunsFor(null);
+    setCustomRunsValue("");
   }
   function handleExtra(kind, n) {
     pushHistory();
@@ -7057,7 +7076,7 @@ function MatchScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "repeat(4, 1fr)",
+      gridTemplateColumns: "repeat(3, 1fr)",
       gap: 9,
       marginBottom: 9
     }
@@ -7066,6 +7085,12 @@ function MatchScreen({
     variant: n === 4 ? "primary" : n === 6 ? "gold" : "default",
     onClick: () => handleRun(n)
   }, n)), /*#__PURE__*/React.createElement(Btn, {
+    variant: "default",
+    onClick: () => {
+      setCustomRunsFor("run");
+      setCustomRunsValue("");
+    }
+  }, "Other"), /*#__PURE__*/React.createElement(Btn, {
     variant: "default",
     onClick: () => setShowExtra("choose")
   }, "Extra"), /*#__PURE__*/React.createElement(Btn, {
@@ -7198,7 +7223,13 @@ function MatchScreen({
   }, [0, 1, 2, 3, 4].map(n => /*#__PURE__*/React.createElement(Btn, {
     key: n,
     onClick: () => handleExtra(showExtra, n)
-  }, n))))), showWicket && /*#__PURE__*/React.createElement(Modal, {
+  }, n)), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => {
+      setCustomRunsFor(showExtra);
+      setCustomRunsValue("");
+      setShowExtra(null);
+    }
+  }, "Other")))), showWicket && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowWicket(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7252,6 +7283,55 @@ function MatchScreen({
     style: {
       width: "100%",
       marginTop: 10
+    }
+  }, "Confirm")), customRunsFor && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setCustomRunsFor(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 6
+    }
+  }, "Other runs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 14,
+      lineHeight: 1.5
+    }
+  }, "For an overthrow or any total the quick buttons don\u2019t cover \u2014 e.g. a single plus a misfield running away for four more."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, [5, 7, 8].map(n => /*#__PURE__*/React.createElement(Btn, {
+    key: n,
+    variant: customRunsValue === String(n) ? "primary" : "default",
+    onClick: () => setCustomRunsValue(String(n)),
+    style: {
+      flex: 1
+    }
+  }, n))), /*#__PURE__*/React.createElement(TextField, {
+    value: customRunsValue,
+    onChange: v => setCustomRunsValue(v.replace(/[^0-9]/g, "").slice(0, 2)),
+    placeholder: "Total runs on this ball",
+    inputMode: "numeric",
+    style: {
+      textAlign: "center",
+      fontSize: 20,
+      fontWeight: 700,
+      fontFamily: "'IBM Plex Mono', monospace"
+    }
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: customRunsValue === "" || parseInt(customRunsValue, 10) > 24,
+    onClick: confirmCustomRuns,
+    style: {
+      width: "100%",
+      marginTop: 14
     }
   }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: match,
