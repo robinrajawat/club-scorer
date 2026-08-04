@@ -387,6 +387,16 @@ function genMatchCode() {
   for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
 }
+function getFollowCodeFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("follow");
+    if (!raw) return null;
+    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // ---------- Storage helpers ----------
 // Three tiers, chosen per-match / per-call:
@@ -764,6 +774,32 @@ function buildShareText(match) {
     if (match.playerOfMatch) lines.push(`\u2B50 Player of the Match: ${match.playerOfMatch}`);
   }
   if (match.shareCode) lines.push(`Match code: ${match.shareCode}`);
+  return lines.join("\n");
+}
+function buildFollowUrl(code) {
+  try {
+    const {
+      origin,
+      pathname
+    } = window.location;
+    return `${origin}${pathname}?follow=${code}`;
+  } catch (e) {
+    return `?follow=${code}`;
+  }
+}
+function buildLiveShareText(match, code) {
+  const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
+  match.innings.forEach(inn => {
+    if (!inn.battingOrder || inn.battingOrder.length === 0) return;
+    lines.push(`${inn.battingTeam}: ${inn.runs}-${inn.wickets} (${oversLabel(inn.legalBalls, inn.ballsPerOver)} ov)`);
+  });
+  if (match.status === "complete") {
+    const result = matchResultText(match);
+    if (result) lines.push(result);
+  } else {
+    lines.push("Follow live \u2192");
+  }
+  lines.push(buildFollowUrl(code));
   return lines.join("\n");
 }
 function computePlayerStats(matches) {
@@ -2359,105 +2395,221 @@ function JoinCodeBar({
     }
   }, error));
 }
-function ShareCodeButton({
+function ShareMenu({
   match,
-  onGetCode
+  onGetCode,
+  style
 }) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  if (match.shareCode) {
-    return /*#__PURE__*/React.createElement("button", {
-      className: "cs-btn",
-      onClick: () => {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(match.shareCode).catch(() => {});
-        }
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      title: "Tap to copy — share this code so a teammate can continue scoring on their phone",
-      style: {
-        background: "rgba(242,236,217,0.14)",
-        border: `1px solid rgba(242,236,217,0.35)`,
-        borderRadius: 8,
-        color: COLORS.cream,
-        fontFamily: "'IBM Plex Mono'",
-        fontWeight: 600,
-        fontSize: 12.5,
-        cursor: "pointer",
-        padding: "0 12px",
-        height: 38,
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        letterSpacing: 0.5
-      }
-    }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
-      size: 13
-    }), " ", copied ? "Copied!" : match.shareCode);
+  const [copiedWhich, setCopiedWhich] = useState(null); // 'code' | 'link' | null
+  function flashCopied(which) {
+    setCopiedWhich(which);
+    setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
   }
+  async function ensureCode() {
+    if (match.shareCode) return {
+      ok: true,
+      code: match.shareCode
+    };
+    setBusy(true);
+    setError("");
+    const result = await onGetCode();
+    setBusy(false);
+    if (!result || result.ok === false) {
+      setError(result && result.error || "Couldn't get a code.");
+      return {
+        ok: false
+      };
+    }
+    return {
+      ok: true,
+      code: result.code
+    };
+  }
+  async function handleInviteCopy() {
+    const res = await ensureCode();
+    if (!res.ok) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(res.code).catch(() => {});
+    }
+    flashCopied("code");
+  }
+  async function handleCopyLink() {
+    const res = await ensureCode();
+    if (!res.ok) return;
+    const url = buildFollowUrl(res.code);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    flashCopied("link");
+  }
+  async function handleWhatsAppLive() {
+    const res = await ensureCode();
+    if (!res.ok) return;
+    const text = buildLiveShareText(match, res.code);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setOpen(false);
+  }
+  const rowLabelStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 13,
+    fontWeight: 700
+  };
+  const rowSubStyle = {
+    fontSize: 11.5,
+    opacity: 0.7,
+    margin: "3px 0 8px",
+    lineHeight: 1.4
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative"
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
-    onClick: async () => {
-      setBusy(true);
-      setError("");
-      const result = await onGetCode();
-      setBusy(false);
-      if (result && result.ok === false) setError(result.error || "Couldn't get a code.");
-    },
-    disabled: busy,
-    title: "Get a code so this match can continue on another phone",
-    "aria-label": "Get code",
+    onClick: () => setOpen(o => !o),
+    title: "Share",
+    "aria-label": "Share",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: `1px solid rgba(242,236,217,0.35)`,
       borderRadius: 8,
       color: COLORS.cream,
-      cursor: busy ? "default" : "pointer",
+      cursor: "pointer",
       width: 38,
       height: 38,
       display: "flex",
       alignItems: "center",
-      justifyContent: "center"
+      justifyContent: "center",
+      ...style
     }
-  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+  }, /*#__PURE__*/React.createElement(Share, {
     size: 17
-  })), error && /*#__PURE__*/React.createElement("div", {
+  })), open && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setOpen(false),
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 25
+    }
+  }), open && /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
     style: {
       position: "absolute",
       top: "calc(100% + 8px)",
       right: 0,
-      width: 240,
+      width: 270,
       background: COLORS.ink,
       color: COLORS.cream,
-      borderRadius: 10,
-      padding: "10px 12px",
+      borderRadius: 12,
+      padding: 8,
       fontFamily: "'Inter'",
-      fontSize: 12,
-      lineHeight: 1.5,
       boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-      zIndex: 20
+      zIndex: 30
     }
-  }, error, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setError(""),
+  }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "block",
-      marginTop: 6,
-      background: "none",
-      border: "none",
-      color: COLORS.gold,
+      padding: "8px 8px 10px",
+      borderBottom: "1px solid rgba(242,236,217,0.15)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: rowLabelStyle
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 14
+  }), "Invite to help score"), /*#__PURE__*/React.createElement("div", {
+    style: rowSubStyle
+  }, "Full access \u2014 they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: handleInviteCopy,
+    style: {
+      width: "100%",
+      background: "rgba(242,236,217,0.1)",
+      border: "1px solid rgba(242,236,217,0.3)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'IBM Plex Mono'",
+      fontWeight: 600,
+      fontSize: 13,
+      letterSpacing: 0.5,
+      padding: "8px 10px",
+      cursor: "pointer"
+    }
+  }, copiedWhich === "code" ? "Copied!" : match.shareCode) : /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: handleInviteCopy,
+    disabled: busy,
+    style: {
+      width: "100%",
+      background: "rgba(242,236,217,0.1)",
+      border: "1px solid rgba(242,236,217,0.3)",
+      borderRadius: 8,
+      color: COLORS.cream,
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer",
-      padding: 0
+      fontSize: 12.5,
+      padding: "8px 10px",
+      cursor: busy ? "default" : "pointer"
     }
-  }, "Dismiss")));
+  }, busy ? "Getting code\u2026" : "Get code & copy")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 8px 8px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: rowLabelStyle
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 14
+  }), "Share live score"), /*#__PURE__*/React.createElement("div", {
+    style: rowSubStyle
+  }, "Read-only \u2014 anyone with the link can watch, not edit."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: handleWhatsAppLive,
+    disabled: busy,
+    style: {
+      flex: 1,
+      background: COLORS.turf,
+      border: "none",
+      borderRadius: 8,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      padding: "8px 6px",
+      cursor: busy ? "default" : "pointer"
+    }
+  }, "WhatsApp"), /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: handleCopyLink,
+    disabled: busy,
+    style: {
+      flex: 1,
+      background: "rgba(242,236,217,0.1)",
+      border: "1px solid rgba(242,236,217,0.3)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      padding: "8px 6px",
+      cursor: busy ? "default" : "pointer"
+    }
+  }, copiedWhich === "link" ? "Copied!" : "Copy link"))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "8px 8px 2px",
+      fontSize: 11.5,
+      color: COLORS.gold,
+      lineHeight: 1.4
+    }
+  }, error)));
 }
 
 
@@ -4288,37 +4440,6 @@ function ExportPdfButton({
     size: 17
   }));
 }
-function WhatsAppShareButton({
-  match,
-  style
-}) {
-  function handleShare() {
-    const text = buildShareText(match);
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-  return /*#__PURE__*/React.createElement("button", {
-    onClick: handleShare,
-    className: "cs-btn",
-    title: "Share to WhatsApp",
-    "aria-label": "Share to WhatsApp",
-    style: {
-      background: "rgba(242,236,217,0.14)",
-      border: "1px solid rgba(242,236,217,0.35)",
-      borderRadius: 8,
-      color: COLORS.cream,
-      cursor: "pointer",
-      width: 38,
-      height: 38,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      ...style
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  }));
-}
 function parseOverLabel(label, ballsPerOver) {
   const [whole, balls] = String(label).split(".").map(Number);
   return whole + (balls || 0) / (ballsPerOver || 6);
@@ -4668,6 +4789,249 @@ function ScorecardOverlay({
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
   }))));
 }
+// Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
+// here — this component only ever reads sharedMatches/{code}, it never writes to it. That's the
+// entire access-control model for this screen: there is nothing on the page that could mutate the
+// match, not a client-side check hiding buttons that exist elsewhere.
+function FollowScreen({
+  code,
+  onExit
+}) {
+  const [match, setMatch] = useState(null);
+  const [status, setStatus] = useState("loading"); // loading | found | not-found | error
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState(0);
+  useEffect(() => {
+    if (!code) {
+      setStatus("not-found");
+      return;
+    }
+    const unsub = db.collection("sharedMatches").doc(code).onSnapshot(doc => {
+      if (!doc.exists) {
+        setStatus("not-found");
+        return;
+      }
+      const m = unpackMatchFromFirestore(doc.data());
+      setMatch(m);
+      setTab(m.innings.length - 1);
+      setStatus("found");
+    }, err => {
+      console.error("[follow] snapshot error \u2014 code:", err.code, "message:", err.message);
+      setError(err.code === "permission-denied" ? "This live link isn't available right now." : err.message || "Couldn't load this match.");
+      setStatus("error");
+    });
+    return unsub;
+  }, [code]);
+  const wrapStyle = {
+    minHeight: "100vh",
+    background: COLORS.cream,
+    backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(42,36,32,0.045) 28px)"
+  };
+  if (status === "loading") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...wrapStyle,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center"
+      }
+    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, null), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        color: COLORS.inkSoft,
+        fontSize: 13
+      }
+    }, "Loading live score\u2026")));
+  }
+  if (status === "not-found" || status === "error") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...wrapStyle,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        maxWidth: 320
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'DM Serif Display', serif",
+        fontSize: 20,
+        color: COLORS.ink,
+        marginBottom: 8
+      }
+    }, status === "not-found" ? "Match not found" : "Couldn't load this match"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.inkSoft,
+        lineHeight: 1.5,
+        marginBottom: 20
+      }
+    }, status === "not-found" ? "This link may be wrong, or the match was removed." : error), /*#__PURE__*/React.createElement("button", {
+      className: "cs-btn cs-shine",
+      onClick: onExit,
+      style: {
+        background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+        border: "none",
+        borderRadius: 10,
+        color: "#fff",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13.5,
+        padding: "10px 20px",
+        cursor: "pointer"
+      }
+    }, "Go to Club Scorer")));
+  }
+  const resultText = matchResultText(match);
+  return /*#__PURE__*/React.createElement("div", {
+    style: wrapStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "sticky",
+      top: 0,
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      color: COLORS.cream,
+      padding: "16px 16px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+      zIndex: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, match.status !== "complete" && /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      background: "#e6544b",
+      animation: "cs-pulse 1.6s ease infinite",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      opacity: 0.85
+    }
+  }, match.status === "complete" ? "Final" : "Live")), /*#__PURE__*/React.createElement("button", {
+    onClick: onExit,
+    className: "cs-btn",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      padding: "6px 10px"
+    }
+  }, "Exit")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      marginTop: 4,
+      maxWidth: 560,
+      margin: "4px auto 0"
+    }
+  }, match.teamA, " vs ", match.teamB), resultText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      opacity: 0.9,
+      maxWidth: 560,
+      margin: "4px auto 0"
+    }
+  }, resultText)), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, tossText(match.toss), tossText(match.toss) && nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("br", null), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "House rules: ", nonStandardRulesText(match.rules))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      padding: "14px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: () => setTab(i),
+    className: "cs-btn cs-shine",
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      borderRadius: 10,
+      border: "none",
+      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tab === i ? "#fff" : COLORS.ink,
+      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: match.innings[tab],
+    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
+    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
+    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+  }))));
+}
 function MatchScreen({
   match,
   setMatch,
@@ -4729,7 +5093,8 @@ function MatchScreen({
     if (result.ok) {
       setMatch(updated);
       return {
-        ok: true
+        ok: true,
+        code: updated.shareCode
       };
     }
     return {
@@ -5008,11 +5373,9 @@ function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement(Table2, {
     size: 17
-  })), /*#__PURE__*/React.createElement(ShareCodeButton, {
+  })), /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
     onGetCode: handleGetCode
-  }), /*#__PURE__*/React.createElement(WhatsAppShareButton, {
-    match: match
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), /*#__PURE__*/React.createElement("div", {
@@ -5726,6 +6089,28 @@ function ResultScreen({
   const resultText = matchResultText(match);
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
+  async function handleGetCode() {
+    if (match.shareCode) return {
+      ok: true,
+      code: match.shareCode
+    };
+    const updated = {
+      ...match,
+      shareCode: genMatchCode()
+    };
+    const result = await saveMatch(updated);
+    if (result.ok) {
+      setMatch(updated);
+      return {
+        ok: true,
+        code: updated.shareCode
+      };
+    }
+    return {
+      ok: false,
+      error: result.error
+    };
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -5763,8 +6148,9 @@ function ResultScreen({
       display: "flex",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(WhatsAppShareButton, {
+  }, /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
+    onGetCode: handleGetCode,
     style: {
       background: COLORS.pitch,
       border: "none",
@@ -5842,16 +6228,19 @@ const SCREEN_DEPTH = {
   match: 1,
   account: 1,
   stats: 1,
+  follow: 1,
   "team-edit": 2
 };
 function CricketScorer() {
-  const [screen, setScreenRaw] = useState("home"); // home | setup | match | teams | team-edit
+  const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
+  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : "home"); // home | setup | match | teams | team-edit | follow
+  const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
   const [teams, setTeams] = useState([]);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialFollowCode);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [rules, setRules] = useState(DEFAULT_RULES);
@@ -5981,6 +6370,17 @@ function CricketScorer() {
     setScreen("home");
     refreshIndex();
   }
+  function exitFollow() {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("follow");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    } catch (e) {
+      /* noop — worst case the param stays in the address bar */
+    }
+    setFollowCode(null);
+    setScreen("home");
+  }
   async function handleSaveTeam(team) {
     const updated = teams.filter(t => t.id !== team.id);
     updated.push(team);
@@ -6087,6 +6487,12 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(StatsScreen, {
     onBack: () => setScreen("home"),
     allMatchIds: matches.map(m => m.id)
+  })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "follow",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(FollowScreen, {
+    code: followCode,
+    onExit: exitFollow
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
