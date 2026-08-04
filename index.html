@@ -130,6 +130,29 @@ const BarChart = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/Rea
   x2: "6",
   y2: "14"
 }));
+const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "18",
+  cy: "5",
+  r: "3"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "6",
+  cy: "12",
+  r: "3"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "18",
+  cy: "19",
+  r: "3"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "8.6",
+  y1: "10.6",
+  x2: "15.4",
+  y2: "6.4"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "8.6",
+  y1: "13.4",
+  x2: "15.4",
+  y2: "17.6"
+}));
 const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "12",
   y1: "5",
@@ -412,11 +435,14 @@ async function saveMatch(match) {
         ...match,
         updatedAt: Date.now()
       });
-      // Read it straight back. A write that "succeeds" but isn't actually readable (e.g. Firestore
-      // rules that allow write but not read on sharedMatches, or any other silent gap) is worse
-      // than an obvious failure — it shows the person a code that will never work on another
-      // device. Catch that here instead of only discovering it when someone tries to join.
-      const verify = await db.collection("sharedMatches").doc(match.shareCode).get();
+      // Read it straight back — from the SERVER, not the SDK's local cache. A same-session read
+      // immediately after a write can be served from the client's own optimistic write cache even
+      // if the write never actually reached Firestore, which would make this check a false
+      // positive. Forcing {source: "server"} is the only way this genuinely proves another device
+      // could read it too.
+      const verify = await db.collection("sharedMatches").doc(match.shareCode).get({
+        source: "server"
+      });
       if (!verify.exists) {
         throw new Error("The code saved but couldn't be read back \u2014 check Firestore rules allow both read and write on sharedMatches/{code}.");
       }
@@ -496,7 +522,9 @@ async function loadMatch(id) {
 }
 async function fetchSharedMatch(code) {
   try {
-    const doc = await db.collection("sharedMatches").doc(code).get();
+    const doc = await db.collection("sharedMatches").doc(code).get({
+      source: "server"
+    });
     return doc.exists ? {
       found: true,
       match: doc.data()
@@ -678,6 +706,32 @@ function nonStandardRulesText(rules) {
 function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
+}
+function matchResultText(match) {
+  const [i1, i2] = match.innings;
+  if (!i2) return null;
+  if (i2.runs >= i1.runs + 1) {
+    return `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;
+  } else if (i2.runs === i1.runs) {
+    return "Match tied";
+  }
+  return `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
+}
+function buildShareText(match) {
+  const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
+  const toss = tossText(match.toss);
+  if (toss) lines.push(toss);
+  match.innings.forEach(inn => {
+    if (!inn.battingOrder || inn.battingOrder.length === 0) return;
+    lines.push(`${inn.battingTeam}: ${inn.runs}-${inn.wickets} (${oversLabel(inn.legalBalls, inn.ballsPerOver)} ov)`);
+  });
+  if (match.status === "complete") {
+    const result = matchResultText(match);
+    if (result) lines.push(result);
+    if (match.playerOfMatch) lines.push(`\u2B50 Player of the Match: ${match.playerOfMatch}`);
+  }
+  if (match.shareCode) lines.push(`Match code: ${match.shareCode}`);
+  return lines.join("\n");
 }
 function computePlayerStats(matches) {
   const players = {}; // name -> { runs, balls, dismissals, innings, wickets, ballsBowled, runsConceded, matches: Set }
@@ -4183,6 +4237,37 @@ function ExportPdfButton({
     size: 17
   }));
 }
+function WhatsAppShareButton({
+  match,
+  style
+}) {
+  function handleShare() {
+    const text = buildShareText(match);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: handleShare,
+    className: "cs-btn",
+    title: "Share to WhatsApp",
+    "aria-label": "Share to WhatsApp",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.cream,
+      cursor: "pointer",
+      width: 38,
+      height: 38,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 17
+  }));
+}
 function parseOverLabel(label, ballsPerOver) {
   const [whole, balls] = String(label).split(".").map(Number);
   return whole + (balls || 0) / (ballsPerOver || 6);
@@ -4873,6 +4958,8 @@ function MatchScreen({
   })), /*#__PURE__*/React.createElement(ShareCodeButton, {
     match: match,
     onGetCode: handleGetCode
+  }), /*#__PURE__*/React.createElement(WhatsAppShareButton, {
+    match: match
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), /*#__PURE__*/React.createElement("div", {
@@ -4905,7 +4992,30 @@ function MatchScreen({
       fontSize: 18,
       opacity: 0.75
     }
-  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), isChasing && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "inline-flex",
+      alignItems: "baseline",
+      gap: 6,
+      marginTop: 8,
+      padding: "6px 12px",
+      background: "rgba(255,255,255,0.16)",
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#fff"
+    }
+  }, "Need ", Math.max(runsNeeded, 0), " off ", Math.max(ballsLeft, 0), " ball", Math.max(ballsLeft, 0) === 1 ? "" : "s"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 11.5,
+      opacity: 0.75
+    }
+  }, "(", oversLabel(ballsLeft, inning.ballsPerOver), " ov)")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 16,
@@ -4915,7 +5025,7 @@ function MatchScreen({
       opacity: 0.9,
       fontWeight: 500
     }
-  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", Math.max(ballsLeft, 0), " ball", Math.max(ballsLeft, 0) === 1 ? "" : "s", " (", oversLabel(ballsLeft, inning.ballsPerOver), " ov)"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate)), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
     style: {
       background: COLORS.gold,
       color: "#fff",
@@ -5560,14 +5670,7 @@ function ResultScreen({
   onExit
 }) {
   const [i1, i2] = match.innings;
-  let resultText = "";
-  if (i2.runs >= i1.runs + 1) {
-    resultText = `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;
-  } else if (i2.runs === i1.runs) {
-    resultText = "Match tied";
-  } else {
-    resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
-  }
+  const resultText = matchResultText(match);
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
   return /*#__PURE__*/React.createElement("div", {
@@ -5602,14 +5705,26 @@ function ResultScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Matches"), /*#__PURE__*/React.createElement(ExportPdfButton, {
+  }), " Matches"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(WhatsAppShareButton, {
     match: match,
     style: {
       background: COLORS.pitch,
       border: "none",
       color: "#fff"
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
+    match: match,
+    style: {
+      background: COLORS.pitch,
+      border: "none",
+      color: "#fff"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
       color: COLORS.cream,
