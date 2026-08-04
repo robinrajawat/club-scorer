@@ -596,6 +596,28 @@ async function transactionalMatchWrite(ref, match) {
 }
 // Writes the match to wherever it primarily lives (an open score-code doc that grants full
 // write access to anyone who knows it, this account's private Firestore, or localStorage).
+// Registry of currently-mounted MatchScreen setters, keyed by match id. flushPendingWrites() runs
+// on a timer/'online' event entirely outside React, with no normal way to reach a live component's
+// state — this is that channel. Without it, a background sync that succeeds while a match is open
+// on screen leaves that screen's local writeSeq stale, so the NEXT ball scored there sends an
+// outdated expected sequence number and gets treated as a conflict with "another device" — even
+// though it's the same single device, just this device's own background sync racing its live UI.
+// See MatchScreen's registerLiveMatch effect and notifyLiveMatchSynced below.
+const liveMatchSetters = {};
+function registerLiveMatch(id, setMatch) {
+  liveMatchSetters[id] = setMatch;
+}
+function unregisterLiveMatch(id) {
+  delete liveMatchSetters[id];
+}
+function notifyLiveMatchSynced(id, writeSeq) {
+  if (writeSeq == null) return;
+  const setMatch = liveMatchSetters[id];
+  if (setMatch) setMatch(cur => cur && cur.id === id ? {
+    ...cur,
+    writeSeq
+  } : cur);
+}
 async function savePrimaryMatch(match) {
   try {
     if (match.shareCode) {
@@ -621,6 +643,7 @@ async function savePrimaryMatch(match) {
       upsertLocalPointer(match, {
         cloud: false
       });
+      notifyLiveMatchSynced(match.id, newSeq);
       return {
         ok: true,
         writeSeq: newSeq
@@ -646,6 +669,7 @@ async function savePrimaryMatch(match) {
       upsertLocalPointer(match, {
         cloud: true
       });
+      notifyLiveMatchSynced(match.id, newSeq);
       return {
         ok: true,
         writeSeq: newSeq
@@ -6428,6 +6452,15 @@ function MatchScreen({
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
+  // Registers this screen so a background sync (flushPendingWrites, running on a timer completely
+  // outside React) can push a newly-confirmed writeSeq in here directly — see
+  // notifyLiveMatchSynced. Without this, a background sync that lands while this exact match is
+  // open on screen leaves this screen's local writeSeq stale, and the next ball scored here would
+  // read as a conflict with "another device" that's actually just this device's own outbox.
+  useEffect(() => {
+    registerLiveMatch(match.id, setMatch);
+    return () => unregisterLiveMatch(match.id);
+  }, [match.id, setMatch]);
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   const target = inningIdx === 1 ? match.innings[0].runs + 1 : null;
