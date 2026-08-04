@@ -4605,7 +4605,7 @@ function RunRateChart({
   const yTickVals = Array.from({
     length: yTicks + 1
   }, (_, i) => Math.round(maxRuns / yTicks * i));
-  const wicketMarkerSize = 3.2;
+  const wicketMarkerRadius = 3.4;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
@@ -4668,22 +4668,18 @@ function RunRateChart({
     width: "9",
     height: "9",
     viewBox: "0 0 9 9"
-  }, /*#__PURE__*/React.createElement("line", {
-    x1: "1.5",
-    y1: "1.5",
-    x2: "7.5",
-    y2: "7.5",
-    stroke: COLORS.ball,
-    strokeWidth: "1.6",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("line", {
-    x1: "7.5",
-    y1: "1.5",
-    x2: "1.5",
-    y2: "7.5",
-    stroke: COLORS.ball,
-    strokeWidth: "1.6",
-    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "4.5",
+    cy: "4.5",
+    r: "4.5",
+    fill: "#fff"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "4.5",
+    cy: "4.5",
+    r: "3.2",
+    fill: COLORS.ball,
+    stroke: "#fff",
+    strokeWidth: "1"
   })), "wicket"))), /*#__PURE__*/React.createElement("svg", {
     viewBox: `0 0 ${W} ${H}`,
     style: {
@@ -4736,40 +4732,28 @@ function RunRateChart({
     strokeLinejoin: "round",
     strokeLinecap: "round"
   })), wicketPoints.map((wks, i) => wks.map((w, wi) => /*#__PURE__*/React.createElement("g", {
-    key: `${i}-${wi}`,
-    transform: `translate(${x(w.over)}, ${y(w.runs)})`
-  }, /*#__PURE__*/React.createElement("title", null, `${w.wicket}-${w.batsman ? "wkt " + w.batsman : "wkt"}`), /*#__PURE__*/React.createElement("line", {
-    x1: -wicketMarkerSize,
-    y1: -wicketMarkerSize,
-    x2: wicketMarkerSize,
-    y2: wicketMarkerSize,
-    stroke: "#fff",
-    strokeWidth: "3",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("line", {
-    x1: wicketMarkerSize,
-    y1: -wicketMarkerSize,
-    x2: -wicketMarkerSize,
-    y2: wicketMarkerSize,
-    stroke: "#fff",
-    strokeWidth: "3",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("line", {
-    x1: -wicketMarkerSize,
-    y1: -wicketMarkerSize,
-    x2: wicketMarkerSize,
-    y2: wicketMarkerSize,
+    key: `${i}-${wi}`
+  }, /*#__PURE__*/React.createElement("title", null, `${w.wicket}${w.batsman ? " \u2013 " + w.batsman : ""}`), /*#__PURE__*/React.createElement("line", {
+    x1: x(w.over),
+    x2: x(w.over),
+    y1: y(w.runs) + wicketMarkerRadius + 2,
+    y2: H - padB,
     stroke: COLORS.ball,
-    strokeWidth: "1.6",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("line", {
-    x1: wicketMarkerSize,
-    y1: -wicketMarkerSize,
-    x2: -wicketMarkerSize,
-    y2: wicketMarkerSize,
-    stroke: COLORS.ball,
-    strokeWidth: "1.6",
-    strokeLinecap: "round"
+    strokeWidth: "1",
+    strokeDasharray: "1.5 1.5",
+    opacity: "0.35"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: x(w.over),
+    cy: y(w.runs),
+    r: wicketMarkerRadius + 1.6,
+    fill: "#fff"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: x(w.over),
+    cy: y(w.runs),
+    r: wicketMarkerRadius,
+    fill: COLORS.ball,
+    stroke: "#fff",
+    strokeWidth: "1"
   })))), series.map((points, i) => {
     const last = points[points.length - 1];
     return last ? /*#__PURE__*/React.createElement("circle", {
