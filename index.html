@@ -111,6 +111,22 @@ const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
 }), /*#__PURE__*/React.createElement("path", {
   d: "M17 5h2.5a2 2 0 0 1 0 4H18"
 }));
+const BarChart = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
+  x1: "18",
+  y1: "20",
+  x2: "18",
+  y2: "10"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "20",
+  x2: "12",
+  y2: "4"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6",
+  y1: "20",
+  x2: "6",
+  y2: "14"
+}));
 const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "12",
   y1: "5",
@@ -644,6 +660,53 @@ function nonStandardRulesText(rules) {
 function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
+}
+function computePlayerStats(matches) {
+  const players = {}; // name -> { runs, balls, dismissals, innings, wickets, ballsBowled, runsConceded, matches: Set }
+  function get(name) {
+    if (!players[name]) {
+      players[name] = {
+        name,
+        runs: 0,
+        balls: 0,
+        dismissals: 0,
+        battingInnings: 0,
+        wickets: 0,
+        ballsBowled: 0,
+        runsConceded: 0,
+        matchIds: new Set()
+      };
+    }
+    return players[name];
+  }
+  matches.forEach(m => {
+    if (!m || !m.innings) return;
+    m.innings.forEach(inn => {
+      Object.entries(inn.batsmen || {}).forEach(([name, b]) => {
+        const p = get(name);
+        p.runs += b.runs || 0;
+        p.balls += b.balls || 0;
+        p.battingInnings += 1;
+        if (b.out) p.dismissals += 1;
+        p.matchIds.add(m.id);
+      });
+      Object.entries(inn.bowlers || {}).forEach(([name, bw]) => {
+        const p = get(name);
+        p.wickets += bw.wickets || 0;
+        p.ballsBowled += bw.ballsBowled || 0;
+        p.runsConceded += bw.runs || 0;
+        p.matchIds.add(m.id);
+      });
+    });
+  });
+  return Object.values(players).map(p => ({
+    ...p,
+    matchCount: p.matchIds.size,
+    battingAvg: p.dismissals > 0 ? p.runs / p.dismissals : null,
+    strikeRate: p.balls > 0 ? p.runs / p.balls * 100 : null,
+    bowlingAvg: p.wickets > 0 ? p.runsConceded / p.wickets : null,
+    economy: p.ballsBowled > 0 ? p.runsConceded / p.ballsBowled * 6 : null
+  }));
 }
 function suggestPlayerOfMatch(match) {
   // simple, transparent heuristic: runs scored + 20 per wicket taken, combined across both innings
@@ -1801,6 +1864,248 @@ function AccountScreen({
   }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")));
 }
 
+function StatsScreen({
+  onBack,
+  allMatchIds
+}) {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([]);
+  const [tab, setTab] = useState("batting"); // batting | bowling
+  const [matchCount, setMatchCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(allMatchIds.map(id => loadMatch(id))).then(matches => {
+      if (cancelled) return;
+      const full = matches.filter(Boolean);
+      setStats(computePlayerStats(full));
+      setMatchCount(full.length);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allMatchIds.join(",")]);
+  const batters = [...stats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 25);
+  const bowlers = [...stats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 25);
+  const headerStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: COLORS.inkSoft,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    textAlign: "right"
+  };
+  const cellStyle = {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 12.5,
+    textAlign: "right"
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Stats"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 18
+    }
+  }, loading ? "Loading…" : `Across ${matchCount} match${matchCount === 1 ? "" : "es"} on this device / account.`), loading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 0"
+    }
+  }, /*#__PURE__*/React.createElement(LoadingBallIllustration, null)) : stats.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft
+    }
+  }, "No completed balls scored yet — stats build up as matches are played.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 16
+    }
+  }, ["batting", "bowling"].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t,
+    onClick: () => setTab(t),
+    className: "cs-btn cs-shine",
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      borderRadius: 10,
+      border: "none",
+      background: tab === t ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tab === t ? "#fff" : COLORS.ink,
+      boxShadow: tab === t ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      textTransform: "capitalize"
+    }
+  }, t))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, tab === "batting" ? batters.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No batting data yet.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1.8fr 0.6fr 0.6fr 0.7fr 0.7fr",
+      gap: 4,
+      padding: "0 2px 6px",
+      borderBottom: `1.5px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...headerStyle,
+      textAlign: "left"
+    }
+  }, "Player"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Runs"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Inn"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Avg"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "SR")), batters.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.name,
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1.8fr 0.6fr 0.6fr 0.7fr 0.7fr",
+      gap: 4,
+      padding: "7px 2px",
+      borderBottom: `1px dashed ${COLORS.creamDark}`,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...cellStyle,
+      fontWeight: 700
+    }
+  }, p.runs), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.battingInnings), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.battingAvg === null ? "-" : p.battingAvg.toFixed(1)), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.strikeRate === null ? "-" : p.strikeRate.toFixed(0))))) : bowlers.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No bowling data yet.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1.8fr 0.6fr 0.6fr 0.7fr 0.7fr",
+      gap: 4,
+      padding: "0 2px 6px",
+      borderBottom: `1.5px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...headerStyle,
+      textAlign: "left"
+    }
+  }, "Player"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Wkts"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Runs"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Avg"), /*#__PURE__*/React.createElement("span", {
+    style: headerStyle
+  }, "Econ")), bowlers.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.name,
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1.8fr 0.6fr 0.6fr 0.7fr 0.7fr",
+      gap: 4,
+      padding: "7px 2px",
+      borderBottom: `1px dashed ${COLORS.creamDark}`,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...cellStyle,
+      fontWeight: 700,
+      color: COLORS.ball
+    }
+  }, p.wickets), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.runsConceded), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.bowlingAvg === null ? "-" : p.bowlingAvg.toFixed(1)), /*#__PURE__*/React.createElement("span", {
+    style: cellStyle
+  }, p.economy === null ? "-" : p.economy.toFixed(2))))))));
+}
+
 function JoinCodeBar({
   onJoin
 }) {
@@ -1984,7 +2289,8 @@ function HomeScreen({
   user,
   profile,
   onOpenAccount,
-  onJoinCode
+  onJoinCode,
+  onOpenStats
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2069,7 +2375,17 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(Users, {
     size: 17
-  }), " Teams")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), " Teams"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onOpenStats,
+    style: {
+      flex: 1,
+      padding: "15px",
+      fontSize: 14,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(BarChart, {
+    size: 17
+  }), " Stats")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5063,6 +5379,7 @@ const SCREEN_DEPTH = {
   teams: 1,
   match: 1,
   account: 1,
+  stats: 1,
   "team-edit": 2
 };
 function CricketScorer() {
@@ -5256,7 +5573,8 @@ function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: () => setScreen("account"),
-    onJoinCode: handleJoinCode
+    onJoinCode: handleJoinCode,
+    onOpenStats: () => setScreen("stats")
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -5299,6 +5617,12 @@ function CricketScorer() {
     onSaveProfile: handleSaveProfile,
     onBack: () => setScreen("home"),
     redirectError: authError
+  })), screen === "stats" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "stats",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(StatsScreen, {
+    onBack: () => setScreen("home"),
+    allMatchIds: matches.map(m => m.id)
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
