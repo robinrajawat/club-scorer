@@ -486,45 +486,169 @@ function unpackMatchFromFirestore(match) {
     }))
   };
 }
+// ---------- Offline outbox ----------
+// Every saveMatch() call already writes a full match snapshot (not a diff), so the only thing an
+// offline queue needs to remember per match is "the latest state that hasn't reached the server
+// yet" — no event log, no replay. Piggybacks on the same LS_PREFIX localStorage convention used
+// everywhere else in this file rather than introducing IndexedDB for what's a small, single JSON
+// blob per in-progress match.
+const PENDING_PREFIX = `${LS_PREFIX}pending:`;
+function lsPendingIds() {
+  try {
+    return JSON.parse(localStorage.getItem(`${LS_PREFIX}pending-ids`) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+function lsSetPendingIds(ids) {
+  try {
+    localStorage.setItem(`${LS_PREFIX}pending-ids`, JSON.stringify(ids));
+  } catch (e) {
+    console.error("save pending-ids failed", e);
+  }
+}
+function queuePendingWrite(match) {
+  try {
+    localStorage.setItem(PENDING_PREFIX + match.id, JSON.stringify(match));
+    const ids = lsPendingIds();
+    if (!ids.includes(match.id)) lsSetPendingIds([...ids, match.id]);
+  } catch (e) {
+    console.error("queue pending write failed", e);
+  }
+}
+function clearPendingWrite(id) {
+  try {
+    localStorage.removeItem(PENDING_PREFIX + id);
+    lsSetPendingIds(lsPendingIds().filter(x => x !== id));
+  } catch (e) {
+    console.error("clear pending write failed", e);
+  }
+}
+function pendingWriteCount() {
+  return lsPendingIds().length;
+}
+let flushInFlight = false;
+// Retries every queued match once. Safe to call as often as you like (on 'online', on a timer, or
+// opportunistically right after any other successful save) — it's a no-op re-entrancy guard plus
+// a cheap localStorage scan when the queue is empty, which is the common case.
+async function flushPendingWrites() {
+  if (flushInFlight) return;
+  const ids = lsPendingIds();
+  if (ids.length === 0) return;
+  flushInFlight = true;
+  try {
+    for (const id of ids) {
+      const raw = localStorage.getItem(PENDING_PREFIX + id);
+      if (!raw) {
+        clearPendingWrite(id);
+        continue;
+      }
+      let match;
+      try {
+        match = JSON.parse(raw);
+      } catch (e) {
+        clearPendingWrite(id);
+        continue;
+      }
+      const result = await savePrimaryMatch(match);
+      if (result.ok) {
+        clearPendingWrite(id);
+      }
+      // Network failure: leave it queued, try again next flush.
+      // Conflict: also leave it queued rather than looping on it forever here — a background
+      // flush has no human to ask "which version wins", so it waits for whoever's actually
+      // scoring this match to reopen it, which re-attempts the save and surfaces the conflict
+      // properly (see MatchScreen's conflict banner). We deliberately don't resolve conflicts here.
+    }
+  } finally {
+    flushInFlight = false;
+  }
+}
+// Runs one write attempt inside a Firestore transaction that enforces optimistic concurrency: the
+// write only lands if the server's writeSeq still matches what this client last saw. This is what
+// makes two devices scoring the same shared match safe — instead of silent last-write-wins, a
+// stale writer gets a conflict result back with the actual current server state, instead of
+// blindly stomping whatever the other device just wrote.
+async function transactionalMatchWrite(ref, match) {
+  const expectedSeq = match.writeSeq || 0;
+  let newSeq;
+  let remoteRaw = null;
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const serverSeq = snap.exists ? snap.data().writeSeq || 0 : 0;
+    if (snap.exists && serverSeq !== expectedSeq) {
+      remoteRaw = snap.data();
+      throw Object.assign(new Error("conflict"), {
+        isConflict: true
+      });
+    }
+    newSeq = serverSeq + 1;
+    tx.set(ref, packMatchForFirestore({
+      ...match,
+      writeSeq: newSeq,
+      updatedAt: Date.now()
+    }));
+  });
+  return {
+    newSeq,
+    remoteRaw
+  };
+}
 // Writes the match to wherever it primarily lives (an open score-code doc that grants full
 // write access to anyone who knows it, this account's private Firestore, or localStorage).
 async function savePrimaryMatch(match) {
   try {
     if (match.shareCode) {
-      console.log("[saveMatch] writing to sharedMatches/" + match.shareCode);
-      await db.collection("sharedMatches").doc(match.shareCode).set(packMatchForFirestore({
-        ...match,
-        updatedAt: Date.now()
-      }));
-      console.log("[saveMatch] write acknowledged, verifying against server\u2026");
-      // Read it straight back — from the SERVER, not the SDK's local cache. A same-session read
-      // immediately after a write can be served from the client's own optimistic write cache even
-      // if the write never actually reached Firestore, which would make this check a false
-      // positive. Forcing {source: "server"} is the only way this genuinely proves another device
-      // could read it too.
-      const verify = await db.collection("sharedMatches").doc(match.shareCode).get({
-        source: "server"
-      });
-      console.log("[saveMatch] server verify — exists:", verify.exists);
-      if (!verify.exists) {
-        throw new Error("The code saved but couldn't be read back \u2014 check Firestore rules allow both read and write on sharedMatches/{code}.");
+      const ref = db.collection("sharedMatches").doc(match.shareCode);
+      let newSeq;
+      try {
+        ({
+          newSeq
+        } = await transactionalMatchWrite(ref, match));
+      } catch (e) {
+        if (e.isConflict) {
+          const remoteDoc = await ref.get({
+            source: "server"
+          });
+          return {
+            ok: false,
+            conflict: true,
+            remoteMatch: unpackMatchFromFirestore(remoteDoc.data())
+          };
+        }
+        throw e;
       }
       upsertLocalPointer(match, {
         cloud: false
       });
       return {
-        ok: true
+        ok: true,
+        writeSeq: newSeq
       };
     } else if (auth.currentUser) {
-      await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id).set(packMatchForFirestore({
-        ...match,
-        updatedAt: Date.now()
-      }));
+      const ref = db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id);
+      let newSeq;
+      try {
+        ({
+          newSeq
+        } = await transactionalMatchWrite(ref, match));
+      } catch (e) {
+        if (e.isConflict) {
+          const remoteDoc = await ref.get();
+          return {
+            ok: false,
+            conflict: true,
+            remoteMatch: unpackMatchFromFirestore(remoteDoc.data())
+          };
+        }
+        throw e;
+      }
       upsertLocalPointer(match, {
         cloud: true
       });
       return {
-        ok: true
+        ok: true,
+        writeSeq: newSeq
       };
     } else {
       localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
@@ -550,15 +674,23 @@ async function savePrimaryMatch(match) {
     };
   }
 }
-// Public entry point. Saves the match to its primary location, then — entirely separately —
-// mirrors it into /liveViews/{viewCode} if a view code has been issued for it. This mirror is a
-// DIFFERENT document in a DIFFERENT collection from /sharedMatches/{shareCode}, keyed by a
-// DIFFERENT random code. That separation is the whole security model for read-only following:
-// a view code can never resolve inside /sharedMatches, so it structurally cannot be used to gain
-// scoring access, no matter what a viewer does with the link. See FollowScreen and the
-// Firestore rules notes near genMatchCode() for the other half of this.
+// Public entry point. Saves the match to its primary location, queues it for automatic retry if
+// that fails for a plain connectivity reason (queued writes are flushed on the 'online' event, a
+// periodic timer, and opportunistically after any other successful save — see CricketScorer), and
+// — entirely separately — mirrors it into /liveViews/{viewCode} if a view code has been issued for
+// it. That mirror is a DIFFERENT document in a DIFFERENT collection from /sharedMatches/{shareCode},
+// keyed by a DIFFERENT random code. That separation is the whole security model for read-only
+// following: a view code can never resolve inside /sharedMatches, so it structurally cannot be
+// used to gain scoring access, no matter what a viewer does with the link. See FollowScreen and
+// the Firestore rules notes near genMatchCode() for the other half of this.
 async function saveMatch(match) {
   const result = await savePrimaryMatch(match);
+  if (result.ok) {
+    clearPendingWrite(match.id);
+    flushPendingWrites(); // opportunistic: we know the network just worked, catch up anything else
+  } else if (!result.conflict) {
+    queuePendingWrite(match);
+  }
   if (match.viewCode) {
     try {
       await db.collection("liveViews").doc(match.viewCode).set(packMatchForFirestore({
@@ -591,6 +723,19 @@ async function loadIndex() {
   }
 }
 async function loadMatch(id) {
+  // A queued-but-not-yet-synced write is by definition newer than whatever's on the server —
+  // reading it back here (instead of the network) is what stops a reload right as connectivity
+  // returns, but before the next flush runs, from silently discarding balls that were scored
+  // while offline. flushPendingWrites() (triggered elsewhere) will reconcile it with the server
+  // shortly after; this function just needs to not present stale data as current in the meantime.
+  const pendingRaw = localStorage.getItem(PENDING_PREFIX + id);
+  if (pendingRaw) {
+    try {
+      return JSON.parse(pendingRaw);
+    } catch (e) {
+      /* fall through to normal load */
+    }
+  }
   const pointer = lsGetIndex().find(m => m.id === id);
   try {
     if (pointer && pointer.shareCode) {
@@ -3413,7 +3558,8 @@ function HomeScreen({
   profile,
   onOpenAccount,
   onJoinCode,
-  onOpenStats
+  onOpenStats,
+  pendingCount
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3431,6 +3577,13 @@ function HomeScreen({
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount
+  })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
+    count: pendingCount
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -5219,6 +5372,181 @@ function PrintReport({
     bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   })) : null));
 }
+// Small "N not synced yet" pill — shown on Home (so it's visible even after you've walked away
+// from a match) and in the live scoring header (so it's visible exactly when it matters most).
+// Silent no-op render when there's nothing pending, so it never adds visual noise on the common
+// path where every save reaches the server immediately.
+function SyncStatusBanner({
+  count,
+  dark
+}) {
+  const [syncing, setSyncing] = useState(false);
+  if (!count) return null;
+  async function handleTap() {
+    if (syncing) return;
+    setSyncing(true);
+    await flushPendingWrites();
+    setSyncing(false);
+  }
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: handleTap,
+    disabled: syncing,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: dark ? "rgba(242,236,217,0.14)" : "rgba(230,84,75,0.1)",
+      border: `1px solid ${dark ? "rgba(242,236,217,0.35)" : "#e6544b55"}`,
+      borderRadius: 10,
+      color: dark ? COLORS.cream : "#b3392f",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      padding: "6px 10px",
+      cursor: syncing ? "default" : "pointer",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 13
+  }), syncing ? "Syncing\u2026" : `${count} match${count === 1 ? "" : "es"} not synced \u2014 tap to retry`);
+}
+// Shown when a scored ball's save collides with a newer write from another device — the two
+// devices' local states have genuinely diverged and nothing here tries to auto-merge ball-by-ball
+// history, since a wrong automatic guess is worse than asking. Blocks scoring until resolved
+// (unlike SyncStatusBanner) because continuing to score on top of a stale base only makes the
+// eventual reconciliation harder.
+function SyncConflictModal({
+  local,
+  remote,
+  onKeepMine,
+  onUseTheirs
+}) {
+  const localInn = local.innings[local.currentInningIndex];
+  const remoteInn = remote.innings[Math.min(remote.currentInningIndex, remote.innings.length - 1)];
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(20,16,12,0.55)",
+      zIndex: 80,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      animation: "cs-scrim 0.2s ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.cream,
+      borderRadius: 18,
+      padding: 22,
+      maxWidth: 360,
+      width: "100%",
+      boxShadow: "0 12px 40px rgba(0,0,0,0.35)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.ink,
+      marginBottom: 6
+    }
+  }, "Scores don\u2019t match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 16
+    }
+  }, "Another device saved a ball for this match that this one hasn\u2019t seen. Pick which version to keep going with \u2014 the other will be overwritten."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      background: "#fff",
+      borderRadius: 12,
+      padding: "10px 12px",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.08)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "This device"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontWeight: 700,
+      fontSize: 16,
+      color: COLORS.ink
+    }
+  }, localInn.runs, "-", localInn.wickets, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 500,
+      color: COLORS.inkSoft
+    }
+  }, "(", oversLabel(localInn.legalBalls, localInn.ballsPerOver), ")"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      background: "#fff",
+      borderRadius: 12,
+      padding: "10px 12px",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.08)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Other device"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontWeight: 700,
+      fontSize: 16,
+      color: COLORS.ink
+    }
+  }, remoteInn.runs, "-", remoteInn.wickets, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 500,
+      color: COLORS.inkSoft
+    }
+  }, "(", oversLabel(remoteInn.legalBalls, remoteInn.ballsPerOver), ")")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onKeepMine,
+    style: {
+      width: "100%"
+    }
+  }, "Keep this device\u2019s version"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onUseTheirs,
+    style: {
+      width: "100%"
+    }
+  }, "Use the other device\u2019s version"))));
+}
 function ExportPdfButton({
   match,
   style
@@ -6044,7 +6372,8 @@ function FollowScreen({
 function MatchScreen({
   match,
   setMatch,
-  onExit
+  onExit,
+  pendingCount
 }) {
   const [showRuns, setShowRuns] = useState(false);
   const [showExtra, setShowExtra] = useState(null); // 'wide'|'noball'|'bye'|'legbye'
@@ -6055,6 +6384,8 @@ function MatchScreen({
   const [history, setHistory] = useState([]);
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
+  const [conflict, setConflict] = useState(null); // remote match, when another device's write
+  // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
@@ -6076,6 +6407,35 @@ function MatchScreen({
   // if excluding maxed-out bowlers would leave nobody to pick, don't exclude them — show everyone
   // with a warning instead of a dead end
   const maxOversExcludeList = eligibleAfterMaxOvers.length > 0 ? atMaxOvers : [];
+  // Every write to a shared match is optimistic-concurrency checked server-side (see
+  // transactionalMatchWrite). A plain ok result just needs its new writeSeq folded back into local
+  // state so the NEXT write's check is against the right baseline — cur => merge, never overwrite,
+  // since local state may already have moved on by the time this resolves. A conflict result means
+  // another device's write landed in between; that needs a human decision, not a silent overwrite,
+  // so it opens the resolution modal instead.
+  function applySaveResult(result) {
+    if (result.ok && result.writeSeq != null) {
+      setMatch(cur => cur ? {
+        ...cur,
+        writeSeq: result.writeSeq
+      } : cur);
+    } else if (result.conflict) {
+      setConflict(result.remoteMatch);
+    }
+  }
+  function resolveConflictKeepMine() {
+    const forced = {
+      ...match,
+      writeSeq: conflict.writeSeq
+    };
+    setMatch(forced);
+    setConflict(null);
+    saveMatch(forced).then(applySaveResult);
+  }
+  function resolveConflictUseTheirs() {
+    setMatch(conflict);
+    setConflict(null);
+  }
   function pushHistory() {
     setHistory(h => [...h, JSON.parse(JSON.stringify(match))]);
   }
@@ -6086,7 +6446,7 @@ function MatchScreen({
     };
     checkInningEnd(updated);
     setMatch(updated);
-    saveMatch(updated);
+    saveMatch(updated).then(applySaveResult);
   }
   async function handleGetCode() {
     if (match.shareCode) return {
@@ -6100,15 +6460,19 @@ function MatchScreen({
     const result = await saveMatch(updated);
     console.log("[get-code] saveMatch result:", JSON.stringify(result));
     if (result.ok) {
-      setMatch(updated);
+      setMatch({
+        ...updated,
+        writeSeq: result.writeSeq
+      });
       return {
         ok: true,
         code: updated.shareCode
       };
     }
+    if (result.conflict) setConflict(result.remoteMatch);
     return {
       ok: false,
-      error: result.error
+      error: result.error || "This match changed on another device \u2014 resolve that before sharing a code."
     };
   }
   async function handleGetViewCode() {
@@ -6121,15 +6485,19 @@ function MatchScreen({
     };
     const result = await saveMatch(updated);
     if (result.ok) {
-      setMatch(updated);
+      setMatch({
+        ...updated,
+        writeSeq: result.writeSeq
+      });
       return {
         ok: true,
         code: updated.viewCode
       };
     }
+    if (result.conflict) setConflict(result.remoteMatch);
     return {
       ok: false,
-      error: result.error
+      error: result.error || "This match changed on another device \u2014 resolve that before sharing a link."
     };
   }
   function checkInningEnd(updated) {
@@ -6292,10 +6660,19 @@ function MatchScreen({
   }
   function undo() {
     if (history.length === 0) return;
-    const prev = history[history.length - 1];
+    // The history snapshot was taken before the ball being undone, so its own writeSeq is one
+    // behind whatever this device most recently confirmed with the server. Reverting the ball
+    // data but keeping the CURRENT writeSeq as the expected baseline is what's actually correct
+    // here: this device is the sole author of that latest confirmed write, so its own writeSeq
+    // is the right thing to check the undo against — using the stale snapshot's seq instead would
+    // make every undo spuriously look like a conflict with another device.
+    const prev = {
+      ...history[history.length - 1],
+      writeSeq: match.writeSeq
+    };
     setHistory(h => h.slice(0, -1));
     setMatch(prev);
-    saveMatch(prev);
+    saveMatch(prev).then(applySaveResult);
   }
   function swapStrike() {
     if (!inning.strikerName || !inning.nonStrikerName) return;
@@ -6409,7 +6786,10 @@ function MatchScreen({
     onGetViewCode: handleGetViewCode
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
+    count: pendingCount,
+    dark: true
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -6862,6 +7242,11 @@ function MatchScreen({
   }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: match,
     onClose: () => setShowScorecard(false)
+  }), conflict && /*#__PURE__*/React.createElement(SyncConflictModal, {
+    local: match,
+    remote: conflict,
+    onKeepMine: resolveConflictKeepMine,
+    onUseTheirs: resolveConflictUseTheirs
   }));
 }
 function SecondInningsSetup({
@@ -6890,7 +7275,18 @@ function SecondInningsSetup({
       awaitingSecondInningsSetup: false
     };
     setMatch(updatedMatch);
-    saveMatch(updatedMatch);
+    saveMatch(updatedMatch).then(result => {
+      // Merge-only (functional form): local state may already have moved on by the time this
+      // resolves. No conflict UI here deliberately — this is a one-time transition, and if it
+      // does race another device, the very next ball scored from MatchScreen's commit() will hit
+      // the same writeSeq mismatch and surface the proper resolution modal there.
+      if (result.ok && result.writeSeq != null) {
+        setMatch(cur => cur ? {
+          ...cur,
+          writeSeq: result.writeSeq
+        } : cur);
+      }
+    });
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6976,13 +7372,18 @@ function PlayerOfMatchCard({
   const [picking, setPicking] = useState(false);
   const current = match.playerOfMatch;
   function pick(name) {
-    setMatch({
+    const updated = {
       ...match,
       playerOfMatch: name
-    });
-    saveMatch({
-      ...match,
-      playerOfMatch: name
+    };
+    setMatch(updated);
+    saveMatch(updated).then(result => {
+      if (result.ok && result.writeSeq != null) {
+        setMatch(cur => cur ? {
+          ...cur,
+          writeSeq: result.writeSeq
+        } : cur);
+      }
     });
     setPicking(false);
   }
@@ -7131,7 +7532,10 @@ function ResultScreen({
     };
     const result = await saveMatch(updated);
     if (result.ok) {
-      setMatch(updated);
+      setMatch({
+        ...updated,
+        writeSeq: result.writeSeq
+      });
       return {
         ok: true,
         code: updated.shareCode
@@ -7139,7 +7543,7 @@ function ResultScreen({
     }
     return {
       ok: false,
-      error: result.error
+      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a code." : undefined)
     };
   }
   async function handleGetViewCode() {
@@ -7153,7 +7557,10 @@ function ResultScreen({
     };
     const result = await saveMatch(updated);
     if (result.ok) {
-      setMatch(updated);
+      setMatch({
+        ...updated,
+        writeSeq: result.writeSeq
+      });
       return {
         ok: true,
         code: updated.viewCode
@@ -7161,7 +7568,7 @@ function ResultScreen({
     }
     return {
       ok: false,
-      error: result.error
+      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a link." : undefined)
     };
   }
   return /*#__PURE__*/React.createElement("div", {
@@ -7302,6 +7709,7 @@ function CricketScorer() {
   const [profile, setProfile] = useState(null);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
+  const [pendingCount, setPendingCount] = useState(0);
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
   function setScreen(next) {
@@ -7356,6 +7764,34 @@ function CricketScorer() {
       initialLoadDone.current = true;
     });
     return unsubAuth;
+  }, []);
+  // Offline outbox: retry queued writes whenever the browser tells us we're back online, and on a
+  // slow poll as a safety net for platforms where the 'online' event doesn't fire reliably. The
+  // poll also keeps the visible pending count in sync with reality (e.g. after a match screen's
+  // own save clears its own entry) without threading a callback through every save call site.
+  useEffect(() => {
+    let cancelled = false;
+    function refreshPendingCount() {
+      if (!cancelled) setPendingCount(pendingWriteCount());
+    }
+    function handleOnline() {
+      flushPendingWrites().then(refreshPendingCount);
+    }
+    window.addEventListener("online", handleOnline);
+    refreshPendingCount();
+    flushPendingWrites().then(refreshPendingCount); // catch up on anything queued from a prior session
+    const poll = setInterval(() => {
+      if (navigator.onLine !== false) {
+        flushPendingWrites().then(refreshPendingCount);
+      } else {
+        refreshPendingCount();
+      }
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", handleOnline);
+      clearInterval(poll);
+    };
   }, []);
   async function refreshIndex() {
     setMatches(await loadIndex());
@@ -7418,7 +7854,16 @@ function CricketScorer() {
     ensureBatsman(m.innings[0], setup.nonStrikerA);
     ensureBowler(m.innings[0], setup.bowlerB);
     setMatch(m);
-    saveMatch(m);
+    saveMatch(m).then(result => {
+      // First-ever write for a brand new match — merge the assigned writeSeq back so the very
+      // first ball scored doesn't immediately false-conflict against a baseline of 0.
+      if (result.ok && result.writeSeq != null) {
+        setMatch(cur => cur ? {
+          ...cur,
+          writeSeq: result.writeSeq
+        } : cur);
+      }
+    });
     setScreen("match");
     if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
   }
@@ -7606,7 +8051,8 @@ function CricketScorer() {
     profile: profile,
     onOpenAccount: () => setScreen("account"),
     onJoinCode: handleJoinCode,
-    onOpenStats: () => setScreen("stats")
+    onOpenStats: () => setScreen("stats"),
+    pendingCount: pendingCount
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -7621,7 +8067,8 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(MatchScreen, {
     match: match,
     setMatch: setMatch,
-    onExit: exitToHome
+    onExit: exitToHome,
+    pendingCount: pendingCount
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
