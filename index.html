@@ -2401,9 +2401,27 @@ function ShareMenu({
   style
 }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null); // {top, right} in viewport coords
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copiedWhich, setCopiedWhich] = useState(null); // 'code' | 'link' | null
+  const btnRef = useRef(null);
+  function toggleOpen() {
+    setOpen(o => {
+      const next = !o;
+      if (next && btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        // Fixed-position + portal to document.body so this never gets clipped by an ancestor's
+        // overflow:hidden (the scoring header uses one to contain its decorative background) or
+        // trapped by an ancestor's stacking context — both bit us before this was a portal.
+        setPos({
+          top: rect.bottom + 8,
+          right: Math.max(8, window.innerWidth - rect.right)
+        });
+      }
+      return next;
+    });
+  }
   function flashCopied(which) {
     setCopiedWhich(which);
     setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
@@ -2466,43 +2484,19 @@ function ShareMenu({
     margin: "3px 0 8px",
     lineHeight: 1.4
   };
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: () => setOpen(o => !o),
-    title: "Share",
-    "aria-label": "Share",
-    style: {
-      background: "rgba(242,236,217,0.14)",
-      border: `1px solid rgba(242,236,217,0.35)`,
-      borderRadius: 8,
-      color: COLORS.cream,
-      cursor: "pointer",
-      width: 38,
-      height: 38,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      ...style
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  })), open && /*#__PURE__*/React.createElement("div", {
+  const menu = open && pos && /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     onClick: () => setOpen(false),
     style: {
       position: "fixed",
       inset: 0,
-      zIndex: 25
+      zIndex: 100
     }
-  }), open && /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     onClick: e => e.stopPropagation(),
     style: {
-      position: "absolute",
-      top: "calc(100% + 8px)",
-      right: 0,
+      position: "fixed",
+      top: pos.top,
+      right: pos.right,
       width: 270,
       background: COLORS.ink,
       color: COLORS.cream,
@@ -2510,7 +2504,7 @@ function ShareMenu({
       padding: 8,
       fontFamily: "'Inter'",
       boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-      zIndex: 30
+      zIndex: 101
     }
   }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2609,7 +2603,29 @@ function ShareMenu({
       color: COLORS.gold,
       lineHeight: 1.4
     }
-  }, error)));
+  }, error))), document.body);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    ref: btnRef,
+    className: "cs-btn",
+    onClick: toggleOpen,
+    title: "Share",
+    "aria-label": "Share",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: `1px solid rgba(242,236,217,0.35)`,
+      borderRadius: 8,
+      color: COLORS.cream,
+      cursor: "pointer",
+      width: 38,
+      height: 38,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 17
+  })), menu);
 }
 
 
