@@ -1110,6 +1110,66 @@ async function saveProfile(profile) {
     console.error("profile save failed", e);
   }
 }
+// ---------- Account data export & deletion ----------
+// Everything queryable by uid: profile, personal teams, personal cloud matches, and the clubs this
+// account belongs to. This deliberately can't include matches that only ever existed as an open
+// score/view code (sharedMatches/liveViews) — those documents have no owner field at all, by
+// design (see the Firestore rules notes near genMatchCode), so there's nothing to query them by.
+async function exportUserData() {
+  if (!auth.currentUser) return null;
+  const uid = auth.currentUser.uid;
+  const [profile, teams, matchesSnap, clubsSnap] = await Promise.all([loadProfile(), loadTeams(), db.collection("users").doc(uid).collection("matches").get(), db.collection("clubs").where("memberUids", "array-contains", uid).get()]);
+  return {
+    exportedAt: new Date().toISOString(),
+    account: {
+      uid,
+      email: auth.currentUser.email,
+      displayName: auth.currentUser.displayName
+    },
+    profile: profile || null,
+    teams,
+    matches: matchesSnap.docs.map(d => unpackMatchFromFirestore(d.data())),
+    clubs: clubsSnap.docs.map(d => ({
+      id: d.id,
+      name: d.data().name,
+      role: d.data().ownerUid === uid ? "owner" : "member"
+    }))
+  };
+}
+// Deletes everything this account can reach, then the Firebase Auth account itself. localMatchIds
+// lets the caller pass in whatever this device's own match index knows about — those go through
+// the regular deleteMatch() so a shareCode/viewCode pair tied to a match gets cleaned up too,
+// which a plain Firestore query by uid could never find (same ownerless-by-design limitation as
+// exportUserData above). Matches only ever seen on a DIFFERENT device won't be reachable from
+// here; that's a real limitation of the open-code sharing model, not an oversight.
+async function deleteUserAccount(localMatchIds) {
+  const uid = auth.currentUser.uid;
+  for (const id of localMatchIds) {
+    await deleteMatch(id);
+  }
+  const matchesSnap = await db.collection("users").doc(uid).collection("matches").get();
+  await Promise.all(matchesSnap.docs.map(d => d.ref.delete().catch(e => console.error("delete account: match cleanup failed", e))));
+  await db.collection("users").doc(uid).collection("meta").doc("teams").delete().catch(e => console.error("delete account: teams cleanup failed", e));
+  await db.collection("users").doc(uid).collection("meta").doc("profile").delete().catch(e => console.error("delete account: profile cleanup failed", e));
+  const clubsSnap = await db.collection("clubs").where("memberUids", "array-contains", uid).get();
+  await Promise.all(clubsSnap.docs.map(d => d.ref.update({
+    memberUids: firebase.firestore.FieldValue.arrayRemove(uid)
+  }).catch(e => console.error("delete account: club leave failed", e))));
+  try {
+    await auth.currentUser.delete();
+  } catch (e) {
+    if (e.code === "auth/requires-recent-login") {
+      // Firebase requires a fresh sign-in for account deletion specifically — reusing the same
+      // sign-in flow (with its popup-blocked/redirect fallback already handled) rather than
+      // duplicating that logic here.
+      const reauth = await signInGoogle();
+      if (!reauth.ok) throw e;
+      await auth.currentUser.delete();
+    } else {
+      throw e;
+    }
+  }
+}
 
 // ---------- House rules (balls/over, wide & no-ball run values, free hit) ----------
 // Device-local by default so guests (no sign-in required) can still set these; also synced into
@@ -2291,6 +2351,8 @@ function AccountScreen({
   onSignIn,
   onSignOut,
   onSaveProfile,
+  onExportData,
+  onDeleteAccount,
   onBack,
   redirectError
 }) {
@@ -2298,6 +2360,11 @@ function AccountScreen({
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
@@ -2314,6 +2381,42 @@ function AccountScreen({
     const result = await onSignOut();
     setBusy(false);
     if (result && result.ok === false && result.error) setActionError(result.error);
+  }
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const data = await onExportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json"
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `club-scorer-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("export failed", e);
+      setActionError("Couldn't export your data \u2014 try again in a moment.");
+    }
+    setExporting(false);
+  }
+  async function handleDeleteAccount() {
+    if (deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE") return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await onDeleteAccount();
+      // onDeleteAccount signs the account out and returns to Home on success — nothing more to do
+      // here, this component will unmount.
+    } catch (e) {
+      console.error("account deletion failed", e);
+      setDeleteError(e.message || "Couldn't delete your account \u2014 try again, or contact support if this keeps happening.");
+      setDeleting(false);
+    }
   }
   async function handleSaveName() {
     setBusy(true);
@@ -2639,7 +2742,132 @@ function AccountScreen({
       padding: "0 14px",
       fontSize: 13
     }
-  }, "View license"))));
+  }, "View license"))), user && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Your data"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleExport,
+    disabled: exporting,
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, exporting ? "Preparing\u2026" : "Export my data (.json)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "4px 0 16px"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 700,
+      color: COLORS.ball,
+      marginBottom: 6
+    }
+  }, "Delete account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "Permanently deletes your profile, teams, and matches saved to this account, and removes you from any clubs. This can\u2019t be undone."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDeleteConfirmText("");
+      setDeleteError("");
+      setShowDeleteConfirm(true);
+    },
+    className: "cs-btn",
+    style: {
+      width: "100%",
+      background: "none",
+      border: `1.5px solid ${COLORS.ball}`,
+      borderRadius: 10,
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      padding: "10px 0",
+      cursor: "pointer"
+    }
+  }, "Delete my account")), showDeleteConfirm && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => !deleting && setShowDeleteConfirm(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.ball,
+      marginBottom: 10
+    }
+  }, "Delete your account?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 14
+    }
+  }, "This permanently deletes your profile, your teams, every match saved to this account, and removes you from your clubs. It does not delete matches you only ever shared via a match code on another device. This cannot be undone."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Type DELETE to confirm"), /*#__PURE__*/React.createElement(TextField, {
+    value: deleteConfirmText,
+    onChange: setDeleteConfirmText,
+    placeholder: "DELETE",
+    autoCapitalize: "characters",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    style: {
+      marginBottom: 12
+    }
+  }), deleteError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, deleteError), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: handleDeleteAccount,
+    disabled: deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE",
+    style: {
+      width: "100%"
+    }
+  }, deleting ? "Deleting\u2026" : "Permanently delete my account")));
 }
 
 function StatsScreen({
@@ -8479,6 +8707,23 @@ function CricketScorer() {
     await saveProfile(p);
     setProfile(p);
   }
+  async function handleExportData() {
+    return await exportUserData();
+  }
+  async function handleDeleteAccount() {
+    // Passes this device's own match index so deleteUserAccount can route each one through
+    // deleteMatch() — the only way a match's shareCode/viewCode docs (which have no owner field to
+    // query by) get cleaned up. auth.currentUser.delete() triggers the same onAuthStateChanged
+    // listener a normal sign-out does, so user/profile clear themselves; this just needs to reset
+    // the screens that were showing this account's now-deleted data.
+    await deleteUserAccount(matches.map(m => m.id));
+    setMatches(await loadIndex());
+    setTeams(await loadTeams());
+    setClubs([]);
+    setClubTeamsById({});
+    setActiveClubId(null);
+    setScreen("home");
+  }
   async function handleSaveRules(r) {
     await saveRules(r);
     setRules(r);
@@ -8783,6 +9028,8 @@ function CricketScorer() {
     onSignIn: signInGoogle,
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
+    onExportData: handleExportData,
+    onDeleteAccount: handleDeleteAccount,
     onBack: () => setScreen("home"),
     redirectError: authError
   })), screen === "stats" && /*#__PURE__*/React.createElement(NavWrap, {
