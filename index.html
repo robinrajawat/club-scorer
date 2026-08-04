@@ -431,10 +431,12 @@ function upsertLocalPointer(match, extra) {
 async function saveMatch(match) {
   try {
     if (match.shareCode) {
+      console.log("[saveMatch] writing to sharedMatches/" + match.shareCode);
       await db.collection("sharedMatches").doc(match.shareCode).set({
         ...match,
         updatedAt: Date.now()
       });
+      console.log("[saveMatch] write acknowledged, verifying against server\u2026");
       // Read it straight back — from the SERVER, not the SDK's local cache. A same-session read
       // immediately after a write can be served from the client's own optimistic write cache even
       // if the write never actually reached Firestore, which would make this check a false
@@ -443,6 +445,7 @@ async function saveMatch(match) {
       const verify = await db.collection("sharedMatches").doc(match.shareCode).get({
         source: "server"
       });
+      console.log("[saveMatch] server verify — exists:", verify.exists);
       if (!verify.exists) {
         throw new Error("The code saved but couldn't be read back \u2014 check Firestore rules allow both read and write on sharedMatches/{code}.");
       }
@@ -473,7 +476,7 @@ async function saveMatch(match) {
       };
     }
   } catch (e) {
-    console.error("cloud save failed", match.shareCode ? "(match code)" : "(account)", e.code, e.message);
+    console.error("[saveMatch] threw —", match.shareCode ? "(match code)" : "(account)", "code:", e.code, "message:", e.message);
     // Still keep this device usable even when the cloud write fails, but a match-code save that
     // only lands in localStorage is actively misleading — nothing exists for another phone to
     // find — so this is surfaced as a real failure rather than silently treated as success.
@@ -521,10 +524,12 @@ async function loadMatch(id) {
   return raw ? JSON.parse(raw) : null;
 }
 async function fetchSharedMatch(code) {
+  console.log("[fetchSharedMatch] looking up doc path: sharedMatches/" + code);
   try {
     const doc = await db.collection("sharedMatches").doc(code).get({
       source: "server"
     });
+    console.log("[fetchSharedMatch] server response — exists:", doc.exists, "id:", doc.id);
     return doc.exists ? {
       found: true,
       match: doc.data()
@@ -532,7 +537,7 @@ async function fetchSharedMatch(code) {
       found: false
     };
   } catch (e) {
-    console.error("join by code failed", e.code, e.message);
+    console.error("[fetchSharedMatch] threw — code:", e.code, "message:", e.message);
     return {
       found: false,
       error: e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
@@ -1543,12 +1548,22 @@ function TextField({
   value,
   onChange,
   placeholder,
-  style
+  style,
+  autoCapitalize,
+  autoCorrect,
+  autoComplete,
+  spellCheck,
+  inputMode
 }) {
   return /*#__PURE__*/React.createElement("input", {
     value: value,
     onChange: e => onChange(e.target.value),
     placeholder: placeholder,
+    autoCapitalize: autoCapitalize,
+    autoCorrect: autoCorrect,
+    autoComplete: autoComplete,
+    spellCheck: spellCheck,
+    inputMode: inputMode,
     style: {
       fontFamily: "'Inter', sans-serif",
       fontSize: 15,
@@ -2247,12 +2262,15 @@ function JoinCodeBar({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
-    if (!code.trim() || busy) return;
+    const cleaned = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!cleaned || busy) return;
     setBusy(true);
     setError("");
-    const result = await onJoin(code.trim().toUpperCase());
+    console.log("[join-code] submitting code:", JSON.stringify(cleaned), "length:", cleaned.length);
+    const result = await onJoin(cleaned);
+    console.log("[join-code] result:", JSON.stringify(result));
     setBusy(false);
-    if (!result.ok) setError(result.error || "No match found for that code — check it and try again.");
+    if (!result.ok) setError((result.error || "No match found for that code.") + ` (searched: "${cleaned}")`);
   }
   if (!open) {
     return /*#__PURE__*/React.createElement("button", {
@@ -2285,8 +2303,13 @@ function JoinCodeBar({
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: code,
-    onChange: v => setCode(v.toUpperCase()),
+    onChange: v => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
     placeholder: "Enter code, e.g. 7GQK4RTP",
+    autoCapitalize: "characters",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    inputMode: "text",
     style: {
       textTransform: "uppercase",
       letterSpacing: 1
@@ -4672,7 +4695,9 @@ function MatchScreen({
       ...match,
       shareCode: genMatchCode()
     };
+    console.log("[get-code] generated code:", updated.shareCode, "for match id:", updated.id);
     const result = await saveMatch(updated);
+    console.log("[get-code] saveMatch result:", JSON.stringify(result));
     if (result.ok) {
       setMatch(updated);
       return {
@@ -5859,7 +5884,9 @@ function CricketScorer() {
     setRules(r);
   }
   async function handleJoinCode(code) {
+    console.log("[handleJoinCode] joining with code:", JSON.stringify(code));
     const result = await fetchSharedMatch(code);
+    console.log("[handleJoinCode] fetchSharedMatch result found:", result.found, "error:", result.error || "(none)");
     if (!result.found) return {
       ok: false,
       error: result.error || "No match found for that code."
