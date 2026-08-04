@@ -4183,6 +4183,10 @@ function ExportPdfButton({
     size: 17
   }));
 }
+function parseOverLabel(label, ballsPerOver) {
+  const [whole, balls] = String(label).split(".").map(Number);
+  return whole + (balls || 0) / (ballsPerOver || 6);
+}
 function RunRateChart({
   match
 }) {
@@ -4206,6 +4210,12 @@ function RunRateChart({
     });
     return points;
   });
+  const wicketPoints = innings.map(inn => (inn.fallOfWickets || []).map(fow => ({
+    over: parseOverLabel(fow.over, inn.ballsPerOver),
+    runs: fow.score,
+    wicket: fow.wicket,
+    batsman: fow.batsman
+  })));
   const maxOver = Math.max(match.oversLimit, ...series.map(s => s[s.length - 1]?.over || 0), 1);
   const maxRuns = Math.max(...series.flatMap(s => s.map(p => p.runs)), 10);
   const W = 300,
@@ -4222,6 +4232,7 @@ function RunRateChart({
   const yTickVals = Array.from({
     length: yTicks + 1
   }, (_, i) => Math.round(maxRuns / yTicks * i));
+  const wicketMarkerSize = 3.2;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
@@ -4270,7 +4281,37 @@ function RunRateChart({
       background: seriesColors[i],
       display: "inline-block"
     }
-  }), inn.battingTeam)))), /*#__PURE__*/React.createElement("svg", {
+  }), inn.battingTeam)), wicketPoints.some(w => w.length > 0) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "9",
+    height: "9",
+    viewBox: "0 0 9 9"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "1.5",
+    y1: "1.5",
+    x2: "7.5",
+    y2: "7.5",
+    stroke: COLORS.ball,
+    strokeWidth: "1.6",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "7.5",
+    y1: "1.5",
+    x2: "1.5",
+    y2: "7.5",
+    stroke: COLORS.ball,
+    strokeWidth: "1.6",
+    strokeLinecap: "round"
+  })), "wicket"))), /*#__PURE__*/React.createElement("svg", {
     viewBox: `0 0 ${W} ${H}`,
     style: {
       width: "100%",
@@ -4321,7 +4362,42 @@ function RunRateChart({
     strokeWidth: "2",
     strokeLinejoin: "round",
     strokeLinecap: "round"
-  })), series.map((points, i) => {
+  })), wicketPoints.map((wks, i) => wks.map((w, wi) => /*#__PURE__*/React.createElement("g", {
+    key: `${i}-${wi}`,
+    transform: `translate(${x(w.over)}, ${y(w.runs)})`
+  }, /*#__PURE__*/React.createElement("title", null, `${w.wicket}-${w.batsman ? "wkt " + w.batsman : "wkt"}`), /*#__PURE__*/React.createElement("line", {
+    x1: -wicketMarkerSize,
+    y1: -wicketMarkerSize,
+    x2: wicketMarkerSize,
+    y2: wicketMarkerSize,
+    stroke: "#fff",
+    strokeWidth: "3",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: wicketMarkerSize,
+    y1: -wicketMarkerSize,
+    x2: -wicketMarkerSize,
+    y2: wicketMarkerSize,
+    stroke: "#fff",
+    strokeWidth: "3",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: -wicketMarkerSize,
+    y1: -wicketMarkerSize,
+    x2: wicketMarkerSize,
+    y2: wicketMarkerSize,
+    stroke: COLORS.ball,
+    strokeWidth: "1.6",
+    strokeLinecap: "round"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: wicketMarkerSize,
+    y1: -wicketMarkerSize,
+    x2: -wicketMarkerSize,
+    y2: wicketMarkerSize,
+    stroke: COLORS.ball,
+    strokeWidth: "1.6",
+    strokeLinecap: "round"
+  })))), series.map((points, i) => {
     const last = points[points.length - 1];
     return last ? /*#__PURE__*/React.createElement("circle", {
       key: i,
@@ -4332,6 +4408,7 @@ function RunRateChart({
     }) : null;
   })));
 }
+
 
 function ScorecardOverlay({
   match,
@@ -4838,7 +4915,7 @@ function MatchScreen({
       opacity: 0.9,
       fontWeight: 500
     }
-  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", oversLabel(ballsLeft, inning.ballsPerOver), " ov"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate)), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(runsNeeded, 0), " off ", Math.max(ballsLeft, 0), " ball", Math.max(ballsLeft, 0) === 1 ? "" : "s", " (", oversLabel(ballsLeft, inning.ballsPerOver), " ov)"), /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate)), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
     style: {
       background: COLORS.gold,
       color: "#fff",
