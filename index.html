@@ -3853,6 +3853,8 @@ function PlayingXIPicker({
   keeper,
   selected,
   onToggle,
+  onSetCaptain,
+  onSetKeeper,
   required
 }) {
   const count = selected.length;
@@ -3882,7 +3884,14 @@ function PlayingXIPicker({
       fontWeight: 700,
       color: count === required ? COLORS.turf : COLORS.inkSoft
     }
-  }, count, "/", required, " selected")), /*#__PURE__*/React.createElement("div", {
+  }, count, "/", required, " selected")), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / keeper for this match."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -3892,21 +3901,68 @@ function PlayingXIPicker({
     const name = p.name;
     const checked = selected.includes(name);
     const disabled = !checked && atLimit;
-    return /*#__PURE__*/React.createElement("button", {
+    // Once a player is in the XI, their pill grows two extra tap targets for captain/keeper —
+    // needs to be a plain div (not a button) at the top level so those can be real sibling
+    // buttons instead of illegally nesting buttons inside the selection button.
+    if (!checked) {
+      return /*#__PURE__*/React.createElement("button", {
+        key: name,
+        type: "button",
+        className: "cs-btn cs-shine",
+        disabled: disabled,
+        onClick: () => onToggle(name),
+        style: {
+          padding: "8px 12px 8px 10px",
+          borderRadius: 20,
+          border: "none",
+          cursor: disabled ? "not-allowed" : "pointer",
+          background: "#fff",
+          color: disabled ? COLORS.inkSoft : COLORS.ink,
+          opacity: disabled ? 0.45 : 1,
+          boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+          fontFamily: "'Inter'",
+          fontWeight: 600,
+          fontSize: 13,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 15,
+          height: 15,
+          borderRadius: 4,
+          flexShrink: 0,
+          border: `1.5px solid ${COLORS.creamDark}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }), p.number ? `#${p.number} ${name}` : name);
+    }
+    const isCaptain = name === captain;
+    const isKeeper = name === keeper;
+    return /*#__PURE__*/React.createElement("div", {
       key: name,
+      className: "cs-shine",
+      style: {
+        padding: "5px 6px 5px 10px",
+        borderRadius: 20,
+        background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+        boxShadow: "0 2px 8px rgba(45,80,22,0.3)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5
+      }
+    }, /*#__PURE__*/React.createElement("button", {
       type: "button",
-      className: "cs-btn cs-shine",
-      disabled: disabled,
       onClick: () => onToggle(name),
       style: {
-        padding: "8px 12px 8px 10px",
-        borderRadius: 20,
+        background: "none",
         border: "none",
-        cursor: disabled ? "not-allowed" : "pointer",
-        background: checked ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
-        color: checked ? "#fff" : disabled ? COLORS.inkSoft : COLORS.ink,
-        opacity: disabled ? 0.45 : 1,
-        boxShadow: checked ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        padding: "3px 0",
+        cursor: "pointer",
+        color: "#fff",
         fontFamily: "'Inter'",
         fontWeight: 600,
         fontSize: 13,
@@ -3920,21 +3976,59 @@ function PlayingXIPicker({
         height: 15,
         borderRadius: 4,
         flexShrink: 0,
-        border: checked ? "none" : `1.5px solid ${COLORS.creamDark}`,
-        background: checked ? "rgba(255,255,255,0.25)" : "transparent",
+        background: "rgba(255,255,255,0.25)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center"
       }
-    }, checked && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
         lineHeight: 1
       }
-    }, "✓")), p.number ? `#${p.number} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
-      isCaptain: name === captain,
-      isKeeper: name === keeper
-    }));
+    }, "✓")), p.number ? `#${p.number} ${name}` : name), onSetCaptain && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onSetCaptain(isCaptain ? "" : name),
+      "aria-label": isCaptain ? `Remove ${name} as captain` : `Make ${name} captain`,
+      title: "Captain",
+      style: {
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        flexShrink: 0,
+        border: "none",
+        background: isCaptain ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "rgba(255,255,255,0.2)",
+        color: "#fff",
+        fontFamily: "'Inter'",
+        fontSize: 9,
+        fontWeight: 800,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, "C"), onSetKeeper && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onSetKeeper(isKeeper ? "" : name),
+      "aria-label": isKeeper ? `Remove ${name} as wicketkeeper` : `Make ${name} wicketkeeper`,
+      title: "Wicketkeeper",
+      style: {
+        width: 26,
+        height: 22,
+        borderRadius: 11,
+        flexShrink: 0,
+        border: "none",
+        background: isKeeper ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
+        color: isKeeper ? COLORS.pitch : "#fff",
+        fontFamily: "'Inter'",
+        fontSize: 8.5,
+        fontWeight: 800,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, "WK"));
   })));
 }
 function SetupScreen({
@@ -4035,6 +4129,9 @@ function SetupScreen({
       if (xi.length >= Math.min(11, teamASquad.length)) return xi;
       return [...xi, name];
     });
+    // A player dropped from the XI can't stay captain/keeper for this match.
+    setTeamACaptain(c => c === name ? "" : c);
+    setTeamAKeeper(k => k === name ? "" : k);
     setStrikerA("");
     setNonStrikerA("");
   }
@@ -4044,6 +4141,8 @@ function SetupScreen({
       if (xi.length >= Math.min(11, teamBSquad.length)) return xi;
       return [...xi, name];
     });
+    setTeamBCaptain(c => c === name ? "" : c);
+    setTeamBKeeper(k => k === name ? "" : k);
     setBowlerB("");
   }
   function flipCoin() {
@@ -4426,6 +4525,8 @@ function SetupScreen({
     keeper: teamAKeeper,
     selected: teamAPlayingXI,
     onToggle: toggleAXI,
+    onSetCaptain: setTeamACaptain,
+    onSetKeeper: setTeamAKeeper,
     required: Math.min(11, teamASquad.length)
   }), teamBSquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
     label: `${teamBName || "Team B"} — pick who's playing`,
@@ -4434,6 +4535,8 @@ function SetupScreen({
     keeper: teamBKeeper,
     selected: teamBPlayingXI,
     onToggle: toggleBXI,
+    onSetCaptain: setTeamBCaptain,
+    onSetKeeper: setTeamBKeeper,
     required: Math.min(11, teamBSquad.length)
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4798,9 +4901,16 @@ function TeamEditScreen({
       letterSpacing: 1,
       color: COLORS.inkSoft,
       textTransform: "uppercase",
-      marginBottom: 12
+      marginBottom: 4
     }
-  }, "Players"), /*#__PURE__*/React.createElement("div", {
+  }, "Players"), players.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 10
+    }
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -4881,14 +4991,55 @@ function TeamEditScreen({
       fontWeight: 600,
       fontSize: 13.5,
       color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.name), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setCaptain(captain === p.name ? "" : p.name),
+    "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
+    title: "Captain",
+    style: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      flexShrink: 0,
+      border: captain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: captain === p.name ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "#fff",
+      color: captain === p.name ? "#fff" : COLORS.inkSoft,
+      boxShadow: captain === p.name ? "0 1px 4px rgba(184,137,43,0.4)" : "none",
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 800,
+      cursor: "pointer",
       display: "flex",
       alignItems: "center",
-      gap: 6
+      justifyContent: "center"
     }
-  }, p.name, /*#__PURE__*/React.createElement(RoleBadge, {
-    isCaptain: p.name === captain,
-    isKeeper: p.name === keeper
-  })), /*#__PURE__*/React.createElement("button", {
+  }, "C"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setKeeper(keeper === p.name ? "" : p.name),
+    "aria-label": keeper === p.name ? `Remove ${p.name} as wicketkeeper` : `Make ${p.name} wicketkeeper`,
+    title: "Wicketkeeper",
+    style: {
+      width: 30,
+      height: 26,
+      borderRadius: 13,
+      flexShrink: 0,
+      border: keeper === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: keeper === p.name ? "#fff" : COLORS.inkSoft,
+      boxShadow: keeper === p.name ? "0 1px 4px rgba(45,80,22,0.4)" : "none",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 800,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, "WK"), /*#__PURE__*/React.createElement("button", {
     onClick: () => removePlayer(p.name),
     className: "cs-btn",
     style: {
@@ -4908,100 +5059,7 @@ function TeamEditScreen({
       flexShrink: 0
     },
     "aria-label": `Remove ${p.name}`
-  }, "✕"))))), players.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 4
-    }
-  }, "Captain ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 500,
-      textTransform: "none",
-      letterSpacing: 0
-    }
-  }, "(optional — tap again to clear)")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 16
-    }
-  }, players.map(p => {
-    const active = captain === p.name;
-    return /*#__PURE__*/React.createElement("button", {
-      key: p.name,
-      type: "button",
-      onClick: () => setCaptain(active ? "" : p.name),
-      className: "cs-btn cs-shine",
-      style: {
-        padding: "8px 13px",
-        borderRadius: 18,
-        border: "none",
-        cursor: "pointer",
-        background: active ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "#fff",
-        color: active ? "#fff" : COLORS.ink,
-        boxShadow: active ? "0 2px 8px rgba(184,137,43,0.35)" : "0 1px 2px rgba(42,36,32,0.08)",
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 12.5
-      }
-    }, p.number ? `#${p.number} ` : "", p.name);
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 4
-    }
-  }, "Wicketkeeper ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 500,
-      textTransform: "none",
-      letterSpacing: 0
-    }
-  }, "(optional — tap again to clear)")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, players.map(p => {
-    const active = keeper === p.name;
-    return /*#__PURE__*/React.createElement("button", {
-      key: p.name,
-      type: "button",
-      onClick: () => setKeeper(active ? "" : p.name),
-      className: "cs-btn cs-shine",
-      style: {
-        padding: "8px 13px",
-        borderRadius: 18,
-        border: "none",
-        cursor: "pointer",
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
-        color: active ? "#fff" : COLORS.ink,
-        boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 12.5
-      }
-    }, p.number ? `#${p.number} ` : "", p.name);
-  }))), /*#__PURE__*/React.createElement(Btn, {
+  }, "✕"))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => onSave({
