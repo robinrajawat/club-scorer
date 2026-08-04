@@ -428,14 +428,42 @@ function upsertLocalPointer(match, extra) {
   });
   lsSetIndex(idx);
 }
+function packMatchForFirestore(match) {
+  // Firestore rejects any array that directly contains another array ("nested arrays").
+  // inning.overs is exactly that: an array of per-over ball-event arrays. Every previous fix in
+  // this area was chasing symptoms — this is the actual reason every write here has always failed.
+  // Wrap each over's ball array in a small object so the outer structure becomes array-of-maps
+  // (which Firestore allows) instead of array-of-arrays (which it rejects outright). This only
+  // affects what gets sent to Firestore — the runtime/in-memory shape the whole engine uses is
+  // untouched.
+  return {
+    ...match,
+    innings: match.innings.map(inn => ({
+      ...inn,
+      overs: inn.overs.map(balls => ({
+        balls
+      }))
+    }))
+  };
+}
+function unpackMatchFromFirestore(match) {
+  if (!match || !match.innings) return match;
+  return {
+    ...match,
+    innings: match.innings.map(inn => ({
+      ...inn,
+      overs: (inn.overs || []).map(o => Array.isArray(o) ? o : o.balls || [])
+    }))
+  };
+}
 async function saveMatch(match) {
   try {
     if (match.shareCode) {
       console.log("[saveMatch] writing to sharedMatches/" + match.shareCode);
-      await db.collection("sharedMatches").doc(match.shareCode).set({
+      await db.collection("sharedMatches").doc(match.shareCode).set(packMatchForFirestore({
         ...match,
         updatedAt: Date.now()
-      });
+      }));
       console.log("[saveMatch] write acknowledged, verifying against server\u2026");
       // Read it straight back — from the SERVER, not the SDK's local cache. A same-session read
       // immediately after a write can be served from the client's own optimistic write cache even
@@ -456,10 +484,10 @@ async function saveMatch(match) {
         ok: true
       };
     } else if (auth.currentUser) {
-      await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id).set({
+      await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(match.id).set(packMatchForFirestore({
         ...match,
         updatedAt: Date.now()
-      });
+      }));
       upsertLocalPointer(match, {
         cloud: true
       });
@@ -512,10 +540,10 @@ async function loadMatch(id) {
   try {
     if (pointer && pointer.shareCode) {
       const doc = await db.collection("sharedMatches").doc(pointer.shareCode).get();
-      if (doc.exists) return doc.data();
+      if (doc.exists) return unpackMatchFromFirestore(doc.data());
     } else if ((pointer && pointer.cloud || !pointer) && auth.currentUser) {
       const doc = await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(id).get();
-      if (doc.exists) return doc.data();
+      if (doc.exists) return unpackMatchFromFirestore(doc.data());
     }
   } catch (e) {
     console.error("cloud load failed, trying local fallback", e);
@@ -532,7 +560,7 @@ async function fetchSharedMatch(code) {
     console.log("[fetchSharedMatch] server response — exists:", doc.exists, "id:", doc.id);
     return doc.exists ? {
       found: true,
-      match: doc.data()
+      match: unpackMatchFromFirestore(doc.data())
     } : {
       found: false
     };
