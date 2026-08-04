@@ -706,6 +706,8 @@ function newInning(battingTeam, bowlingTeam, rules) {
     fallOfWickets: [],
     // {score, wicket, over, batsman}
     complete: false,
+    partnershipRuns: 0,
+    partnershipBalls: 0,
     // house rules baked in at innings start, so a mid-match account-settings change never
     // affects an innings already in progress
     ballsPerOver: r.ballsPerOver,
@@ -882,6 +884,12 @@ function applyBall(inning, event) {
     cur.strikerName = event.newBatsman || "";
   }
   cur.bowlers[cur.bowlerName] = bowler;
+  cur.partnershipRuns = (cur.partnershipRuns || 0) + runsThisBall;
+  if (legalBall) cur.partnershipBalls = (cur.partnershipBalls || 0) + 1;
+  if (event.kind === "wicket") {
+    cur.partnershipRuns = 0;
+    cur.partnershipBalls = 0;
+  }
   const lastOverIdx = cur.overs.length - 1;
   cur.overs[lastOverIdx] = [...cur.overs[lastOverIdx], {
     display,
@@ -3684,6 +3692,156 @@ function ExportPdfButton({
     size: 17
   }));
 }
+function RunRateChart({
+  match
+}) {
+  const innings = match.innings;
+  const hasData = innings.some(inn => inn.overs.some(o => o.length > 0));
+  if (!hasData) return null;
+  const seriesColors = [COLORS.turf, COLORS.gold];
+  const series = innings.map(inn => {
+    const points = [{
+      over: 0,
+      runs: 0
+    }];
+    let cum = 0;
+    inn.overs.forEach((balls, i) => {
+      if (balls.length === 0 && i === inn.overs.length - 1) return; // in-progress empty over, skip
+      cum += balls.reduce((s, b) => s + (b.runs || 0), 0);
+      points.push({
+        over: i + 1,
+        runs: cum
+      });
+    });
+    return points;
+  });
+  const maxOver = Math.max(match.oversLimit, ...series.map(s => s[s.length - 1]?.over || 0), 1);
+  const maxRuns = Math.max(...series.flatMap(s => s.map(p => p.runs)), 10);
+  const W = 300,
+    H = 130,
+    padL = 28,
+    padB = 20,
+    padT = 8,
+    padR = 8;
+  const plotW = W - padL - padR,
+    plotH = H - padT - padB;
+  const x = over => padL + over / maxOver * plotW;
+  const y = runs => padT + plotH - runs / maxRuns * plotH;
+  const yTicks = 4;
+  const yTickVals = Array.from({
+    length: yTicks + 1
+  }, (_, i) => Math.round(maxRuns / yTicks * i));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Run Rate"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12
+    }
+  }, innings.map((inn, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 9,
+      height: 9,
+      borderRadius: "50%",
+      background: seriesColors[i],
+      display: "inline-block"
+    }
+  }), inn.battingTeam)))), /*#__PURE__*/React.createElement("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    style: {
+      width: "100%",
+      height: "auto",
+      display: "block"
+    }
+  }, yTickVals.map((v, i) => /*#__PURE__*/React.createElement("g", {
+    key: i
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    x2: W - padR,
+    y1: y(v),
+    y2: y(v),
+    stroke: COLORS.creamDark,
+    strokeWidth: "1"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: padL - 6,
+    y: y(v) + 3,
+    textAnchor: "end",
+    fontSize: "8",
+    fontFamily: "'IBM Plex Mono', monospace",
+    fill: COLORS.inkSoft
+  }, v))), /*#__PURE__*/React.createElement("line", {
+    x1: padL,
+    x2: W - padR,
+    y1: H - padB,
+    y2: H - padB,
+    stroke: COLORS.willow,
+    strokeWidth: "1.2"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: padL,
+    y: H - 4,
+    fontSize: "8",
+    fontFamily: "'IBM Plex Mono', monospace",
+    fill: COLORS.inkSoft
+  }, "0"), /*#__PURE__*/React.createElement("text", {
+    x: W - padR,
+    y: H - 4,
+    textAnchor: "end",
+    fontSize: "8",
+    fontFamily: "'IBM Plex Mono', monospace",
+    fill: COLORS.inkSoft
+  }, maxOver, " ov"), series.map((points, i) => /*#__PURE__*/React.createElement("polyline", {
+    key: i,
+    points: points.map(p => `${x(p.over)},${y(p.runs)}`).join(" "),
+    fill: "none",
+    stroke: seriesColors[i],
+    strokeWidth: "2",
+    strokeLinejoin: "round",
+    strokeLinecap: "round"
+  })), series.map((points, i) => {
+    const last = points[points.length - 1];
+    return last ? /*#__PURE__*/React.createElement("circle", {
+      key: i,
+      cx: x(last.over),
+      cy: y(last.runs),
+      r: "3",
+      fill: seriesColors[i]
+    }) : null;
+  })));
+}
+
 function ScorecardOverlay({
   match,
   onClose
@@ -3787,7 +3945,9 @@ function ScorecardOverlay({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -4271,7 +4431,20 @@ function MatchScreen({
         fontWeight: 400
       }
     }, "(", b.balls, ")")));
-  }), /*#__PURE__*/React.createElement("div", {
+  }), inning.strikerName && inning.nonStrikerName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      padding: "4px 0 2px",
+      textAlign: "right"
+    }
+  }, "Partnership: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink,
+      fontWeight: 600
+    }
+  }, inning.partnershipRuns || 0), " (", inning.partnershipBalls || 0, ")"), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.creamDark,
