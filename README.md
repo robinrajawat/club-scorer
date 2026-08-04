@@ -1,21 +1,48 @@
 # Club Scorer
 
-Ball-by-ball cricket scoring for friendly club games — single-file, no build step.
+Ball-by-ball cricket scoring for friendly club and social games. Single HTML file, no installs, no build step — open it in a browser and start scoring.
 
-## Publish on GitHub Pages
+**Live app:** https://robinrajawat.github.io/cricket-scorer
 
-1. Create a new GitHub repo (e.g. `cricket-scorer`).
-2. Add this `index.html` to the root of the repo (commit it directly, no build needed).
-3. Go to **Settings → Pages** in the repo.
-4. Under **Source**, choose **Deploy from a branch**, pick `main` and `/ (root)`, then **Save**.
-5. GitHub will give you a URL like `https://yourusername.github.io/cricket-scorer/` — that's your app.
+## Features
 
-## Notes
+**Scoring**
+- Ball-by-ball scoring for runs, wides, no-balls, byes, leg byes, and every dismissal type (bowled, caught, LBW, stumped, hit wicket, run out).
+- Automatic strike rotation, bowler tracking, and over completion.
+- Undo any ball if you tap the wrong thing mid-over.
+- House rules per match: balls per over, runs conceded on a wide or no-ball, Free Hit, and a maximum overs cap per bowler.
 
-- **Data storage:** by default, matches and teams are saved in the browser's `localStorage`, tied to that specific browser on that specific device. Two ways to sync across devices:
-  - **Sign in with Google** — tap the account button (top-right on the home screen) to open the Account screen, sign in, and optionally set a display name. Your matches and teams then sync to your account and follow you to any device you sign into. No password is ever seen by this app.
-  - **Match codes** — no sign-in needed. Tap "Get Code" on an in-progress match to generate an 8-character code; a teammate enters it under "Have a match code?" on their home screen to pick up scoring on their phone. Anyone with the code can read/write that match, so treat it like a shareable link.
-  If you don't use either, everything stays local and won't sync, and clearing Safari's site data will wipe it.
-- **Add to Home Screen (iPhone):** open the published URL in Safari → tap Share → **Add to Home Screen**. It'll behave like a native app icon.
-- **PDF export:** the "Export PDF" buttons use your browser's native print dialog — choose "Save as PDF" as the destination.
-- No backend, no dependencies to install — React and fonts load from CDN at runtime, everything else is one HTML file.
+**Teams**
+- Save team rosters once, reuse them across matches.
+- Set a captain and wicketkeeper per team; they're marked on the scorecard.
+
+**Live score & sharing**
+- A run rate chart plots both innings on the same graph, with wickets marked on the line.
+- Get a match code and share a link (WhatsApp or anywhere else) so others can follow the score live, no app or sign-in needed on their end.
+- A teammate with the code can also pick up scoring from their own phone.
+
+**Sync & accounts**
+- Sign in with Google to sync your matches and teams across devices.
+- No sign-in required — everything works fully offline and stays local to your device if you'd rather not create an account.
+
+**After the match**
+- Full scorecard with batting and bowling figures, toss result, and Player of the Match.
+- Career stats — batting and bowling numbers aggregated across all your matches.
+- Export any scorecard to PDF via your browser's print dialog.
+
+**Works anywhere**
+- Add it to your phone's home screen for an app-like icon and experience.
+- Once loaded, the app keeps working with no signal — handy for grounds with patchy reception.
+
+## Data & privacy
+
+By default, matches and teams are saved in your browser's `localStorage`, tied to that browser on that device. Two ways to sync across devices, both optional:
+
+- **Sign in with Google** — tap the account button on the home screen. Your matches and teams then follow you to any device you sign into. No password is ever seen by this app.
+- **Match codes** — no sign-in needed. Tap "Get Code" on an in-progress match and share the code with a teammate so they can follow or score along. Anyone with the code can read/write that match, so treat it like a shareable link.
+
+If you use neither, everything stays local, and clearing your browser's site data will wipe it.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
