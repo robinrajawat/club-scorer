@@ -320,6 +320,11 @@ const COLORS = {
   ballLight: "#b23b3b",
   gold: "#b8892b"
 };
+// Jersey color presets offered when editing a team — deliberately a curated set rather than
+// leaving people to the raw native color picker for the common case, since a handful of
+// well-separated, readable-on-white options is faster to pick from and harder to end up with two
+// teams that are nearly indistinguishable on a chart.
+const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -1153,6 +1158,12 @@ function captainFor(match, teamName) {
 }
 function keeperFor(match, teamName) {
   return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
+}
+// Team colors are optional (most club teams never set one) — callers always pass a sensible
+// default so the app looks exactly as it did before this existed when nobody's picked a color.
+function teamColorFor(match, teamName, fallback) {
+  const c = teamName === match.teamA ? match.teamAColor : match.teamBColor;
+  return c || fallback;
 }
 function suggestedNextBowler(inning) {
   // The most common club-cricket pattern is two (or a small rotation of) bowlers alternating
@@ -4045,12 +4056,14 @@ function SetupScreen({
   const [teamAPlayingXI, setTeamAPlayingXI] = useState([]); // subset actually playing this match
   const [teamACaptain, setTeamACaptain] = useState("");
   const [teamAKeeper, setTeamAKeeper] = useState("");
+  const [teamAColor, setTeamAColor] = useState("");
   const [teamBId, setTeamBId] = useState(null);
   const [teamBName, setTeamBName] = useState("");
   const [teamBSquad, setTeamBSquad] = useState([]);
   const [teamBPlayingXI, setTeamBPlayingXI] = useState([]);
   const [teamBCaptain, setTeamBCaptain] = useState("");
   const [teamBKeeper, setTeamBKeeper] = useState("");
+  const [teamBColor, setTeamBColor] = useState("");
   const [overs, setOvers] = useState("20");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
@@ -4092,6 +4105,7 @@ function SetupScreen({
       setTeamAPlayingXI([]);
       setTeamACaptain("");
       setTeamAKeeper("");
+      setTeamAColor("");
     } else {
       const label = team.name === teamBName ? `${team.name} (A)` : team.name;
       const players = normalizePlayers(team.players);
@@ -4101,6 +4115,7 @@ function SetupScreen({
       setTeamAPlayingXI(defaultXI(players));
       setTeamACaptain(team.captain || "");
       setTeamAKeeper(team.keeper || "");
+      setTeamAColor(team.color || "");
     }
     setStrikerA("");
     setNonStrikerA("");
@@ -4113,6 +4128,7 @@ function SetupScreen({
       setTeamBPlayingXI([]);
       setTeamBCaptain("");
       setTeamBKeeper("");
+      setTeamBColor("");
     } else {
       const label = team.name === teamAName ? `${team.name} (B)` : team.name;
       const players = normalizePlayers(team.players);
@@ -4122,6 +4138,7 @@ function SetupScreen({
       setTeamBPlayingXI(defaultXI(players));
       setTeamBCaptain(team.captain || "");
       setTeamBKeeper(team.keeper || "");
+      setTeamBColor(team.color || "");
     }
     setBowlerB("");
   }
@@ -4640,8 +4657,10 @@ function SetupScreen({
       teamBRoster,
       teamACaptain,
       teamAKeeper,
+      teamAColor,
       teamBCaptain,
       teamBKeeper,
+      teamBColor,
       teamANumbers,
       teamBNumbers,
       rules: matchRules,
@@ -4850,6 +4869,7 @@ function TeamEditScreen({
   const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
+  const [color, setColor] = useState(team ? team.color || "" : "");
   function addPlayer() {
     const n = newPlayer.trim();
     if (!n || players.some(p => p.name === n)) return;
@@ -4918,7 +4938,92 @@ function TeamEditScreen({
     value: name,
     onChange: setName,
     placeholder: "e.g. Willow CC"
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Jersey color ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 500,
+      color: COLORS.inkSoft
+    }
+  }, "(optional \u2014 used on charts and the scoreboard)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      alignItems: "center"
+    }
+  }, TEAM_COLOR_PRESETS.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c,
+    type: "button",
+    onClick: () => setColor(color === c ? "" : c),
+    "aria-label": `Jersey color ${c}`,
+    style: {
+      width: 30,
+      height: 30,
+      borderRadius: "50%",
+      border: color === c ? `2.5px solid ${COLORS.ink}` : "2.5px solid transparent",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.25)",
+      background: c,
+      cursor: "pointer",
+      padding: 0
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    "aria-label": "Custom jersey color",
+    style: {
+      width: 30,
+      height: 30,
+      borderRadius: "50%",
+      border: `1.5px dashed ${COLORS.willow}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      background: !color || TEAM_COLOR_PRESETS.includes(color) ? "#fff" : color,
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "color",
+    value: color && !TEAM_COLOR_PRESETS.includes(color) ? color : "#888888",
+    onChange: e => setColor(e.target.value),
+    style: {
+      position: "absolute",
+      inset: 0,
+      opacity: 0,
+      cursor: "pointer",
+      border: "none",
+      padding: 0
+    }
+  }), (!color || TEAM_COLOR_PRESETS.includes(color)) && /*#__PURE__*/React.createElement(Plus, {
+    size: 14,
+    style: {
+      color: COLORS.inkSoft
+    }
+  })), color && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setColor(""),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: "0 0 0 4px"
+    }
+  }, "Clear")))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -5100,7 +5205,8 @@ function TeamEditScreen({
       name: name.trim(),
       players,
       captain,
-      keeper
+      keeper,
+      color: color || null
     }),
     style: {
       width: "100%"
@@ -5760,7 +5866,7 @@ function RunRateChart({
   const innings = match.innings;
   const hasData = innings.some(inn => inn.overs.some(o => o.length > 0));
   if (!hasData) return null;
-  const seriesColors = [COLORS.turf, COLORS.gold];
+  const seriesColors = innings.map((inn, i) => teamColorFor(match, inn.battingTeam, i === 0 ? COLORS.turf : COLORS.gold));
   const series = innings.map(inn => {
     const points = [{
       over: 0,
@@ -5974,7 +6080,7 @@ function RunsPerOverChart({
   const innings = match.innings;
   const hasData = innings.some(inn => inn.overs.some(o => o.length > 0));
   if (!hasData) return null;
-  const seriesColors = [COLORS.turf, COLORS.gold];
+  const seriesColors = innings.map((inn, i) => teamColorFor(match, inn.battingTeam, i === 0 ? COLORS.turf : COLORS.gold));
   const perOver = innings.map(inn => {
     const arr = [];
     inn.overs.forEach((balls, i) => {
@@ -7998,8 +8104,10 @@ function ResultScreen({
       teamBRoster: match.teamBRoster,
       teamACaptain: match.teamACaptain,
       teamAKeeper: match.teamAKeeper,
+      teamAColor: match.teamAColor || null,
       teamBCaptain: match.teamBCaptain,
       teamBKeeper: match.teamBKeeper,
+      teamBColor: match.teamBColor || null,
       oversLimit: 1,
       currentInningIndex: 0,
       status: "in-progress",
@@ -8382,8 +8490,10 @@ function CricketScorer() {
       teamBRoster: setup.teamBRoster || [],
       teamACaptain: setup.teamACaptain || "",
       teamAKeeper: setup.teamAKeeper || "",
+      teamAColor: setup.teamAColor || null,
       teamBCaptain: setup.teamBCaptain || "",
       teamBKeeper: setup.teamBKeeper || "",
+      teamBColor: setup.teamBColor || null,
       teamANumbers: setup.teamANumbers || {},
       teamBNumbers: setup.teamBNumbers || {},
       oversLimit: setup.oversLimit,
