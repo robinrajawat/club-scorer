@@ -1338,6 +1338,10 @@ function newInning(battingTeam, bowlingTeam, rules) {
     // name of the bowler of each completed over, in order — used to suggest the next bowler
     fallOfWickets: [],
     // {score, wicket, over, batsman}
+    penalties: [],
+    // {score, over, runs} — penalty runs aren't tied to any delivery, so they never appear in the
+    // ball-by-ball log; this is what lets them show up anywhere at all instead of just silently
+    // moving the total.
     complete: false,
     partnershipRuns: 0,
     partnershipBalls: 0,
@@ -1390,10 +1394,18 @@ function crr(runs, legalBalls, ballsPerOver) {
 
 // ---------- Ball event application ----------
 // event: { kind: 'run'|'wide'|'noball'|'bye'|'legbye'|'wicket', runs, wicketType, newBatsman }
+// A ball's "display" string for the over strip / ball-by-ball log embeds the completed/overthrow
+// split when event.overthrow is present — "2+1" for 2 run plus a 1-run overthrow bonus — instead
+// of collapsing it into a bare total that gives no hint anything unusual happened.
+function runsDisplay(total, overthrow) {
+  if (!overthrow) return String(total);
+  return `${total - overthrow}+${overthrow}`;
+}
 function applyBall(inning, event) {
   // Penalty runs (always exactly 5, per the Laws) aren't tied to any delivery — no ball bowled,
   // no batsman/bowler figures affected, no entry in the over's ball-by-ball log. Handled entirely
-  // separately from the rest of the ball pipeline below.
+  // separately from the rest of the ball pipeline below. Still logged to inning.penalties so it's
+  // a traceable event on the scorecard (see InningScorecard) rather than just moving the total.
   if (event.kind === "penalty") {
     return {
       ...inning,
@@ -1401,7 +1413,13 @@ function applyBall(inning, event) {
       extras: {
         ...inning.extras,
         penalty: (inning.extras.penalty || 0) + event.runs
-      }
+      },
+      penalties: [...(inning.penalties || []), {
+        runs: event.runs,
+        score: inning.runs + event.runs,
+        wickets: inning.wickets,
+        over: oversLabel(inning.legalBalls, inning.ballsPerOver)
+      }]
     };
   }
   // Free hit: a non-run-out dismissal can't stand on a free-hit ball. Reroute it to a dot ball
@@ -1448,7 +1466,7 @@ function applyBall(inning, event) {
     };
     bowler.runs += event.runs;
     bowler.ballsBowled += 1;
-    display = String(event.runs);
+    display = runsDisplay(event.runs, event.overthrow);
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
     legalBall = false;
@@ -1456,7 +1474,7 @@ function applyBall(inning, event) {
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
     cur.extras.wide += runsThisBall;
-    display = event.runs ? `Wd+${event.runs}` : "Wd";
+    display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow)}` : "Wd";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
     legalBall = false;
@@ -1470,7 +1488,7 @@ function applyBall(inning, event) {
       fours: cur.batsmen[cur.strikerName].fours + (event.runs === 4 ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (event.runs === 6 ? 1 : 0)
     };
-    display = event.runs ? `Nb+${event.runs}` : "Nb";
+    display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow)}` : "Nb";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
     if (cur.freeHitEnabled) cur.freeHitActive = true;
   } else if (event.kind === "bye" || event.kind === "legbye") {
@@ -1482,7 +1500,7 @@ function applyBall(inning, event) {
       balls: cur.batsmen[cur.strikerName].balls + 1
     };
     bowler.ballsBowled += 1;
-    display = `${event.kind === "bye" ? "B" : "Lb"}${event.runs}`;
+    display = `${event.kind === "bye" ? "B" : "Lb"}${runsDisplay(event.runs, event.overthrow)}`;
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
@@ -5195,7 +5213,29 @@ function InningScorecard({
     }
   }, inning.fallOfWickets.map((fw, i) => /*#__PURE__*/React.createElement("span", {
     key: i
-  }, fw.wicket, "-", fw.score, " (", fw.batsman, ", ", fw.over, " ov)", i < inning.fallOfWickets.length - 1 ? "  ·  " : "")))), /*#__PURE__*/React.createElement("div", {
+  }, fw.wicket, "-", fw.score, " (", fw.batsman, ", ", fw.over, " ov)", i < inning.fallOfWickets.length - 1 ? "  ·  " : "")))), (inning.penalties || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 5
+    }
+  }, "Penalties"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      lineHeight: 1.7
+    }
+  }, inning.penalties.map((p, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, "+", p.runs, " at ", p.score, "-", p.wickets, " (", p.over, " ov)", i < inning.penalties.length - 1 ? "  ·  " : "")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 16,
       fontFamily: "'Inter'"
@@ -6376,7 +6416,8 @@ function MatchScreen({
   const [showExtra, setShowExtra] = useState(null); // 'wide'|'noball'|'bye'|'legbye'
   const [showWicket, setShowWicket] = useState(false);
   const [customRunsFor, setCustomRunsFor] = useState(null); // null | 'run' | 'wide' | 'noball' | 'bye' | 'legbye'
-  const [customRunsValue, setCustomRunsValue] = useState("");
+  const [customRunsCompleted, setCustomRunsCompleted] = useState("");
+  const [customOverthrow, setCustomOverthrow] = useState("");
   const [newBatsmanName, setNewBatsmanName] = useState("");
   const [newBowlerPrompt, setNewBowlerPrompt] = useState(false);
   const [newBowlerName, setNewBowlerName] = useState("");
@@ -6518,11 +6559,12 @@ function MatchScreen({
       }
     }
   }
-  function handleRun(n) {
+  function handleRun(n, overthrow) {
     pushHistory();
     commit(applyBall(inning, {
       kind: "run",
-      runs: n
+      runs: n,
+      overthrow: overthrow || undefined
     }));
     setShowRuns(false);
     if (n === 4 || n === 6) {
@@ -6538,26 +6580,31 @@ function MatchScreen({
   }
   // The 0/1/2/3/4/6 (and 0-4 on extras) buttons cover the vast majority of deliveries, but an
   // overthrow can push a ball's total past what any of those cover — e.g. a single completed plus
-  // a misfield running away for four more is 5, or three run plus an overthrown boundary is 7.
-  // This is the escape hatch for those: same commit path as the preset buttons (handleRun /
-  // handleExtra), just with a typed-in total instead of a fixed one, so nothing about how a ball
-  // is recorded downstream needs to know the total came from a preset or a custom entry.
+  // a misfield running away for four more, or three run plus an overthrown boundary. This is the
+  // escape hatch for those: still commits through the exact same handleRun/handleExtra path as the
+  // preset buttons, just built from two typed-in numbers (what the batsmen actually ran, and the
+  // overthrow bonus on top) instead of one flat total — so the ball-by-ball log can show "2+1"
+  // rather than a bare "3" that gives no hint an overthrow happened.
   function confirmCustomRuns() {
-    const n = parseInt(customRunsValue, 10);
-    if (!Number.isInteger(n) || n < 0 || n > 24) return;
+    const completed = parseInt(customRunsCompleted, 10) || 0;
+    const overthrow = parseInt(customOverthrow, 10) || 0;
+    const total = completed + overthrow;
+    if (total < 0 || total > 24 || overthrow < 0) return;
     if (customRunsFor === "run") {
-      handleRun(n);
+      handleRun(total, overthrow);
     } else {
-      handleExtra(customRunsFor, n);
+      handleExtra(customRunsFor, total, overthrow);
     }
     setCustomRunsFor(null);
-    setCustomRunsValue("");
+    setCustomRunsCompleted("");
+    setCustomOverthrow("");
   }
-  function handleExtra(kind, n) {
+  function handleExtra(kind, n, overthrow) {
     pushHistory();
     commit(applyBall(inning, {
       kind,
-      runs: n
+      runs: n,
+      overthrow: overthrow || undefined
     }));
     setShowExtra(null);
     if (kind === "noball" && (n === 4 || n === 6)) {
@@ -6573,7 +6620,9 @@ function MatchScreen({
   }
   function handlePenalty() {
     // Penalty runs are always exactly 5 (Laws 41/42) and, in the common case this covers, go to
-    // the batting side. Not tied to a delivery — no ball consumed, no bowler/batsman impact.
+    // the batting side. Not tied to a delivery — no ball consumed, no bowler/batsman impact — but
+    // still logged to inning.penalties (see applyBall) so it shows up as a traceable event on the
+    // scorecard instead of just silently moving the total.
     pushHistory();
     commit(applyBall(inning, {
       kind: "penalty",
@@ -7088,7 +7137,8 @@ function MatchScreen({
     variant: "default",
     onClick: () => {
       setCustomRunsFor("run");
-      setCustomRunsValue("");
+      setCustomRunsCompleted("");
+      setCustomOverthrow("");
     }
   }, "Other"), /*#__PURE__*/React.createElement(Btn, {
     variant: "default",
@@ -7226,7 +7276,8 @@ function MatchScreen({
   }, n)), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => {
       setCustomRunsFor(showExtra);
-      setCustomRunsValue("");
+      setCustomRunsCompleted("");
+      setCustomOverthrow("");
       setShowExtra(null);
     }
   }, "Other")))), showWicket && /*#__PURE__*/React.createElement(Modal, {
@@ -7298,40 +7349,84 @@ function MatchScreen({
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
-      marginBottom: 14,
+      marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "For an overthrow or any total the quick buttons don\u2019t cover \u2014 e.g. a single plus a misfield running away for four more."), /*#__PURE__*/React.createElement("div", {
+  }, "For an overthrow or any total the quick buttons don\u2019t cover. Split it into what was actually run and any overthrow bonus, so the ball history shows \u201c2+1\u201d rather than a bare \u201c3\u201d that hides what happened."), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      gap: 8,
-      marginBottom: 10
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
     }
-  }, [5, 7, 8].map(n => /*#__PURE__*/React.createElement(Btn, {
-    key: n,
-    variant: customRunsValue === String(n) ? "primary" : "default",
-    onClick: () => setCustomRunsValue(String(n)),
-    style: {
-      flex: 1
-    }
-  }, n))), /*#__PURE__*/React.createElement(TextField, {
-    value: customRunsValue,
-    onChange: v => setCustomRunsValue(v.replace(/[^0-9]/g, "").slice(0, 2)),
-    placeholder: "Total runs on this ball",
+  }, "Runs completed"), /*#__PURE__*/React.createElement(TextField, {
+    value: customRunsCompleted,
+    onChange: v => setCustomRunsCompleted(v.replace(/[^0-9]/g, "").slice(0, 2)),
+    placeholder: "Runs the batsmen ran",
     inputMode: "numeric",
     style: {
       textAlign: "center",
-      fontSize: 20,
+      fontSize: 18,
+      fontWeight: 700,
+      fontFamily: "'IBM Plex Mono', monospace",
+      marginBottom: 14
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Overthrow bonus"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, [1, 2, 4].map(n => /*#__PURE__*/React.createElement(Btn, {
+    key: n,
+    variant: customOverthrow === String(n) ? "primary" : "default",
+    onClick: () => setCustomOverthrow(String(n)),
+    style: {
+      flex: 1
+    }
+  }, "+", n))), /*#__PURE__*/React.createElement(TextField, {
+    value: customOverthrow,
+    onChange: v => setCustomOverthrow(v.replace(/[^0-9]/g, "").slice(0, 2)),
+    placeholder: "Extra runs from the misfield",
+    inputMode: "numeric",
+    style: {
+      textAlign: "center",
+      fontSize: 18,
       fontWeight: 700,
       fontFamily: "'IBM Plex Mono', monospace"
     }
-  }), /*#__PURE__*/React.createElement(Btn, {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      margin: "12px 0 4px"
+    }
+  }, "Total: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, (parseInt(customRunsCompleted, 10) || 0) + (parseInt(customOverthrow, 10) || 0)), " runs on this ball"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: customRunsValue === "" || parseInt(customRunsValue, 10) > 24,
+    disabled: customRunsCompleted === "" && customOverthrow === "",
     onClick: confirmCustomRuns,
     style: {
       width: "100%",
-      marginTop: 14
+      marginTop: 10
     }
   }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: match,
