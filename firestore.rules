@@ -1,0 +1,128 @@
+rules_version = '2';
+
+// Firestore Security Rules for cricket-scorer.
+//
+// This file is not auto-deployed — paste it into Firebase Console → Firestore Database → Rules
+// → Publish. Keeping it in the repo is so the actual access-control model has a diff history,
+// instead of living only as tribal knowledge in the console.
+//
+// ---- The trust model in one paragraph ----
+// This app has three tiers of data, each with a different capability:
+//   1. /users/{uid}/...        — private to one signed-in Google account.
+//   2. /sharedMatches/{code}   — a match code is a bearer capability for FULL scoring access.
+//                                 Anyone who has the code (signed in or not) can read AND write it.
+//   3. /liveViews/{code}       — a view code is a bearer capability for READ-ONLY access. A
+//                                 DIFFERENT collection from #2, keyed by a DIFFERENT random code,
+//                                 so a view code can never be used to gain scoring access no
+//                                 matter what a viewer does with it — there is no document at
+//                                 that code inside /sharedMatches for it to match.
+// Clubs add a fourth tier: shared-but-not-public team rosters, gated by Google account
+// membership rather than a bearer code, because unlike a single match you actually want to know
+// (and be able to revoke) who's in a club.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // Personal account data — matches, teams, profile, house rules.
+    // Only the signed-in owner can ever read or write their own subtree.
+    // ---------------------------------------------------------------------
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------------
+    // Full-access co-scoring. Knowledge of the 8-character code IS the credential — this is
+    // intentional (it's how a teammate resumes scoring on another phone with no account needed)
+    // and is unchanged from before. What changed is that this code is no longer also accepted as
+    // a "read-only" link — see /liveViews below.
+    // ---------------------------------------------------------------------
+    match /sharedMatches/{code} {
+      allow read, write: if true;
+    }
+
+    // ---------------------------------------------------------------------
+    // Read-only live-follow mirror. Same open-by-code trust model as sharedMatches, but it is a
+    // SEPARATE collection so a view code and a score code are never interchangeable. The app
+    // only ever writes here from the match owner's client (see saveMatch/liveViews mirror write
+    // in index.html) and only ever reads here from FollowScreen, which has no scoring controls.
+    // ---------------------------------------------------------------------
+    match /liveViews/{code} {
+      allow read, write: if true;
+    }
+
+    // ---------------------------------------------------------------------
+    // Clubs — shared team rosters gated by Google-account membership, not a bearer code.
+    // ---------------------------------------------------------------------
+    match /clubs/{clubId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid];
+
+      allow update: if request.auth != null && (
+        // (A) An existing member editing club data (e.g. renaming it). Membership and ownership
+        // must not change via this branch — that's what (B)/(C)/(D) are for.
+        (
+          request.auth.uid in resource.data.memberUids &&
+          request.resource.data.memberUids == resource.data.memberUids &&
+          request.resource.data.ownerUid == resource.data.ownerUid
+        )
+        ||
+        // (B) Self-join with a valid, unexpired invite code that names THIS club. The code is
+        // looked up by its own ID — never queried/listed — exactly like sharedMatches/liveViews.
+        (
+          !(request.auth.uid in resource.data.memberUids) &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
+          'joinCodeUsed' in request.resource.data &&
+          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.clubId == clubId &&
+          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.expiresAt > request.time.toMillis()
+        )
+        ||
+        // (C) Self-leave. Anyone but the owner can remove only themselves.
+        (
+          request.auth.uid in resource.data.memberUids &&
+          request.auth.uid != resource.data.ownerUid &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.memberUids == resource.data.memberUids.removeAll([request.auth.uid])
+        )
+        ||
+        // (D) Owner removing someone else, or pruning the list — ownership itself can't change
+        // here (that would need an explicit transfer flow, deliberately not built).
+        (
+          request.auth.uid == resource.data.ownerUid &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.memberUids.hasOnly(resource.data.memberUids)
+        )
+      );
+
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+    }
+
+    match /clubs/{clubId}/teams/{teamId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
+    }
+
+    // ---------------------------------------------------------------------
+    // Club invite codes. A code is a single-purpose capability token: any signed-in user can
+    // look one up by its exact ID (that's how joining resolves code → clubId), but only existing
+    // members can mint or revoke one for their club.
+    // ---------------------------------------------------------------------
+    match /clubJoinCodes/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.resource.data.clubId is string
+        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.memberUids;
+
+      allow delete: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.memberUids;
+
+      allow update: if false; // codes are immutable — rotate by delete + create instead
+    }
+  }
+}

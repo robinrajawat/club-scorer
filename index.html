@@ -396,6 +396,9 @@ async function signOutUser() {
     };
   }
 }
+// Generic random-code generator, reused for match score codes, match view codes, and club join
+// codes. Every use of this treats the code as a bearer capability scoped to exactly one
+// collection/document — see the Firestore rules doc for the exact permissions each grants.
 function genMatchCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
   let s = "";
@@ -449,6 +452,7 @@ function upsertLocalPointer(match, extra) {
     updatedAt: Date.now(),
     status: match.status,
     shareCode: match.shareCode || null,
+    viewCode: match.viewCode || null,
     ...extra
   });
   lsSetIndex(idx);
@@ -481,7 +485,9 @@ function unpackMatchFromFirestore(match) {
     }))
   };
 }
-async function saveMatch(match) {
+// Writes the match to wherever it primarily lives (an open score-code doc that grants full
+// write access to anyone who knows it, this account's private Firestore, or localStorage).
+async function savePrimaryMatch(match) {
   try {
     if (match.shareCode) {
       console.log("[saveMatch] writing to sharedMatches/" + match.shareCode);
@@ -542,6 +548,29 @@ async function saveMatch(match) {
       error: e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
     };
   }
+}
+// Public entry point. Saves the match to its primary location, then — entirely separately —
+// mirrors it into /liveViews/{viewCode} if a view code has been issued for it. This mirror is a
+// DIFFERENT document in a DIFFERENT collection from /sharedMatches/{shareCode}, keyed by a
+// DIFFERENT random code. That separation is the whole security model for read-only following:
+// a view code can never resolve inside /sharedMatches, so it structurally cannot be used to gain
+// scoring access, no matter what a viewer does with the link. See FollowScreen and the
+// Firestore rules notes near genMatchCode() for the other half of this.
+async function saveMatch(match) {
+  const result = await savePrimaryMatch(match);
+  if (match.viewCode) {
+    try {
+      await db.collection("liveViews").doc(match.viewCode).set(packMatchForFirestore({
+        ...match,
+        updatedAt: Date.now()
+      }));
+    } catch (e) {
+      // Deliberately non-fatal: scoring must keep working even if the read-only mirror can't be
+      // reached right now. Worst case a follower sees a stale score until the next ball updates it.
+      console.error("[saveMatch] live-view mirror write failed \u2014 code:", e.code, "message:", e.message);
+    }
+  }
+  return result;
 }
 async function loadIndex() {
   const local = lsGetIndex();
@@ -608,6 +637,13 @@ async function deleteMatch(id) {
   } catch (e) {
     console.error("cloud delete failed", e);
   }
+  if (pointer && pointer.viewCode) {
+    try {
+      await db.collection("liveViews").doc(pointer.viewCode).delete();
+    } catch (e) {
+      console.error("live-view delete failed", e);
+    }
+  }
   try {
     localStorage.removeItem(`${LS_PREFIX}match:${id}`);
     lsSetIndex(lsGetIndex().filter(m => m.id !== id));
@@ -647,6 +683,236 @@ async function saveTeams(teams) {
     localStorage.setItem(`${LS_PREFIX}teams`, JSON.stringify(teams));
   } catch (e) {
     console.error("save teams failed", e);
+  }
+}
+
+// ---------- Clubs (shared team rosters) ----------
+// A club is a Firestore doc with a member list: /clubs/{clubId} = { name, ownerUid, memberUids,
+// joinCodeUsed?, createdAt }. Its teams live in the /clubs/{clubId}/teams/{teamId} subcollection.
+// Membership changes only ever happen through a join code (see joinClubWithCode) or the owner
+// removing someone — nothing here trusts an email address or a client-supplied uid list.
+// Requires sign-in throughout: an anonymous/local-only user has no stable identity for a
+// Firestore rule to check membership against, so clubs are a signed-in-only feature by design.
+// This all depends on Firestore rules being published for /clubs, /clubs/{id}/teams, and
+// /clubJoinCodes — see the rules doc for the exact text.
+async function loadClubs() {
+  if (!auth.currentUser) return [];
+  try {
+    const snap = await db.collection("clubs").where("memberUids", "array-contains", auth.currentUser.uid).get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("clubs load failed", e);
+    return [];
+  }
+}
+async function createClub(name) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in to create a club."
+  };
+  const trimmed = (name || "").trim();
+  if (!trimmed) return {
+    ok: false,
+    error: "Give the club a name."
+  };
+  try {
+    const ref = db.collection("clubs").doc();
+    const club = {
+      name: trimmed,
+      ownerUid: auth.currentUser.uid,
+      memberUids: [auth.currentUser.uid],
+      createdAt: Date.now()
+    };
+    await ref.set(club);
+    return {
+      ok: true,
+      club: {
+        id: ref.id,
+        ...club
+      }
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't create the club."
+    };
+  }
+}
+async function renameClub(clubId, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return {
+    ok: false,
+    error: "Give the club a name."
+  };
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      name: trimmed
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only club members can rename it." : e.message || "Couldn't rename the club."
+    };
+  }
+}
+// Mints a time-limited invite code. Anyone who redeems it while signed in is added to the
+// member list — the code carries no other authority (it can't read the club before being
+// redeemed, and it can't be reused to do anything but this one join).
+async function generateClubJoinCode(clubId) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  try {
+    const code = genMatchCode();
+    await db.collection("clubJoinCodes").doc(code).set({
+      clubId,
+      createdBy: auth.currentUser.uid,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+    return {
+      ok: true,
+      code
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only club members can invite others." : e.message || "Couldn't generate an invite code."
+    };
+  }
+}
+async function joinClubWithCode(code) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in to join a club."
+  };
+  const cleaned = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!cleaned) return {
+    ok: false,
+    error: "Enter a code."
+  };
+  try {
+    const codeDoc = await db.collection("clubJoinCodes").doc(cleaned).get();
+    if (!codeDoc.exists) return {
+      ok: false,
+      error: "That code doesn't match any club."
+    };
+    const {
+      clubId,
+      expiresAt
+    } = codeDoc.data();
+    if (expiresAt && expiresAt < Date.now()) return {
+      ok: false,
+      error: "That invite has expired \u2014 ask for a new one."
+    };
+    // The Firestore rule re-checks this exact join code is valid and unexpired server-side before
+    // allowing the membership write — this client-side check is only for a fast error message.
+    await db.collection("clubs").doc(clubId).update({
+      memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+      joinCodeUsed: cleaned
+    });
+    const clubDoc = await db.collection("clubs").doc(clubId).get();
+    return {
+      ok: true,
+      club: {
+        id: clubDoc.id,
+        ...clubDoc.data()
+      }
+    };
+  } catch (e) {
+    console.error("join club failed", e);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "That invite is no longer valid." : e.message || "Couldn't join that club."
+    };
+  }
+}
+async function leaveClub(clubId) {
+  if (!auth.currentUser) return;
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      memberUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid)
+    });
+  } catch (e) {
+    console.error("leave club failed", e);
+  }
+}
+async function removeClubMember(clubId, uid) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      memberUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can remove members." : e.message || "Couldn't remove that member."
+    };
+  }
+}
+// Owner-only. Cleans up the teams subcollection first — Firestore never cascade-deletes
+// subcollections on its own, and once the club doc is gone no rule would ever again grant access
+// to those orphaned team docs anyway, but leaving them around is just clutter.
+async function deleteClub(clubId) {
+  try {
+    const snap = await db.collection("clubs").doc(clubId).collection("teams").get();
+    await Promise.all(snap.docs.map(d => d.ref.delete()));
+    await db.collection("clubs").doc(clubId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can delete it." : e.message || "Couldn't delete the club."
+    };
+  }
+}
+async function loadClubTeams(clubId) {
+  try {
+    const snap = await db.collection("clubs").doc(clubId).collection("teams").get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("club teams load failed", e);
+    return [];
+  }
+}
+async function saveClubTeam(clubId, team) {
+  try {
+    await db.collection("clubs").doc(clubId).collection("teams").doc(team.id).set(team);
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only club members can edit its teams." : e.message || "Couldn't save the team."
+    };
+  }
+}
+async function deleteClubTeam(clubId, teamId) {
+  try {
+    await db.collection("clubs").doc(clubId).collection("teams").doc(teamId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't delete the team."
+    };
   }
 }
 
@@ -2495,9 +2761,278 @@ function JoinCodeBar({
     }
   }, error));
 }
+// Chip row for switching between "My Teams" (private) and any club the user belongs to, plus
+// create/join a club and — once a club is selected — invite/leave/delete controls for it.
+function ClubPanel({
+  clubs,
+  activeClubId,
+  onSelect,
+  onCreate,
+  onJoin,
+  onInvite,
+  onLeave,
+  onDelete,
+  currentUid
+}) {
+  const [mode, setMode] = useState(null); // null | 'create' | 'join'
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [inviteCode, setInviteCode] = useState(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const activeClub = clubs.find(c => c.id === activeClubId) || null;
+  function closeAdd() {
+    setMode(null);
+    setText("");
+    setError("");
+  }
+  async function submitAdd() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    const result = mode === "create" ? await onCreate(text.trim()) : await onJoin(text.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Something went wrong.");
+      return;
+    }
+    closeAdd();
+    if (result.club) onSelect(result.club.id);
+  }
+  async function handleInvite() {
+    if (inviteCode) return;
+    setInviteBusy(true);
+    const result = await onInvite(activeClub.id);
+    setInviteBusy(false);
+    if (result.ok) setInviteCode(result.code);else setError(result.error || "Couldn't generate an invite.");
+  }
+  function handleSelect(id) {
+    setInviteCode(null);
+    setError("");
+    onSelect(id);
+  }
+  const chipStyle = active => ({
+    padding: "7px 13px",
+    borderRadius: 20,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 12.5,
+    cursor: "pointer",
+    border: active ? "none" : `1px solid ${COLORS.willow}`,
+    background: active ? COLORS.pitch : "#fff",
+    color: active ? "#fff" : COLORS.inkSoft,
+    whiteSpace: "nowrap"
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      overflowX: "auto",
+      paddingBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleSelect(null),
+    style: chipStyle(!activeClubId)
+  }, "My Teams"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    onClick: () => handleSelect(c.id),
+    style: chipStyle(activeClubId === c.id)
+  }, c.name)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode(mode ? null : "create"),
+    "aria-label": "Add or join a club",
+    style: { ...chipStyle(false),
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 13,
+    strokeWidth: 2.5
+  }), " Club")), mode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.6)",
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMode("create");
+      setText("");
+      setError("");
+    },
+    style: {
+      flex: 1,
+      padding: "6px 8px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      background: mode === "create" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      color: mode === "create" ? "#fff" : COLORS.inkSoft
+    }
+  }, "Create a club"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMode("join");
+      setText("");
+      setError("");
+    },
+    style: {
+      flex: 1,
+      padding: "6px 8px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      background: mode === "join" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      color: mode === "join" ? "#fff" : COLORS.inkSoft
+    }
+  }, "Join with code")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: text,
+    onChange: v => setText(mode === "join" ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : v),
+    placeholder: mode === "join" ? "Invite code, e.g. 7GQK4RTP" : "Club name",
+    autoCapitalize: mode === "join" ? "characters" : "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitAdd,
+    disabled: busy || !text.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, busy ? "\u2026" : mode === "join" ? "Join" : "Create")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12,
+      fontFamily: "'Inter'",
+      marginTop: 8
+    }
+  }, error), /*#__PURE__*/React.createElement("button", {
+    onClick: closeAdd,
+    style: {
+      display: "block",
+      marginTop: 8,
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Cancel")), activeClub && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: "10px 12px",
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.6)",
+      border: `1px solid ${COLORS.willow}`,
+      fontFamily: "'Inter'",
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.inkSoft,
+      marginBottom: 8,
+      lineHeight: 1.5
+    }
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees and can edit these teams \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, inviteCode ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inviteCode).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    },
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff",
+      fontFamily: "'IBM Plex Mono'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      letterSpacing: 0.5,
+      cursor: "pointer"
+    }
+  }, copied ? "Copied!" : inviteCode) : /*#__PURE__*/React.createElement("button", {
+    onClick: handleInvite,
+    disabled: inviteBusy,
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, inviteBusy ? "Getting code\u2026" : "Invite someone"), activeClub.ownerUid === currentUid ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (window.confirm(`Delete "${activeClub.name}" for everyone? This can't be undone.`)) onDelete(activeClub.id);
+    },
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: "none",
+      background: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Delete club") : /*#__PURE__*/React.createElement("button", {
+    onClick: () => onLeave(activeClub.id),
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: "none",
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Leave club"))));
+}
 function ShareMenu({
   match,
   onGetCode,
+  onGetViewCode,
   style
 }) {
   const [open, setOpen] = useState(false);
@@ -2526,6 +3061,9 @@ function ShareMenu({
     setCopiedWhich(which);
     setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
   }
+  // Full-access score code (co-scoring). Deliberately separate from ensureViewCode below —
+  // never conflate these two, that conflation was the exact hole that let a "read-only" viewer
+  // gain scoring access.
   async function ensureCode() {
     if (match.shareCode) return {
       ok: true,
@@ -2546,6 +3084,28 @@ function ShareMenu({
       code: result.code
     };
   }
+  // Read-only view code. Resolves against match.viewCode / the liveViews collection only — this
+  // value must never be accepted by the "Invite to help score" join flow.
+  async function ensureViewCode() {
+    if (match.viewCode) return {
+      ok: true,
+      code: match.viewCode
+    };
+    setBusy(true);
+    setError("");
+    const result = await onGetViewCode();
+    setBusy(false);
+    if (!result || result.ok === false) {
+      setError(result && result.error || "Couldn't get a link.");
+      return {
+        ok: false
+      };
+    }
+    return {
+      ok: true,
+      code: result.code
+    };
+  }
   async function handleInviteCopy() {
     const res = await ensureCode();
     if (!res.ok) return;
@@ -2555,7 +3115,7 @@ function ShareMenu({
     flashCopied("code");
   }
   async function handleCopyLink() {
-    const res = await ensureCode();
+    const res = await ensureViewCode();
     if (!res.ok) return;
     const url = buildFollowUrl(res.code);
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2564,7 +3124,7 @@ function ShareMenu({
     flashCopied("link");
   }
   async function handleWhatsAppLive() {
-    const res = await ensureCode();
+    const res = await ensureViewCode();
     if (!res.ok) return;
     const text = buildLiveShareText(match, res.code);
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -3680,11 +4240,21 @@ function TeamsScreen({
   onNew,
   onEdit,
   onDelete,
-  onBack
+  onBack,
+  clubs,
+  activeClubId,
+  onSelectSource,
+  onCreateClub,
+  onJoinClub,
+  onInviteClub,
+  onLeaveClub,
+  onDeleteClub,
+  currentUid
 }) {
   function matchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
+  const activeClubName = activeClubId && (clubs.find(c => c.id === activeClubId) || {}).name;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 40px",
@@ -3724,7 +4294,17 @@ function TeamsScreen({
       color: COLORS.inkSoft,
       marginBottom: 20
     }
-  }, "Save squads once, then pick players from a list during scoring."), /*#__PURE__*/React.createElement(Btn, {
+  }, "Save squads once, then pick players from a list during scoring."), /*#__PURE__*/React.createElement(ClubPanel, {
+    clubs: clubs,
+    activeClubId: activeClubId,
+    onSelect: onSelectSource,
+    onCreate: onCreateClub,
+    onJoin: onJoinClub,
+    onInvite: onInviteClub,
+    onLeave: onLeaveClub,
+    onDelete: onDeleteClub,
+    currentUid: currentUid
+  }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
     style: {
@@ -3737,7 +4317,7 @@ function TeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), " New Team"), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }), activeClubName ? ` New Team in ${activeClubName}` : " New Team"), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
@@ -3806,7 +4386,7 @@ function TeamsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")));
+  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches.")));
 }
 function TeamEditScreen({
   team,
@@ -5054,9 +5634,12 @@ function ScorecardOverlay({
   }))));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
-// here — this component only ever reads sharedMatches/{code}, it never writes to it. That's the
-// entire access-control model for this screen: there is nothing on the page that could mutate the
-// match, not a client-side check hiding buttons that exist elsewhere.
+// here — this component only ever reads liveViews/{code}, a document that is structurally
+// separate from sharedMatches/{code} (the full-write co-scoring code). A view code is never
+// written into sharedMatches, and the join-code box on the home screen only ever looks up
+// sharedMatches — so even if a viewer copies this code out of the URL and pastes it there,
+// there is nothing for it to match. That collection-level separation, not a hidden button, is the
+// entire access-control model for this screen.
 function FollowScreen({
   code,
   onExit
@@ -5070,7 +5653,7 @@ function FollowScreen({
       setStatus("not-found");
       return;
     }
-    const unsub = db.collection("sharedMatches").doc(code).onSnapshot(doc => {
+    const unsub = db.collection("liveViews").doc(code).onSnapshot(doc => {
       if (!doc.exists) {
         setStatus("not-found");
         return;
@@ -5371,6 +5954,27 @@ function MatchScreen({
       error: result.error
     };
   }
+  async function handleGetViewCode() {
+    if (match.viewCode) return {
+      ok: true
+    };
+    const updated = {
+      ...match,
+      viewCode: genMatchCode()
+    };
+    const result = await saveMatch(updated);
+    if (result.ok) {
+      setMatch(updated);
+      return {
+        ok: true,
+        code: updated.viewCode
+      };
+    }
+    return {
+      ok: false,
+      error: result.error
+    };
+  }
   function checkInningEnd(updated) {
     const inn = updated.innings[updated.currentInningIndex];
     const oversDone = inn.legalBalls >= updated.oversLimit * (inn.ballsPerOver || 6);
@@ -5644,7 +6248,8 @@ function MatchScreen({
     size: 17
   })), /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
-    onGetCode: handleGetCode
+    onGetCode: handleGetCode,
+    onGetViewCode: handleGetViewCode
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), /*#__PURE__*/React.createElement("div", {
@@ -6380,6 +6985,28 @@ function ResultScreen({
       error: result.error
     };
   }
+  async function handleGetViewCode() {
+    if (match.viewCode) return {
+      ok: true,
+      code: match.viewCode
+    };
+    const updated = {
+      ...match,
+      viewCode: genMatchCode()
+    };
+    const result = await saveMatch(updated);
+    if (result.ok) {
+      setMatch(updated);
+      return {
+        ok: true,
+        code: updated.viewCode
+      };
+    }
+    return {
+      ok: false,
+      error: result.error
+    };
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -6420,6 +7047,7 @@ function ResultScreen({
   }, /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
     onGetCode: handleGetCode,
+    onGetViewCode: handleGetViewCode,
     style: {
       background: COLORS.pitch,
       border: "none",
@@ -6508,6 +7136,9 @@ function CricketScorer() {
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
   const [teams, setTeams] = useState([]);
+  const [clubs, setClubs] = useState([]);
+  const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
+  const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode);
   const [user, setUser] = useState(null);
@@ -6523,6 +7154,16 @@ function CricketScorer() {
       setNavDirection(to >= from ? "forward" : "back");
       return next;
     });
+  }
+  // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
+  // match-setup picker can offer a teammate's club rosters alongside your own without an extra
+  // round trip the moment you pick "New Match".
+  async function refreshClubs() {
+    const clubList = await loadClubs();
+    setClubs(clubList);
+    const entries = await Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)]));
+    setClubTeamsById(Object.fromEntries(entries));
+    return clubList;
   }
   useEffect(() => {
     if (!fontLoaded.current) {
@@ -6540,7 +7181,8 @@ function CricketScorer() {
       setUser(u);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
-        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules()]).then(([idx, teamList, prof, r]) => {
+        setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
+        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs()]).then(([idx, teamList, prof, r]) => {
           setMatches(idx);
           setTeams(teamList);
           setProfile(prof);
@@ -6548,7 +7190,7 @@ function CricketScorer() {
         });
       }
     });
-    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules()]).then(([idx, teamList, prof, r]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs()]).then(([idx, teamList, prof, r]) => {
       setMatches(idx);
       setTeams(teamList);
       setProfile(prof);
@@ -6651,19 +7293,87 @@ function CricketScorer() {
     setScreen("home");
   }
   async function handleSaveTeam(team) {
-    const updated = teams.filter(t => t.id !== team.id);
-    updated.push(team);
-    updated.sort((a, b) => a.name.localeCompare(b.name));
-    setTeams(updated);
-    await saveTeams(updated);
+    if (activeClubId) {
+      const result = await saveClubTeam(activeClubId, team);
+      if (result.ok) {
+        setClubTeamsById(prev => ({
+          ...prev,
+          [activeClubId]: [...(prev[activeClubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
+        }));
+      }
+    } else {
+      const updated = teams.filter(t => t.id !== team.id);
+      updated.push(team);
+      updated.sort((a, b) => a.name.localeCompare(b.name));
+      setTeams(updated);
+      await saveTeams(updated);
+    }
     setScreen("teams");
     setEditingTeam(null);
   }
   async function handleDeleteTeam(id) {
-    const updated = teams.filter(t => t.id !== id);
-    setTeams(updated);
-    await saveTeams(updated);
+    if (activeClubId) {
+      await deleteClubTeam(activeClubId, id);
+      setClubTeamsById(prev => ({
+        ...prev,
+        [activeClubId]: (prev[activeClubId] || []).filter(t => t.id !== id)
+      }));
+    } else {
+      const updated = teams.filter(t => t.id !== id);
+      setTeams(updated);
+      await saveTeams(updated);
+    }
   }
+  async function handleCreateClub(name) {
+    const result = await createClub(name);
+    if (result.ok) {
+      setClubs(cs => [...cs, result.club]);
+      setClubTeamsById(prev => ({
+        ...prev,
+        [result.club.id]: []
+      }));
+    }
+    return result;
+  }
+  async function handleJoinClub(code) {
+    const result = await joinClubWithCode(code);
+    if (result.ok) {
+      setClubs(cs => [...cs.filter(c => c.id !== result.club.id), result.club]);
+      const teamList = await loadClubTeams(result.club.id);
+      setClubTeamsById(prev => ({
+        ...prev,
+        [result.club.id]: teamList
+      }));
+    }
+    return result;
+  }
+  async function handleLeaveClub(clubId) {
+    await leaveClub(clubId);
+    setClubs(cs => cs.filter(c => c.id !== clubId));
+    setClubTeamsById(prev => {
+      const next = { ...prev
+      };
+      delete next[clubId];
+      return next;
+    });
+    if (activeClubId === clubId) setActiveClubId(null);
+  }
+  async function handleDeleteClub(clubId) {
+    const result = await deleteClub(clubId);
+    if (result.ok) {
+      setClubs(cs => cs.filter(c => c.id !== clubId));
+      setClubTeamsById(prev => {
+        const next = { ...prev
+        };
+        delete next[clubId];
+        return next;
+      });
+      if (activeClubId === clubId) setActiveClubId(null);
+    }
+    return result;
+  }
+  const activeTeams = activeClubId ? clubTeamsById[activeClubId] || [] : teams;
+  const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -6714,7 +7424,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(SetupScreen, {
     onStart: startNewMatch,
     onCancel: () => setScreen("home"),
-    teams: teams,
+    teams: allTeamsForSetup,
     rules: rules
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
@@ -6727,7 +7437,7 @@ function CricketScorer() {
     navKey: "teams",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
-    teams: teams,
+    teams: activeTeams,
     matches: matches,
     onNew: () => {
       setEditingTeam(null);
@@ -6738,7 +7448,16 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDelete: handleDeleteTeam,
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("home"),
+    clubs: clubs,
+    activeClubId: activeClubId,
+    onSelectSource: setActiveClubId,
+    onCreateClub: handleCreateClub,
+    onJoinClub: handleJoinClub,
+    onInviteClub: generateClubJoinCode,
+    onLeaveClub: handleLeaveClub,
+    onDeleteClub: handleDeleteClub,
+    currentUid: user && user.uid
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
     direction: navDirection
