@@ -1752,11 +1752,12 @@ function RoleBadge({
     }
   }, label);
 }
-function BoundaryCelebration({
+function BallCelebration({
   celebration
 }) {
   if (!celebration) return null;
   const isSix = celebration.type === 6;
+  const isWicket = celebration.type === "wicket";
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
@@ -1776,11 +1777,11 @@ function BoundaryCelebration({
       padding: "16px 38px",
       borderRadius: 22,
       letterSpacing: 1,
-      background: isSix ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})` : `linear-gradient(160deg, #5c9436, ${COLORS.turf})`,
-      boxShadow: isSix ? "0 16px 44px rgba(45,80,22,0.55)" : "0 16px 44px rgba(74,124,46,0.45)",
+      background: isWicket ? `linear-gradient(160deg, #b3392f, ${COLORS.ball})` : isSix ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})` : `linear-gradient(160deg, #5c9436, ${COLORS.turf})`,
+      boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(45,80,22,0.55)" : "0 16px 44px rgba(74,124,46,0.45)",
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
-  }, isSix ? "SIX!" : "FOUR!"));
+  }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
 }
 function OdometerScore({
   text,
@@ -6561,6 +6562,21 @@ function MatchScreen({
     }));
     setShowExtra(null);
   }
+  // Same one-second pop used for boundaries, in the wicket-red palette — see BallCelebration.
+  // Called right after commit() at each of the three places a wicket ball actually lands (plain
+  // wicket, caught-with-fielder, and the "new batsman entered" step that finalizes a pending
+  // wicket) rather than at the moment the wicket TYPE is picked, since that's often not the final
+  // commit (catches wait on a fielder name, non-last wickets wait on the next batsman).
+  function celebrateWicket() {
+    const key = Date.now();
+    setCelebration({
+      type: "wicket",
+      key
+    });
+    setTimeout(() => {
+      setCelebration(c => c && c.key === key ? null : c);
+    }, 1000);
+  }
   function handleWicket(wicketType, legal = true) {
     const isLast = inning.wickets + 1 >= 10;
     if (wicketType === "Caught") {
@@ -6581,6 +6597,7 @@ function MatchScreen({
         legal,
         newBatsman: ""
       }));
+      celebrateWicket();
       setShowWicket(false);
     } else {
       setShowWicket(false);
@@ -6588,6 +6605,7 @@ function MatchScreen({
         wicketType,
         legal
       });
+      celebrateWicket();
     }
   }
   const [pendingWicket, setPendingWicket] = useState(null);
@@ -6609,12 +6627,14 @@ function MatchScreen({
         newBatsman: "",
         fielderName: fielderDraftName.trim()
       }));
+      celebrateWicket();
     } else {
       setPendingWicket({
         wicketType,
         legal,
         fielderName: fielderDraftName.trim()
       });
+      celebrateWicket();
     }
     setCatchDraft(null);
     setFielderDraftName("");
@@ -6702,7 +6722,7 @@ function MatchScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement(BoundaryCelebration, {
+  }, /*#__PURE__*/React.createElement(BallCelebration, {
     celebration: celebration
   }), /*#__PURE__*/React.createElement("div", {
     style: {
