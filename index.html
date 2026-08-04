@@ -3029,6 +3029,116 @@ function ClubPanel({
     }
   }, "Leave club"))));
 }
+// Small "move to..." dropdown for a single team row — lets an existing personal team be moved
+// into a club (or between clubs, or back to personal) instead of re-entering the whole roster.
+// This copies the team into the destination first, then deletes it from the source, so a failed
+// destination write never loses the team.
+function MoveTeamMenu({
+  team,
+  clubs,
+  currentClubId,
+  onMove
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const btnRef = useRef(null);
+  const destinations = [{
+    id: null,
+    name: "My Teams"
+  }, ...clubs.map(c => ({
+    id: c.id,
+    name: c.name
+  }))].filter(d => d.id !== currentClubId);
+  if (destinations.length === 0) return null;
+  function toggle() {
+    setOpen(o => {
+      const next = !o;
+      if (next && btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        setPos({
+          top: rect.bottom + 6,
+          right: Math.max(8, window.innerWidth - rect.right)
+        });
+      }
+      return next;
+    });
+  }
+  async function handlePick(destId) {
+    setOpen(false);
+    setBusy(true);
+    await onMove(team, destId);
+    setBusy(false);
+  }
+  const menu = open && pos && /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setOpen(false),
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 100
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      position: "fixed",
+      top: pos.top,
+      right: pos.right,
+      minWidth: 170,
+      background: COLORS.ink,
+      color: COLORS.cream,
+      borderRadius: 12,
+      padding: 6,
+      fontFamily: "'Inter'",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+      zIndex: 101
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "6px 8px",
+      fontSize: 10.5,
+      opacity: 0.6,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, "Move team to"), destinations.map(d => /*#__PURE__*/React.createElement("button", {
+    key: d.id || "personal",
+    onClick: () => handlePick(d.id),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      color: COLORS.cream,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      padding: "8px 8px",
+      borderRadius: 8,
+      cursor: "pointer"
+    }
+  }, d.name)))), document.body);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    ref: btnRef,
+    onClick: toggle,
+    disabled: busy,
+    className: "cs-btn",
+    "aria-label": "Move team",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: busy ? "default" : "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 16
+  })), menu);
+}
 function ShareMenu({
   match,
   onGetCode,
@@ -4249,6 +4359,7 @@ function TeamsScreen({
   onInviteClub,
   onLeaveClub,
   onDeleteClub,
+  onMoveTeam,
   currentUid
 }) {
   function matchCount(teamId) {
@@ -4355,7 +4466,12 @@ function TeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement("button", {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement(MoveTeamMenu, {
+    team: t,
+    clubs: clubs,
+    currentClubId: activeClubId,
+    onMove: onMoveTeam
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEdit(t),
     className: "cs-btn",
     style: {
@@ -7374,6 +7490,38 @@ function CricketScorer() {
   }
   const activeTeams = activeClubId ? clubTeamsById[activeClubId] || [] : teams;
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
+  // Copies a team into the destination first, then deletes it from the source — so a failed or
+  // denied destination write (e.g. rules not yet published) never loses the team.
+  async function handleMoveTeam(team, toClubId) {
+    const fromClubId = activeClubId;
+    if (toClubId === fromClubId) return;
+    if (toClubId) {
+      const result = await saveClubTeam(toClubId, team);
+      if (!result.ok) {
+        alert(result.error || "Couldn't move the team.");
+        return;
+      }
+      setClubTeamsById(prev => ({
+        ...prev,
+        [toClubId]: [...(prev[toClubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
+      }));
+    } else {
+      const updated = [...teams.filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name));
+      setTeams(updated);
+      await saveTeams(updated);
+    }
+    if (fromClubId) {
+      await deleteClubTeam(fromClubId, team.id);
+      setClubTeamsById(prev => ({
+        ...prev,
+        [fromClubId]: (prev[fromClubId] || []).filter(t => t.id !== team.id)
+      }));
+    } else {
+      const updated = teams.filter(t => t.id !== team.id);
+      setTeams(updated);
+      await saveTeams(updated);
+    }
+  }
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -7457,6 +7605,7 @@ function CricketScorer() {
     onInviteClub: generateClubJoinCode,
     onLeaveClub: handleLeaveClub,
     onDeleteClub: handleDeleteClub,
+    onMoveTeam: handleMoveTeam,
     currentUid: user && user.uid
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
