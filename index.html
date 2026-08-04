@@ -634,6 +634,18 @@ function captainFor(match, teamName) {
 function keeperFor(match, teamName) {
   return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
 }
+function suggestedNextBowler(inning) {
+  // The most common club-cricket pattern is two (or a small rotation of) bowlers alternating
+  // ends every over. The bowler from two overs ago — i.e. not the one who just finished, but the
+  // one before that — is usually who comes back on. Still just a suggestion; always overridable.
+  if (!inning.overBowlers || inning.overBowlers.length < 2) return null;
+  return inning.overBowlers[inning.overBowlers.length - 2] || null;
+}
+function bowlersAtMaxOvers(inning) {
+  if (!inning.maxOversPerBowler) return [];
+  const maxBalls = inning.maxOversPerBowler * (inning.ballsPerOver || 6);
+  return Object.entries(inning.bowlers || {}).filter(([, bw]) => (bw.ballsBowled || 0) >= maxBalls).map(([name]) => name);
+}
 function numberFor(match, teamName, playerName) {
   const map = teamName === match.teamA ? match.teamANumbers : match.teamBNumbers;
   return map && map[playerName] ? map[playerName] : "";
@@ -651,7 +663,8 @@ const DEFAULT_RULES = {
   ballsPerOver: 6,
   wideRuns: 1,
   noballRuns: 1,
-  freeHit: false
+  freeHit: false,
+  maxOversPerBowler: null
 };
 function nonStandardRulesText(rules) {
   if (!rules) return null;
@@ -765,12 +778,15 @@ function newInning(battingTeam, bowlingTeam, rules) {
       wide: 0,
       noball: 0,
       bye: 0,
-      legbye: 0
+      legbye: 0,
+      penalty: 0
     },
     strikerName: "",
     nonStrikerName: "",
     bowlerName: "",
     lastBowlerName: "",
+    overBowlers: [],
+    // name of the bowler of each completed over, in order — used to suggest the next bowler
     fallOfWickets: [],
     // {score, wicket, over, batsman}
     complete: false,
@@ -782,7 +798,8 @@ function newInning(battingTeam, bowlingTeam, rules) {
     wideRuns: r.wideRuns,
     noballRuns: r.noballRuns,
     freeHitEnabled: r.freeHit,
-    freeHitActive: false
+    freeHitActive: false,
+    maxOversPerBowler: r.maxOversPerBowler || null
   };
 }
 function ensureBatsman(inning, name) {
@@ -825,6 +842,19 @@ function crr(runs, legalBalls, ballsPerOver) {
 // ---------- Ball event application ----------
 // event: { kind: 'run'|'wide'|'noball'|'bye'|'legbye'|'wicket', runs, wicketType, newBatsman }
 function applyBall(inning, event) {
+  // Penalty runs (always exactly 5, per the Laws) aren't tied to any delivery — no ball bowled,
+  // no batsman/bowler figures affected, no entry in the over's ball-by-ball log. Handled entirely
+  // separately from the rest of the ball pipeline below.
+  if (event.kind === "penalty") {
+    return {
+      ...inning,
+      runs: inning.runs + event.runs,
+      extras: {
+        ...inning.extras,
+        penalty: (inning.extras.penalty || 0) + event.runs
+      }
+    };
+  }
   // Free hit: a non-run-out dismissal can't stand on a free-hit ball. Reroute it to a dot ball
   // rather than crediting the wicket — the UI also hides the disallowed wicket types while a
   // free hit is active, this is just a safety net.
@@ -977,6 +1007,7 @@ function applyBall(inning, event) {
         };
       }
       cur.overs = [...cur.overs, []];
+      cur.overBowlers = [...cur.overBowlers, cur.bowlerName];
       cur.lastBowlerName = cur.bowlerName;
       cur.bowlerName = "";
       strikeChanges = !strikeChanges; // extra swap at end of over (net effect: swap unless odd run already swapped -> then no swap)
@@ -2697,8 +2728,20 @@ function SetupScreen({
   const [flipping, setFlipping] = useState(false);
   const [matchRules, setMatchRules] = useState({
     ...DEFAULT_RULES,
-    ...rules
+    ...rules,
+    maxOversPerBowler: (rules && rules.maxOversPerBowler) || Math.ceil(20 / 5)
   });
+  const [maxOversTouched, setMaxOversTouched] = useState(false);
+  useEffect(() => {
+    if (maxOversTouched) return;
+    const n = parseInt(overs || "0", 10);
+    if (n > 0) {
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: Math.max(1, Math.ceil(n / 5))
+      }));
+    }
+  }, [overs, maxOversTouched]);
   function normalizePlayers(players) {
     // older saved teams may still have plain name strings instead of {name, number}
     return (players || []).map(p => typeof p === "string" ? {
@@ -3049,7 +3092,91 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.freeHit ? "On" : "Off"))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, matchRules.freeHit ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Max overs per bowler"), matchRules.maxOversPerBowler === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      setMaxOversTouched(true);
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: Math.max(1, Math.ceil(parseInt(overs || "20", 10) / 5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: "#fff",
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "No limit \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.maxOversPerBowler),
+    onChange: v => {
+      setMaxOversTouched(true);
+      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: isNaN(n) ? 1 : Math.max(1, n)
+      }));
+    },
+    style: {
+      textAlign: "center"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "overs each \u2014 suggested from your total overs, editable"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setMaxOversTouched(true);
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: null
+      }));
+    },
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "No limit")))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -3675,7 +3802,7 @@ function InningScorecard({
   battingNumbers,
   bowlingNumbers
 }) {
-  const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye;
+  const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye + (inning.extras.penalty || 0);
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
   const bowlingOrder = inning.bowlingOrder.length ? inning.bowlingOrder : Object.keys(inning.bowlers);
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -3826,7 +3953,7 @@ function InningScorecard({
       color: COLORS.inkSoft,
       fontSize: 11.5
     }
-  }, " ", "(wd ", inning.extras.wide, ", nb ", inning.extras.noball, ", b ", inning.extras.bye, ", lb ", inning.extras.legbye, ")")))), inning.fallOfWickets.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, " ", "(wd ", inning.extras.wide, ", nb ", inning.extras.noball, ", b ", inning.extras.bye, ", lb ", inning.extras.legbye, (inning.extras.penalty || 0) > 0 ? `, pen ${inning.extras.penalty}` : "", ")")))), inning.fallOfWickets.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 12
     }
@@ -4351,6 +4478,18 @@ function MatchScreen({
   const ballsLeft = match.oversLimit * (inning.ballsPerOver || 6) - inning.legalBalls;
   const runsNeeded = target ? target - inning.runs : null;
   const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * (inning.ballsPerOver || 6)).toFixed(2) : null;
+  useEffect(() => {
+    if (needsNewBowler && !newBowlerName) {
+      const suggested = suggestedNextBowler(inning);
+      if (suggested && suggested !== inning.lastBowlerName) setNewBowlerName(suggested);
+    }
+  }, [needsNewBowler]);
+  const atMaxOvers = needsNewBowler ? bowlersAtMaxOvers(inning) : [];
+  const bowlingRosterNames = rosterFor(match, inning.bowlingTeam);
+  const eligibleAfterMaxOvers = bowlingRosterNames.filter(n => n !== inning.lastBowlerName && !atMaxOvers.includes(n));
+  // if excluding maxed-out bowlers would leave nobody to pick, don't exclude them — show everyone
+  // with a warning instead of a dead end
+  const maxOversExcludeList = eligibleAfterMaxOvers.length > 0 ? atMaxOvers : [];
   function pushHistory() {
     setHistory(h => [...h, JSON.parse(JSON.stringify(match))]);
   }
@@ -4439,6 +4578,16 @@ function MatchScreen({
         setCelebration(c => c && c.key === key ? null : c);
       }, 1000);
     }
+  }
+  function handlePenalty() {
+    // Penalty runs are always exactly 5 (Laws 41/42) and, in the common case this covers, go to
+    // the batting side. Not tied to a delivery — no ball consumed, no bowler/batsman impact.
+    pushHistory();
+    commit(applyBall(inning, {
+      kind: "penalty",
+      runs: 5
+    }));
+    setShowExtra(null);
   }
   function handleWicket(wicketType, legal = true) {
     const isLast = inning.wickets + 1 >= 10;
@@ -4938,11 +5087,26 @@ function MatchScreen({
     value: newBowlerName,
     onChange: setNewBowlerName,
     exclude: inning.lastBowlerName,
+    excludeList: maxOversExcludeList,
     placeholder: "Bowler name",
     captain: captainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
-  }), rosterFor(match, inning.bowlingTeam).length === 0 && newBowlerName.trim() && newBowlerName.trim() === inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
+  }), inning.maxOversPerBowler && atMaxOvers.length > 0 && maxOversExcludeList.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 8
+    }
+  }, atMaxOvers.length === 1 ? `${atMaxOvers[0]} has reached the ${inning.maxOversPerBowler}-over limit.` : `${atMaxOvers.join(", ")} have reached the ${inning.maxOversPerBowler}-over limit.`), inning.maxOversPerBowler && atMaxOvers.length > 0 && maxOversExcludeList.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginTop: 8
+    }
+  }, "Everyone available has reached the ", inning.maxOversPerBowler, "-over limit \u2014 pick anyway."), rosterFor(match, inning.bowlingTeam).length === 0 && newBowlerName.trim() && newBowlerName.trim() === inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -4980,7 +5144,12 @@ function MatchScreen({
     onClick: () => setShowExtra("bye")
   }, "Bye"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => setShowExtra("legbye")
-  }, "Leg Bye"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Leg Bye"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handlePenalty,
+    style: {
+      gridColumn: "1 / -1"
+    }
+  }, "Penalty +5 (batting team)"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
