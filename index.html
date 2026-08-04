@@ -7716,14 +7716,7 @@ function SuperOverOpenersSetup({
       awaitingFirstInningsSetup: false
     };
     setMatch(updatedMatch);
-    saveMatch(updatedMatch).then(result => {
-      if (result.ok && result.writeSeq != null) {
-        setMatch(cur => cur ? {
-          ...cur,
-          writeSeq: result.writeSeq
-        } : cur);
-      }
-    });
+    saveTransition(updatedMatch, setMatch);
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7806,6 +7799,27 @@ function SuperOverOpenersSetup({
     }
   }, "Start Super Over"));
 }
+// Best-effort self-heal for one-time transition saves (second-innings setup, super-over openers)
+// where a conflict is never expected to reflect a genuine second scorer — nobody else should be
+// racing a transition only one person can trigger — so it's safe to just retry once against the
+// server's actual current sequence instead of surfacing a resolution UI nobody needs here.
+async function saveTransition(updatedMatch, setMatch) {
+  let result = await saveMatch(updatedMatch);
+  if (result.conflict && result.remoteMatch) {
+    result = await saveMatch({
+      ...updatedMatch,
+      writeSeq: result.remoteMatch.writeSeq
+    });
+  }
+  if (result.ok && result.writeSeq != null) {
+    setMatch(cur => cur ? {
+      ...cur,
+      writeSeq: result.writeSeq
+    } : cur);
+  } else if (!result.ok) {
+    console.error("[saveTransition] failed after retry:", result.error);
+  }
+}
 function SecondInningsSetup({
   match,
   setMatch
@@ -7832,18 +7846,7 @@ function SecondInningsSetup({
       awaitingSecondInningsSetup: false
     };
     setMatch(updatedMatch);
-    saveMatch(updatedMatch).then(result => {
-      // Merge-only (functional form): local state may already have moved on by the time this
-      // resolves. No conflict UI here deliberately — this is a one-time transition, and if it
-      // does race another device, the very next ball scored from MatchScreen's commit() will hit
-      // the same writeSeq mismatch and surface the proper resolution modal there.
-      if (result.ok && result.writeSeq != null) {
-        setMatch(cur => cur ? {
-          ...cur,
-          writeSeq: result.writeSeq
-        } : cur);
-      }
-    });
+    saveTransition(updatedMatch, setMatch);
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8126,8 +8129,17 @@ function ResultScreen({
       ...match,
       superOverMatchId: newMatch.id
     });
-    await saveMatch(newMatch);
-    setMatch(newMatch);
+    const result = await saveMatch(newMatch);
+    // Without merging the confirmed writeSeq back in here, the local state would carry a stale
+    // (undefined) seq into the very next save — picking Super Over openers — which would then
+    // read as a conflict against the server's actual seq and get silently dropped by
+    // SuperOverOpenersSetup's merge-only success handler. That's exactly what left
+    // awaitingFirstInningsSetup stuck at true on the server: the local screen looked fine
+    // (optimistic update) while the real fix never reached Firestore.
+    setMatch(result.ok && result.writeSeq != null ? {
+      ...newMatch,
+      writeSeq: result.writeSeq
+    } : newMatch);
   }
   async function handleViewSuperOver() {
     const linked = await loadMatch(match.superOverMatchId);
@@ -8314,7 +8326,16 @@ function ResultScreen({
       width: "100%",
       marginBottom: 14
     }
-  }, "View Super Over"), /*#__PURE__*/React.createElement(PlayerOfMatchCard, {
+  }, "View Super Over"), isTied && match.rules && match.rules.superOver ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginBottom: 14,
+      fontStyle: "italic"
+    }
+  }, "Player of the Match will be picked once the Super Over settles it.") : /*#__PURE__*/React.createElement(PlayerOfMatchCard, {
     match: match,
     setMatch: setMatch
   }), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
