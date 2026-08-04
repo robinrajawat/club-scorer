@@ -4591,6 +4591,11 @@ function RunRateChart({
   })));
   const maxOver = Math.max(match.oversLimit, ...series.map(s => s[s.length - 1]?.over || 0), 1);
   const maxRuns = Math.max(...series.flatMap(s => s.map(p => p.runs)), 10);
+  const overStepOptions = [1, 2, 5, 10, 15, 20, 25, 50];
+  const overStep = overStepOptions.find(s => match.oversLimit / s <= 5) || overStepOptions[overStepOptions.length - 1];
+  const xTickVals = [];
+  for (let o = 0; o <= maxOver; o += overStep) xTickVals.push(o);
+  if (xTickVals[xTickVals.length - 1] !== maxOver) xTickVals.push(maxOver);
   const W = 300,
     H = 130,
     padL = 28,
@@ -4703,27 +4708,30 @@ function RunRateChart({
     fontSize: "8",
     fontFamily: "'IBM Plex Mono', monospace",
     fill: COLORS.inkSoft
-  }, v))), /*#__PURE__*/React.createElement("line", {
+  }, v))), xTickVals.map((o, i) => o > 0 && o < maxOver && /*#__PURE__*/React.createElement("line", {
+    key: `xg${i}`,
+    x1: x(o),
+    x2: x(o),
+    y1: padT,
+    y2: H - padB,
+    stroke: COLORS.creamDark,
+    strokeWidth: "0.75"
+  })), xTickVals.map((o, i) => /*#__PURE__*/React.createElement("text", {
+    key: i,
+    x: x(o),
+    y: H - 4,
+    textAnchor: o === 0 ? "start" : o === maxOver ? "end" : "middle",
+    fontSize: "8",
+    fontFamily: "'IBM Plex Mono', monospace",
+    fill: COLORS.inkSoft
+  }, o, i === xTickVals.length - 1 ? " ov" : "")), /*#__PURE__*/React.createElement("line", {
     x1: padL,
     x2: W - padR,
     y1: H - padB,
     y2: H - padB,
     stroke: COLORS.willow,
     strokeWidth: "1.2"
-  }), /*#__PURE__*/React.createElement("text", {
-    x: padL,
-    y: H - 4,
-    fontSize: "8",
-    fontFamily: "'IBM Plex Mono', monospace",
-    fill: COLORS.inkSoft
-  }, "0"), /*#__PURE__*/React.createElement("text", {
-    x: W - padR,
-    y: H - 4,
-    textAnchor: "end",
-    fontSize: "8",
-    fontFamily: "'IBM Plex Mono', monospace",
-    fill: COLORS.inkSoft
-  }, maxOver, " ov"), series.map((points, i) => /*#__PURE__*/React.createElement("polyline", {
+  }), series.map((points, i) => /*#__PURE__*/React.createElement("polyline", {
     key: i,
     points: points.map(p => `${x(p.over)},${y(p.runs)}`).join(" "),
     fill: "none",
@@ -4913,7 +4921,8 @@ function FollowScreen({
       }
       const m = unpackMatchFromFirestore(doc.data());
       setMatch(m);
-      setTab(m.innings.length - 1);
+      const startedIdx = m.innings.reduce((acc, inn, idx) => inn.battingOrder && inn.battingOrder.length > 0 ? idx : acc, 0);
+      setTab(startedIdx);
       setStatus("found");
     }, err => {
       console.error("[follow] snapshot error \u2014 code:", err.code, "message:", err.message);
@@ -4993,6 +5002,8 @@ function FollowScreen({
     }, "Go to Club Scorer")));
   }
   const resultText = matchResultText(match);
+  const inningsBreak = match.awaitingSecondInningsSetup && match.status !== "complete";
+  const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
   return /*#__PURE__*/React.createElement("div", {
     style: wrapStyle
   }, /*#__PURE__*/React.createElement("div", {
@@ -5024,8 +5035,8 @@ function FollowScreen({
       width: 8,
       height: 8,
       borderRadius: "50%",
-      background: "#e6544b",
-      animation: "cs-pulse 1.6s ease infinite",
+      background: inningsBreak ? COLORS.willow : "#e6544b",
+      animation: inningsBreak ? "none" : "cs-pulse 1.6s ease infinite",
       flexShrink: 0
     }
   }), /*#__PURE__*/React.createElement("span", {
@@ -5037,7 +5048,7 @@ function FollowScreen({
       textTransform: "uppercase",
       opacity: 0.85
     }
-  }, match.status === "complete" ? "Final" : "Live")), /*#__PURE__*/React.createElement("button", {
+  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live")), /*#__PURE__*/React.createElement("button", {
     onClick: onExit,
     className: "cs-btn",
     style: {
@@ -5059,7 +5070,7 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, match.teamA, " vs ", match.teamB), resultText && /*#__PURE__*/React.createElement("div", {
+  }, match.teamA, " vs ", match.teamB), (resultText || inningsBreakText) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -5068,7 +5079,7 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText)), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
+  }, resultText || inningsBreakText)), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 16px 0",
       maxWidth: 560,
