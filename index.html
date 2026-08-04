@@ -287,7 +287,7 @@ const GLOBAL_CSS = `
     .no-print { display: none !important; }
     .print-only { display: block !important; }
     body, html { background: #fff !important; }
-    .print-only * { box-shadow: none !important; animation: none !important; }
+    .print-only * { box-shadow: none !important; animation: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;
 function NavWrap({
@@ -5222,16 +5222,32 @@ function ExportPdfButton({
   match,
   style
 }) {
+  const [preparing, setPreparing] = useState(false);
+  // iOS Safari can hang for a long time — and sometimes render a blank print preview — if
+  // window.print() fires while the web fonts (DM Serif Display / IBM Plex Mono / Inter) are
+  // still mid-fetch, since it tries to lay the print document out with fonts that swap mid-paint.
+  // Waiting for document.fonts.ready, then giving the browser two animation frames to actually
+  // paint before printing, is the standard workaround for that class of WebKit print bug. The
+  // 1.2s race is a safety net in case fonts.ready itself never resolves on some browsers.
   function handleExport() {
+    if (preparing) return;
+    setPreparing(true);
     const prevTitle = document.title;
     document.title = `${match.teamA} vs ${match.teamB} — Scorecard`;
-    window.print();
-    setTimeout(() => {
-      document.title = prevTitle;
-    }, 500);
+    const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready.catch(() => {}) : Promise.resolve();
+    Promise.race([fontsReady, new Promise(resolve => setTimeout(resolve, 1200))]).then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.print();
+        setPreparing(false);
+        setTimeout(() => {
+          document.title = prevTitle;
+        }, 500);
+      }));
+    });
   }
   return /*#__PURE__*/React.createElement("button", {
     onClick: handleExport,
+    disabled: preparing,
     className: "cs-btn",
     title: "Export PDF",
     "aria-label": "Export PDF",
@@ -5240,7 +5256,8 @@ function ExportPdfButton({
       border: "1px solid rgba(242,236,217,0.35)",
       borderRadius: 8,
       color: COLORS.cream,
-      cursor: "pointer",
+      cursor: preparing ? "default" : "pointer",
+      opacity: preparing ? 0.6 : 1,
       width: 38,
       height: 38,
       display: "flex",
@@ -5493,15 +5510,21 @@ function RunsPerOverChart({
     });
     return m;
   });
+  // The most expensive over per innings gets a highlighted bar — ties all highlight.
+  const maxByInnings = perOver.map(arr => Math.max(...arr.filter(v => v != null), -1));
   const bowledOvers = Math.max(...perOver.map(arr => arr.length), 0);
   const totalOvers = Math.max(match.oversLimit, bowledOvers, 1);
   const maxOverRuns = Math.max(...perOver.flatMap(arr => arr.filter(v => v != null)), 6);
+  // Fixed unit column width in the SVG's own coordinate system, but the SVG itself is rendered at
+  // width="100%" (see below) instead of a fixed pixel width — the browser scales the whole
+  // viewBox to fit the card, so every over's column stays exactly the same width as every other
+  // one AND the full set always fits the screen without needing to scroll to see the later overs.
   const colW = 24,
     barW = 9,
     barGap = 2,
     padL = 6,
     padR = 6,
-    padT = 18,
+    padT = 22,
     padB = 20,
     plotH = 70;
   const H = padT + plotH + padB;
@@ -5537,7 +5560,8 @@ function RunsPerOverChart({
   }, "Runs Per Over"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 12
+      gap: 12,
+      flexWrap: "wrap"
     }
   }, innings.map((inn, i) => /*#__PURE__*/React.createElement("span", {
     key: i,
@@ -5558,16 +5582,29 @@ function RunsPerOverChart({
       background: seriesColors[i],
       display: "inline-block"
     }
-  }), inn.battingTeam)))), /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
+  }), inn.battingTeam)), /*#__PURE__*/React.createElement("span", {
     style: {
-      overflowX: "auto",
-      WebkitOverflowScrolling: "touch"
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft
     }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: W,
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 9,
+      height: 9,
+      borderRadius: 3,
+      background: COLORS.ball,
+      display: "inline-block"
+    }
+  }), "Most expensive"))), /*#__PURE__*/React.createElement("svg", {
+    width: "100%",
     height: H,
     viewBox: `0 0 ${W} ${H}`,
+    preserveAspectRatio: "none",
     style: {
       display: "block"
     }
@@ -5593,6 +5630,7 @@ function RunsPerOverChart({
       const h = barH(runs);
       const bx = slots[i];
       const wk = wicketsByOver[i][overNum] || 0;
+      const isMostExpensive = runs === maxByInnings[i] && runs > 0;
       return /*#__PURE__*/React.createElement("g", {
         key: i
       }, /*#__PURE__*/React.createElement("rect", {
@@ -5601,13 +5639,21 @@ function RunsPerOverChart({
         width: barW,
         height: h,
         rx: 1.5,
-        fill: seriesColors[i]
-      }), Array.from({
+        fill: isMostExpensive ? COLORS.ball : seriesColors[i]
+      }), /*#__PURE__*/React.createElement("text", {
+        x: bx + barW / 2,
+        y: baseY - h - 3,
+        textAnchor: "middle",
+        fontSize: "7",
+        fontWeight: isMostExpensive ? 700 : 500,
+        fontFamily: "'IBM Plex Mono', monospace",
+        fill: isMostExpensive ? COLORS.ball : COLORS.inkSoft
+      }, runs), Array.from({
         length: Math.min(wk, 3)
       }, (_, k) => /*#__PURE__*/React.createElement("circle", {
         key: k,
         cx: bx + barW / 2,
-        cy: baseY - h - 5 - k * 5,
+        cy: baseY - h - 13 - k * 5,
         r: "2",
         fill: COLORS.ball,
         stroke: "#fff",
@@ -5621,7 +5667,58 @@ function RunsPerOverChart({
       fontFamily: "'IBM Plex Mono', monospace",
       fill: COLORS.inkSoft
     }, overNum));
-  }))));
+  })));
+}
+// Folded-by-default toss/house-rules line — most matches use standard rules, so this stays out
+// of the way until someone actually wants to check what was agreed.
+function MatchInfoFold({
+  match
+}) {
+  const [open, setOpen] = useState(false);
+  const toss = tossText(match.toss);
+  const houseRules = nonStandardRulesText(match.rules);
+  if (!toss && !houseRules) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(o => !o),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      padding: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 12,
+    style: {
+      transform: open ? "rotate(90deg)" : "none",
+      transition: "transform 0.15s ease"
+    }
+  }), "Match details"), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, toss, toss && houseRules && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "House rules: ", houseRules)));
 }
 
 
@@ -5683,21 +5780,9 @@ function ScorecardOverlay({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Close"))), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, tossText(match.toss), tossText(match.toss) && nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("br", null), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontStyle: "italic"
-    }
-  }, "House rules: ", nonStandardRulesText(match.rules))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, "Close"))), /*#__PURE__*/React.createElement(MatchInfoFold, {
+    match: match
+  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -5728,15 +5813,12 @@ function ScorecardOverlay({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement(RunRateChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
       padding: 16,
+      marginBottom: 14,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement(InningScorecard, {
@@ -5747,7 +5829,11 @@ function ScorecardOverlay({
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
-  }))));
+  })), /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
+    match: match
+  })));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
 // here — this component only ever reads liveViews/{code}, a document that is structurally
@@ -5934,21 +6020,9 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), (tossText(match.toss) || nonStandardRulesText(match.rules)) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, tossText(match.toss), tossText(match.toss) && nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("br", null), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontStyle: "italic"
-    }
-  }, "House rules: ", nonStandardRulesText(match.rules))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchInfoFold, {
+    match: match
+  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -5979,15 +6053,12 @@ function FollowScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement(RunRateChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
       padding: 16,
+      marginBottom: 14,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement(InningScorecard, {
@@ -5998,7 +6069,11 @@ function FollowScreen({
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
-  }))));
+  })), /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
+    match: match
+  })));
 }
 function MatchScreen({
   match,
