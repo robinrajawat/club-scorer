@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Club Scorer" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#2d5016" />
+<link rel="manifest" href="./manifest.json" />
 <style>
   html, body { margin: 0; padding: 0; }
   @page { margin: 14mm; }
@@ -5722,6 +5723,69 @@ function MatchInfoFold({
 }
 
 
+// Shared by ScorecardOverlay (live, scorer-side) and FollowScreen (read-only live-follow) — both
+// want the exact same body: foldable match details, an innings switcher, the scoreboard, then the
+// charts. Keeping one copy means the chart-order/labeling fixes above only ever need to happen once.
+function MatchStatsPanel({
+  match,
+  tab,
+  setTab
+}) {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(MatchInfoFold, {
+    match: match
+  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      padding: "14px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: () => setTab(i),
+    className: "cs-btn cs-shine",
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      borderRadius: 10,
+      border: "none",
+      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: tab === i ? "#fff" : COLORS.ink,
+      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: match.innings[tab],
+    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
+    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
+    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+  })), /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
+    match: match
+  })));
+}
 function ScorecardOverlay({
   match,
   onClose
@@ -5780,60 +5844,11 @@ function ScorecardOverlay({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Close"))), /*#__PURE__*/React.createElement(MatchInfoFold, {
-    match: match
-  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      padding: "14px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    onClick: () => setTab(i),
-    className: "cs-btn cs-shine",
-    style: {
-      flex: 1,
-      padding: "9px 0",
-      borderRadius: 10,
-      border: "none",
-      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
-      color: tab === i ? "#fff" : COLORS.ink,
-      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer"
-    }
-  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "16px",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement(InningScorecard, {
-    inning: match.innings[tab],
-    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
-    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
-    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
-    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
-    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
-  })), /*#__PURE__*/React.createElement(RunRateChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
-    match: match
-  })));
+  }, "Close"))), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+    match: match,
+    tab: tab,
+    setTab: setTab
+  }));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
 // here — this component only ever reads liveViews/{code}, a document that is structurally
@@ -6020,60 +6035,11 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchInfoFold, {
-    match: match
-  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      padding: "14px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    onClick: () => setTab(i),
-    className: "cs-btn cs-shine",
-    style: {
-      flex: 1,
-      padding: "9px 0",
-      borderRadius: 10,
-      border: "none",
-      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
-      color: tab === i ? "#fff" : COLORS.ink,
-      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer"
-    }
-  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "16px",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement(InningScorecard, {
-    inning: match.innings[tab],
-    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
-    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
-    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
-    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
-    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
-  })), /*#__PURE__*/React.createElement(RunRateChart, {
-    match: match
-  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
-    match: match
-  })));
+  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+    match: match,
+    tab: tab,
+    setTab: setTab
+  }));
 }
 function MatchScreen({
   match,

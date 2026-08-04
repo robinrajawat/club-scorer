@@ -17,14 +17,16 @@
 //     the real network; caching it would be actively wrong.
 //
 // Bump CACHE_NAME on any meaningful change so old caches get cleaned up.
-const CACHE_NAME = "cricket-scorer-v1";
+const CACHE_NAME = "cricket-scorer-v2";
 
 const SHELL_ASSET_PATTERNS = [
   /unpkg\.com\/react@/,
   /unpkg\.com\/react-dom@/,
   /gstatic\.com\/firebasejs\//,
   /fonts\.googleapis\.com/,
-  /fonts\.gstatic\.com/
+  /fonts\.gstatic\.com/,
+  /\/manifest\.json$/,
+  /\/icons\//
 ];
 
 self.addEventListener("install", () => {
