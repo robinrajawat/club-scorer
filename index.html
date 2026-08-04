@@ -767,6 +767,7 @@ function tossText(toss) {
 }
 function matchResultText(match) {
   const [i1, i2] = match.innings;
+  if (match.status !== "complete") return null;
   if (!i2) return null;
   if (i2.runs >= i1.runs + 1) {
     return `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;
