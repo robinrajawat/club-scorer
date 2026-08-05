@@ -2124,10 +2124,31 @@ async function deleteUserAccount(localMatchIds) {
   await Promise.all(matchesSnap.docs.map(d => d.ref.delete().catch(e => console.error("delete account: match cleanup failed", e))));
   await db.collection("users").doc(uid).collection("meta").doc("teams").delete().catch(e => console.error("delete account: teams cleanup failed", e));
   await db.collection("users").doc(uid).collection("meta").doc("profile").delete().catch(e => console.error("delete account: profile cleanup failed", e));
+  // Leave every club this account is a member of. Both memberUids AND coOwnerUids must be
+  // cleared in the SAME write — the clubs/{clubId} update rule's self-leave branch (C) requires
+  // both to change together; a memberUids-only write (as this used to do) fails that branch
+  // whenever the departing member was also a co-owner, silently leaving them stuck in
+  // coOwnerUids forever pointing at a now-deleted account. This can never touch ownerUid itself —
+  // there is no self-service ownership transfer, so a club where this account was the SOLE owner
+  // (no co-owners) becomes permanently unmanageable by anyone. AccountScreen warns about this
+  // before deletion; there's no way to prevent it here after the fact.
   const clubsSnap = await db.collection("clubs").where("memberUids", "array-contains", uid).get();
   await Promise.all(clubsSnap.docs.map(d => d.ref.update({
-    memberUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    memberUids: firebase.firestore.FieldValue.arrayRemove(uid),
+    coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
   }).catch(e => console.error("delete account: club leave failed", e))));
+  // Same idea for federation co-ownership (federations have no separate "member" list — only
+  // createdBy and coOwnerUids). Relies on the federations/{federationId} update rule's branch
+  // (C) — if that hasn't been published to this Firestore project yet, this best-effort write
+  // fails harmlessly (caught below) and the now-deleted account stays listed as a co-owner. A
+  // federation this account CREATED (createdBy) can never be reassigned or removed — federations
+  // can never be deleted at all (see the rule's `allow delete: if false`), so a federation whose
+  // creator's account is gone stays exactly as owned/manageable as it was via any co-owner, but
+  // permanently carries a dead createdBy uid with no way to ever change that.
+  const fedSnap = await db.collection("federations").where("coOwnerUids", "array-contains", uid).get();
+  await Promise.all(fedSnap.docs.map(d => d.ref.update({
+    coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
+  }).catch(e => console.error("delete account: federation co-owner cleanup failed", e))));
   try {
     await auth.currentUser.delete();
   } catch (e) {
@@ -3346,6 +3367,8 @@ function RuleChoice({
 function AccountScreen({
   user,
   profile,
+  clubs = [],
+  federationsById = {},
   onSignIn,
   onSignOut,
   onSaveProfile,
@@ -3368,6 +3391,12 @@ function AccountScreen({
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
+  // Deleting the account can never reassign ownership — a club or federation this account is the
+  // SOLE owner of (no co-owners) becomes permanently stuck: nobody can ever manage, rename,
+  // invite into, or (for federations, which can never be deleted at all) get rid of it again.
+  // Surfaced before deletion so the person can invite a co-owner first if they want a way out.
+  const soleOwnerClubs = user ? clubs.filter(c => c.ownerUid === user.uid && (c.coOwnerUids || []).length === 0) : [];
+  const soleOwnerFederations = user ? Object.values(federationsById).filter(f => f.createdBy === user.uid && (f.coOwnerUids || []).length === 0) : [];
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -3761,7 +3790,32 @@ function AccountScreen({
       lineHeight: 1.6,
       marginBottom: 14
     }
-  }, "This permanently deletes your profile, your teams, every match saved to this account, and removes you from your clubs. It does not delete matches you only ever shared via a match code on another device. This cannot be undone."), /*#__PURE__*/React.createElement("div", {
+  }, "This permanently deletes your profile, your teams, every match saved to this account, and removes you from your clubs. It does not delete matches you only ever shared via a match code on another device. This cannot be undone."), (soleOwnerClubs.length > 0 || soleOwnerFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: `1.5px solid rgba(139,30,30,0.25)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      marginBottom: 4
+    }
+  }, "You're the only owner here \u2014 deleting your account leaves ", soleOwnerClubs.length > 0 && soleOwnerFederations.length > 0 ? "these permanently stuck" : soleOwnerClubs.length > 0 ? "this club permanently stuck" : "this federation permanently stuck", ":"), soleOwnerClubs.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id
+  }, "\u2022 ", c.name, " (club) \u2014 nobody will ever be able to manage or rename it, invite anyone, or remove members again. It could still be deleted outright by a co-owner, but there won't be one.")), soleOwnerFederations.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id
+  }, "\u2022 ", f.name, " (federation) \u2014 a federation can never be deleted by anyone, so this one is stuck this way for good, not just until someone deletes it.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, "If you'd rather avoid that, add a co-owner from Clubs & Federations first \u2014 co-owners have identical rights, so any of them can take over.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -14603,6 +14657,8 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(AccountScreen, {
     user: user,
     profile: profile,
+    clubs: clubs,
+    federationsById: federationsById,
     onSignIn: signInGoogle,
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,

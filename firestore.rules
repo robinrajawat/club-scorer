@@ -238,6 +238,22 @@ service cloud.firestore {
           get(/databases/$(database)/documents/federationCoOwnerInviteCodes/$(request.resource.data.coOwnerInviteCodeUsed)).data.federationId == federationId &&
           get(/databases/$(database)/documents/federationCoOwnerInviteCodes/$(request.resource.data.coOwnerInviteCodeUsed)).data.email == request.auth.token.email.lower()
         )
+        ||
+        // (C) Removing one or more co-owners — coOwnerUids may only SHRINK (become a subset of
+        // what it was), never grow or add anyone new (that's what (B) is for). Covers both the
+        // owner/a co-owner removing a DIFFERENT co-owner (see removeFederationCoOwner in
+        // index.html — previously impossible under this rule, since (A) locks coOwnerUids
+        // entirely), and a co-owner removing THEMSELVES (mirrors clubs' self-leave branch; also
+        // what account deletion relies on to clean up a departing co-owner's federations, see
+        // deleteUserAccount). createdBy can never be removed this way — deliberately: there is no
+        // ownership-transfer flow, and a federation can never be deleted (see below), so the
+        // original creator is a permanent, unremovable anchor.
+        (
+          isFederationOwner(resource.data) &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.get('coOwnerUids', []).hasOnly(resource.data.get('coOwnerUids', []))
+        )
       );
 
       allow delete: if false;
