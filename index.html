@@ -4049,7 +4049,8 @@ function ClubSourceSelector({
   clubs,
   activeClubId,
   onSelect,
-  onManage
+  onManage,
+  currentUid
 }) {
   const chipStyle = active => ({
     padding: "7px 13px",
@@ -4081,7 +4082,7 @@ function ClubSourceSelector({
     key: c.id,
     onClick: () => onSelect(c.id),
     style: chipStyle(activeClubId === c.id)
-  }, c.name))), /*#__PURE__*/React.createElement("button", {
+  }, c.name))), currentUid && /*#__PURE__*/React.createElement("button", {
     onClick: onManage,
     className: "cs-btn",
     style: {
@@ -4430,7 +4431,7 @@ function ClubPanel({
     key: c.id,
     onClick: () => handleSelect(c.id),
     style: chipStyle(activeClubId === c.id)
-  }, c.name)), /*#__PURE__*/React.createElement("button", {
+  }, c.name, c.ownerUid === currentUid ? " · Owner" : (c.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "")), /*#__PURE__*/React.createElement("button", {
     onClick: () => setMode(mode ? null : "create"),
     "aria-label": "Add or join a club",
     style: { ...chipStyle(false),
@@ -4693,7 +4694,13 @@ function ClubPanel({
       gap: 8,
       flexWrap: "wrap"
     }
-  }, activeIsOwner && (inviteCode ? /*#__PURE__*/React.createElement("button", {
+  }, activeIsOwner && (inviteCode ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inviteCode).catch(() => {});
       setCopied(true);
@@ -4708,9 +4715,33 @@ function ClubPanel({
       fontWeight: 600,
       fontSize: 12.5,
       letterSpacing: 0.5,
-      cursor: "pointer"
+      cursor: "pointer",
+      alignSelf: "flex-start"
     }
-  }, copied ? "Copied!" : inviteCode) : inviteOpen ? /*#__PURE__*/React.createElement("div", {
+  }, copied ? "Copied!" : inviteCode), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'"
+    }
+  }, "Send this code to ", inviteEmail, " \u2014 it only works while they're signed in with that exact email."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setInviteCode(null);
+      setInviteEmail("");
+      setInviteOpen(true);
+    },
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0,
+      alignSelf: "flex-start"
+    }
+  }, "Invite someone else")) : inviteOpen ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -4978,7 +5009,7 @@ function ClubPanel({
       fontSize: 11.5,
       color: COLORS.pitch
     }
-  }, f.name, isFederationOwner(f) && /*#__PURE__*/React.createElement("button", {
+  }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", isFederationOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleFedManage(f),
     "aria-label": `Manage ${f.name}`,
     style: {
@@ -9178,7 +9209,8 @@ function TeamsScreen({
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelectSource,
-    onManage: onManageClubs
+    onManage: onManageClubs,
+    currentUid: currentUid
   }), canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
