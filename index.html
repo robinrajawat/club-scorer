@@ -1267,6 +1267,33 @@ async function loadTournamentMatches(tournamentId) {
   }
   return [...byId.values()];
 }
+// Standard single (or double) round-robin: every team plays every other team once, or twice with
+// fixture order reversed for the return leg. Dates/times are deliberately left blank — free-text,
+// filled in manually if wanted, rather than a date picker — since a club tournament's actual
+// scheduling (grounds, weekends, weather) rarely maps cleanly onto anything a generator could
+// guess at anyway.
+function generateRoundRobinFixtures(teamNames, double) {
+  const fixtures = [];
+  for (let i = 0; i < teamNames.length; i++) {
+    for (let j = i + 1; j < teamNames.length; j++) {
+      fixtures.push({
+        id: uid(),
+        teamA: teamNames[i],
+        teamB: teamNames[j],
+        date: "",
+        matchId: null
+      });
+      if (double) fixtures.push({
+        id: uid(),
+        teamA: teamNames[j],
+        teamB: teamNames[i],
+        date: "",
+        matchId: null
+      });
+    }
+  }
+  return fixtures;
+}
 function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {
@@ -4824,6 +4851,17 @@ function SetupScreen({
     }
     setBowlerB("");
   }
+  // Coming from "Score this fixture" — try to match each fixture team name against a saved team
+  // (so the full roster/XI picker still works), falling back to a plain typed name if there's no
+  // match (e.g. the team was entered ad hoc and never saved). Runs once: this only ever applies to
+  // a fresh Setup screen landed on directly from a fixture, not to normal team-picking afterward.
+  useEffect(() => {
+    if (!presetTournament || !presetTournament.fixtureTeamA) return;
+    const savedA = teams.find(t => t.name === presetTournament.fixtureTeamA);
+    if (savedA) selectTeamA(savedA);else setTeamAName(presetTournament.fixtureTeamA);
+    const savedB = teams.find(t => t.name === presetTournament.fixtureTeamB);
+    if (savedB) selectTeamB(savedB);else setTeamBName(presetTournament.fixtureTeamB);
+  }, []);
   function toggleAXI(name) {
     setTeamAPlayingXI(xi => {
       if (xi.includes(name)) return xi.filter(n => n !== name);
@@ -5367,7 +5405,8 @@ function SetupScreen({
         wonBy: tossWonBy,
         decision: tossDecision || null
       } : null,
-      tournamentId: presetTournament ? presetTournament.id : null
+      tournamentId: presetTournament ? presetTournament.id : null,
+      fixtureId: presetTournament ? presetTournament.fixtureId || null : null
     })
   }, "Start Match")));
 }
@@ -5655,10 +5694,330 @@ function TournamentsScreen({
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
 // since the local match index only carries lightweight pointers — nowhere near enough to compute a
 // points table from.
+// One row in the fixtures list — its own component mainly so the free-text date field can hold
+// local edit state and only commit (via onUpdateDate) on blur, rather than writing to Firestore on
+// every keystroke.
+function FixtureRow({
+  fixture,
+  match,
+  onScore,
+  onUpdateDate,
+  onDelete
+}) {
+  const [date, setDate] = useState(fixture.date || "");
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 8,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13.5,
+      color: COLORS.ink
+    }
+  }, fixture.teamA, " vs ", fixture.teamB), /*#__PURE__*/React.createElement("button", {
+    onClick: onDelete,
+    className: "cs-btn",
+    "aria-label": "Remove fixture",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      fontSize: 14,
+      lineHeight: 1,
+      padding: 4,
+      flexShrink: 0
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: date,
+    onChange: e => setDate(e.target.value),
+    onBlur: () => {
+      if (date !== (fixture.date || "")) onUpdateDate(date);
+    },
+    placeholder: "Date/time (optional, e.g. Sat 14 Jun 3pm)",
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      padding: "8px 10px"
+    }
+  }), match ? /*#__PURE__*/React.createElement("button", {
+    onClick: onScore,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: `1.5px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      padding: "7px 12px",
+      cursor: "pointer",
+      flexShrink: 0,
+      whiteSpace: "nowrap"
+    }
+  }, match.status === "complete" ? matchResultText(match) || "View" : "In progress") : /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onScore,
+    style: {
+      padding: "7px 14px",
+      fontSize: 12,
+      flexShrink: 0
+    }
+  }, "Score")));
+}
+// Round-robin generation, manual add/remove, and free-text date fields for a tournament's
+// schedule. Fixtures live inline on the tournament doc (tournament.fixtures) rather than their own
+// subcollection — even a full double round-robin among a dozen club teams is well under any
+// Firestore document size concern, and keeping it inline means one save covers the whole schedule.
+function FixturesSection({
+  tournament,
+  matches,
+  onStartFixtureMatch,
+  onUpdateTournament,
+  onOpenMatch
+}) {
+  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newA, setNewA] = useState("");
+  const [newB, setNewB] = useState("");
+  const fixtures = tournament.fixtures || [];
+  const matchById = new Map((matches || []).map(m => [m.id, m]));
+  async function generate(double) {
+    setBusy(true);
+    await onUpdateTournament({
+      ...tournament,
+      fixtures: generateRoundRobinFixtures(tournament.teams, double)
+    });
+    setBusy(false);
+  }
+  async function clearAll() {
+    if (!window.confirm("Clear all fixtures? This only removes the schedule \u2014 already-scored matches and the table are untouched.")) return;
+    setBusy(true);
+    await onUpdateTournament({
+      ...tournament,
+      fixtures: []
+    });
+    setBusy(false);
+  }
+  function updateDate(fixtureId, date) {
+    onUpdateTournament({
+      ...tournament,
+      fixtures: fixtures.map(f => f.id === fixtureId ? {
+        ...f,
+        date
+      } : f)
+    });
+  }
+  function deleteFixture(fixtureId) {
+    onUpdateTournament({
+      ...tournament,
+      fixtures: fixtures.filter(f => f.id !== fixtureId)
+    });
+  }
+  async function addFixture() {
+    if (!newA || !newB || newA === newB || busy) return;
+    setBusy(true);
+    await onUpdateTournament({
+      ...tournament,
+      fixtures: [...fixtures, {
+        id: uid(),
+        teamA: newA,
+        teamB: newB,
+        date: "",
+        matchId: null
+      }]
+    });
+    setBusy(false);
+    setAdding(false);
+    setNewA("");
+    setNewB("");
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Fixtures"), fixtures.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: clearAll,
+    disabled: busy,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Clear all")), fixtures.length === 0 && !adding ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => generate(false),
+    disabled: busy,
+    style: {
+      flex: "1 1 auto"
+    }
+  }, busy ? "Generating\u2026" : "Generate Round-Robin"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => generate(true),
+    disabled: busy,
+    style: {
+      flex: "1 1 auto"
+    }
+  }, "Home & Away")) : fixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+    key: f.id,
+    fixture: f,
+    match: f.matchId ? matchById.get(f.matchId) : null,
+    onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
+    onUpdateDate: date => updateDate(f.id, date),
+    onDelete: () => deleteFixture(f.id)
+  })), adding ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 8,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: newA,
+    onChange: e => setNewA(e.target.value),
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      padding: "8px 6px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Team\u2026"), tournament.teams.map(n => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: n
+  }, n))), /*#__PURE__*/React.createElement("select", {
+    value: newB,
+    onChange: e => setNewB(e.target.value),
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      padding: "8px 6px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "vs Team\u2026"), tournament.teams.map(n => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: n
+  }, n)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setAdding(false),
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: addFixture,
+    disabled: !newA || !newB || newA === newB || busy,
+    style: {
+      flex: 2
+    }
+  }, "Add Fixture"))) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setNewA("");
+      setNewB("");
+      setAdding(true);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "6px 2px",
+      marginTop: fixtures.length > 0 ? 4 : 0
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 14
+  }), " Add a fixture"));
+}
 function TournamentDetailScreen({
   tournament,
   onBack,
   onStartMatch,
+  onStartFixtureMatch,
+  onUpdateTournament,
   onOpenMatch,
   onDeleteTournament
 }) {
@@ -5735,20 +6094,25 @@ function TournamentDetailScreen({
       flexShrink: 0,
       padding: 4
     }
-  }, deleting ? "Deleting\u2026" : "Delete")), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
+  }, deleting ? "Deleting\u2026" : "Delete")), matches !== null && /*#__PURE__*/React.createElement(FixturesSection, {
+    tournament: tournament,
+    matches: matches,
+    onStartFixtureMatch: onStartFixtureMatch,
+    onUpdateTournament: onUpdateTournament,
+    onOpenMatch: onOpenMatch
+  }), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => onStartMatch(tournament),
     style: {
       width: "100%",
-      padding: "14px",
-      fontSize: 15,
+      padding: "12px",
+      fontSize: 13.5,
       marginBottom: 20,
       borderRadius: 14
     }
   }, /*#__PURE__*/React.createElement(Plus, {
-    size: 18,
+    size: 16,
     strokeWidth: 2.5
-  }), " Score a Match in This Tournament"), matches === null ? /*#__PURE__*/React.createElement("div", {
+  }), " Score an Extra Match (not on the fixture list)"), matches === null ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -9585,6 +9949,7 @@ function CricketScorer() {
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
   const [activeTournamentClubId, setActiveTournamentClubId] = useState(null); // Tournaments screen's own source selector
   const [viewingTournament, setViewingTournament] = useState(null);
+  const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode);
@@ -9782,6 +10147,19 @@ function CricketScorer() {
     setScreen("match");
     setPresetTournament(null);
     if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
+    // Came from "Score this fixture" — link the new match back onto that fixture so it shows as
+    // played instead of staying listed as upcoming. viewingTournament/viewingTournamentClubId are
+    // still valid here since navigating to Setup never clears them, only actually leaving the
+    // tournament (back, delete) does.
+    if (setup.fixtureId && viewingTournament && viewingTournament.id === setup.tournamentId) {
+      handleUpdateTournament({
+        ...viewingTournament,
+        fixtures: (viewingTournament.fixtures || []).map(f => f.id === setup.fixtureId ? {
+          ...f,
+          matchId: m.id
+        } : f)
+      });
+    }
   }
   async function openMatch(id) {
     const m = await loadMatch(id);
@@ -9920,11 +10298,12 @@ function CricketScorer() {
     };
   }
   async function handleDeleteTournament(t) {
-    if (activeTournamentClubId) {
-      await deleteClubTournament(activeTournamentClubId, t.id);
+    const clubId = viewingTournamentClubId;
+    if (clubId) {
+      await deleteClubTournament(clubId, t.id);
       setClubTournamentsById(prev => ({
         ...prev,
-        [activeTournamentClubId]: (prev[activeTournamentClubId] || []).filter(x => x.id !== t.id)
+        [clubId]: (prev[clubId] || []).filter(x => x.id !== t.id)
       }));
     } else {
       const updated = tournaments.filter(x => x.id !== t.id);
@@ -9932,10 +10311,48 @@ function CricketScorer() {
       await saveTournaments(updated);
     }
     setViewingTournament(null);
+    setViewingTournamentClubId(null);
     setScreen("tournaments");
+  }
+  // Persists any change to the currently-viewed tournament (fixtures generated/added/edited/
+  // deleted, teams, name, ...) — single choke point so every fixture action doesn't need its own
+  // save-plus-state-sync logic, and so it's automatically correct about which source (personal or
+  // a specific club) the tournament actually lives in.
+  async function handleUpdateTournament(updated) {
+    const clubId = viewingTournamentClubId;
+    if (clubId) {
+      const result = await saveClubTournament(clubId, updated);
+      if (result.ok) {
+        setClubTournamentsById(prev => ({
+          ...prev,
+          [clubId]: (prev[clubId] || []).map(t => t.id === updated.id ? updated : t)
+        }));
+        setViewingTournament(updated);
+      }
+      return result;
+    }
+    const updatedList = tournaments.map(t => t.id === updated.id ? updated : t);
+    setTournaments(updatedList);
+    await saveTournaments(updatedList);
+    setViewingTournament(updated);
+    return {
+      ok: true
+    };
   }
   function handleStartMatchInTournament(t) {
     setPresetTournament(t);
+    setScreen("setup");
+  }
+  // Same as above but pre-fills the team pickers from a specific unplayed fixture, and — once the
+  // match is actually created (see startNewMatch) — links the new match's id back onto that
+  // fixture so it shows as played instead of staying listed as upcoming.
+  function handleStartFixtureMatch(t, fixture) {
+    setPresetTournament({
+      ...t,
+      fixtureId: fixture.id,
+      fixtureTeamA: fixture.teamA,
+      fixtureTeamB: fixture.teamB
+    });
     setScreen("setup");
   }
   const activeTeams = activeClubId ? clubTeamsById[activeClubId] || [] : teams;
@@ -10076,6 +10493,7 @@ function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onOpenTournament: t => {
       setViewingTournament(t);
+      setViewingTournamentClubId(activeTournamentClubId);
       setScreen("tournament-detail");
     },
     onBack: () => setScreen("home")
@@ -10086,6 +10504,8 @@ function CricketScorer() {
     tournament: viewingTournament,
     onBack: () => setScreen("tournaments"),
     onStartMatch: handleStartMatchInTournament,
+    onStartFixtureMatch: handleStartFixtureMatch,
+    onUpdateTournament: handleUpdateTournament,
     onOpenMatch: id => {
       openMatch(id);
     },
