@@ -15,9 +15,10 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 
 **Teams & clubs**
 - Save team rosters once, reuse them across matches. Set a captain and wicketkeeper per team; they're marked on the scorecard.
-- Create a **club** to share rosters with your teammates: everyone in the club can see and edit the same teams, so whoever's scoring doesn't have to re-type a squad someone else already entered. Join a club with an invite code from an existing member; leave any time.
+- Create a **club** to share rosters with your teammates: everyone in the club can see and edit the same teams, so whoever's scoring doesn't have to re-type a squad someone else already entered. Join a club with an invite code from an existing member; leave any time. Rename a club any time from the Teams screen.
 - Move an existing personal team into a club (or back out) from the Teams screen without re-entering it.
 - Requires signing in with Google — clubs are per-account, not per-device.
+- Affiliate a club with a **federation** (e.g. a league or association like "DCF") using a code, the same way you'd join a club. Any other club in the same federation shows up as selectable opponents when you build a tournament — so if Billund Club and Esbjerg Club are both in DCF, Billund can build a tournament against Esbjerg's teams without ever recreating Esbjerg's roster. Federation visibility is read-only and name-only: it never exposes another club's matches, membership, or player list.
 
 **Live score & sharing**
 - Runs-per-over and run-rate charts, with the most expensive over highlighted and each bar labeled.
@@ -51,6 +52,7 @@ By default, matches and teams are saved in your browser's `localStorage`, tied t
 - **Score codes** — no sign-in needed. Tap "Invite to help score" on an in-progress match and share the code with a teammate so they can score along from their own phone. Anyone with this code can read *and write* that match, so treat it like a shared password, not a link to hand out publicly.
 - **View links** — tap "Share live score" for a link anyone can open to watch the score update live. This is read-only: opening it, or even knowing the code inside the URL, never grants scoring access.
 - **Clubs** — team rosters shared with people who've joined via an invite code you generated. Only members can see or edit a club's teams; membership is by Google account, not by device.
+- **Federations** — a much thinner sharing tier on top of clubs. Affiliating a club with a federation code publishes that club's team *names* (nothing else) into a directory any other member club can read, purely so tournaments can pick opponents from another club without recreating their roster. It grants no access to matches, membership, or players.
 
 If you use none of the above, everything stays local, and clearing your browser's site data will wipe it.
 
