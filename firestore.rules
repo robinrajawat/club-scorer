@@ -145,6 +145,17 @@ service cloud.firestore {
           request.resource.data.memberUids.hasOnly(resource.data.memberUids) &&
           request.resource.data.get('coOwnerUids', []).hasOnly(request.resource.data.memberUids)
         )
+        ||
+        // (E) Any current member correcting their OWN display name in memberNames — e.g. when it
+        // was stored blank/generic because their Google account had no display name set at the
+        // time they joined, and they've since signed in with a proper name or the client falls
+        // back to their email instead. Scoped to exactly one key so a member can never touch
+        // anyone else's entry, membership, or anything else on the doc.
+        (
+          request.auth.uid in resource.data.memberUids &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberNames']) &&
+          request.resource.data.memberNames.diff(resource.data.get('memberNames', {})).affectedKeys().hasOnly([request.auth.uid])
+        )
       );
 
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;

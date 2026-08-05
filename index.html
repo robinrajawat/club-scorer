@@ -988,7 +988,7 @@ async function createClub(name) {
       memberUids: [auth.currentUser.uid],
       coOwnerUids: [],
       memberNames: {
-        [auth.currentUser.uid]: auth.currentUser.displayName || "Member"
+        [auth.currentUser.uid]: auth.currentUser.displayName || auth.currentUser.email || "Member"
       },
       createdAt: Date.now()
     };
@@ -1151,7 +1151,7 @@ async function joinClubWithCode(code) {
     // fast error message.
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
-      [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || "Member",
+      [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
       joinCodeUsed: cleaned
     });
     const clubDoc = await db.collection("clubs").doc(clubId).get();
@@ -1200,6 +1200,23 @@ async function removeClubMember(clubId, uid) {
       error: e.code === "permission-denied" ? "Only the club owner can remove members." : e.message || "Couldn't remove that member."
     };
   }
+}
+// Any member can call this for THEMSELVES only (see clubs/{clubId} update rule, branch E) — it
+// self-heals a stale memberNames entry, e.g. one stored blank/generic because the Google account
+// had no display name set back when they joined. Silent best-effort: called automatically when a
+// club's member list is viewed and the stored name doesn't match what we'd show now, so nobody
+// has to notice and go fix it themselves.
+async function refreshMyMemberName(clubId) {
+  if (!auth.currentUser) return;
+  const name = auth.currentUser.displayName || auth.currentUser.email || "Member";
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      [`memberNames.${auth.currentUser.uid}`]: name
+    });
+  } catch (e) {
+    console.error("refresh my member name failed", e);
+  }
+  return name;
 }
 // Owner-only. Revokes co-ownership without removing the person from the club — they stay a plain
 // member. Can't be used on ownerUid itself (that's not a co-owner, and has no removal path short
@@ -4118,6 +4135,7 @@ function ClubPanel({
   onInviteFederation,
   onRemoveMember,
   onRemoveCoOwner,
+  onRefreshMyMemberName,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -4148,6 +4166,15 @@ function ClubPanel({
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
+  // Self-heal a stale/missing memberNames entry the moment a club with one is opened — e.g. a
+  // member who joined back when their Google account had no display name set, so it got stored
+  // as the literal word "Member" instead of something identifying. Harmless to call again if the
+  // freshly computed name still comes out the same.
+  useEffect(() => {
+    if (!activeClub || !currentUid || !onRefreshMyMemberName) return;
+    const stored = activeClub.memberNames && activeClub.memberNames[currentUid];
+    if (!stored || stored === "Member") onRefreshMyMemberName(activeClub.id);
+  }, [activeClubId]);
   async function handleRemoveCoOwnerClick(uid) {
     setMemberBusyUid(uid);
     await onRemoveCoOwner(activeClub.id, uid);
@@ -5734,6 +5761,7 @@ function ClubFederationScreen({
   onInviteFederation,
   onRemoveMember,
   onRemoveClubCoOwner,
+  onRefreshMyMemberName,
   onRenameFederation,
   onKickClubFromFederation,
   onLoadFederationTeams,
@@ -5834,6 +5862,7 @@ function ClubFederationScreen({
     onInviteFederation: onInviteFederation,
     onRemoveMember: onRemoveMember,
     onRemoveCoOwner: onRemoveClubCoOwner,
+    onRefreshMyMemberName: onRefreshMyMemberName,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
@@ -13732,6 +13761,17 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleRefreshMyMemberName(clubId) {
+    const name = await refreshMyMemberName(clubId);
+    if (name && user) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        memberNames: { ...(c.memberNames || {}),
+          [user.uid]: name
+        }
+      } : c));
+    }
+  }
   async function handleRemoveClubCoOwner(clubId, uid) {
     const result = await removeClubCoOwner(clubId, uid);
     if (result.ok) {
@@ -14104,6 +14144,7 @@ function CricketScorer() {
     onInviteFederation: inviteFederationByEmail,
     onRemoveMember: handleRemoveMember,
     onRemoveClubCoOwner: handleRemoveClubCoOwner,
+    onRefreshMyMemberName: handleRefreshMyMemberName,
     onRenameFederation: handleRenameFederation,
     onUpdateFederationDescription: handleUpdateFederationDescription,
     onKickClubFromFederation: handleKickClubFromFederation,
