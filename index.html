@@ -1059,17 +1059,32 @@ async function inviteClubMemberByEmail(clubId, email) {
   };
   try {
     const code = genMatchCode();
+    const createdAt = Date.now();
+    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000; // 7 days
     await db.collection("clubJoinCodes").doc(code).set({
       clubId,
       email: cleaned,
       role: "member",
       createdBy: auth.currentUser.uid,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+      createdAt,
+      expiresAt
     });
+    // Mirrors a lightweight summary onto the club doc itself so the owner can see and revoke
+    // pending invites — clubJoinCodes disallows `list` (a stranger shouldn't be able to enumerate
+    // invite codes), so this is the only way to show "who have I invited?" without that.
+    await db.collection("clubs").doc(clubId).update({
+      [`pendingInvites.${code}`]: {
+        email: cleaned,
+        role: "member",
+        createdAt,
+        expiresAt
+      }
+    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
     return {
       ok: true,
-      code
+      code,
+      createdAt,
+      expiresAt
     };
   } catch (e) {
     return {
@@ -1094,22 +1109,54 @@ async function inviteClubCoOwnerByEmail(clubId, email) {
   };
   try {
     const code = genMatchCode();
+    const createdAt = Date.now();
+    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
     await db.collection("clubJoinCodes").doc(code).set({
       clubId,
       email: cleaned,
       role: "coOwner",
       createdBy: auth.currentUser.uid,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      createdAt,
+      expiresAt
     });
+    await db.collection("clubs").doc(clubId).update({
+      [`pendingInvites.${code}`]: {
+        email: cleaned,
+        role: "coOwner",
+        createdAt,
+        expiresAt
+      }
+    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
     return {
       ok: true,
-      code
+      code,
+      createdAt,
+      expiresAt
     };
   } catch (e) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can invite a co-owner." : e.message || "Couldn't generate an invite code."
+    };
+  }
+}
+// Owner-only (any owner/co-owner of the club, same as every other club-level action — unlike
+// federation invites, club invites aren't locked to whoever personally sent them). Deletes the
+// join code itself, so it can never be redeemed after this, and drops it from the club's
+// pendingInvites list.
+async function revokeClubInvite(clubId, code) {
+  try {
+    await db.collection("clubJoinCodes").doc(code).delete();
+    await db.collection("clubs").doc(clubId).update({
+      [`pendingInvites.${code}`]: firebase.firestore.FieldValue.delete()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can revoke an invite." : e.message || "Couldn't revoke that invite."
     };
   }
 }
@@ -1152,7 +1199,8 @@ async function joinClubWithCode(code) {
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
       [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
-      joinCodeUsed: cleaned
+      joinCodeUsed: cleaned,
+      [`pendingInvites.${cleaned}`]: firebase.firestore.FieldValue.delete()
     });
     const clubDoc = await db.collection("clubs").doc(clubId).get();
     return {
@@ -1384,15 +1432,29 @@ async function inviteFederationByEmail(federationId, email) {
   };
   try {
     const code = genMatchCode();
+    const createdAt = Date.now();
     await db.collection("federationJoinCodes").doc(code).set({
       federationId,
       email: cleaned,
       createdBy: auth.currentUser.uid,
-      createdAt: Date.now()
+      createdAt
     });
+    // Best-effort mirror for the pending-invites list (see inviteClubMemberByEmail for why).
+    // Unlike a club invite, redeeming this one writes only to the CLUB doc (see
+    // joinFederationWithCode) — this app never lets one club's write touch another document it
+    // doesn't own — so this entry can't auto-clear on redemption the way club/co-owner invites
+    // do. It's cleared by an explicit revoke, or just ages out past expiresAt in the UI.
+    await db.collection("federations").doc(federationId).update({
+      [`pendingInvites.${code}`]: {
+        kind: "club",
+        email: cleaned,
+        createdAt
+      }
+    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
     return {
       ok: true,
-      code
+      code,
+      createdAt
     };
   } catch (e) {
     return {
@@ -1553,20 +1615,49 @@ async function inviteFederationCoOwnerByEmail(federationId, email) {
   };
   try {
     const code = genMatchCode();
+    const createdAt = Date.now();
     await db.collection("federationCoOwnerInviteCodes").doc(code).set({
       federationId,
       email: cleaned,
       createdBy: auth.currentUser.uid,
-      createdAt: Date.now()
+      createdAt
     });
+    await db.collection("federations").doc(federationId).update({
+      [`pendingInvites.${code}`]: {
+        kind: "coOwner",
+        email: cleaned,
+        createdAt
+      }
+    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
     return {
       ok: true,
-      code
+      code,
+      createdAt
     };
   } catch (e) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the federation owner can invite others." : e.message || "Couldn't create that invite."
+    };
+  }
+}
+// Only the person who personally minted a federation invite can revoke it — see the
+// federationJoinCodes/federationCoOwnerInviteCodes rules (`createdBy` check), a narrower
+// ownership check than clubs use for their own invites, where any owner/co-owner can revoke.
+async function revokeFederationInvite(federationId, code, kind) {
+  try {
+    const collectionName = kind === "coOwner" ? "federationCoOwnerInviteCodes" : "federationJoinCodes";
+    await db.collection(collectionName).doc(code).delete();
+    await db.collection("federations").doc(federationId).update({
+      [`pendingInvites.${code}`]: firebase.firestore.FieldValue.delete()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the person who sent this invite can revoke it." : e.message || "Couldn't revoke that invite."
     };
   }
 }
@@ -1600,7 +1691,8 @@ async function redeemFederationCoOwnerInvite(code) {
     // fast, specific error message.
     await db.collection("federations").doc(federationId).update({
       coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
-      coOwnerInviteCodeUsed: cleaned
+      coOwnerInviteCodeUsed: cleaned,
+      [`pendingInvites.${cleaned}`]: firebase.firestore.FieldValue.delete()
     });
     const fedDoc = await db.collection("federations").doc(federationId).get();
     return {
@@ -4149,6 +4241,7 @@ function ClubPanel({
   onInviteFederation,
   onRemoveMember,
   onRemoveCoOwner,
+  onRevokeInvite,
   onRefreshMyMemberName,
   currentUid
 }) {
@@ -4180,6 +4273,8 @@ function ClubPanel({
   const [confirmRemoveMember, setConfirmRemoveMember] = useState(null); // { uid, name } | null
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
   const [confirmLeaveFederation, setConfirmLeaveFederation] = useState(null); // federation | null
+  const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { code, email } | null
+  const [revokeBusyCode, setRevokeBusyCode] = useState(null);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
@@ -4235,6 +4330,21 @@ function ClubPanel({
     setMemberBusyUid(uid);
     await onRemoveMember(activeClub.id, uid);
     setMemberBusyUid(null);
+  }
+  function requestRevokeInvite(code, email) {
+    setConfirmRevokeInvite({
+      code,
+      email
+    });
+  }
+  async function handleRevokeInviteClick() {
+    const {
+      code
+    } = confirmRevokeInvite;
+    setConfirmRevokeInvite(null);
+    setRevokeBusyCode(code);
+    await onRevokeInvite(activeClub.id, code);
+    setRevokeBusyCode(null);
   }
   function closeAdd() {
     setMode(null);
@@ -4926,7 +5036,65 @@ function ClubPanel({
     padding: 0,
     textDecoration: "underline"
   }
-}, "+ Invite a co-owner by email"))))), /*#__PURE__*/React.createElement("div", {
+}, "+ Invite a co-owner by email"))))), activeIsOwner && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending invites"), Object.entries(activeClub.pendingInvites).map(([code, invite]) => /*#__PURE__*/React.createElement("div", {
+    key: code,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, invite.email), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.gold,
+      flexShrink: 0
+    }
+  }, invite.role === "coOwner" ? "Co-owner" : "Member"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => requestRevokeInvite(code, invite.email),
+    disabled: revokeBusyCode === code,
+    "aria-label": `Revoke invite to ${invite.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -5107,6 +5275,12 @@ function ClubPanel({
       onLeaveFederation(activeClub.id, fed.id);
     },
     onCancel: () => setConfirmLeaveFederation(null)
+  }), confirmRevokeInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Revoke this invite?",
+    message: `Revoke the invite to ${confirmRevokeInvite.email}? The code will stop working immediately.`,
+    confirmLabel: "Revoke",
+    onConfirm: handleRevokeInviteClick,
+    onCancel: () => setConfirmRevokeInvite(null)
   }));
 }
 // Full club/federation administration lives here, off the Account screen — creating, joining,
@@ -5130,7 +5304,8 @@ function FederationsPanel({
   onUpdateFederationDescription,
   onInviteFederation,
   onInviteFederationCoOwnerByEmail,
-  onKickClubFromFederation
+  onKickClubFromFederation,
+  onRevokeInvite
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -5156,6 +5331,8 @@ function FederationsPanel({
   const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
   const [confirmKick, setConfirmKick] = useState(null); // { federationId, clubId, clubName } | null
   const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
+  const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { federationId, code, kind, email } | null
+  const [revokeBusyCode, setRevokeBusyCode] = useState(null);
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
@@ -5309,6 +5486,25 @@ function FederationsPanel({
     setLeaveBusyClubId(clubId);
     await onLeaveFederation(clubId, federationId);
     setLeaveBusyClubId(null);
+  }
+  function requestRevokeInvite(federationId, code, kind, email) {
+    setConfirmRevokeInvite({
+      federationId,
+      code,
+      kind,
+      email
+    });
+  }
+  async function handleRevokeInviteClick() {
+    const {
+      federationId,
+      code,
+      kind
+    } = confirmRevokeInvite;
+    setConfirmRevokeInvite(null);
+    setRevokeBusyCode(code);
+    await onRevokeInvite(federationId, code, kind);
+    setRevokeBusyCode(null);
   }
   const cardStyle = {
     background: "rgba(255,255,255,0.6)",
@@ -5687,7 +5883,65 @@ function FederationsPanel({
       padding: 0,
       textDecoration: "underline"
     }
-  }, "+ Invite a co-owner by email")))))), error && /*#__PURE__*/React.createElement("div", {
+  }, "+ Invite a co-owner by email")))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending invites"), Object.entries(f.pendingInvites).map(([code, invite]) => /*#__PURE__*/React.createElement("div", {
+    key: code,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, invite.email), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.gold,
+      flexShrink: 0
+    }
+  }, invite.kind === "coOwner" ? "Co-owner" : "Club"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => requestRevokeInvite(f.id, code, invite.kind, invite.email),
+    disabled: revokeBusyCode === code,
+    "aria-label": `Revoke invite to ${invite.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12,
@@ -5868,6 +6122,8 @@ function ClubFederationScreen({
   onRedeemFederationCoOwnerInvite,
   onUpdateClubDescription,
   onUpdateFederationDescription,
+  onRevokeClubInvite,
+  onRevokeFederationInvite,
   currentUid
 }) {
   const [redeemCode, setRedeemCode] = useState("");
@@ -5960,6 +6216,7 @@ function ClubFederationScreen({
     onInviteFederation: onInviteFederation,
     onRemoveMember: onRemoveMember,
     onRemoveCoOwner: onRemoveClubCoOwner,
+    onRevokeInvite: onRevokeClubInvite,
     onRefreshMyMemberName: onRefreshMyMemberName,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement(FederationsPanel, {
@@ -5974,7 +6231,8 @@ function ClubFederationScreen({
     onUpdateFederationDescription: onUpdateFederationDescription,
     onInviteFederation: onInviteFederation,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
-    onKickClubFromFederation: onKickClubFromFederation
+    onKickClubFromFederation: onKickClubFromFederation,
+    onRevokeInvite: onRevokeFederationInvite
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 20,
@@ -13796,8 +14054,58 @@ function CricketScorer() {
     }
     return result;
   }
+  function mirrorPendingInvite(setClubsOrFeds, id, code, entry) {
+    setClubsOrFeds(prev => prev.map ? prev.map(c => c.id === id ? {
+      ...c,
+      pendingInvites: { ...(c.pendingInvites || {}),
+        [code]: entry
+      }
+    } : c) : { ...prev,
+      [id]: { ...(prev[id] || {}),
+        pendingInvites: { ...((prev[id] || {}).pendingInvites || {}),
+          [code]: entry
+        }
+      }
+    });
+  }
+  async function handleInviteClubMember(clubId, email) {
+    const result = await inviteClubMemberByEmail(clubId, email);
+    if (result.ok) {
+      mirrorPendingInvite(setClubs, clubId, result.code, {
+        email: email.trim().toLowerCase(),
+        role: "member",
+        createdAt: result.createdAt,
+        expiresAt: result.expiresAt
+      });
+    }
+    return result;
+  }
   async function handleInviteClubCoOwner(clubId, email) {
-    return inviteClubCoOwnerByEmail(clubId, email);
+    const result = await inviteClubCoOwnerByEmail(clubId, email);
+    if (result.ok) {
+      mirrorPendingInvite(setClubs, clubId, result.code, {
+        email: email.trim().toLowerCase(),
+        role: "coOwner",
+        createdAt: result.createdAt,
+        expiresAt: result.expiresAt
+      });
+    }
+    return result;
+  }
+  async function handleRevokeClubInvite(clubId, code) {
+    const result = await revokeClubInvite(clubId, code);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => {
+        if (c.id !== clubId) return c;
+        const pendingInvites = { ...(c.pendingInvites || {})
+        };
+        delete pendingInvites[code];
+        return { ...c,
+          pendingInvites
+        };
+      }));
+    }
+    return result;
   }
   async function handleJoinClub(code) {
     const result = await joinClubWithCode(code);
@@ -13959,8 +14267,45 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleInviteFederation(federationId, email) {
+    const result = await inviteFederationByEmail(federationId, email);
+    if (result.ok) {
+      mirrorPendingInvite(setFederationsById, federationId, result.code, {
+        kind: "club",
+        email: email.trim().toLowerCase(),
+        createdAt: result.createdAt
+      });
+    }
+    return result;
+  }
   async function handleInviteFederationCoOwner(federationId, email) {
-    return inviteFederationCoOwnerByEmail(federationId, email);
+    const result = await inviteFederationCoOwnerByEmail(federationId, email);
+    if (result.ok) {
+      mirrorPendingInvite(setFederationsById, federationId, result.code, {
+        kind: "coOwner",
+        email: email.trim().toLowerCase(),
+        createdAt: result.createdAt
+      });
+    }
+    return result;
+  }
+  async function handleRevokeFederationInvite(federationId, code, kind) {
+    const result = await revokeFederationInvite(federationId, code, kind);
+    if (result.ok) {
+      setFederationsById(prev => {
+        const fed = prev[federationId];
+        if (!fed) return prev;
+        const pendingInvites = { ...(fed.pendingInvites || {})
+        };
+        delete pendingInvites[code];
+        return { ...prev,
+          [federationId]: { ...fed,
+            pendingInvites
+          }
+        };
+      });
+    }
+    return result;
   }
   async function handleRemoveFederationCoOwner(federationId, uid) {
     const result = await removeFederationCoOwner(federationId, uid);
@@ -14289,8 +14634,9 @@ function CricketScorer() {
     onSelect: setActiveClubAdminId,
     onCreate: handleCreateClub,
     onJoin: handleJoinClub,
-    onInvite: inviteClubMemberByEmail,
+    onInvite: handleInviteClubMember,
     onInviteClubCoOwner: handleInviteClubCoOwner,
+    onRevokeClubInvite: handleRevokeClubInvite,
     onLeave: handleLeaveClub,
     onDelete: handleDeleteClub,
     onRename: handleRenameClub,
@@ -14299,7 +14645,7 @@ function CricketScorer() {
     onCreateFederation: handleCreateFederation,
     onJoinFederation: handleJoinFederation,
     onLeaveFederation: handleLeaveFederation,
-    onInviteFederation: inviteFederationByEmail,
+    onInviteFederation: handleInviteFederation,
     onRemoveMember: handleRemoveMember,
     onRemoveClubCoOwner: handleRemoveClubCoOwner,
     onRefreshMyMemberName: handleRefreshMyMemberName,
@@ -14308,6 +14654,7 @@ function CricketScorer() {
     onKickClubFromFederation: handleKickClubFromFederation,
     onLoadFederationTeams: loadFederationTeams,
     onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
+    onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     currentUid: user && user.uid
