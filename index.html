@@ -15516,6 +15516,13 @@ function CricketScorer() {
   const [pendingCount, setPendingCount] = useState(0);
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
+  // Custom left-edge swipe-to-go-back (see swipe-gesture useEffect near the bottom of this
+  // component). backActionRef always holds whatever "back" means for the CURRENTLY shown screen
+  // — kept in sync every render rather than recomputed inside the touch handler itself, since the
+  // handler is only ever attached once (empty-deps effect) and would otherwise close over stale
+  // screen/state values.
+  const backActionRef = useRef(null);
+  const swipeStartRef = useRef(null); // {x, y} | null — set on a touchstart within the edge zone
   function setScreen(next) {
     setScreenRaw(current => {
       const from = SCREEN_DEPTH[current] ?? 0;
@@ -15799,6 +15806,81 @@ function CricketScorer() {
     }
     setScreen("home");
   }
+  // Keeps backActionRef pointed at whatever "Back" does for the screen on display right now —
+  // deliberately mirrors each screen's own onBack/onCancel/onExit prop below (see the render at
+  // the bottom of this component) rather than introducing a second source of truth for where
+  // "back" goes; home/login are top-level and stay null (nothing to swipe back to).
+  useEffect(() => {
+    backActionRef.current = (() => {
+      switch (screen) {
+        case "setup":
+          return () => {
+            const cameFromTournament = !!presetTournament && viewingTournament && viewingTournament.id === presetTournament.id;
+            setPresetTournament(null);
+            setScreen(cameFromTournament ? "tournament-detail" : "home");
+          };
+        case "match":
+          return match ? exitToHome : null;
+        case "teams":
+        case "tournaments":
+        case "account":
+          return () => setScreen("home");
+        case "tournament-detail":
+          return () => setScreen("tournaments");
+        case "shared-links":
+          return () => setScreen("account");
+        case "club-admin":
+          return () => setScreen(clubAdminReturnScreen);
+        case "follow":
+          return exitFollow;
+        case "follow-tournament":
+          return exitFollowTournament;
+        case "team-edit":
+          return () => setScreen("teams");
+        default:
+          return null;
+      }
+    })();
+  });
+  // Left-edge swipe-to-go-back, since a plain React/state-driven "screen" has no browser history
+  // for Safari's own edge-swipe gesture to hook into (see chat) — this reimplements just the
+  // gesture-detection part: a touch starting within EDGE_ZONE of the left edge that travels more
+  // than SWIPE_THRESHOLD px, mostly horizontally, fires whatever backActionRef currently holds.
+  // Attached once (empty deps) with plain DOM listeners rather than per-render, since it must
+  // survive every screen change without re-attaching; freshness comes from backActionRef instead.
+  useEffect(() => {
+    const EDGE_ZONE = 24;
+    const SWIPE_THRESHOLD = 70;
+    function onTouchStart(e) {
+      const t = e.touches[0];
+      swipeStartRef.current = t && t.clientX <= EDGE_ZONE ? {
+        x: t.clientX,
+        y: t.clientY
+      } : null;
+    }
+    function onTouchEnd(e) {
+      const start = swipeStartRef.current;
+      swipeStartRef.current = null;
+      if (!start || !backActionRef.current) return;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      if (dx > SWIPE_THRESHOLD && dx > Math.abs(dy) * 1.5) {
+        backActionRef.current();
+      }
+    }
+    document.addEventListener("touchstart", onTouchStart, {
+      passive: true
+    });
+    document.addEventListener("touchend", onTouchEnd, {
+      passive: true
+    });
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
   async function handleSaveTeam(team) {
     if (activeClubId) {
       const result = await saveClubTeam(activeClubId, team);
