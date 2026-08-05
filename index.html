@@ -1074,6 +1074,40 @@ async function deleteMatch(id) {
   } catch (e) {
     console.error("local delete failed", e);
   }
+  clearUndoHistory(id);
+}
+// ---------- Undo history (per-match, device-local) ----------
+// The undo stack (MatchScreen's `history`) is a list of full match snapshots taken before each
+// ball, kept ONLY in React state — so a tab refresh mid-match wiped it, leaving no way to correct
+// a mis-scored ball (undo button just showed disabled, even though the match itself was fine and
+// fully saved). This mirrors it into localStorage on every push/pop so it survives a refresh.
+// Deliberately local-only, not synced to Firestore: undo is a same-device "oops, fix the last
+// few balls" tool, not something that needs to follow the match across devices, and capping the
+// depth (see MAX_UNDO_HISTORY below) keeps it bounded regardless of how long the innings runs.
+const MAX_UNDO_HISTORY = 30;
+function undoHistoryKey(matchId) {
+  return `${LS_PREFIX}undoHistory:${matchId}`;
+}
+function loadUndoHistory(matchId) {
+  try {
+    return JSON.parse(localStorage.getItem(undoHistoryKey(matchId)) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+function saveUndoHistory(matchId, history) {
+  try {
+    localStorage.setItem(undoHistoryKey(matchId), JSON.stringify(history));
+  } catch (e) {
+    console.error("save undo history failed", e);
+  }
+}
+function clearUndoHistory(matchId) {
+  try {
+    localStorage.removeItem(undoHistoryKey(matchId));
+  } catch (e) {
+    /* noop */
+  }
 }
 
 // ---------- Team roster storage ----------
@@ -10434,9 +10468,17 @@ function TournamentDetailScreen({
   }
 }, /*#__PURE__*/React.createElement("span", {
   style: {
-    fontSize: 20
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 30,
+    height: 30,
+    borderRadius: "50%",
+    background: "#e8791c",
+    fontSize: 15,
+    flexShrink: 0
   }
-}, "\u{1F7E0}"), /*#__PURE__*/React.createElement("div", {
+}, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
   style: {
     flex: 1,
     minWidth: 0
@@ -10475,9 +10517,17 @@ function TournamentDetailScreen({
   }
 }, /*#__PURE__*/React.createElement("span", {
   style: {
-    fontSize: 20
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 30,
+    height: 30,
+    borderRadius: "50%",
+    background: "#7b3fa0",
+    fontSize: 15,
+    flexShrink: 0
   }
-}, "\u{1F7E3}"), /*#__PURE__*/React.createElement("div", {
+}, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
   style: {
     flex: 1,
     minWidth: 0
@@ -13604,7 +13654,7 @@ function MatchScreen({
   const [newBatsmanName, setNewBatsmanName] = useState("");
   const [newBowlerPrompt, setNewBowlerPrompt] = useState(false);
   const [newBowlerName, setNewBowlerName] = useState("");
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(() => loadUndoHistory(match.id));
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
   const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null — currently showing
@@ -13743,7 +13793,12 @@ function MatchScreen({
     setConflict(null);
   }
   function pushHistory() {
-    setHistory(h => [...h, JSON.parse(JSON.stringify(match))]);
+    setHistory(h => {
+      const next = [...h, JSON.parse(JSON.stringify(match))];
+      const trimmed = next.length > MAX_UNDO_HISTORY ? next.slice(next.length - MAX_UNDO_HISTORY) : next;
+      saveUndoHistory(match.id, trimmed);
+      return trimmed;
+    });
   }
   function commit(newInningState, extra) {
     const updated = {
@@ -14020,7 +14075,11 @@ function MatchScreen({
       ...history[history.length - 1],
       writeSeq: match.writeSeq
     };
-    setHistory(h => h.slice(0, -1));
+    setHistory(h => {
+      const next = h.slice(0, -1);
+      saveUndoHistory(match.id, next);
+      return next;
+    });
     setMatch(prev);
     queueSave(prev);
   }
