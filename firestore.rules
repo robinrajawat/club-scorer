@@ -16,9 +16,9 @@ rules_version = '2';
 //                                 so a view code can never be used to gain scoring access no
 //                                 matter what a viewer does with it — there is no document at
 //                                 that code inside /sharedMatches for it to match.
-// Clubs add a fourth tier: shared-but-not-public team rosters, gated by Google account
-// membership rather than a bearer code, because unlike a single match you actually want to know
-// (and be able to revoke) who's in a club.
+// Clubs add a fourth tier: shared-but-not-public team rosters and tournaments, gated by Google
+// account membership rather than a bearer code, because unlike a single match you actually want
+// to know (and be able to revoke) who's in a club.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -102,6 +102,11 @@ service cloud.firestore {
     }
 
     match /clubs/{clubId}/teams/{teamId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
+    }
+
+    match /clubs/{clubId}/tournaments/{tournamentId} {
       allow read, write: if request.auth != null
         && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
     }

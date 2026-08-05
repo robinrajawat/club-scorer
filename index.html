@@ -459,6 +459,7 @@ function upsertLocalPointer(match, extra) {
     status: match.status,
     shareCode: match.shareCode || null,
     viewCode: match.viewCode || null,
+    tournamentId: match.tournamentId || null,
     ...extra
   });
   lsSetIndex(idx);
@@ -1144,6 +1145,193 @@ async function deleteClubTeam(clubId, teamId) {
       error: e.message || "Couldn't delete the team."
     };
   }
+}
+
+// ---------- Tournaments ----------
+// A tournament is a name plus a list of participating team names — deliberately just names, not
+// full roster objects, since a match already stores its own teamA/teamB as plain strings and
+// standings only ever need to know who's competing, not their player list. Storage mirrors teams
+// exactly: personal tournaments live in one doc (list field), club tournaments are a subcollection
+// gated the same way club teams are. A match opts into a tournament via match.tournamentId (and
+// match.tournamentClubId when it's a club tournament, so the right collection can be queried).
+async function loadTournaments() {
+  if (auth.currentUser) {
+    try {
+      const doc = await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("tournaments").get();
+      return doc.exists ? doc.data().list || [] : [];
+    } catch (e) {
+      console.error("cloud tournaments load failed, falling back to local", e);
+    }
+  }
+  try {
+    return JSON.parse(localStorage.getItem(`${LS_PREFIX}tournaments`) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+async function saveTournaments(tournaments) {
+  if (auth.currentUser) {
+    try {
+      await db.collection("users").doc(auth.currentUser.uid).collection("meta").doc("tournaments").set({
+        list: tournaments
+      });
+      return;
+    } catch (e) {
+      console.error("cloud tournaments save failed, falling back to local", e);
+    }
+  }
+  try {
+    localStorage.setItem(`${LS_PREFIX}tournaments`, JSON.stringify(tournaments));
+  } catch (e) {
+    console.error("save tournaments failed", e);
+  }
+}
+async function loadClubTournaments(clubId) {
+  try {
+    const snap = await db.collection("clubs").doc(clubId).collection("tournaments").get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("club tournaments load failed", e);
+    return [];
+  }
+}
+async function saveClubTournament(clubId, tournament) {
+  try {
+    await db.collection("clubs").doc(clubId).collection("tournaments").doc(tournament.id).set(tournament);
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only club members can edit its tournaments." : e.message || "Couldn't save the tournament."
+    };
+  }
+}
+async function deleteClubTournament(clubId, tournamentId) {
+  try {
+    await db.collection("clubs").doc(clubId).collection("tournaments").doc(tournamentId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't delete the tournament."
+    };
+  }
+}
+// Standard cricket points-table math: 2 for a win, 1 each for a tie or no-result, 0 for a loss.
+// If a tied match has a linked Super Over (match.superOverMatchId), points follow the Super Over's
+// winner instead — the real convention is that the Super Over decides the match, but NRR still
+// uses the ORIGINAL tied innings, not the one-over shootout, since NRR is meant to reflect
+// tournament-long batting/bowling strength, not a coin-flip-adjacent single over.
+// allMatches must include every match in the tournament AND any linked Super Over matches (the
+// caller is responsible for fetching those; this function doesn't do its own Firestore reads).
+// Fetches every full match doc tagged with this tournament — the local match index only stores
+// lightweight pointers (no innings data), so standings genuinely need a real query. Two sources:
+// this account's personal matches, and open sharedMatches (co-scored matches tagged with this
+// tournament regardless of who's signed in) — both are simple single-field equality queries,
+// which Firestore indexes automatically without any manual index setup. Also resolves any linked
+// Super Over matches, since computeStandings needs those for points even though they're
+// deliberately NOT tagged with the tournament themselves (that would double-count them as a
+// separate played match).
+async function loadTournamentMatches(tournamentId) {
+  const queries = [db.collection("sharedMatches").where("tournamentId", "==", tournamentId).get()];
+  if (auth.currentUser) {
+    queries.push(db.collection("users").doc(auth.currentUser.uid).collection("matches").where("tournamentId", "==", tournamentId).get());
+  }
+  let snaps;
+  try {
+    snaps = await Promise.all(queries);
+  } catch (e) {
+    console.error("tournament matches load failed", e);
+    return [];
+  }
+  const byId = new Map();
+  for (const snap of snaps) {
+    for (const doc of snap.docs) {
+      const m = unpackMatchFromFirestore(doc.data());
+      byId.set(m.id, m);
+    }
+  }
+  const superOverIds = [...byId.values()].map(m => m.superOverMatchId).filter(Boolean).filter(id => !byId.has(id));
+  if (superOverIds.length) {
+    const linked = await Promise.all(superOverIds.map(id => loadMatch(id)));
+    linked.forEach(m => {
+      if (m) byId.set(m.id, m);
+    });
+  }
+  return [...byId.values()];
+}
+function computeStandings(tournament, allMatches) {
+  const byId = new Map(allMatches.map(m => [m.id, m]));
+  const table = new Map(tournament.teams.map(name => [name, {
+    team: name,
+    played: 0,
+    won: 0,
+    lost: 0,
+    tied: 0,
+    points: 0,
+    runsFor: 0,
+    oversFor: 0,
+    runsAgainst: 0,
+    oversAgainst: 0
+  }]));
+  const tournamentMatches = allMatches.filter(m => m.tournamentId === tournament.id && m.status === "complete");
+  for (const m of tournamentMatches) {
+    const [i1, i2] = m.innings;
+    if (!table.has(i1.battingTeam) || !table.has(i2.battingTeam)) continue; // team not in this tournament's roster — skip rather than guess
+    let winner = null; // team name, or null for a tie/no-result
+    if (i2.runs > i1.runs) winner = i2.battingTeam;else if (i1.runs > i2.runs) winner = i1.battingTeam;
+    // A tie with a completed, decisive Super Over: follow the chain for points only.
+    if (!winner && m.superOverMatchId) {
+      const so = byId.get(m.superOverMatchId);
+      if (so && so.status === "complete") {
+        const [s1, s2] = so.innings;
+        if (s2.runs > s1.runs) winner = s2.battingTeam;else if (s1.runs > s2.runs) winner = s1.battingTeam;
+      }
+    }
+    const rowA = table.get(i1.battingTeam);
+    const rowB = table.get(i2.battingTeam);
+    rowA.played++;
+    rowB.played++;
+    // NRR convention: a side bowled out (or that simply completes its full quota) is credited with
+    // the full overs ALLOTTED for the run-rate calculation, not just the balls it happened to face
+    // — otherwise being bowled out cheaply would perversely IMPROVE a team's run rate.
+    const wicketsLimit = m.isSuperOver ? 2 : 10;
+    const oversA = i1.wickets >= wicketsLimit ? m.oversLimit : i1.legalBalls / (i1.ballsPerOver || 6);
+    const oversB = i2.wickets >= wicketsLimit ? m.oversLimit : i2.legalBalls / (i2.ballsPerOver || 6);
+    rowA.runsFor += i1.runs;
+    rowA.oversFor += oversA;
+    rowA.runsAgainst += i2.runs;
+    rowA.oversAgainst += oversB;
+    rowB.runsFor += i2.runs;
+    rowB.oversFor += oversB;
+    rowB.runsAgainst += i1.runs;
+    rowB.oversAgainst += oversA;
+    if (winner === i1.battingTeam) {
+      rowA.won++;
+      rowA.points += 2;
+      rowB.lost++;
+    } else if (winner === i2.battingTeam) {
+      rowB.won++;
+      rowB.points += 2;
+      rowA.lost++;
+    } else {
+      rowA.tied++;
+      rowB.tied++;
+      rowA.points += 1;
+      rowB.points += 1;
+    }
+  }
+  return [...table.values()].map(r => ({
+    ...r,
+    nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
+  })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
 }
 
 // ---------- Account profile (display name override) ----------
@@ -4093,6 +4281,7 @@ function HomeScreen({
   onOpenAccount,
   onJoinCode,
   onOpenStats,
+  onOpenTournaments,
   pendingCount
 }) {
   return /*#__PURE__*/React.createElement("div", {
@@ -4195,7 +4384,17 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(BarChart, {
     size: 17
-  }), " Stats")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), " Stats"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onOpenTournaments,
+    style: {
+      flex: 1,
+      padding: "15px",
+      fontSize: 14,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 17
+  }), " Cups")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4530,7 +4729,8 @@ function SetupScreen({
   onStart,
   onCancel,
   teams,
-  rules
+  rules,
+  presetTournament
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -4702,7 +4902,24 @@ function SetupScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, "New Match"), /*#__PURE__*/React.createElement("div", {
+  }, "New Match"), presetTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "rgba(184,137,43,0.1)",
+      border: "1.5px solid rgba(184,137,43,0.3)",
+      borderRadius: 12,
+      padding: "10px 14px",
+      marginBottom: 16,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.gold
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 15
+  }), "Playing in: ", presetTournament.name), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease backwards"
@@ -5149,7 +5366,8 @@ function SetupScreen({
       toss: tossWonBy ? {
         wonBy: tossWonBy,
         decision: tossDecision || null
-      } : null
+      } : null,
+      tournamentId: presetTournament ? presetTournament.id : null
     })
   }, "Start Match")));
 }
@@ -5173,6 +5391,502 @@ function Field({
       marginBottom: 5
     }
   }, label), children);
+}
+// Source-scoped list of tournaments (personal or a specific club's), mirroring TeamsScreen's
+// My-Teams/club switcher exactly — same chip row, same mental model, so nothing new to learn.
+// Doesn't offer club create/join here since ClubPanel (on the Teams screen) already owns that;
+// this only ever lists clubs the person is already in.
+function TournamentsScreen({
+  tournaments,
+  clubs,
+  activeClubId,
+  onSelectSource,
+  teamOptions,
+  onCreateTournament,
+  onOpenTournament,
+  onBack
+}) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [selectedTeams, setSelectedTeams] = useState([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const activeClubName = activeClubId && (clubs.find(c => c.id === activeClubId) || {}).name;
+  function toggleTeam(n) {
+    setSelectedTeams(s => s.includes(n) ? s.filter(x => x !== n) : [...s, n]);
+  }
+  function openCreate() {
+    setName("");
+    setSelectedTeams([]);
+    setError("");
+    setCreating(true);
+  }
+  async function submitCreate() {
+    if (!name.trim() || selectedTeams.length < 2 || busy) return;
+    setBusy(true);
+    setError("");
+    const result = await onCreateTournament(name.trim(), selectedTeams);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't create the tournament.");
+      return;
+    }
+    setCreating(false);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Tournaments"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 16,
+      lineHeight: 1.5
+    }
+  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      overflowX: "auto",
+      paddingBottom: 4,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSelectSource(null),
+    style: {
+      padding: "7px 13px",
+      borderRadius: 20,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      border: !activeClubId ? "none" : `1px solid ${COLORS.willow}`,
+      background: !activeClubId ? COLORS.pitch : "#fff",
+      color: !activeClubId ? "#fff" : COLORS.inkSoft,
+      whiteSpace: "nowrap"
+    }
+  }, "My Tournaments"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    onClick: () => onSelectSource(c.id),
+    style: {
+      padding: "7px 13px",
+      borderRadius: 20,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      border: activeClubId === c.id ? "none" : `1px solid ${COLORS.willow}`,
+      background: activeClubId === c.id ? COLORS.pitch : "#fff",
+      color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
+      whiteSpace: "nowrap"
+    }
+  }, c.name))), !creating && /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: openCreate,
+    disabled: teamOptions.length < 2,
+    style: {
+      width: "100%",
+      padding: "14px",
+      fontSize: 15,
+      marginBottom: 16,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 18,
+    strokeWidth: 2.5
+  }), activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), teamOptions.length < 2 && !creating && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginTop: -8,
+      marginBottom: 16
+    }
+  }, activeClubName ? `${activeClubName} needs at least 2 saved teams first.` : "Save at least 2 teams first (Teams screen)."), creating && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Tournament name"
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: name,
+    onChange: setName,
+    placeholder: "e.g. Summer T20 League"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      margin: "14px 0 8px"
+    }
+  }, "Participating teams (", selectedTeams.length, " selected)"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 14
+    }
+  }, teamOptions.map(n => /*#__PURE__*/React.createElement("button", {
+    key: n,
+    type: "button",
+    onClick: () => toggleTeam(n),
+    className: "cs-btn cs-shine",
+    style: {
+      padding: "8px 13px",
+      borderRadius: 18,
+      border: "none",
+      cursor: "pointer",
+      background: selectedTeams.includes(n) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      color: selectedTeams.includes(n) ? "#fff" : COLORS.ink,
+      boxShadow: selectedTeams.includes(n) ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, n))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginBottom: 10
+    }
+  }, error), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setCreating(false),
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !name.trim() || selectedTeams.length < 2 || busy,
+    onClick: submitCreate,
+    style: {
+      flex: 2
+    }
+  }, busy ? "Creating\u2026" : "Create"))), tournaments.length > 0 ? tournaments.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.id,
+    onClick: () => onOpenTournament(t),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      textAlign: "left",
+      background: "#fff",
+      border: "none",
+      borderRadius: 14,
+      padding: "14px 16px",
+      marginBottom: 10,
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink,
+      marginBottom: 3
+    }
+  }, t.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft
+    }
+  }, t.teams.length, " teams")), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }))) : !creating && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 20px",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      lineHeight: 1.6
+    }
+  }, activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
+}
+// Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
+// since the local match index only carries lightweight pointers — nowhere near enough to compute a
+// points table from.
+function TournamentDetailScreen({
+  tournament,
+  onBack,
+  onStartMatch,
+  onOpenMatch,
+  onDeleteTournament
+}) {
+  const [matches, setMatches] = useState(null); // null = loading
+  const [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadTournamentMatches(tournament.id).then(m => {
+      if (!cancelled) setMatches(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament.id]);
+  const standings = matches ? computeStandings(tournament, matches) : [];
+  const tournamentMatches = matches ? matches.filter(m => m.tournamentId === tournament.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : [];
+  function handleDelete() {
+    if (!window.confirm(`Delete "${tournament.name}"? Matches already scored in it are untouched, but the tournament and its table go away for good.`)) return;
+    setDeleting(true);
+    onDeleteTournament(tournament);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Tournaments"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 18,
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch
+    }
+  }, tournament.name), /*#__PURE__*/React.createElement("button", {
+    onClick: handleDelete,
+    disabled: deleting,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      textDecoration: "underline",
+      flexShrink: 0,
+      padding: 4
+    }
+  }, deleting ? "Deleting\u2026" : "Delete")), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => onStartMatch(tournament),
+    style: {
+      width: "100%",
+      padding: "14px",
+      fontSize: 15,
+      marginBottom: 20,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 18,
+    strokeWidth: 2.5
+  }), " Score a Match in This Tournament"), matches === null ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 13
+    }
+  }, "Loading standings\u2026") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: "14px 4px",
+      marginBottom: 20,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      minWidth: 420
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map((h, i) => /*#__PURE__*/React.createElement("th", {
+    key: h,
+    style: {
+      textAlign: i === 0 ? "left" : "center",
+      padding: "0 8px 8px",
+      whiteSpace: "nowrap"
+    }
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map((r, i) => /*#__PURE__*/React.createElement("tr", {
+    key: r.team,
+    style: {
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.ink,
+      whiteSpace: "nowrap"
+    }
+  }, r.team), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.played), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.won), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.lost), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.turf
+    }
+  }, r.points), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontFamily: "'IBM Plex Mono', monospace",
+      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
+    }
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Matches"), tournamentMatches.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "20px",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 13
+    }
+  }, "No matches scored in this tournament yet.") : tournamentMatches.map(m => /*#__PURE__*/React.createElement("button", {
+    key: m.id,
+    onClick: () => onOpenMatch(m.id),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      textAlign: "left",
+      background: "#fff",
+      border: "none",
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 8,
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      color: COLORS.ink
+    }
+  }, m.teamA, " vs ", m.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: m.status === "complete" ? COLORS.inkSoft : COLORS.turf,
+      fontWeight: m.status === "complete" ? 500 : 700,
+      flexShrink: 0,
+      marginLeft: 10
+    }
+  }, m.status === "complete" ? matchResultText(m) || "Result unavailable" : "In progress")))));
 }
 function TeamsScreen({
   teams,
@@ -8851,8 +9565,10 @@ const SCREEN_DEPTH = {
   account: 1,
   stats: 1,
   follow: 1,
+  tournaments: 1,
   "team-edit": 2,
-  "shared-links": 2
+  "shared-links": 2,
+  "tournament-detail": 2
 };
 function CricketScorer() {
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
@@ -8865,6 +9581,11 @@ function CricketScorer() {
   const [clubs, setClubs] = useState([]);
   const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
+  const [tournaments, setTournaments] = useState([]);
+  const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
+  const [activeTournamentClubId, setActiveTournamentClubId] = useState(null); // Tournaments screen's own source selector
+  const [viewingTournament, setViewingTournament] = useState(null);
+  const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode);
   const [user, setUser] = useState(null);
@@ -8888,8 +9609,9 @@ function CricketScorer() {
   async function refreshClubs() {
     const clubList = await loadClubs();
     setClubs(clubList);
-    const entries = await Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)]));
-    setClubTeamsById(Object.fromEntries(entries));
+    const [teamEntries, tournamentEntries] = await Promise.all([Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)])), Promise.all(clubList.map(async c => [c.id, await loadClubTournaments(c.id)]))]);
+    setClubTeamsById(Object.fromEntries(teamEntries));
+    setClubTournamentsById(Object.fromEntries(tournamentEntries));
     return clubList;
   }
   useEffect(() => {
@@ -8909,19 +9631,22 @@ function CricketScorer() {
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
         setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
-        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs()]).then(([idx, teamList, prof, r]) => {
+        setActiveTournamentClubId(null);
+        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs(), loadTournaments()]).then(([idx, teamList, prof, r, , tourneys]) => {
           setMatches(idx);
           setTeams(teamList);
           setProfile(prof);
           setRules(r);
+          setTournaments(tourneys);
         });
       }
     });
-    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs()]).then(([idx, teamList, prof, r]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs(), loadTournaments()]).then(([idx, teamList, prof, r, , tourneys]) => {
       setMatches(idx);
       setTeams(teamList);
       setProfile(prof);
       setRules(r);
+      setTournaments(tourneys);
       setLoading(false);
       initialLoadDone.current = true;
     });
@@ -9033,6 +9758,7 @@ function CricketScorer() {
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,
+      tournamentId: setup.tournamentId || null,
       innings: [newInning(setup.teamA, setup.teamB, setup.rules)],
       awaitingSecondInningsSetup: false
     };
@@ -9054,6 +9780,7 @@ function CricketScorer() {
       }
     });
     setScreen("match");
+    setPresetTournament(null);
     if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
   }
   async function openMatch(id) {
@@ -9163,6 +9890,54 @@ function CricketScorer() {
     }
     return result;
   }
+  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : tournaments;
+  async function handleCreateTournament(name, teamNames) {
+    const t = {
+      id: uid(),
+      name,
+      teams: teamNames,
+      createdAt: Date.now()
+    };
+    if (activeTournamentClubId) {
+      const result = await saveClubTournament(activeTournamentClubId, t);
+      if (result.ok) {
+        setClubTournamentsById(prev => ({
+          ...prev,
+          [activeTournamentClubId]: [...(prev[activeTournamentClubId] || []), t]
+        }));
+      }
+      return {
+        ...result,
+        tournament: t
+      };
+    }
+    const updated = [...tournaments, t];
+    setTournaments(updated);
+    await saveTournaments(updated);
+    return {
+      ok: true,
+      tournament: t
+    };
+  }
+  async function handleDeleteTournament(t) {
+    if (activeTournamentClubId) {
+      await deleteClubTournament(activeTournamentClubId, t.id);
+      setClubTournamentsById(prev => ({
+        ...prev,
+        [activeTournamentClubId]: (prev[activeTournamentClubId] || []).filter(x => x.id !== t.id)
+      }));
+    } else {
+      const updated = tournaments.filter(x => x.id !== t.id);
+      setTournaments(updated);
+      await saveTournaments(updated);
+    }
+    setViewingTournament(null);
+    setScreen("tournaments");
+  }
+  function handleStartMatchInTournament(t) {
+    setPresetTournament(t);
+    setScreen("setup");
+  }
   const activeTeams = activeClubId ? clubTeamsById[activeClubId] || [] : teams;
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   // Copies a team into the destination first, then deletes it from the source — so a failed or
@@ -9241,15 +10016,20 @@ function CricketScorer() {
     onOpenAccount: () => setScreen("account"),
     onJoinCode: handleJoinCode,
     onOpenStats: () => setScreen("stats"),
+    onOpenTournaments: () => setScreen("tournaments"),
     pendingCount: pendingCount
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(SetupScreen, {
     onStart: startNewMatch,
-    onCancel: () => setScreen("home"),
+    onCancel: () => {
+      setPresetTournament(null);
+      setScreen("home");
+    },
     teams: allTeamsForSetup,
-    rules: rules
+    rules: rules,
+    presetTournament: presetTournament
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
@@ -9284,6 +10064,32 @@ function CricketScorer() {
     onDeleteClub: handleDeleteClub,
     onMoveTeam: handleMoveTeam,
     currentUid: user && user.uid
+  })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "tournaments",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(TournamentsScreen, {
+    tournaments: activeTournaments,
+    clubs: clubs,
+    activeClubId: activeTournamentClubId,
+    onSelectSource: setActiveTournamentClubId,
+    teamOptions: (activeTournamentClubId ? clubTeamsById[activeTournamentClubId] || [] : teams).map(t => t.name),
+    onCreateTournament: handleCreateTournament,
+    onOpenTournament: t => {
+      setViewingTournament(t);
+      setScreen("tournament-detail");
+    },
+    onBack: () => setScreen("home")
+  })), screen === "tournament-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "tournament-detail",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(TournamentDetailScreen, {
+    tournament: viewingTournament,
+    onBack: () => setScreen("tournaments"),
+    onStartMatch: handleStartMatchInTournament,
+    onOpenMatch: id => {
+      openMatch(id);
+    },
+    onDeleteTournament: handleDeleteTournament
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
     direction: navDirection
