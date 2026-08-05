@@ -4308,6 +4308,126 @@ function ShareMenu({
 
 // ---------- Screens ----------
 
+function WelcomeScreen({
+  onSignIn,
+  onSkip
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function handleSignIn() {
+    setBusy(true);
+    setError("");
+    const result = await onSignIn();
+    setBusy(false);
+    if (result && result.ok === false && result.error) setError(result.error);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 20px 40px",
+      maxWidth: 400,
+      margin: "0 auto",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      boxSizing: "border-box"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginBottom: 32
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      height: 64,
+      borderRadius: "50%",
+      margin: "0 auto 16px",
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
+    }
+  }, /*#__PURE__*/React.createElement(Circle, {
+    size: 30,
+    fill: COLORS.ball,
+    style: {
+      color: COLORS.cream
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 34,
+      color: COLORS.pitch,
+      letterSpacing: -0.5
+    }
+  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginTop: 5
+    }
+  }, "Ball-by-ball scoring for friendly games")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: `1.5px solid rgba(139,30,30,0.25)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, error), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: handleSignIn,
+    disabled: busy,
+    style: {
+      width: "100%",
+      padding: "15px",
+      fontSize: 15
+    }
+  }, /*#__PURE__*/React.createElement(LogIn, {
+    size: 17
+  }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      lineHeight: 1.5,
+      margin: "10px 0 22px"
+    }
+  }, "Sync your matches and teams across devices, join clubs, and share live scores."), /*#__PURE__*/React.createElement("button", {
+    onClick: onSkip,
+    className: "cs-btn",
+    style: {
+      width: "100%",
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13.5,
+      cursor: "pointer",
+      padding: 10,
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent"
+    }
+  }, "Continue without an account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginTop: 4,
+      lineHeight: 1.5
+    }
+  }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
+}
 function HomeScreen({
   matches,
   onNew,
@@ -9989,6 +10109,7 @@ function ResultScreen({
 // ---------- Root ----------
 const SCREEN_DEPTH = {
   home: 0,
+  login: 0,
   setup: 1,
   teams: 1,
   match: 1,
@@ -10002,7 +10123,7 @@ const SCREEN_DEPTH = {
 };
 function CricketScorer() {
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : "home"); // home | setup | match | teams | team-edit | follow
+  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : "login"); // home | login | setup | match | teams | team-edit | follow
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
@@ -10020,6 +10141,7 @@ function CricketScorer() {
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode);
   const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
@@ -10059,6 +10181,7 @@ function CricketScorer() {
     });
     const unsubAuth = auth.onAuthStateChanged(u => {
       setUser(u);
+      setAuthChecked(true);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
         setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
@@ -10083,6 +10206,11 @@ function CricketScorer() {
     });
     return unsubAuth;
   }, []);
+  // Once someone signs in from the welcome screen (or already had a session restored), move
+  // straight past it into Home rather than leaving them stuck looking at a sign-in button.
+  useEffect(() => {
+    if (user && screen === "login") setScreen("home");
+  }, [user]);
   // Offline outbox: retry queued writes whenever the browser tells us we're back online, and on a
   // slow poll as a safety net for platforms where the 'online' event doesn't fire reliably. The
   // poll also keeps the visible pending count in sync with reality (e.g. after a match screen's
@@ -10462,7 +10590,7 @@ function CricketScorer() {
     WebkitTextSizeAdjust: "100%",
     touchAction: "manipulation"
   };
-  if (loading) {
+  if (loading || !authChecked && !initialFollowCode) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         ...wrapStyle,
@@ -10485,7 +10613,13 @@ function CricketScorer() {
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: wrapStyle,
     className: "no-print"
-  }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
+  }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), screen === "login" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "login",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(WelcomeScreen, {
+    onSignIn: signInGoogle,
+    onSkip: () => setScreen("home")
+  })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "home",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HomeScreen, {
