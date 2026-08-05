@@ -734,6 +734,63 @@ async function saveMatch(match) {
   }
   return result;
 }
+// Plain (non-React-state-coupled) retry-once-on-conflict, for one-off administrative writes like
+// revoking a code — there's no live scoring session to hand a resolution UI to here, and no
+// genuine second writer to race, so adopting the server's actual sequence and retrying once is
+// the right amount of care for this context. See saveTransition for the MatchScreen equivalent.
+async function saveWithConflictRetry(match) {
+  let result = await saveMatch(match);
+  if (result.conflict && result.remoteMatch) {
+    result = await saveMatch({
+      ...match,
+      writeSeq: result.remoteMatch.writeSeq
+    });
+  }
+  return result;
+}
+// Revoking a code doesn't just stop working going forward — it deletes the document that code
+// pointed at, so anyone still holding the old code gets a real "not found," not a code that quietly
+// keeps failing. Clearing shareCode also moves the match's primary storage back to the account (or
+// local device) on the next save, same as it would if a shareCode had never been set — revoking is
+// really just "un-sharing," not a special state.
+async function revokeShareCode(matchId) {
+  const match = await loadMatch(matchId);
+  if (!match || !match.shareCode) return {
+    ok: false,
+    error: "Couldn't find that match."
+  };
+  const oldCode = match.shareCode;
+  const result = await saveWithConflictRetry({
+    ...match,
+    shareCode: null
+  });
+  if (!result.ok) return result;
+  try {
+    await db.collection("sharedMatches").doc(oldCode).delete();
+  } catch (e) {
+    console.error("revoke share code: delete failed", e);
+  }
+  return result;
+}
+async function revokeViewCode(matchId) {
+  const match = await loadMatch(matchId);
+  if (!match || !match.viewCode) return {
+    ok: false,
+    error: "Couldn't find that match."
+  };
+  const oldCode = match.viewCode;
+  const result = await saveWithConflictRetry({
+    ...match,
+    viewCode: null
+  });
+  if (!result.ok) return result;
+  try {
+    await db.collection("liveViews").doc(oldCode).delete();
+  } catch (e) {
+    console.error("revoke view code: delete failed", e);
+  }
+  return result;
+}
 async function loadIndex() {
   const local = lsGetIndex();
   if (!auth.currentUser) return local;
@@ -2353,6 +2410,7 @@ function AccountScreen({
   onSaveProfile,
   onExportData,
   onDeleteAccount,
+  onOpenSharedLinks,
   onBack,
   redirectError
 }) {
@@ -2742,7 +2800,13 @@ function AccountScreen({
       padding: "0 14px",
       fontSize: 13
     }
-  }, "View license"))), user && /*#__PURE__*/React.createElement("div", {
+  }, "View license"))), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onOpenSharedLinks,
+    style: {
+      width: "100%",
+      marginTop: 14
+    }
+  }, "Manage Shared Links"), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -2870,6 +2934,196 @@ function AccountScreen({
   }, deleting ? "Deleting\u2026" : "Permanently delete my account")));
 }
 
+// Every match this device/account knows about that currently has an active score code and/or
+// view link, with a revoke button for each — the account-level "what have I shared" overview that
+// individual matches don't give you on their own.
+function SharedLinksScreen({
+  matches,
+  onRevokeShareCode,
+  onRevokeViewCode,
+  onBack
+}) {
+  const [busyId, setBusyId] = useState(null); // `${matchId}:share` | `${matchId}:view`
+  const [error, setError] = useState("");
+  const shared = matches.filter(m => m.shareCode || m.viewCode);
+  async function handleRevoke(kind, m) {
+    const key = `${m.id}:${kind}`;
+    if (busyId) return;
+    if (!window.confirm(kind === "share" ? `Revoke the scoring code for ${m.teamA} vs ${m.teamB}? Anyone using it will immediately lose access.` : `Revoke the live-follow link for ${m.teamA} vs ${m.teamB}? It will stop working immediately.`)) return;
+    setBusyId(key);
+    setError("");
+    const result = await (kind === "share" ? onRevokeShareCode : onRevokeViewCode)(m.id);
+    setBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't revoke that \u2014 try again.");
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Shared Links"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 18,
+      lineHeight: 1.5
+    }
+  }, "Scoring codes and live-follow links currently active for matches this device knows about. Revoking one takes effect immediately."), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: "1.5px solid rgba(139,30,30,0.25)",
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, error), shared.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      lineHeight: 1.6
+    }
+  }, "Nothing currently shared.", /*#__PURE__*/React.createElement("br", null), "Codes and links you generate from a match will show up here.") : shared.map(m => /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14,
+      color: COLORS.ink,
+      marginBottom: 10
+    }
+  }, m.teamA, " vs ", m.teamB, m.status === "complete" && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 500,
+      color: COLORS.inkSoft,
+      fontSize: 12
+    }
+  }, "  \u00b7 Final")), m.shareCode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      padding: "8px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, "Scoring code"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, m.shareCode)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRevoke("share", m),
+    disabled: !!busyId,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: `1.5px solid ${COLORS.ball}`,
+      borderRadius: 8,
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12,
+      padding: "6px 12px",
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, busyId === `${m.id}:share` ? "Revoking\u2026" : "Revoke")), m.viewCode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      padding: "8px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, "Live-follow link"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, m.viewCode)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRevoke("view", m),
+    disabled: !!busyId,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: `1.5px solid ${COLORS.ball}`,
+      borderRadius: 8,
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12,
+      padding: "6px 12px",
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, busyId === `${m.id}:view` ? "Revoking\u2026" : "Revoke")))));
+}
 function StatsScreen({
   onBack,
   allMatchIds
@@ -8597,7 +8851,8 @@ const SCREEN_DEPTH = {
   account: 1,
   stats: 1,
   follow: 1,
-  "team-edit": 2
+  "team-edit": 2,
+  "shared-links": 2
 };
 function CricketScorer() {
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
@@ -8727,6 +8982,16 @@ function CricketScorer() {
   async function handleSaveRules(r) {
     await saveRules(r);
     setRules(r);
+  }
+  async function handleRevokeShareCode(id) {
+    const result = await revokeShareCode(id);
+    if (result.ok) setMatches(await loadIndex());
+    return result;
+  }
+  async function handleRevokeViewCode(id) {
+    const result = await revokeViewCode(id);
+    if (result.ok) setMatches(await loadIndex());
+    return result;
   }
   async function handleJoinCode(code) {
     const result = await fetchSharedMatch(code);
@@ -9030,8 +9295,17 @@ function CricketScorer() {
     onSaveProfile: handleSaveProfile,
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
+    onOpenSharedLinks: () => setScreen("shared-links"),
     onBack: () => setScreen("home"),
     redirectError: authError
+  })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "shared-links",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(SharedLinksScreen, {
+    matches: matches,
+    onRevokeShareCode: handleRevokeShareCode,
+    onRevokeViewCode: handleRevokeViewCode,
+    onBack: () => setScreen("account")
   })), screen === "stats" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "stats",
     direction: navDirection
