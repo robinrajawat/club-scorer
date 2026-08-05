@@ -10003,6 +10003,16 @@ function TournamentDetailScreen({
   const tournamentPlayerStats = computePlayerStats(completedTournamentMatches);
   const tournamentBatters = [...tournamentPlayerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 25);
   const tournamentBowlers = [...tournamentPlayerStats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 25);
+  // Orange/Purple Cap: the tournament's leading run-scorer/wicket-taker — literally just the top
+  // row of the same batting/bowling leaderboards already computed above for the Tournament Stats
+  // tables, surfaced as their own callout since "who's leading" is the thing people actually look
+  // for first, same reasoning as Player of the Tournament just below.
+  const orangeCap = tournamentBatters[0] || null;
+  const purpleCap = tournamentBowlers[0] || null;
+  // Table Toppers: the standings leader, but only once someone's actually played — computeStandings
+  // seeds every team at 0 points, so with nothing played yet "the leader" is just whichever team
+  // happens to sort first and would be a meaningless callout.
+  const tableTopper = standings[0] && standings[0].played > 0 ? standings[0] : null;
   const suggestedPOT = suggestPlayerOfTournament(completedTournamentMatches);
   const allPOTCandidates = Array.from(new Set(completedTournamentMatches.flatMap(m => allMatchPlayers(m)))).sort();
   const finalPOT = tournament.playerOfTournament || suggestedPOT;
@@ -10170,7 +10180,8 @@ function TournamentDetailScreen({
   }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map((r, i) => /*#__PURE__*/React.createElement("tr", {
     key: r.team,
     style: {
-      borderTop: `1px solid ${COLORS.creamDark}`
+      borderTop: `1px solid ${COLORS.creamDark}`,
+      background: tableTopper && r.team === tableTopper.team ? "rgba(184,137,43,0.08)" : "transparent"
     }
   }, /*#__PURE__*/React.createElement("td", {
     style: {
@@ -10403,7 +10414,141 @@ function TournamentDetailScreen({
     fontSize: 13,
     padding: 0
   }
-}, "pick one manually"), ".")), /*#__PURE__*/React.createElement("div", {
+}, "pick one manually"), ".")), (orangeCap || purpleCap || tableTopper) && /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: `linear-gradient(160deg, #fff, ${COLORS.cream})`,
+    borderRadius: 16,
+    padding: "16px 18px",
+    marginBottom: 20,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+    border: `1.5px solid ${COLORS.gold}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14
+  }
+}, orangeCap && /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 20
+  }
+}, "\u{1F7E0}"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    flex: 1,
+    minWidth: 0
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, "Orange Cap \u2014 most runs"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'DM Serif Display', serif",
+    fontSize: 16,
+    color: COLORS.pitch,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  }
+}, orangeCap.name)), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 14,
+    fontWeight: 700,
+    color: COLORS.pitch,
+    flexShrink: 0
+  }
+}, orangeCap.runs, " runs")), purpleCap && /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 20
+  }
+}, "\u{1F7E3}"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    flex: 1,
+    minWidth: 0
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, "Purple Cap \u2014 most wickets"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'DM Serif Display', serif",
+    fontSize: 16,
+    color: COLORS.pitch,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  }
+}, purpleCap.name)), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 14,
+    fontWeight: 700,
+    color: COLORS.pitch,
+    flexShrink: 0
+  }
+}, purpleCap.wickets, " wkts")), tableTopper && /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+  }
+}, /*#__PURE__*/React.createElement(Trophy, {
+  size: 20,
+  color: COLORS.gold
+}), /*#__PURE__*/React.createElement("div", {
+  style: {
+    flex: 1,
+    minWidth: 0
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, "Table Toppers"), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'DM Serif Display', serif",
+    fontSize: 16,
+    color: COLORS.pitch,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  }
+}, tableTopper.team)), /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 14,
+    fontWeight: 700,
+    color: COLORS.pitch,
+    flexShrink: 0
+  }
+}, tableTopper.points, " pts"))), /*#__PURE__*/React.createElement("div", {
   style: {
     marginBottom: 20
   }
