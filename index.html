@@ -1279,10 +1279,10 @@ async function loadTournamentMatches(tournamentId) {
   return [...byId.values()];
 }
 // Standard single (or double) round-robin: every team plays every other team once, or twice with
-// fixture order reversed for the return leg. Dates/times are deliberately left blank — free-text,
-// filled in manually if wanted, rather than a date picker — since a club tournament's actual
-// scheduling (grounds, weekends, weather) rarely maps cleanly onto anything a generator could
-// guess at anyway.
+// fixture order reversed for the return leg. Dates/times are deliberately left blank — a club
+// tournament's actual scheduling (grounds, weekends, weather) rarely maps cleanly onto anything a
+// generator could guess at anyway — but filled in later via a native datetime picker (FixtureRow)
+// rather than free text, so they sort/display consistently.
 function generateRoundRobinFixtures(teamNames, double) {
   const fixtures = [];
   for (let i = 0; i < teamNames.length; i++) {
@@ -1371,6 +1371,53 @@ function computeStandings(tournament, allMatches) {
     nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
   })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
 }
+
+// ---------- Knockout stages (Quarterfinal / Semifinal / Final) ----------
+// Winner of a completed match, following the Super Over chain for a tied match — same convention
+// computeStandings uses for points. Returns the team name, or null if the match is unplayed, or
+// still tied with no decisive Super Over yet (a knockout can't advance a team on that).
+function matchWinner(m, matchById) {
+  if (!m || m.status !== "complete" || !m.innings || !m.innings[1]) return null;
+  const [i1, i2] = m.innings;
+  if (i2.runs > i1.runs) return i2.battingTeam;
+  if (i1.runs > i2.runs) return i1.battingTeam;
+  if (m.superOverMatchId && matchById) {
+    const so = matchById.get(m.superOverMatchId);
+    if (so && so.status === "complete" && so.innings && so.innings[1]) {
+      const [s1, s2] = so.innings;
+      if (s2.runs > s1.runs) return s2.battingTeam;
+      if (s1.runs > s2.runs) return s1.battingTeam;
+    }
+  }
+  return null;
+}
+// Standard single-elimination bracket sizes, largest first. Which ones apply to a given
+// tournament is purely a function of how many teams are in it — e.g. 8+ teams get a Quarterfinal
+// working down to a Final, 4-7 teams start at the Semifinal, 2-3 teams go straight to a Final,
+// and fewer than 2 teams can't have a knockout stage at all.
+const KNOCKOUT_STAGES = [{
+  label: "Quarterfinal",
+  size: 8
+}, {
+  label: "Semifinal",
+  size: 4
+}, {
+  label: "Final",
+  size: 2
+}];
+function applicableKnockoutStages(teamCount) {
+  const start = KNOCKOUT_STAGES.findIndex(s => teamCount >= s.size);
+  return start === -1 ? [] : KNOCKOUT_STAGES.slice(start);
+}
+// Seeding pairs for the FIRST knockout stage, keeping seed #1 and #2 apart until the final —
+// index pairs into a standings-ranked array of length `size`, e.g. for 8: 1v8, 4v5, 2v7, 3v6.
+// Later stages don't need this: their teams are already in bracket order (the winners of
+// consecutive pairs from the previous stage), so they just pair up sequentially.
+const BRACKET_SEED_PAIRS = {
+  8: [[0, 7], [3, 4], [1, 6], [2, 5]],
+  4: [[0, 3], [1, 2]],
+  2: [[0, 1]]
+};
 
 // ---------- Account profile (display name override) ----------
 async function loadProfile() {
@@ -5927,9 +5974,12 @@ function TournamentsScreen({
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
 // since the local match index only carries lightweight pointers — nowhere near enough to compute a
 // points table from.
-// One row in the fixtures list — its own component mainly so the free-text date field can hold
-// local edit state and only commit (via onUpdateDate) on blur, rather than writing to Firestore on
-// every keystroke.
+// One row in the fixtures list. The date field is a native datetime-local input — it gets you a
+// browser calendar/time dropdown for free instead of a blank text box — stored as its ISO-ish
+// "YYYY-MM-DDTHH:mm" value. Older fixtures may still carry a free-text date from before this
+// existed (e.g. "Sat 14 Jun 3pm"); those can't populate the picker (the browser can't parse
+// them), so they're shown as a small caption underneath until replaced.
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 function FixtureRow({
   fixture,
   match,
@@ -5937,7 +5987,8 @@ function FixtureRow({
   onUpdateDate,
   onDelete
 }) {
-  const [date, setDate] = useState(fixture.date || "");
+  const rawDate = fixture.date || "";
+  const isIsoDate = ISO_DATETIME_RE.test(rawDate);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
@@ -5946,7 +5997,17 @@ function FixtureRow({
       marginBottom: 8,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, fixture.stage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.gold,
+      marginBottom: 4
+    }
+  }, fixture.stage), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -5981,16 +6042,19 @@ function FixtureRow({
       gap: 8,
       alignItems: "center"
     }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: date,
-    onChange: e => setDate(e.target.value),
-    onBlur: () => {
-      if (date !== (fixture.date || "")) onUpdateDate(date);
-    },
-    placeholder: "Date/time (optional, e.g. Sat 14 Jun 3pm)",
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
-      minWidth: 0,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "datetime-local",
+    value: isIsoDate ? rawDate : "",
+    onChange: e => onUpdateDate(e.target.value),
+    "aria-label": "Fixture date and time",
+    style: {
+      width: "100%",
+      boxSizing: "border-box",
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.ink,
@@ -5999,7 +6063,14 @@ function FixtureRow({
       borderRadius: 8,
       padding: "8px 10px"
     }
-  }), match ? /*#__PURE__*/React.createElement("button", {
+  }), !isIsoDate && rawDate && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginTop: 4
+    }
+  }, "Currently: \u201C", rawDate, "\u201D \u2014 pick above to replace")), match ? /*#__PURE__*/React.createElement("button", {
     onClick: onScore,
     className: "cs-btn",
     style: {
@@ -6025,10 +6096,11 @@ function FixtureRow({
     }
   }, "Score")));
 }
-// Round-robin generation, manual add/remove, and free-text date fields for a tournament's
-// schedule. Fixtures live inline on the tournament doc (tournament.fixtures) rather than their own
-// subcollection — even a full double round-robin among a dozen club teams is well under any
-// Firestore document size concern, and keeping it inline means one save covers the whole schedule.
+// Round-robin generation, manual add/remove, date/time fields, and knockout-stage proposals for a
+// tournament's schedule. Fixtures live inline on the tournament doc (tournament.fixtures) rather
+// than their own subcollection — even a full double round-robin plus a bracket among a dozen club
+// teams is well under any Firestore document size concern, and keeping it inline means one save
+// covers the whole schedule.
 function FixturesSection({
   tournament,
   matches,
@@ -6044,9 +6116,11 @@ function FixturesSection({
   const matchById = new Map((matches || []).map(m => [m.id, m]));
   async function generate(double) {
     setBusy(true);
+    // Regenerating the group stage only ever touches group fixtures — any knockout rounds already
+    // proposed (which only make sense once fixed teams/results exist) are left alone.
     await onUpdateTournament({
       ...tournament,
-      fixtures: generateRoundRobinFixtures(tournament.teams, double)
+      fixtures: [...generateRoundRobinFixtures(tournament.teams, double), ...fixtures.filter(f => f.stage)]
     });
     setBusy(false);
   }
@@ -6092,7 +6166,113 @@ function FixturesSection({
     setNewA("");
     setNewB("");
   }
-  return /*#__PURE__*/React.createElement("div", {
+  // ---- Knockout stages (Quarterfinal / Semifinal / Final), proposed once applicable ----
+  const standings = computeStandings(tournament, matches || []);
+  const stages = applicableKnockoutStages(tournament.teams.length);
+  const groupFixtures = fixtures.filter(f => !f.stage);
+  function fixturesForStage(label) {
+    return fixtures.filter(f => f.stage === label);
+  }
+  function stageDecided(label) {
+    const fx = fixturesForStage(label);
+    return fx.length > 0 && fx.every(f => f.matchId && matchWinner(matchById.get(f.matchId), matchById));
+  }
+  // Group stage is "done" (and thus the first knockout round can be proposed) once every group
+  // fixture has a complete match — or trivially, if there was no group stage at all (some club
+  // tournaments go straight to a knockout bracket).
+  const groupStageDone = groupFixtures.length === 0 || groupFixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
+  const nextStageIndex = stages.findIndex(s => fixturesForStage(s.label).length === 0);
+  const nextStageReady = nextStageIndex === -1 ? false : nextStageIndex === 0 ? groupStageDone : stageDecided(stages[nextStageIndex - 1].label);
+  async function generateStage(index) {
+    const stage = stages[index];
+    let pairs;
+    if (index === 0) {
+      // Entry round: seed straight off the standings, keeping #1 and #2 apart until the final.
+      const top = standings.map(r => r.team).slice(0, stage.size);
+      pairs = (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
+    } else {
+      // Later rounds: teams are just the winners of the previous round, taken in the order those
+      // fixtures were generated (already bracket-consistent), paired up sequentially.
+      const winners = fixturesForStage(stages[index - 1].label).map(f => matchWinner(matchById.get(f.matchId), matchById));
+      pairs = [];
+      for (let k = 0; k < winners.length; k += 2) pairs.push([winners[k], winners[k + 1]]);
+    }
+    const newFixtures = pairs.filter(([a, b]) => a && b).map(([a, b]) => ({
+      id: uid(),
+      teamA: a,
+      teamB: b,
+      date: "",
+      matchId: null,
+      stage: stage.label
+    }));
+    if (!newFixtures.length) return;
+    setBusy(true);
+    await onUpdateTournament({
+      ...tournament,
+      fixtures: [...fixtures, ...newFixtures]
+    });
+    setBusy(false);
+  }
+  const finalStage = stages.length ? stages[stages.length - 1] : null;
+  const championFixture = finalStage && stageDecided(finalStage.label) ? fixturesForStage(finalStage.label)[0] : null;
+  const champion = championFixture ? matchWinner(matchById.get(championFixture.matchId), matchById) : null;
+  const knockoutSection = stages.length === 0 ? null : /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Knockouts"), champion && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 10,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 18
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5
+    }
+  }, champion, " won the tournament")), stages.flatMap(s => fixturesForStage(s.label)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+    key: f.id,
+    fixture: f,
+    match: f.matchId ? matchById.get(f.matchId) : null,
+    onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
+    onUpdateDate: date => updateDate(f.id, date),
+    onDelete: () => deleteFixture(f.id)
+  })), nextStageIndex !== -1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => generateStage(nextStageIndex),
+    disabled: busy || !nextStageReady,
+    style: {
+      width: "100%"
+    }
+  }, busy ? "Generating\u2026" : `Propose ${stages[nextStageIndex].label}`), !nextStageReady && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 6
+    }
+  }, nextStageIndex === 0 ? "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 24
     }
@@ -6126,7 +6306,7 @@ function FixturesSection({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Clear all")), fixtures.length === 0 && !adding ? /*#__PURE__*/React.createElement("div", {
+  }, "Clear all")), groupFixtures.length === 0 && !adding ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -6146,7 +6326,7 @@ function FixturesSection({
     style: {
       flex: "1 1 auto"
     }
-  }, "Home & Away")) : fixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, "Home & Away")) : groupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
@@ -6243,7 +6423,7 @@ function FixturesSection({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14
-  }), " Add a fixture"));
+  }), " Add a fixture")), knockoutSection);
 }
 function TournamentDetailScreen({
   tournament,
