@@ -13521,7 +13521,26 @@ function MatchScreen({
   const [history, setHistory] = useState([]);
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
-  const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null
+  const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null — currently showing
+  const [milestoneQueue, setMilestoneQueue] = useState([]); // milestones waiting their turn to toast
+  // Drains milestoneQueue one at a time — a single ball can produce more than one milestone (e.g.
+  // the boundary that both brings up a batsman's fifty AND the team's hundred), and showing only
+  // the last one silently dropped the others from the toast (they were still logged to the
+  // scorecard either way, just never surfaced in the moment). This shows each in turn instead.
+  useEffect(() => {
+    if (milestoneToast || milestoneQueue.length === 0) return;
+    const [next, ...rest] = milestoneQueue;
+    const key = Date.now();
+    setMilestoneToast({
+      milestone: next,
+      key
+    });
+    setMilestoneQueue(rest);
+    const timer = setTimeout(() => {
+      setMilestoneToast(t => t && t.key === key ? null : t);
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [milestoneToast, milestoneQueue]);
   const [conflict, setConflict] = useState(null); // remote match, when another device's write
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
@@ -13648,20 +13667,12 @@ function MatchScreen({
     checkInningEnd(updated);
     setMatch(updated);
     queueSave(updated);
-    // Toast whichever milestone is newest on this ball (there's almost always at most one; if a
-    // ball somehow crosses two — e.g. a 5-wicket haul that's also a hat-trick — the toast shows
-    // the last one appended, but both are still logged in inning.milestones for the scorecard).
+    // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
+    // above for why this doesn't just set milestoneToast directly (a single ball can produce more
+    // than one, and only showing the last one silently dropped the rest from the toast).
     const newMilestones = newInningState.milestones.slice((inning.milestones || []).length);
     if (newMilestones.length > 0) {
-      const milestone = newMilestones[newMilestones.length - 1];
-      const key = Date.now();
-      setMilestoneToast({
-        milestone,
-        key
-      });
-      setTimeout(() => {
-        setMilestoneToast(t => t && t.key === key ? null : t);
-      }, 3200);
+      setMilestoneQueue(q => [...q, ...newMilestones]);
     }
   }
   async function handleGetCode() {
