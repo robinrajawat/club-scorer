@@ -287,6 +287,7 @@ const GLOBAL_CSS = `
   @keyframes cs-digitRoll { from { transform: translateY(65%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes cs-ballSpin { to { transform: rotate(360deg); } }
   @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
+  @keyframes cs-toastDown { from { transform: translate(-50%, -18px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
   .cs-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -2461,6 +2462,12 @@ function newInning(battingTeam, bowlingTeam, rules) {
     complete: false,
     partnershipRuns: 0,
     partnershipBalls: 0,
+    // Consecutive legal-ball wickets per bowler (resets on any non-wicket legal ball; wides/
+    // no-balls neither extend nor break it) — how hat-tricks are detected in applyBall.
+    bowlerWicketStreak: {},
+    // Milestones crossed during this innings (50s, golden ducks, 5-wicket hauls, hat-tricks,
+    // maiden overs, 50+ partnerships) — appended to live, in applyBall, as they happen.
+    milestones: [],
     // house rules baked in at innings start, so a mid-match account-settings change never
     // affects an innings already in progress
     ballsPerOver: r.ballsPerOver,
@@ -2563,6 +2570,10 @@ function applyBall(inning, event) {
   ensureBatsman(cur, cur.strikerName);
   ensureBatsman(cur, cur.nonStrikerName);
   ensureBowler(cur, cur.bowlerName);
+  cur.bowlerWicketStreak = { ...(inning.bowlerWicketStreak || {}) };
+  cur.milestones = [...(inning.milestones || [])];
+  const ballBowlerName = cur.bowlerName; // stable even if this ball completes the over below,
+  // which clears cur.bowlerName
   const bowler = {
     ...cur.bowlers[cur.bowlerName]
   };
@@ -2570,6 +2581,8 @@ function applyBall(inning, event) {
   let runsThisBall = 0;
   let display = "";
   let strikeChanges = false;
+  let dismissedName = null;
+  let creditsBowler = false;
   if (event.kind === "run") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
@@ -2621,9 +2634,9 @@ function applyBall(inning, event) {
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
     legalBall = event.legal !== false;
-    const dismissedName = cur.strikerName;
+    dismissedName = cur.strikerName;
     const wt = event.wicketType || "out";
-    const creditsBowler = !["Run out"].includes(wt);
+    creditsBowler = !["Run out"].includes(wt);
     let howText;
     if (wt === "Run out") {
       howText = "run out";
@@ -2700,6 +2713,90 @@ function applyBall(inning, event) {
     const tmp = cur.strikerName;
     cur.strikerName = cur.nonStrikerName;
     cur.nonStrikerName = tmp;
+  }
+  // ---- Milestone detection --------------------------------------------------------------
+  // Derived from the SAME before(`inning`)/after(`cur`) state everything above just produced,
+  // rather than a separate reconstruction pass — so it can never drift out of sync with the
+  // scoring logic itself. Every milestone is appended to cur.milestones (shown in the
+  // scorecard/commentary) and returned alongside the ball event so MatchScreen can also pop a
+  // toast for whichever ones are new on THIS ball.
+  const milestoneOver = oversLabel(cur.legalBalls, cur.ballsPerOver);
+  const milestoneScore = `${cur.runs}-${cur.wickets}`;
+  // Batting: 50, 100, 150... — any batsman whose total just crossed a 50-run line this ball.
+  Object.keys(cur.batsmen).forEach(name => {
+    const before = (inning.batsmen[name] && inning.batsmen[name].runs) || 0;
+    const after = cur.batsmen[name].runs;
+    if (after >= 50 && Math.floor(after / 50) > Math.floor(before / 50)) {
+      cur.milestones.push({
+        type: "batting",
+        text: `${name} brings up ${Math.floor(after / 50) * 50}`,
+        over: milestoneOver,
+        score: milestoneScore
+      });
+    }
+  });
+  // Golden duck: dismissed on the very first ball faced, for nought.
+  if (event.kind === "wicket" && legalBall && dismissedName) {
+    const dismissed = cur.batsmen[dismissedName];
+    if (dismissed && dismissed.balls === 1 && dismissed.runs === 0) {
+      cur.milestones.push({
+        type: "goldenDuck",
+        text: `${dismissedName} goes for a golden duck`,
+        over: milestoneOver,
+        score: milestoneScore
+      });
+    }
+  }
+  // Hat-trick: this bowler's third straight credited wicket on a legal delivery (wides/no-balls
+  // neither extend nor break the streak — only legal deliveries count, per the Laws).
+  if (legalBall) {
+    cur.bowlerWicketStreak[ballBowlerName] = event.kind === "wicket" && creditsBowler ? (cur.bowlerWicketStreak[ballBowlerName] || 0) + 1 : 0;
+    if (event.kind === "wicket" && creditsBowler && cur.bowlerWicketStreak[ballBowlerName] === 3) {
+      cur.milestones.push({
+        type: "hatTrick",
+        text: `${ballBowlerName} completes a hat-trick!`,
+        over: milestoneOver,
+        score: milestoneScore
+      });
+    }
+  }
+  // 5-wicket haul: this bowler's tally just reached exactly five.
+  if (event.kind === "wicket" && legalBall && creditsBowler && cur.bowlers[ballBowlerName] && cur.bowlers[ballBowlerName].wickets === 5) {
+    cur.milestones.push({
+      type: "fiveFor",
+      text: `${ballBowlerName} takes a 5-wicket haul`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Maiden over: an over just completed with the bowler's maiden count freshly incremented
+  // (that increment itself already applies the real Law — zero runs off the bat or extras that
+  // count against the bowler — see the over-completion block above; this just notices it happened).
+  if (cur.overs.length > inning.overs.length) {
+    const completedBowler = cur.lastBowlerName;
+    const beforeMaidens = (inning.bowlers[completedBowler] && inning.bowlers[completedBowler].maidens) || 0;
+    const afterMaidens = (cur.bowlers[completedBowler] && cur.bowlers[completedBowler].maidens) || 0;
+    if (afterMaidens > beforeMaidens) {
+      cur.milestones.push({
+        type: "maiden",
+        text: `${completedBowler} bowls a maiden`,
+        over: milestoneOver,
+        score: milestoneScore
+      });
+    }
+  }
+  // Partnership: 50, 100, 150... for the current batting pair. A wicket ball resets
+  // partnershipRuns to 0 as part of the same transition being compared here, so it can never
+  // spuriously fire off its own reset.
+  const beforePartnership = inning.partnershipRuns || 0;
+  const afterPartnership = cur.partnershipRuns || 0;
+  if (afterPartnership >= 50 && Math.floor(afterPartnership / 50) > Math.floor(beforePartnership / 50)) {
+    cur.milestones.push({
+      type: "partnership",
+      text: `${cur.strikerName} & ${cur.nonStrikerName} put on ${Math.floor(afterPartnership / 50) * 50}`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
   }
   return cur;
 }
@@ -2916,6 +3013,55 @@ function BallCelebration({
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
   }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
+}
+// A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments — 50s,
+// maidens, partnerships, golden ducks, 5-fors, hat-tricks. Slides in from the top instead of
+// bursting center-screen, and always logged to inning.milestones (see InningScorecard) even
+// after the toast itself disappears.
+const MILESTONE_ICONS = {
+  batting: "\u{1F3CF}",
+  goldenDuck: "\u{1F980}",
+  hatTrick: "\u{1F3A9}",
+  fiveFor: "\u{1F3AF}",
+  maiden: "\u{1F6E1}\uFE0F",
+  partnership: "\u{1F91D}"
+};
+function MilestoneToast({
+  toast
+}) {
+  if (!toast) return null;
+  const m = toast.milestone;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      top: "max(14px, env(safe-area-inset-top))",
+      left: "50%",
+      zIndex: 79,
+      pointerEvents: "none"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    key: toast.key,
+    style: {
+      transform: "translateX(-50%)",
+      display: "flex",
+      alignItems: "center",
+      gap: 9,
+      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+      color: "#fff",
+      padding: "10px 18px",
+      borderRadius: 30,
+      boxShadow: "0 8px 24px rgba(45,80,22,0.4)",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      whiteSpace: "nowrap",
+      animation: "cs-toastDown 0.32s cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16
+    }
+  }, MILESTONE_ICONS[m.type] || "\u2728"), m.text));
 }
 function OdometerScore({
   text,
@@ -10760,7 +10906,29 @@ function InningScorecard({
     }
   }, inning.penalties.map((p, i) => /*#__PURE__*/React.createElement("span", {
     key: i
-  }, "+", p.runs, " at ", p.score, "-", p.wickets, " (", p.over, " ov)", i < inning.penalties.length - 1 ? "  ·  " : "")))), /*#__PURE__*/React.createElement("div", {
+  }, "+", p.runs, " at ", p.score, "-", p.wickets, " (", p.over, " ov)", i < inning.penalties.length - 1 ? "  ·  " : "")))), (inning.milestones || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 5
+    }
+  }, "Milestones"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      lineHeight: 1.7
+    }
+  }, inning.milestones.map((m, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, m.text, " (", m.score, ", ", m.over, " ov)", i < inning.milestones.length - 1 ? "  ·  " : "")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 16,
       fontFamily: "'Inter'"
@@ -11950,6 +12118,7 @@ function MatchScreen({
   const [history, setHistory] = useState([]);
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
+  const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null
   const [conflict, setConflict] = useState(null); // remote match, when another device's write
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
@@ -12051,6 +12220,21 @@ function MatchScreen({
     checkInningEnd(updated);
     setMatch(updated);
     queueSave(updated);
+    // Toast whichever milestone is newest on this ball (there's almost always at most one; if a
+    // ball somehow crosses two — e.g. a 5-wicket haul that's also a hat-trick — the toast shows
+    // the last one appended, but both are still logged in inning.milestones for the scorecard).
+    const newMilestones = newInningState.milestones.slice((inning.milestones || []).length);
+    if (newMilestones.length > 0) {
+      const milestone = newMilestones[newMilestones.length - 1];
+      const key = Date.now();
+      setMilestoneToast({
+        milestone,
+        key
+      });
+      setTimeout(() => {
+        setMilestoneToast(t => t && t.key === key ? null : t);
+      }, 3200);
+    }
   }
   async function handleGetCode() {
     if (match.shareCode) return {
@@ -12359,6 +12543,8 @@ function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement(BallCelebration, {
     celebration: celebration
+  }), /*#__PURE__*/React.createElement(MilestoneToast, {
+    toast: milestoneToast
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
