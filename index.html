@@ -5922,6 +5922,7 @@ function FederationsPanel({
   onUpdateFederationDescription,
   onInviteFederation,
   onInviteFederationCoOwnerByEmail,
+  onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onRevokeInvite
 }) {
@@ -5951,6 +5952,8 @@ function FederationsPanel({
   const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
   const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { federationId, code, kind, email } | null
   const [revokeBusyCode, setRevokeBusyCode] = useState(null);
+  const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
+  const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
@@ -6017,7 +6020,7 @@ function FederationsPanel({
     setManageClubs(list);
   }
   function startRename(f) {
-    setRenaming(true);
+    setRenaming(f.id);
     setRenameText(f.name);
   }
   async function submitRename(federationId) {
@@ -6071,6 +6074,25 @@ function FederationsPanel({
       email: emailInviteText.trim(),
       code: result.code
     });
+  }
+  function requestRemoveCoOwner(federationId, uid) {
+    setConfirmRemoveCoOwner({
+      federationId,
+      uid
+    });
+  }
+  async function handleRemoveCoOwnerClick() {
+    const {
+      federationId,
+      uid
+    } = confirmRemoveCoOwner;
+    setConfirmRemoveCoOwner(null);
+    setCoOwnerBusyUid(uid);
+    const result = await onRemoveFederationCoOwner(federationId, uid);
+    setCoOwnerBusyUid(null);
+    if (result && !result.ok) {
+      setError(result.error || "Couldn't remove that co-owner.");
+    }
   }
   function requestKick(federationId, clubId, clubName) {
     setConfirmKick({
@@ -6430,6 +6452,58 @@ function FederationsPanel({
     style: {
       marginTop: 10,
       paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Co-owners"), (f.coOwnerUids || []).length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontStyle: "italic"
+    }
+  }, "No co-owners yet.") : (f.coOwnerUids || []).map(uid => /*#__PURE__*/React.createElement("div", {
+    key: uid,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "5px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.ink,
+      fontWeight: 600
+    }
+  }, `Co-owner ${uid.slice(0, 6)}`), /*#__PURE__*/React.createElement("button", {
+    onClick: () => requestRemoveCoOwner(f.id, uid),
+    disabled: coOwnerBusyUid === uid,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, coOwnerBusyUid === uid ? "\u2026" : "Remove")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
       borderTop: `1px dashed ${COLORS.willow}`,
       display: "flex",
       gap: 14,
@@ -6731,6 +6805,12 @@ function FederationsPanel({
     confirmLabel: "Stop sharing",
     onConfirm: handleLeave,
     onCancel: () => setConfirmLeave(null)
+  }), confirmRemoveCoOwner && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Remove co-owner?",
+    message: "Remove this co-owner from the federation? They'll lose the ability to rename it, edit its description, or manage invites.",
+    confirmLabel: "Remove",
+    onConfirm: handleRemoveCoOwnerClick,
+    onCancel: () => setConfirmRemoveCoOwner(null)
   }));
 }
 function ClubFederationScreen({
@@ -6871,6 +6951,7 @@ function ClubFederationScreen({
     onUpdateFederationDescription: onUpdateFederationDescription,
     onInviteFederation: onInviteFederation,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
+    onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onRevokeInvite: onRevokeFederationInvite
   }), /*#__PURE__*/React.createElement("div", {
