@@ -4855,10 +4855,7 @@ function ClubPanel({
   onRename,
   onUpdateDescription,
   federationsById = {},
-  onCreateFederation,
-  onJoinFederation,
   onLeaveFederation,
-  onInviteFederation,
   onRemoveMember,
   onRemoveCoOwner,
   onRevokeInvite,
@@ -4884,10 +4881,6 @@ function ClubPanel({
   const [descEditing, setDescEditing] = useState(false);
   const [descText, setDescText] = useState("");
   const [descBusy, setDescBusy] = useState(false);
-  const [fedMode, setFedMode] = useState(null); // null | 'create' | 'join'
-  const [fedText, setFedText] = useState("");
-  const [fedBusy, setFedBusy] = useState(false);
-  const [fedError, setFedError] = useState("");
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberBusyUid, setMemberBusyUid] = useState(null);
   const [confirmRemoveMember, setConfirmRemoveMember] = useState(null); // { uid, name } | null
@@ -5038,50 +5031,6 @@ function ClubPanel({
       return;
     }
     setDescEditing(false);
-  }
-  function closeFedAdd() {
-    setFedMode(null);
-    setFedText("");
-    setFedError("");
-  }
-  async function submitFedAdd() {
-    if (!fedText.trim() || fedBusy) return;
-    setFedBusy(true);
-    setFedError("");
-    if (fedMode === "create") {
-      // Creating implies wanting your own club in it: create the federation, mint an invite
-      // addressed to my own email (the only path that ever changes a club's federationIds — see
-      // onJoinFederation), then immediately redeem that code for the club currently open in this
-      // panel. Self-addressed, so it always succeeds without any extra confirmation step.
-      const myEmail = (auth.currentUser && auth.currentUser.email || "").toLowerCase();
-      const created = await onCreateFederation(fedText.trim());
-      if (!created.ok) {
-        setFedBusy(false);
-        setFedError(created.error || "Couldn't create the federation.");
-        return;
-      }
-      const codeResult = await onInviteFederation(created.federation.id, myEmail);
-      if (!codeResult.ok) {
-        setFedBusy(false);
-        setFedError(codeResult.error || "Federation created, but couldn't generate its invite code.");
-        return;
-      }
-      const joinResult = await onJoinFederation(activeClub.id, codeResult.code);
-      setFedBusy(false);
-      if (!joinResult.ok) {
-        setFedError(joinResult.error || "Federation created, but couldn't affiliate this club.");
-        return;
-      }
-      closeFedAdd();
-      return;
-    }
-    const result = await onJoinFederation(activeClub.id, fedText.trim());
-    setFedBusy(false);
-    if (!result.ok) {
-      setFedError(result.error || "Something went wrong.");
-      return;
-    }
-    closeFedAdd();
   }
   const chipStyle = active => ({
     padding: "7px 13px",
@@ -5733,8 +5682,7 @@ function ClubPanel({
       display: "flex",
       alignItems: "center",
       gap: 8,
-      flexWrap: "wrap",
-      marginBottom: fedMode ? 8 : 0
+      flexWrap: "wrap"
     }
   }, activeClubFederations.length === 0 && /*#__PURE__*/React.createElement("span", {
     style: {
@@ -5767,108 +5715,7 @@ function ClubPanel({
       lineHeight: 1,
       fontSize: 14
     }
-  }, "\u00d7"))), !fedMode && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setFedMode("create");
-      setFedText("");
-      setFedError("");
-    },
-    style: {
-      padding: "5px 10px",
-      borderRadius: 16,
-      border: `1px dashed ${COLORS.willow}`,
-      background: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer"
-    }
-  }, "+ Federation")), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setFedMode("create");
-      setFedText("");
-      setFedError("");
-    },
-    style: {
-      flex: 1,
-      padding: "5px 8px",
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      background: fedMode === "create" ? COLORS.pitch : "rgba(0,0,0,0.06)",
-      color: fedMode === "create" ? "#fff" : COLORS.inkSoft
-    }
-  }, "New federation"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setFedMode("join");
-      setFedText("");
-      setFedError("");
-    },
-    style: {
-      flex: 1,
-      padding: "5px 8px",
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      background: fedMode === "join" ? COLORS.pitch : "rgba(0,0,0,0.06)",
-      color: fedMode === "join" ? "#fff" : COLORS.inkSoft
-    }
-  }, "Join with code")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: fedText,
-    onChange: v => setFedText(fedMode === "join" ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : v),
-    placeholder: fedMode === "join" ? "Invite code, e.g. 7GQK4RTP" : "Federation name, e.g. DCF",
-    autoCapitalize: fedMode === "join" ? "characters" : "words",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitFedAdd,
-    disabled: fedBusy || !fedText.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 16px",
-      minHeight: 40,
-      fontSize: 12.5
-    }
-  }, fedBusy ? "\u2026" : fedMode === "join" ? "Join" : "Create")), fedError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 11.5,
-      fontFamily: "'Inter'",
-      marginTop: 6
-    }
-  }, fedError), /*#__PURE__*/React.createElement("button", {
-    onClick: closeFedAdd,
-    style: {
-      display: "block",
-      marginTop: 6,
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      cursor: "pointer",
-      textDecoration: "underline"
-    }
-  }, "Cancel"))), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "\u00d7"))))), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: confirmRemoveMember.role === "coOwner" ? "Remove co-owner?" : "Remove member?",
     message: confirmRemoveMember.role === "coOwner" ? `Remove ${confirmRemoveMember.name} as co-owner of "${activeClub.name}"? They'll stay on as a plain member.` : `Remove ${confirmRemoveMember.name} from "${activeClub.name}"?`,
     confirmLabel: "Remove",
@@ -6946,10 +6793,7 @@ function ClubFederationScreen({
     onRename: onRename,
     onUpdateDescription: onUpdateClubDescription,
     federationsById: federationsById,
-    onCreateFederation: onCreateFederation,
-    onJoinFederation: onJoinFederation,
     onLeaveFederation: onLeaveFederation,
-    onInviteFederation: onInviteFederation,
     onRemoveMember: onRemoveMember,
     onRemoveCoOwner: onRemoveClubCoOwner,
     onRevokeInvite: onRevokeClubInvite,
