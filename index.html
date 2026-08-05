@@ -4313,10 +4313,7 @@ function ClubPanel({
       overflowX: "auto",
       paddingBottom: 4
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleSelect(null),
-    style: chipStyle(!activeClubId)
-  }, "My Teams"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
+  }, clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
     onClick: () => handleSelect(c.id),
     style: chipStyle(activeClubId === c.id)
@@ -13559,8 +13556,12 @@ function CricketScorer() {
     refreshIndex();
   }
   function exitToHome() {
+    // If this match belongs to the tournament the person was just looking at, go back there
+    // instead of all the way home — "Back" from a tournament's match should land you back on
+    // that tournament's fixtures/standings, not dump you at the top-level Home screen.
+    const backToTournament = match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId;
     setMatch(null);
-    setScreen("home");
+    setScreen(backToTournament ? "tournament-detail" : "home");
     refreshIndex();
   }
   function exitFollow() {
@@ -13988,8 +13989,9 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(SetupScreen, {
     onStart: startNewMatch,
     onCancel: () => {
+      const cameFromTournament = !!presetTournament && viewingTournament && viewingTournament.id === presetTournament.id;
       setPresetTournament(null);
-      setScreen("home");
+      setScreen(cameFromTournament ? "tournament-detail" : "home");
     },
     teams: allTeamsForSetup,
     rules: rules,
