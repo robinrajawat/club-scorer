@@ -937,14 +937,25 @@ async function saveTeams(teams) {
 }
 
 // ---------- Clubs (shared team rosters) ----------
-// A club is a Firestore doc with a member list: /clubs/{clubId} = { name, ownerUid, memberUids,
-// joinCodeUsed?, createdAt }. Its teams live in the /clubs/{clubId}/teams/{teamId} subcollection.
-// Membership changes only ever happen through a join code (see joinClubWithCode) or the owner
-// removing someone — nothing here trusts an email address or a client-supplied uid list.
-// Requires sign-in throughout: an anonymous/local-only user has no stable identity for a
-// Firestore rule to check membership against, so clubs are a signed-in-only feature by design.
-// This all depends on Firestore rules being published for /clubs, /clubs/{id}/teams, and
-// /clubJoinCodes — see the rules doc for the exact text.
+// A club is a Firestore doc: /clubs/{clubId} = { name, description?, ownerUid, coOwnerUids,
+// memberUids, memberNames, createdAt }. Its teams live in /clubs/{clubId}/teams/{teamId} and its
+// tournaments in /clubs/{clubId}/tournaments/{tournamentId}.
+//
+// Permission model (simplified): there is only ONE privileged tier — "owner" — which covers both
+// the original creator (ownerUid) and anyone granted co-ownership (coOwnerUids). Owner and
+// co-owner have identical rights; the only thing that distinguishes ownerUid is that it can never
+// be removed except by deleting the club outright. Everyone else in memberUids is a plain member:
+// they can be picked for rosters/scoring but cannot rename the club, edit its description, manage
+// teams or tournaments, invite anyone, or remove members.
+//
+// Every invite in this app — becoming a member, or becoming a co-owner — is addressed to one
+// specific email address (see inviteClubMemberByEmail/inviteClubCoOwnerByEmail below) and can
+// only be redeemed by someone signed in as that exact email. This replaces the old anonymous
+// "share this code with your team" pattern; a code is still what gets pasted in to redeem, but
+// it's now bound to a person, not just a click.
+function isClubOwner(club, uid) {
+  return !!club && !!uid && (club.ownerUid === uid || (club.coOwnerUids || []).includes(uid));
+}
 async function loadClubs() {
   if (!auth.currentUser) return [];
   try {
@@ -972,9 +983,10 @@ async function createClub(name) {
     const ref = db.collection("clubs").doc();
     const club = {
       name: trimmed,
+      description: "",
       ownerUid: auth.currentUser.uid,
       memberUids: [auth.currentUser.uid],
-      adminUids: [],
+      coOwnerUids: [],
       memberNames: {
         [auth.currentUser.uid]: auth.currentUser.displayName || "Member"
       },
@@ -995,6 +1007,7 @@ async function createClub(name) {
     };
   }
 }
+// Owner-only.
 async function renameClub(clubId, name) {
   const trimmed = (name || "").trim();
   if (!trimmed) return {
@@ -1012,22 +1025,44 @@ async function renameClub(clubId, name) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner or an admin can rename it." : e.message || "Couldn't rename the club."
+      error: e.code === "permission-denied" ? "Only the club owner can rename it." : e.message || "Couldn't rename the club."
     };
   }
 }
-// Mints a time-limited invite code. Anyone who redeems it while signed in is added to the
-// member list — the code carries no other authority (it can't read the club before being
-// redeemed, and it can't be reused to do anything but this one join).
-async function generateClubJoinCode(clubId) {
+// Owner-only.
+async function updateClubDescription(clubId, description) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      description: (description || "").trim()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can edit the description." : e.message || "Couldn't update the description."
+    };
+  }
+}
+// Owner-only. Mints a time-limited invite addressed to one email. Whoever redeems it while signed
+// in as that exact email is added to memberUids only — no ownership rights.
+async function inviteClubMemberByEmail(clubId, email) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
+  };
+  const cleaned = (email || "").trim().toLowerCase();
+  if (!cleaned || !cleaned.includes("@")) return {
+    ok: false,
+    error: "Enter a valid email address."
   };
   try {
     const code = genMatchCode();
     await db.collection("clubJoinCodes").doc(code).set({
       clubId,
+      email: cleaned,
+      role: "member",
       createdBy: auth.currentUser.uid,
       createdAt: Date.now(),
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -1039,10 +1074,48 @@ async function generateClubJoinCode(clubId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner or an admin can invite others." : e.message || "Couldn't generate an invite code."
+      error: e.code === "permission-denied" ? "Only the club owner can invite others." : e.message || "Couldn't generate an invite code."
     };
   }
 }
+// Owner-only. Same as above but the redeemer becomes a co-owner (added to both memberUids and
+// coOwnerUids) — the sole path onto coOwnerUids, same as club creation is the sole path onto
+// ownerUid. There's no promote-an-existing-member-by-uid flow anymore: granting ownership always
+// goes through the target's own verified email, whether or not they already happen to be a member.
+async function inviteClubCoOwnerByEmail(clubId, email) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  const cleaned = (email || "").trim().toLowerCase();
+  if (!cleaned || !cleaned.includes("@")) return {
+    ok: false,
+    error: "Enter a valid email address."
+  };
+  try {
+    const code = genMatchCode();
+    await db.collection("clubJoinCodes").doc(code).set({
+      clubId,
+      email: cleaned,
+      role: "coOwner",
+      createdBy: auth.currentUser.uid,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    });
+    return {
+      ok: true,
+      code
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can invite a co-owner." : e.message || "Couldn't generate an invite code."
+    };
+  }
+}
+// Redeems either kind of invite above. The code's own `role` field decides whether the caller
+// lands in memberUids only, or in memberUids + coOwnerUids — the Firestore rule re-derives and
+// checks the exact same thing server-side (see clubs/{clubId} update rule, branch B).
 async function joinClubWithCode(code) {
   if (!auth.currentUser) return {
     ok: false,
@@ -1061,14 +1134,21 @@ async function joinClubWithCode(code) {
     };
     const {
       clubId,
-      expiresAt
+      expiresAt,
+      email
     } = codeDoc.data();
     if (expiresAt && expiresAt < Date.now()) return {
       ok: false,
       error: "That invite has expired \u2014 ask for a new one."
     };
-    // The Firestore rule re-checks this exact join code is valid and unexpired server-side before
-    // allowing the membership write — this client-side check is only for a fast error message.
+    const myEmail = (auth.currentUser.email || "").toLowerCase();
+    if (email && myEmail !== email) return {
+      ok: false,
+      error: "That invite is addressed to a different email address than the one you're signed in with."
+    };
+    // The Firestore rule re-checks this exact join code (its clubId, expiry, email, and role)
+    // server-side before allowing the membership write — this client-side check is only for a
+    // fast error message.
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
       [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || "Member",
@@ -1090,23 +1170,25 @@ async function joinClubWithCode(code) {
     };
   }
 }
+// Owner-only.
 async function leaveClub(clubId) {
   if (!auth.currentUser) return;
   try {
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
-      adminUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
+      coOwnerUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
       [`memberNames.${auth.currentUser.uid}`]: firebase.firestore.FieldValue.delete()
     });
   } catch (e) {
     console.error("leave club failed", e);
   }
 }
+// Owner-only.
 async function removeClubMember(clubId, uid) {
   try {
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayRemove(uid),
-      adminUids: firebase.firestore.FieldValue.arrayRemove(uid),
+      coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid),
       [`memberNames.${uid}`]: firebase.firestore.FieldValue.delete()
     });
     return {
@@ -1119,13 +1201,13 @@ async function removeClubMember(clubId, uid) {
     };
   }
 }
-// Owner-only. Promotes an existing member to admin — admins can rename the club, manage its
-// federation affiliations, and invite others, but can't remove members, promote/demote anyone,
-// or delete the club (those stay owner-only, same as before this feature existed).
-async function promoteClubAdmin(clubId, uid) {
+// Owner-only. Revokes co-ownership without removing the person from the club — they stay a plain
+// member. Can't be used on ownerUid itself (that's not a co-owner, and has no removal path short
+// of deleting the club).
+async function removeClubCoOwner(clubId, uid) {
   try {
     await db.collection("clubs").doc(clubId).update({
-      adminUids: firebase.firestore.FieldValue.arrayUnion(uid)
+      coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
     });
     return {
       ok: true
@@ -1133,22 +1215,7 @@ async function promoteClubAdmin(clubId, uid) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner can promote admins." : e.message || "Couldn't promote that member."
-    };
-  }
-}
-async function demoteClubAdmin(clubId, uid) {
-  try {
-    await db.collection("clubs").doc(clubId).update({
-      adminUids: firebase.firestore.FieldValue.arrayRemove(uid)
-    });
-    return {
-      ok: true
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner can change admins." : e.message || "Couldn't demote that admin."
+      error: e.code === "permission-denied" ? "Only the club owner can change co-owners." : e.message || "Couldn't update that co-owner."
     };
   }
 }
@@ -1189,6 +1256,7 @@ async function loadClubTeams(clubId) {
     return [];
   }
 }
+// Owner-only.
 async function saveClubTeam(clubId, team) {
   try {
     await db.collection("clubs").doc(clubId).collection("teams").doc(team.id).set(team);
@@ -1199,10 +1267,11 @@ async function saveClubTeam(clubId, team) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can edit its teams." : e.message || "Couldn't save the team."
+      error: e.code === "permission-denied" ? "Only the club owner can edit its teams." : e.message || "Couldn't save the team."
     };
   }
 }
+// Owner-only.
 async function deleteClubTeam(clubId, teamId) {
   try {
     await db.collection("clubs").doc(clubId).collection("teams").doc(teamId).delete();
@@ -1215,21 +1284,27 @@ async function deleteClubTeam(clubId, teamId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.message || "Couldn't delete the team."
+      error: e.code === "permission-denied" ? "Only the club owner can delete its teams." : e.message || "Couldn't delete the team."
     };
   }
 }
 
 // ---------- Federations ----------
-// A federation (e.g. "DCF") is a light umbrella tag that clubs opt into via a join code — the
-// same bearer-capability pattern as a club invite. It owns no teams or matches of its own; it
-// only republishes a read-only directory of {club, team name} pairs so any club sharing the same
-// federation can pick another member club's team when building a tournament, without ever
-// getting access to that club's matches, membership, or full roster (captain/keeper/players —
-// see the note on tournaments below, which already stores participants as bare names for exactly
-// this reason). There's no Cloud Function doing this server-side, so every mutation that could
-// affect the directory (team saved/deleted, club joins/leaves a federation, club renamed)
-// re-syncs it from the client right after the primary write succeeds.
+// A federation (e.g. "DCF") is a light umbrella tag that clubs opt into via an email-locked
+// invite — it owns no teams or matches of its own; it only republishes a read-only directory of
+// {club, team name} pairs so any club sharing the same federation can pick another member club's
+// team when building a tournament, without ever getting access to that club's matches,
+// membership, or full roster. There's no Cloud Function doing this server-side, so every mutation
+// that could affect the directory (team saved/deleted, club joins/leaves a federation, club
+// renamed) re-syncs it from the client right after the primary write succeeds.
+//
+// Same simplified permission model as clubs: one privileged tier, "owner", covering both the
+// creator (createdBy) and anyone granted co-ownership (coOwnerUids). Every invite — a club
+// affiliating, or someone becoming a co-owner — is addressed to one email and only redeemable by
+// that exact signed-in email.
+function isFederationOwner(federation, uid) {
+  return !!federation && !!uid && (federation.createdBy === uid || (federation.coOwnerUids || []).includes(uid));
+}
 async function createFederation(name) {
   if (!auth.currentUser) return {
     ok: false,
@@ -1244,8 +1319,9 @@ async function createFederation(name) {
     const ref = db.collection("federations").doc();
     const federation = {
       name: trimmed,
+      description: "",
       createdBy: auth.currentUser.uid,
-      adminUids: [],
+      coOwnerUids: [],
       kickedClubIds: [],
       createdAt: Date.now()
     };
@@ -1277,18 +1353,23 @@ async function loadFederationsByIds(ids) {
     return [];
   }
 }
-// Mints a durable invite code for a federation — unlike club invites this doesn't expire, since a
-// federation code (think "the DCF code") is meant to be posted somewhere and reused for a long
-// time, not handed to one specific teammate.
-async function generateFederationJoinCode(federationId) {
+// Owner-only. Mints an invite addressed to one email — whoever redeems it (signed in as that
+// exact email, on behalf of one of their own clubs) affiliates that club with the federation.
+async function inviteFederationByEmail(federationId, email) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
+  };
+  const cleaned = (email || "").trim().toLowerCase();
+  if (!cleaned || !cleaned.includes("@")) return {
+    ok: false,
+    error: "Enter a valid email address."
   };
   try {
     const code = genMatchCode();
     await db.collection("federationJoinCodes").doc(code).set({
       federationId,
+      email: cleaned,
       createdBy: auth.currentUser.uid,
       createdAt: Date.now()
     });
@@ -1299,13 +1380,14 @@ async function generateFederationJoinCode(federationId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.message || "Couldn't generate an invite code."
+      error: e.code === "permission-denied" ? "Only the federation owner can invite a club." : e.message || "Couldn't generate an invite code."
     };
   }
 }
 // A CLUB affiliates with a federation (not a user) — clubId picks which of the caller's clubs is
-// joining. Bulk-mirrors that club's existing teams into the federation's directory immediately,
-// so other member clubs see them right away instead of waiting for each team to be re-saved.
+// joining, and the caller must be signed in as the exact email the invite was addressed to. Bulk-
+// mirrors that club's existing teams into the federation's directory immediately, so other member
+// clubs see them right away instead of waiting for each team to be re-saved.
 async function joinFederationWithCode(clubId, code) {
   if (!auth.currentUser) return {
     ok: false,
@@ -1323,8 +1405,14 @@ async function joinFederationWithCode(clubId, code) {
       error: "That code doesn't match any federation."
     };
     const {
-      federationId
+      federationId,
+      email
     } = codeDoc.data();
+    const myEmail = (auth.currentUser.email || "").toLowerCase();
+    if (email && myEmail !== email) return {
+      ok: false,
+      error: "That invite is addressed to a different email address than the one you're signed in with."
+    };
     const fedDoc = await db.collection("federations").doc(federationId).get();
     if (!fedDoc.exists) return {
       ok: false,
@@ -1345,10 +1433,11 @@ async function joinFederationWithCode(clubId, code) {
     console.error("join federation failed", e);
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner or an admin can affiliate it." : e.message || "Couldn't join that federation."
+      error: e.code === "permission-denied" ? "Only the club owner can affiliate it." : e.message || "Couldn't join that federation."
     };
   }
 }
+// Owner-only (of the CLUB leaving).
 async function leaveFederation(clubId, federationId) {
   try {
     await db.collection("clubs").doc(clubId).update({
@@ -1362,10 +1451,11 @@ async function leaveFederation(clubId, federationId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner or an admin can do that." : e.message || "Couldn't leave that federation."
+      error: e.code === "permission-denied" ? "Only the club owner can do that." : e.message || "Couldn't leave that federation."
     };
   }
 }
+// Owner-only.
 async function renameFederation(federationId, name) {
   const trimmed = (name || "").trim();
   if (!trimmed) return {
@@ -1384,17 +1474,15 @@ async function renameFederation(federationId, name) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only a federation admin can rename it." : e.message || "Couldn't rename the federation."
+      error: e.code === "permission-denied" ? "Only the federation owner can rename it." : e.message || "Couldn't rename the federation."
     };
   }
 }
-// Creator-only (see index.html notes on ClubPanel for why club admin-promotion has a bounded,
-// known member list to pick from, and federation admin-promotion currently doesn't — there's no
-// user-lookup anywhere in this app yet, so this stays creator-only until that exists).
-async function promoteFederationAdmin(federationId, uid) {
+// Owner-only.
+async function updateFederationDescription(federationId, description) {
   try {
     await db.collection("federations").doc(federationId).update({
-      adminUids: firebase.firestore.FieldValue.arrayUnion(uid)
+      description: (description || "").trim()
     });
     return {
       ok: true
@@ -1402,32 +1490,17 @@ async function promoteFederationAdmin(federationId, uid) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the federation's creator can promote admins." : e.message || "Couldn't promote that admin."
+      error: e.code === "permission-denied" ? "Only the federation owner can edit the description." : e.message || "Couldn't update the description."
     };
   }
 }
-async function demoteFederationAdmin(federationId, uid) {
-  try {
-    await db.collection("federations").doc(federationId).update({
-      adminUids: firebase.firestore.FieldValue.arrayRemove(uid)
-    });
-    return {
-      ok: true
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "Only the federation's creator can change admins." : e.message || "Couldn't demote that admin."
-    };
-  }
-}
-// A federation admin's "remove club" action. Deliberately does NOT touch the target club's own
-// federationIds — this app never lets one club's write touch another club's document (see the
-// clubs/{clubId} rule notes), so instead the federation blocklists the club on its OWN doc
-// (kickedClubIds) and wipes its current directory entries. The kickedClubIds check in the
+// Owner-only. A federation owner's "remove club" action. Deliberately does NOT touch the target
+// club's own federationIds — this app never lets one club's write touch another club's document
+// (see the clubs/{clubId} rule notes), so instead the federation blocklists the club on its OWN
+// doc (kickedClubIds) and wipes its current directory entries. The kickedClubIds check in the
 // federations/{id}/teams rule then blocks that club from ever re-publishing into this federation
 // again, even though its own federationIds array still (harmlessly) lists it as affiliated — the
-// club's own admins can still self-leave any time to clear that stale tag from their side.
+// club's own owner can still self-leave any time to clear that stale tag from their side.
 async function kickClubFromFederation(federationId, clubId) {
   try {
     await db.collection("federations").doc(federationId).update({
@@ -1441,17 +1514,17 @@ async function kickClubFromFederation(federationId, clubId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only a federation admin can remove a club." : e.message || "Couldn't remove that club."
+      error: e.code === "permission-denied" ? "Only the federation owner can remove a club." : e.message || "Couldn't remove that club."
     };
   }
 }
-// Lets an existing federation admin name a co-admin by email instead of needing any kind of user
-// search (this app has none). Mints a code addressed to that one email, same bearer-code pattern
-// as every other invite in this app, except redemption additionally checks that the redeemer's
-// own signed-in email matches — see redeemFederationAdminInvite and the federations/{id} update
-// rule, branch (C). The invite carries no authority on its own; it only becomes a real admin
-// grant once someone signed in as that exact email redeems it.
-async function inviteFederationAdminByEmail(federationId, email) {
+// Owner-only. Names a co-owner by email instead of needing any kind of user search (this app has
+// none). Mints a code addressed to that one email, same bearer-code pattern as every other invite
+// in this app, except redemption additionally checks that the redeemer's own signed-in email
+// matches — see redeemFederationCoOwnerInvite and the federations/{id} update rule, branch (C).
+// The invite carries no authority on its own; it only becomes a real co-owner grant once someone
+// signed in as that exact email redeems it.
+async function inviteFederationCoOwnerByEmail(federationId, email) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
@@ -1463,7 +1536,7 @@ async function inviteFederationAdminByEmail(federationId, email) {
   };
   try {
     const code = genMatchCode();
-    await db.collection("federationAdminInviteCodes").doc(code).set({
+    await db.collection("federationCoOwnerInviteCodes").doc(code).set({
       federationId,
       email: cleaned,
       createdBy: auth.currentUser.uid,
@@ -1476,11 +1549,11 @@ async function inviteFederationAdminByEmail(federationId, email) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only a federation admin can invite others." : e.message || "Couldn't create that invite."
+      error: e.code === "permission-denied" ? "Only the federation owner can invite others." : e.message || "Couldn't create that invite."
     };
   }
 }
-async function redeemFederationAdminInvite(code) {
+async function redeemFederationCoOwnerInvite(code) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in to redeem an invite."
@@ -1491,7 +1564,7 @@ async function redeemFederationAdminInvite(code) {
     error: "Enter a code."
   };
   try {
-    const codeDoc = await db.collection("federationAdminInviteCodes").doc(cleaned).get();
+    const codeDoc = await db.collection("federationCoOwnerInviteCodes").doc(cleaned).get();
     if (!codeDoc.exists) return {
       ok: false,
       error: "That code doesn't match any invite."
@@ -1506,11 +1579,11 @@ async function redeemFederationAdminInvite(code) {
       error: "That invite is addressed to a different email address than the one you're signed in with."
     };
     // The Firestore rule re-checks the code's email against request.auth.token.email
-    // server-side before allowing the adminUids write — this client-side check is only for a
+    // server-side before allowing the coOwnerUids write — this client-side check is only for a
     // fast, specific error message.
     await db.collection("federations").doc(federationId).update({
-      adminUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
-      adminInviteCodeUsed: cleaned
+      coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+      coOwnerInviteCodeUsed: cleaned
     });
     const fedDoc = await db.collection("federations").doc(federationId).get();
     return {
@@ -1521,10 +1594,26 @@ async function redeemFederationAdminInvite(code) {
       }
     };
   } catch (e) {
-    console.error("redeem federation admin invite failed", e);
+    console.error("redeem federation co-owner invite failed", e);
     return {
       ok: false,
       error: e.code === "permission-denied" ? "That invite isn't valid for your account." : e.message || "Couldn't redeem that invite."
+    };
+  }
+}
+// Owner-only. Revokes co-ownership without touching the federation's clubs/teams directory.
+async function removeFederationCoOwner(federationId, uid) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation owner can change co-owners." : e.message || "Couldn't update that co-owner."
     };
   }
 }
@@ -1663,7 +1752,7 @@ async function saveClubTournament(clubId, tournament) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can edit its tournaments." : e.message || "Couldn't save the tournament."
+      error: e.code === "permission-denied" ? "Only the club owner can edit its tournaments." : e.message || "Couldn't save the tournament."
     };
   }
 }
@@ -4016,40 +4105,49 @@ function ClubPanel({
   onCreate,
   onJoin,
   onInvite,
+  onInviteCoOwner,
   onLeave,
   onDelete,
   onRename,
+  onUpdateDescription,
   federationsById = {},
   onCreateFederation,
   onJoinFederation,
   onLeaveFederation,
   onInviteFederation,
   onRemoveMember,
-  onPromoteAdmin,
-  onDemoteAdmin,
+  onRemoveCoOwner,
   onRenameFederation,
+  onUpdateFederationDescription,
   onKickClubFromFederation,
   onLoadFederationTeams,
-  onInviteFederationAdminByEmail,
+  onInviteFederationCoOwnerByEmail,
+  onRemoveFederationCoOwner,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
+  const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
+  const [coOwnerInviteCode, setCoOwnerInviteCode] = useState(null);
+  const [coOwnerInviteBusy, setCoOwnerInviteBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
+  const [descEditing, setDescEditing] = useState(false);
+  const [descText, setDescText] = useState("");
+  const [descBusy, setDescBusy] = useState(false);
   const [fedMode, setFedMode] = useState(null); // null | 'create' | 'join'
   const [fedText, setFedText] = useState("");
   const [fedBusy, setFedBusy] = useState(false);
   const [fedError, setFedError] = useState("");
-  const [fedInviteCode, setFedInviteCode] = useState(null); // {federationId, code} of the one just created/invited
-  const [fedInviteBusyId, setFedInviteBusyId] = useState(null);
-  const [fedCodeCopied, setFedCodeCopied] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberBusyUid, setMemberBusyUid] = useState(null);
   const [fedManageOpenId, setFedManageOpenId] = useState(null);
@@ -4059,15 +4157,19 @@ function ClubPanel({
   const [fedRenameId, setFedRenameId] = useState(null); // federationId currently being renamed, or null
   const [fedRenameText, setFedRenameText] = useState("");
   const [fedRenameBusy, setFedRenameBusy] = useState(false);
+  const [fedDescText, setFedDescText] = useState("");
+  const [fedDescBusy, setFedDescBusy] = useState(false);
   const [fedEmailInviteId, setFedEmailInviteId] = useState(null); // federationId currently showing the email-invite form
+  const [fedEmailInviteKind, setFedEmailInviteKind] = useState("club"); // 'club' | 'coOwner'
   const [fedEmailInviteText, setFedEmailInviteText] = useState("");
   const [fedEmailInviteBusy, setFedEmailInviteBusy] = useState(false);
   const [fedEmailInviteError, setFedEmailInviteError] = useState("");
-  const [fedEmailInviteResult, setFedEmailInviteResult] = useState(null); // {federationId, email, code}
+  const [fedEmailInviteResult, setFedEmailInviteResult] = useState(null); // {federationId, kind, email, code}
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
+  const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
-  function isFederationAdmin(f) {
-    return !!f && !!currentUid && (f.createdBy === currentUid || (f.adminUids || []).includes(currentUid));
+  function isFederationOwner(f) {
+    return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
   async function toggleFedManage(f) {
     if (fedManageOpenId === f.id) {
@@ -4076,6 +4178,7 @@ function ClubPanel({
     }
     setFedManageOpenId(f.id);
     setFedRenameId(null);
+    setFedDescText(f.description || "");
     setFedEmailInviteId(null);
     setFedManageClubs([]);
     setFedManageLoading(true);
@@ -4108,8 +4211,16 @@ function ClubPanel({
     }
     setFedRenameId(null);
   }
-  function startFedEmailInvite(f) {
+  async function submitFedDescription(federationId) {
+    if (fedDescBusy) return;
+    setFedDescBusy(true);
+    const result = await onUpdateFederationDescription(federationId, fedDescText.trim());
+    setFedDescBusy(false);
+    if (!result.ok) setFedError(result.error || "Couldn't update the description.");
+  }
+  function startFedEmailInvite(f, kind) {
     setFedEmailInviteId(f.id);
+    setFedEmailInviteKind(kind);
     setFedEmailInviteText("");
     setFedEmailInviteError("");
     setFedEmailInviteResult(null);
@@ -4118,7 +4229,7 @@ function ClubPanel({
     if (!fedEmailInviteText.trim() || fedEmailInviteBusy || !fedEmailInviteId) return;
     setFedEmailInviteBusy(true);
     setFedEmailInviteError("");
-    const result = await onInviteFederationAdminByEmail(fedEmailInviteId, fedEmailInviteText.trim());
+    const result = fedEmailInviteKind === "coOwner" ? await onInviteFederationCoOwnerByEmail(fedEmailInviteId, fedEmailInviteText.trim()) : await onInviteFederation(fedEmailInviteId, fedEmailInviteText.trim());
     setFedEmailInviteBusy(false);
     if (!result.ok) {
       setFedEmailInviteError(result.error || "Couldn't create that invite.");
@@ -4126,9 +4237,15 @@ function ClubPanel({
     }
     setFedEmailInviteResult({
       federationId: fedEmailInviteId,
+      kind: fedEmailInviteKind,
       email: fedEmailInviteText.trim(),
       code: result.code
     });
+  }
+  async function handleRemoveFedCoOwner(federationId, uid) {
+    setMemberBusyUid(uid);
+    await onRemoveFederationCoOwner(federationId, uid);
+    setMemberBusyUid(null);
   }
   async function handleKickClub(federationId, clubId) {
     if (!window.confirm("Remove this club from the federation? It'll stop showing up in tournament pickers for other member clubs.")) return;
@@ -4141,15 +4258,22 @@ function ClubPanel({
       setFedError(result.error || "Couldn't remove that club.");
     }
   }
-  async function handlePromote(uid) {
+  async function handleRemoveCoOwnerClick(uid) {
     setMemberBusyUid(uid);
-    await onPromoteAdmin(activeClub.id, uid);
+    await onRemoveCoOwner(activeClub.id, uid);
     setMemberBusyUid(null);
   }
-  async function handleDemote(uid) {
-    setMemberBusyUid(uid);
-    await onDemoteAdmin(activeClub.id, uid);
-    setMemberBusyUid(null);
+  async function submitCoOwnerInvite() {
+    if (!coOwnerInviteEmail.trim() || coOwnerInviteBusy) return;
+    setCoOwnerInviteBusy(true);
+    setError("");
+    const result = await onInviteCoOwner(activeClub.id, coOwnerInviteEmail.trim());
+    setCoOwnerInviteBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't create that invite.");
+      return;
+    }
+    setCoOwnerInviteCode(result.code);
   }
   async function handleRemoveMemberClick(uid, name) {
     if (!window.confirm(`Remove ${name} from "${activeClub.name}"?`)) return;
@@ -4175,20 +4299,28 @@ function ClubPanel({
     closeAdd();
     if (result.club) onSelect(result.club.id);
   }
-  async function handleInvite() {
-    if (inviteCode) return;
+  async function submitInvite() {
+    if (!inviteEmail.trim() || inviteBusy) return;
     setInviteBusy(true);
-    const result = await onInvite(activeClub.id);
+    setError("");
+    const result = await onInvite(activeClub.id, inviteEmail.trim());
     setInviteBusy(false);
-    if (result.ok) setInviteCode(result.code);else setError(result.error || "Couldn't generate an invite.");
+    if (!result.ok) {
+      setError(result.error || "Couldn't generate an invite.");
+      return;
+    }
+    setInviteCode(result.code);
   }
   function handleSelect(id) {
+    setInviteOpen(false);
     setInviteCode(null);
+    setCoOwnerInviteOpen(false);
+    setCoOwnerInviteCode(null);
     setError("");
     setRenaming(false);
+    setDescEditing(false);
     setFedMode(null);
     setFedError("");
-    setFedInviteCode(null);
     setMembersOpen(false);
     setFedManageOpenId(null);
     setFedRenameId(null);
@@ -4209,6 +4341,21 @@ function ClubPanel({
     }
     setRenaming(false);
   }
+  function startDescEdit() {
+    setDescText(activeClub.description || "");
+    setDescEditing(true);
+  }
+  async function submitDescription() {
+    if (descBusy) return;
+    setDescBusy(true);
+    const result = await onUpdateDescription(activeClub.id, descText.trim());
+    setDescBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't update the description.");
+      return;
+    }
+    setDescEditing(false);
+  }
   function closeFedAdd() {
     setFedMode(null);
     setFedText("");
@@ -4219,16 +4366,18 @@ function ClubPanel({
     setFedBusy(true);
     setFedError("");
     if (fedMode === "create") {
-      // Creating implies wanting your own club in it: create the federation, mint it a code (the
-      // only path that ever changes a club's federationIds — see onJoinFederation), then
-      // immediately redeem that code for the club currently open in this panel.
+      // Creating implies wanting your own club in it: create the federation, mint an invite
+      // addressed to my own email (the only path that ever changes a club's federationIds — see
+      // onJoinFederation), then immediately redeem that code for the club currently open in this
+      // panel. Self-addressed, so it always succeeds without any extra confirmation step.
+      const myEmail = (auth.currentUser && auth.currentUser.email || "").toLowerCase();
       const created = await onCreateFederation(fedText.trim());
       if (!created.ok) {
         setFedBusy(false);
         setFedError(created.error || "Couldn't create the federation.");
         return;
       }
-      const codeResult = await onInviteFederation(created.federation.id);
+      const codeResult = await onInviteFederation(created.federation.id, myEmail);
       if (!codeResult.ok) {
         setFedBusy(false);
         setFedError(codeResult.error || "Federation created, but couldn't generate its invite code.");
@@ -4241,10 +4390,6 @@ function ClubPanel({
         return;
       }
       closeFedAdd();
-      setFedInviteCode({
-        federationId: created.federation.id,
-        code: codeResult.code
-      });
       return;
     }
     const result = await onJoinFederation(activeClub.id, fedText.trim());
@@ -4254,24 +4399,6 @@ function ClubPanel({
       return;
     }
     closeFedAdd();
-  }
-  async function handleFedInvite(federationId) {
-    setFedInviteBusyId(federationId);
-    const result = await onInviteFederation(federationId);
-    setFedInviteBusyId(null);
-    if (result.ok) setFedInviteCode({
-      federationId,
-      code: result.code
-    });else setFedError(result.error || "Couldn't generate an invite.");
-  }
-  function handleChipCodeClick(federationId) {
-    if (fedInviteCode && fedInviteCode.federationId === federationId) {
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(fedInviteCode.code).catch(() => {});
-      setFedCodeCopied(true);
-      setTimeout(() => setFedCodeCopied(false), 1500);
-      return;
-    }
-    handleFedInvite(federationId);
   }
   const chipStyle = active => ({
     padding: "7px 13px",
@@ -4450,7 +4577,7 @@ function ClubPanel({
       cursor: "pointer",
       padding: "0 4px"
     }
-  }, "Cancel")) : onRename && /*#__PURE__*/React.createElement("div", {
+  }, "Cancel")) : onRename && activeIsOwner && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -4478,19 +4605,95 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), !renaming && !activeIsOwner && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      marginBottom: 2
+    }
+  }, activeClub.name), activeIsOwner && (descEditing ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: descText,
+    onChange: setDescText,
+    placeholder: "Club description (optional)",
+    autoCapitalize: "sentences",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: true
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitDescription,
+    disabled: descBusy,
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, descBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setDescEditing(false),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 12,
+      fontStyle: activeClub.description ? "normal" : "italic"
+    }
+  }, activeClub.description || "No description yet."), /*#__PURE__*/React.createElement("button", {
+    onClick: startDescEdit,
+    "aria-label": "Edit description",
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      display: "flex",
+      padding: 2
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  })))), !activeIsOwner && activeClub.description && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 12,
+      marginBottom: 8
+    }
+  }, activeClub.description), /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.inkSoft,
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees and can edit these teams \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), /*#__PURE__*/React.createElement("div", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap"
     }
-  }, inviteCode ? /*#__PURE__*/React.createElement("button", {
+  }, activeIsOwner && (inviteCode ? /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inviteCode).catch(() => {});
       setCopied(true);
@@ -4507,9 +4710,43 @@ function ClubPanel({
       letterSpacing: 0.5,
       cursor: "pointer"
     }
-  }, copied ? "Copied!" : inviteCode) : /*#__PURE__*/React.createElement("button", {
-    onClick: handleInvite,
-    disabled: inviteBusy,
+  }, copied ? "Copied!" : inviteCode) : inviteOpen ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: inviteEmail,
+    onChange: setInviteEmail,
+    placeholder: "person@example.com",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitInvite,
+    disabled: inviteBusy || !inviteEmail.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, inviteBusy ? "\u2026" : "Invite"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setInviteOpen(false),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setInviteOpen(true),
     style: {
       padding: "6px 10px",
       borderRadius: 8,
@@ -4521,7 +4758,7 @@ function ClubPanel({
       fontSize: 12,
       cursor: "pointer"
     }
-  }, inviteBusy ? "Getting code\u2026" : "Invite someone"), activeClub.ownerUid === currentUid ? /*#__PURE__*/React.createElement("button", {
+  }, "Invite someone")), activeClub.ownerUid === currentUid ? /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.confirm(`Delete "${activeClub.name}" for everyone? This can't be undone.`)) onDelete(activeClub.id);
     },
@@ -4551,7 +4788,7 @@ function ClubPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Leave club")), activeClub.ownerUid === currentUid && /*#__PURE__*/React.createElement("div", {
+  }, "Leave club")), activeIsOwner && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -4578,8 +4815,8 @@ function ClubPanel({
 }, activeClub.memberUids.map(uid => {
   const name = activeClub.memberNames && activeClub.memberNames[uid] || `Member ${uid.slice(0, 6)}`;
   const isOwner = uid === activeClub.ownerUid;
-  const isAdmin = (activeClub.adminUids || []).includes(uid);
-  const roleLabel = isOwner ? "Owner" : isAdmin ? "Admin" : "Member";
+  const isCoOwner = (activeClub.coOwnerUids || []).includes(uid);
+  const roleLabel = isOwner ? "Owner" : isCoOwner ? "Co-owner" : "Member";
   return /*#__PURE__*/React.createElement("div", {
     key: uid,
     style: {
@@ -4603,11 +4840,11 @@ function ClubPanel({
       fontWeight: 700,
       textTransform: "uppercase",
       letterSpacing: 0.4,
-      color: isOwner ? COLORS.gold : isAdmin ? COLORS.turf : COLORS.inkSoft,
+      color: isOwner ? COLORS.gold : isCoOwner ? COLORS.gold : COLORS.inkSoft,
       flexShrink: 0
     }
-  }, roleLabel), !isOwner && /*#__PURE__*/React.createElement("button", {
-    onClick: () => isAdmin ? handleDemote(uid) : handlePromote(uid),
+  }, roleLabel), isCoOwner && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRemoveCoOwnerClick(uid),
     disabled: memberBusyUid === uid,
     style: {
       background: "none",
@@ -4621,7 +4858,7 @@ function ClubPanel({
       cursor: "pointer",
       flexShrink: 0
     }
-  }, memberBusyUid === uid ? "\u2026" : isAdmin ? "Demote" : "Promote"), !isOwner && /*#__PURE__*/React.createElement("button", {
+  }, memberBusyUid === uid ? "\u2026" : "Remove co-owner"), !isOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleRemoveMemberClick(uid, name),
     disabled: memberBusyUid === uid,
     "aria-label": `Remove ${name}`,
@@ -4636,7 +4873,79 @@ function ClubPanel({
       lineHeight: 1
     }
   }, "\u00d7"));
-}))), /*#__PURE__*/React.createElement("div", {
+}), /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: `1px dashed ${COLORS.willow}`
+  }
+}, coOwnerInviteCode ? /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontSize: 11.5,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    lineHeight: 1.5
+  }
+}, "Share this code with ", coOwnerInviteEmail, " \u2014 it only works when they redeem it while signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontFamily: "'IBM Plex Mono'",
+    fontWeight: 700,
+    color: COLORS.pitch,
+    letterSpacing: 0.5
+  }
+}, coOwnerInviteCode)) : coOwnerInviteOpen ? /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 6
+  }
+}, /*#__PURE__*/React.createElement(TextField, {
+  value: coOwnerInviteEmail,
+  onChange: setCoOwnerInviteEmail,
+  placeholder: "person@example.com",
+  autoCapitalize: "none",
+  autoCorrect: "off",
+  autoComplete: "off",
+  spellCheck: false
+}), /*#__PURE__*/React.createElement(Btn, {
+  onClick: submitCoOwnerInvite,
+  disabled: coOwnerInviteBusy || !coOwnerInviteEmail.trim(),
+  style: {
+    flexShrink: 0,
+    padding: "0 14px",
+    minHeight: 38,
+    fontSize: 12.5
+  }
+}, coOwnerInviteBusy ? "\u2026" : "Invite"), /*#__PURE__*/React.createElement("button", {
+  onClick: () => setCoOwnerInviteOpen(false),
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: "pointer",
+    padding: "0 4px"
+  }
+}, "Cancel")) : /*#__PURE__*/React.createElement("button", {
+  onClick: () => {
+    setCoOwnerInviteOpen(true);
+    setCoOwnerInviteEmail("");
+    setCoOwnerInviteCode(null);
+  },
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, "+ Invite a co-owner by email"))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -4669,22 +4978,7 @@ function ClubPanel({
       fontSize: 11.5,
       color: COLORS.pitch
     }
-  }, f.name, /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleChipCodeClick(f.id),
-    disabled: fedInviteBusyId === f.id,
-    style: {
-      background: "rgba(255,255,255,0.7)",
-      border: "none",
-      borderRadius: 10,
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: "3px 7px",
-      fontFamily: "'IBM Plex Mono'",
-      fontWeight: 700,
-      fontSize: 10.5,
-      letterSpacing: 0.4
-    }
-  }, fedInviteBusyId === f.id ? "\u2026" : fedInviteCode && fedInviteCode.federationId === f.id ? fedCodeCopied ? "Copied!" : fedInviteCode.code : "Code"), isFederationAdmin(f) && /*#__PURE__*/React.createElement("button", {
+  }, f.name, isFederationOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleFedManage(f),
     "aria-label": `Manage ${f.name}`,
     style: {
@@ -4698,7 +4992,7 @@ function ClubPanel({
       fontWeight: 700,
       fontSize: 10.5
     }
-  }, "Manage"), /*#__PURE__*/React.createElement("button", {
+  }, "Manage"), activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.confirm(`Stop sharing "${activeClub.name}"'s teams with "${f.name}"?`)) onLeaveFederation(activeClub.id, f.id);
     },
@@ -4717,7 +5011,6 @@ function ClubPanel({
       setFedMode("create");
       setFedText("");
       setFedError("");
-      setFedInviteCode(null);
     },
     style: {
       padding: "5px 10px",
@@ -4808,6 +5101,29 @@ function ClubPanel({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 11
   }), " Rename")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: fedDescText,
+    onChange: setFedDescText,
+    placeholder: "Federation description (optional)",
+    autoCapitalize: "sentences",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: true
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => submitFedDescription(f.id),
+    disabled: fedDescBusy,
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, fedDescBusy ? "\u2026" : "Save")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -4928,8 +5244,14 @@ function ClubPanel({
     color: COLORS.pitch,
     letterSpacing: 0.5
   }
-}, fedEmailInviteResult.code))) : /*#__PURE__*/React.createElement("button", {
-  onClick: () => startFedEmailInvite(f),
+}, fedEmailInviteResult.code))) : /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap"
+  }
+}, /*#__PURE__*/React.createElement("button", {
+  onClick: () => startFedEmailInvite(f, "club"),
   className: "cs-btn",
   style: {
     background: "none",
@@ -4942,7 +5264,21 @@ function ClubPanel({
     padding: 0,
     textDecoration: "underline"
   }
-}, "+ Invite an admin by email")))
+}, "+ Invite a club by email"), /*#__PURE__*/React.createElement("button", {
+  onClick: () => startFedEmailInvite(f, "coOwner"),
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, "+ Invite a co-owner by email"))))
 })(), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -5027,15 +5363,7 @@ function ClubPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Cancel")), fedInviteCode && !fedMode && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 8,
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      lineHeight: 1.5
-    }
-  }, "Share that code with another club so they can affiliate and see this club's teams too."))));
+  }, "Cancel"))));
 }
 // Full club/federation administration lives here, off the Account screen — creating, joining,
 // renaming, member/admin management, and federation affiliation. The Teams screen only ever
@@ -5049,6 +5377,7 @@ function ClubFederationScreen({
   onCreate,
   onJoin,
   onInvite,
+  onInviteClubCoOwner,
   onLeave,
   onDelete,
   onRename,
@@ -5058,13 +5387,15 @@ function ClubFederationScreen({
   onLeaveFederation,
   onInviteFederation,
   onRemoveMember,
-  onPromoteAdmin,
-  onDemoteAdmin,
+  onRemoveClubCoOwner,
   onRenameFederation,
   onKickClubFromFederation,
   onLoadFederationTeams,
-  onInviteFederationAdminByEmail,
-  onRedeemFederationAdminInvite,
+  onInviteFederationCoOwnerByEmail,
+  onRemoveFederationCoOwner,
+  onRedeemFederationCoOwnerInvite,
+  onUpdateClubDescription,
+  onUpdateFederationDescription,
   currentUid
 }) {
   const [redeemCode, setRedeemCode] = useState("");
@@ -5076,7 +5407,7 @@ function ClubFederationScreen({
     setRedeemBusy(true);
     setRedeemError("");
     setRedeemSuccess(null);
-    const result = await onRedeemFederationAdminInvite(redeemCode.trim());
+    const result = await onRedeemFederationCoOwnerInvite(redeemCode.trim());
     setRedeemBusy(false);
     if (!result.ok) {
       setRedeemError(result.error || "Couldn't redeem that invite.");
@@ -5124,28 +5455,31 @@ function ClubFederationScreen({
       color: COLORS.inkSoft,
       marginBottom: 20
     }
-  }, "Create or join clubs, manage members and admins, and affiliate with federations for cross-club tournaments."), /*#__PURE__*/React.createElement(ClubPanel, {
+  }, "Create or join clubs. Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments — everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelect,
     onCreate: onCreate,
     onJoin: onJoin,
     onInvite: onInvite,
+    onInviteCoOwner: onInviteClubCoOwner,
     onLeave: onLeave,
     onDelete: onDelete,
     onRename: onRename,
+    onUpdateDescription: onUpdateClubDescription,
     federationsById: federationsById,
     onCreateFederation: onCreateFederation,
     onJoinFederation: onJoinFederation,
     onLeaveFederation: onLeaveFederation,
     onInviteFederation: onInviteFederation,
     onRemoveMember: onRemoveMember,
-    onPromoteAdmin: onPromoteAdmin,
-    onDemoteAdmin: onDemoteAdmin,
+    onRemoveCoOwner: onRemoveClubCoOwner,
     onRenameFederation: onRenameFederation,
+    onUpdateFederationDescription: onUpdateFederationDescription,
     onKickClubFromFederation: onKickClubFromFederation,
     onLoadFederationTeams: onLoadFederationTeams,
-    onInviteFederationAdminByEmail: onInviteFederationAdminByEmail,
+    onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
+    onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5165,7 +5499,7 @@ function ClubFederationScreen({
       textTransform: "uppercase",
       marginBottom: 8
     }
-  }, "Have a federation admin invite?"), /*#__PURE__*/React.createElement("div", {
+  }, "Have a federation co-owner invite?"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -5173,7 +5507,7 @@ function ClubFederationScreen({
       lineHeight: 1.6,
       marginBottom: 10
     }
-  }, "If a federation admin invited you by email, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
+  }, "If a federation owner invited you by email to be a co-owner, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -5209,7 +5543,7 @@ function ClubFederationScreen({
       fontWeight: 600,
       marginTop: 8
     }
-  }, "You're now an admin of \"", redeemSuccess, "\".")));
+  }, "You're now a co-owner of \"", redeemSuccess, "\".")));
 }
 
 // Small "move to..." dropdown for a single team row — lets an existing personal team be moved
@@ -6997,14 +7331,17 @@ function TournamentsScreen({
   federationTeamOptions = [],
   onCreateTournament,
   onOpenTournament,
-  onBack
+  onBack,
+  currentUid
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const activeClubName = activeClubId && (clubs.find(c => c.id === activeClubId) || {}).name;
+  const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
+  const activeClubName = activeClub && activeClub.name;
+  const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   const totalTeamOptions = teamOptions.length + federationTeamOptions.length;
   function toggleTeam(n) {
     setSelectedTeams(s => s.includes(n) ? s.filter(x => x !== n) : [...s, n]);
@@ -7104,7 +7441,7 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name))), !creating && /*#__PURE__*/React.createElement(Btn, {
+  }, c.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -7118,7 +7455,16 @@ function TournamentsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), totalTeamOptions < 2 && !creating && /*#__PURE__*/React.createElement("div", {
+  }), activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !canManage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginTop: -8,
+      marginBottom: 16
+    }
+  }, `Only the owner of "${activeClubName}" can add tournaments.`), totalTeamOptions < 2 && !creating && canManage && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -7742,7 +8088,8 @@ function FixturesSection({
   matches,
   onStartFixtureMatch,
   onUpdateTournament,
-  onOpenMatch
+  onOpenMatch,
+  canManage = true
 }) {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -7756,6 +8103,7 @@ function FixturesSection({
   // progress.
   const isFixturePlayed = f => !!(f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
   async function generate(double) {
+    if (!canManage) return;
     setBusy(true);
     // Regenerating the group stage only ever touches group fixtures — any knockout rounds already
     // proposed (which only make sense once fixed teams/results exist) are left alone.
@@ -7766,6 +8114,7 @@ function FixturesSection({
     setBusy(false);
   }
   async function clearAll() {
+    if (!canManage) return;
     if (!window.confirm("Clear all fixtures? This only removes the schedule \u2014 already-scored matches and the table are untouched.")) return;
     setBusy(true);
     await onUpdateTournament({
@@ -7775,6 +8124,7 @@ function FixturesSection({
     setBusy(false);
   }
   function updateDate(fixtureId, date) {
+    if (!canManage) return;
     onUpdateTournament({
       ...tournament,
       fixtures: fixtures.map(f => f.id === fixtureId ? {
@@ -7784,9 +8134,11 @@ function FixturesSection({
     });
   }
   function requestDeleteFixture(fixtureId) {
+    if (!canManage) return;
     setConfirmDeleteId(fixtureId);
   }
   function deleteFixture(fixtureId) {
+    if (!canManage) return;
     onUpdateTournament({
       ...tournament,
       fixtures: fixtures.filter(fx => fx.id !== fixtureId)
@@ -7794,6 +8146,7 @@ function FixturesSection({
     setConfirmDeleteId(null);
   }
   async function addFixture() {
+    if (!canManage) return;
     if (!newA || !newB || newA === newB || busy) return;
     setBusy(true);
     await onUpdateTournament({
@@ -7831,6 +8184,7 @@ function FixturesSection({
   const nextStageIndex = stages.findIndex(s => fixturesForStage(s.label).length === 0);
   const nextStageReady = nextStageIndex === -1 ? false : nextStageIndex === 0 ? groupStageDone : stageDecided(stages[nextStageIndex - 1].label);
   async function generateStage(index) {
+    if (!canManage) return;
     const stage = stages[index];
     let pairs;
     if (index === 0) {
@@ -7902,8 +8256,8 @@ function FixturesSection({
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
-    onUpdateDate: date => updateDate(f.id, date),
-    onDelete: () => requestDeleteFixture(f.id)
+    onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
   })), (() => {
     const playedKnockoutCount = stages.flatMap(s => fixturesForStage(s.label)).filter(f => isFixturePlayed(f)).length;
     return playedKnockoutCount > 0 && /*#__PURE__*/React.createElement("div", {
@@ -7914,7 +8268,7 @@ function FixturesSection({
         marginBottom: 10
       }
     }, playedKnockoutCount, playedKnockoutCount === 1 ? " fixture played \u2014 see Matches for the result." : " fixtures played \u2014 see Matches for results.");
-  })(), nextStageIndex !== -1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
+  })(), nextStageIndex !== -1 && canManage && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: () => generateStage(nextStageIndex),
     disabled: busy || !nextStageReady,
@@ -7950,7 +8304,7 @@ function FixturesSection({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Fixtures"), fixtures.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, "Fixtures"), fixtures.length > 0 && canManage && /*#__PURE__*/React.createElement("button", {
     onClick: clearAll,
     disabled: busy,
     className: "cs-btn",
@@ -7964,7 +8318,7 @@ function FixturesSection({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Clear all")), groupFixtures.length === 0 && !adding ? /*#__PURE__*/React.createElement("div", {
+  }, "Clear all")), groupFixtures.length === 0 && !adding ? (canManage ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -7984,13 +8338,21 @@ function FixturesSection({
     style: {
       flex: "1 1 auto"
     }
-  }, "Home & Away")) : upcomingGroupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, "Home & Away")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 12
+    }
+  }, "No fixtures yet \u2014 only the club owner can add them.")) : upcomingGroupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
-    onUpdateDate: date => updateDate(f.id, date),
-    onDelete: () => requestDeleteFixture(f.id)
+    onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
   })), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -8066,7 +8428,7 @@ function FixturesSection({
     style: {
       flex: 2
     }
-  }, "Add Fixture"))) : /*#__PURE__*/React.createElement("button", {
+  }, "Add Fixture"))) : canManage && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setNewA("");
       setNewB("");
@@ -8131,7 +8493,8 @@ function TournamentDetailScreen({
   onStartFixtureMatch,
   onUpdateTournament,
   onOpenMatch,
-  onDeleteTournament
+  onDeleteTournament,
+  canManage = true
 }) {
   const [matches, setMatches] = useState(null); // null = loading
   const [deleting, setDeleting] = useState(false);
@@ -8158,11 +8521,12 @@ function TournamentDetailScreen({
   const allPOTCandidates = Array.from(new Set(completedTournamentMatches.flatMap(m => allMatchPlayers(m)))).sort();
   const finalPOT = tournament.playerOfTournament || suggestedPOT;
   function startEditPOT() {
+    if (!canManage) return;
     setPotDraft(tournament.playerOfTournament || suggestedPOT || "");
     setEditingPOT(true);
   }
   async function savePOT() {
-    if (!potDraft) return;
+    if (!canManage || !potDraft) return;
     setPotBusy(true);
     await onUpdateTournament({
       ...tournament,
@@ -8172,6 +8536,7 @@ function TournamentDetailScreen({
     setEditingPOT(false);
   }
   async function resetPOTToSuggestion() {
+    if (!canManage) return;
     setPotBusy(true);
     await onUpdateTournament({
       ...tournament,
@@ -8237,7 +8602,7 @@ function TournamentDetailScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, tournament.name), /*#__PURE__*/React.createElement("button", {
+  }, tournament.name), canManage && /*#__PURE__*/React.createElement("button", {
     onClick: handleDelete,
     disabled: deleting,
     className: "cs-btn",
@@ -8258,7 +8623,8 @@ function TournamentDetailScreen({
     matches: matches,
     onStartFixtureMatch: onStartFixtureMatch,
     onUpdateTournament: onUpdateTournament,
-    onOpenMatch: onOpenMatch
+    onOpenMatch: onOpenMatch,
+    canManage: canManage
   }), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => onStartMatch(tournament),
     style: {
@@ -8459,7 +8825,7 @@ function TournamentDetailScreen({
     color: COLORS.inkSoft,
     marginTop: 2
   }
-}, tournament.playerOfTournament ? "Selected manually" : "Auto-suggested \u2014 runs + 20 per wicket")), /*#__PURE__*/React.createElement("button", {
+}, tournament.playerOfTournament ? "Selected manually" : "Auto-suggested \u2014 runs + 20 per wicket")), canManage && /*#__PURE__*/React.createElement("button", {
   onClick: startEditPOT,
   className: "cs-btn",
   style: {
@@ -8760,12 +9126,15 @@ function TeamsScreen({
   activeClubId,
   onSelectSource,
   onManageClubs,
-  onMoveTeam
+  onMoveTeam,
+  currentUid
 }) {
   function matchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
-  const activeClubName = activeClubId && (clubs.find(c => c.id === activeClubId) || {}).name;
+  const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
+  const activeClubName = activeClub && activeClub.name;
+  const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 40px",
@@ -8810,7 +9179,7 @@ function TeamsScreen({
     activeClubId: activeClubId,
     onSelect: onSelectSource,
     onManage: onManageClubs
-  }), /*#__PURE__*/React.createElement(Btn, {
+  }), canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
     style: {
@@ -8823,13 +9192,21 @@ function TeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), activeClubName ? ` New Team in ${activeClubName}` : " New Team"), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }), activeClubName ? ` New Team in ${activeClubName}` : " New Team"), !canManage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginBottom: 20
+    }
+  }, `Only the owner of "${activeClubName}" can add or edit teams.`), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => onDelete(t.id),
+    onDelete: canManage ? () => onDelete(t.id) : undefined,
     deleteLabel: "Delete"
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
@@ -8842,9 +9219,9 @@ function TeamsScreen({
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => onEdit(t),
+    onClick: canManage ? () => onEdit(t) : undefined,
     style: {
-      cursor: "pointer",
+      cursor: canManage ? "pointer" : "default",
       flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -8861,12 +9238,12 @@ function TeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), /*#__PURE__*/React.createElement(MoveTeamMenu, {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), canManage && /*#__PURE__*/React.createElement(MoveTeamMenu, {
     team: t,
     clubs: clubs,
     currentClubId: activeClubId,
     onMove: onMoveTeam
-  }), /*#__PURE__*/React.createElement("button", {
+  }), canManage && /*#__PURE__*/React.createElement("button", {
     onClick: () => onEdit(t),
     className: "cs-btn",
     style: {
@@ -12847,6 +13224,9 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleInviteClubCoOwner(clubId, email) {
+    return inviteClubCoOwnerByEmail(clubId, email);
+  }
   async function handleJoinClub(code) {
     const result = await joinClubWithCode(code);
     if (result.ok) {
@@ -12891,6 +13271,17 @@ function CricketScorer() {
       setClubs(cs => cs.map(c => c.id === clubId ? {
         ...c,
         name: trimmed
+      } : c));
+    }
+    return result;
+  }
+  async function handleUpdateClubDescription(clubId, description) {
+    const trimmed = (description || "").trim();
+    const result = await updateClubDescription(clubId, trimmed);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        description: trimmed
       } : c));
     }
     return result;
@@ -12940,29 +13331,19 @@ function CricketScorer() {
         return {
           ...c,
           memberUids: (c.memberUids || []).filter(u => u !== uid),
-          adminUids: (c.adminUids || []).filter(u => u !== uid),
+          coOwnerUids: (c.coOwnerUids || []).filter(u => u !== uid),
           memberNames
         };
       }));
     }
     return result;
   }
-  async function handlePromoteAdmin(clubId, uid) {
-    const result = await promoteClubAdmin(clubId, uid);
+  async function handleRemoveClubCoOwner(clubId, uid) {
+    const result = await removeClubCoOwner(clubId, uid);
     if (result.ok) {
       setClubs(cs => cs.map(c => c.id === clubId ? {
         ...c,
-        adminUids: [...(c.adminUids || []).filter(u => u !== uid), uid]
-      } : c));
-    }
-    return result;
-  }
-  async function handleDemoteAdmin(clubId, uid) {
-    const result = await demoteClubAdmin(clubId, uid);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        adminUids: (c.adminUids || []).filter(u => u !== uid)
+        coOwnerUids: (c.coOwnerUids || []).filter(u => u !== uid)
       } : c));
     }
     return result;
@@ -12980,6 +13361,34 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleUpdateFederationDescription(federationId, description) {
+    const trimmed = (description || "").trim();
+    const result = await updateFederationDescription(federationId, trimmed);
+    if (result.ok) {
+      setFederationsById(prev => ({
+        ...prev,
+        [federationId]: { ...(prev[federationId] || {}),
+          description: trimmed
+        }
+      }));
+    }
+    return result;
+  }
+  async function handleInviteFederationCoOwner(federationId, email) {
+    return inviteFederationCoOwnerByEmail(federationId, email);
+  }
+  async function handleRemoveFederationCoOwner(federationId, uid) {
+    const result = await removeFederationCoOwner(federationId, uid);
+    if (result.ok) {
+      setFederationsById(prev => ({
+        ...prev,
+        [federationId]: { ...(prev[federationId] || {}),
+          coOwnerUids: ((prev[federationId] || {}).coOwnerUids || []).filter(u => u !== uid)
+        }
+      }));
+    }
+    return result;
+  }
   async function handleKickClubFromFederation(federationId, clubId) {
     const result = await kickClubFromFederation(federationId, clubId);
     if (result.ok) {
@@ -12992,8 +13401,8 @@ function CricketScorer() {
     }
     return result;
   }
-  async function handleRedeemFederationAdminInvite(code) {
-    const result = await redeemFederationAdminInvite(code);
+  async function handleRedeemFederationCoOwnerInvite(code) {
+    const result = await redeemFederationCoOwnerInvite(code);
     if (result.ok) {
       setFederationsById(prev => ({
         ...prev,
@@ -13220,7 +13629,8 @@ function CricketScorer() {
     activeClubId: activeClubId,
     onSelectSource: setActiveClubId,
     onManageClubs: () => setScreen("club-admin"),
-    onMoveTeam: handleMoveTeam
+    onMoveTeam: handleMoveTeam,
+    currentUid: user && user.uid
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -13237,7 +13647,8 @@ function CricketScorer() {
       setViewingTournamentClubId(activeTournamentClubId);
       setScreen("tournament-detail");
     },
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("home"),
+    currentUid: user && user.uid
   })), screen === "tournament-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournament-detail",
     direction: navDirection
@@ -13250,7 +13661,8 @@ function CricketScorer() {
     onOpenMatch: id => {
       openMatch(id);
     },
-    onDeleteTournament: handleDeleteTournament
+    onDeleteTournament: handleDeleteTournament,
+    canManage: !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
     direction: navDirection
@@ -13284,23 +13696,26 @@ function CricketScorer() {
     onSelect: setActiveClubId,
     onCreate: handleCreateClub,
     onJoin: handleJoinClub,
-    onInvite: generateClubJoinCode,
+    onInvite: inviteClubMemberByEmail,
+    onInviteClubCoOwner: handleInviteClubCoOwner,
     onLeave: handleLeaveClub,
     onDelete: handleDeleteClub,
     onRename: handleRenameClub,
+    onUpdateClubDescription: handleUpdateClubDescription,
     federationsById: federationsById,
     onCreateFederation: handleCreateFederation,
     onJoinFederation: handleJoinFederation,
     onLeaveFederation: handleLeaveFederation,
-    onInviteFederation: generateFederationJoinCode,
+    onInviteFederation: inviteFederationByEmail,
     onRemoveMember: handleRemoveMember,
-    onPromoteAdmin: handlePromoteAdmin,
-    onDemoteAdmin: handleDemoteAdmin,
+    onRemoveClubCoOwner: handleRemoveClubCoOwner,
     onRenameFederation: handleRenameFederation,
+    onUpdateFederationDescription: handleUpdateFederationDescription,
     onKickClubFromFederation: handleKickClubFromFederation,
     onLoadFederationTeams: loadFederationTeams,
-    onInviteFederationAdminByEmail: inviteFederationAdminByEmail,
-    onRedeemFederationAdminInvite: handleRedeemFederationAdminInvite,
+    onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
+    onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
+    onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     currentUid: user && user.uid
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow",
