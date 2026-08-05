@@ -6112,6 +6112,7 @@ function FixturesSection({
   const [adding, setAdding] = useState(false);
   const [newA, setNewA] = useState("");
   const [newB, setNewB] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const fixtures = tournament.fixtures || [];
   const matchById = new Map((matches || []).map(m => [m.id, m]));
   // Once a fixture's match is complete it's finished business for the schedule — the result lives
@@ -6146,14 +6147,15 @@ function FixturesSection({
       } : f)
     });
   }
+  function requestDeleteFixture(fixtureId) {
+    setConfirmDeleteId(fixtureId);
+  }
   function deleteFixture(fixtureId) {
-    const target = fixtures.find(fx => fx.id === fixtureId);
-    const label = target ? `${target.teamA} vs ${target.teamB}` : "this fixture";
-    if (!window.confirm(`Remove fixture ${label}? This can't be undone.`)) return;
     onUpdateTournament({
       ...tournament,
       fixtures: fixtures.filter(fx => fx.id !== fixtureId)
     });
+    setConfirmDeleteId(null);
   }
   async function addFixture() {
     if (!newA || !newB || newA === newB || busy) return;
@@ -6265,7 +6267,7 @@ function FixturesSection({
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: date => updateDate(f.id, date),
-    onDelete: () => deleteFixture(f.id)
+    onDelete: () => requestDeleteFixture(f.id)
   })), (() => {
     const playedKnockoutCount = stages.flatMap(s => fixturesForStage(s.label)).filter(f => isFixturePlayed(f)).length;
     return playedKnockoutCount > 0 && /*#__PURE__*/React.createElement("div", {
@@ -6291,6 +6293,7 @@ function FixturesSection({
       marginTop: 6
     }
   }, nextStageIndex === 0 ? "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
+  const fixtureToConfirmDelete = confirmDeleteId ? fixtures.find(f => f.id === confirmDeleteId) : null;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 24
@@ -6351,7 +6354,7 @@ function FixturesSection({
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: date => updateDate(f.id, date),
-    onDelete: () => deleteFixture(f.id)
+    onDelete: () => requestDeleteFixture(f.id)
   })), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -6450,7 +6453,40 @@ function FixturesSection({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14
-  }), " Add a fixture")), knockoutSection);
+  }), " Add a fixture")), knockoutSection, fixtureToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setConfirmDeleteId(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.ball,
+      marginBottom: 10
+    }
+  }, "Remove this fixture?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 18
+    }
+  }, fixtureToConfirmDelete.teamA, " vs ", fixtureToConfirmDelete.teamB, " will be removed from the schedule. This can\u2019t be undone."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setConfirmDeleteId(null),
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: () => deleteFixture(fixtureToConfirmDelete.id),
+    style: {
+      flex: 1
+    }
+  }, "Remove"))));
 }
 function TournamentDetailScreen({
   tournament,
