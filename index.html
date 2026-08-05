@@ -2969,6 +2969,17 @@ function applyBall(inning, event) {
   // toast for whichever ones are new on THIS ball.
   const milestoneOver = oversLabel(cur.legalBalls, cur.ballsPerOver);
   const milestoneScore = `${cur.runs}-${cur.wickets}`;
+  // Team: 50, 100, 150... — the team total (not any one batsman) just crossed a 50-run line.
+  // Extras (byes, leg byes, wides, no-balls) all add to cur.runs same as runs off the bat, so this
+  // naturally fires on whichever ball actually gets the total there, regardless of event kind.
+  if (cur.runs >= 50 && Math.floor(cur.runs / 50) > Math.floor((inning.runs || 0) / 50)) {
+    cur.milestones.push({
+      type: "team",
+      text: `${cur.battingTeam} brings up ${Math.floor(cur.runs / 50) * 50}`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
   // Batting: 50, 100, 150... — any batsman whose total just crossed a 50-run line this ball.
   Object.keys(cur.batsmen).forEach(name => {
     const before = (inning.batsmen[name] && inning.batsmen[name].runs) || 0;
@@ -3266,6 +3277,7 @@ function BallCelebration({
 // bursting center-screen, and always logged to inning.milestones (see InningScorecard) even
 // after the toast itself disappears.
 const MILESTONE_ICONS = {
+  team: "\u{1F4C8}",
   batting: "\u{1F3CF}",
   goldenDuck: "\u{1F980}",
   hatTrick: "\u{1F3A9}",
@@ -6036,6 +6048,14 @@ function FederationsPanel({
     setEmailInviteError("");
     setEmailInviteResult(null);
   }
+  // A direct shortcut to "invite a co-owner" from right next to the Manage toggle itself — the
+  // form for it already existed inside the Manage panel, but only after opening Manage AND
+  // scrolling past the description and member-clubs list first, which made it easy to miss
+  // entirely. This opens Manage (if it wasn't already) and jumps straight to that form.
+  async function openCoOwnerInvite(f) {
+    if (manageOpenId !== f.id) await toggleManage(f);
+    startEmailInvite("coOwner");
+  }
   async function submitEmailInvite(federationId) {
     if (!emailInviteText.trim() || emailInviteBusy) return;
     setEmailInviteBusy(true);
@@ -6225,7 +6245,7 @@ function FederationsPanel({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }))), isOwner(f) && /*#__PURE__*/React.createElement("button", {
+  }))), isOwner(f) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -6239,7 +6259,21 @@ function FederationsPanel({
       fontWeight: 700,
       fontSize: 11
     }
-  }, manageOpenId === f.id ? "Close" : "Manage")), f.description && /*#__PURE__*/React.createElement("div", {
+  }, manageOpenId === f.id ? "Close" : "Manage"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => openCoOwnerInvite(f),
+    className: "cs-btn",
+    style: {
+      background: "rgba(184,137,43,0.14)",
+      border: `1px solid ${COLORS.gold}`,
+      borderRadius: 10,
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: "4px 9px",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11
+    }
+  }, "+ Co-owner"))), f.description && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
