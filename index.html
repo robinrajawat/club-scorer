@@ -5841,6 +5841,7 @@ function FederationsPanel({
 }
 function ClubFederationScreen({
   onBack,
+  backLabel = "Account",
   clubs,
   activeClubId,
   onSelect,
@@ -5912,7 +5913,7 @@ function ClubFederationScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Account"), /*#__PURE__*/React.createElement("div", {
+  }), " " + backLabel), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 26,
@@ -13455,6 +13456,11 @@ function CricketScorer() {
   const [teams, setTeams] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
+  // Clubs & Federations administration (ClubFederationScreen) gets its own independent club
+  // selection and return destination — it must not inherit whichever club is active in Teams,
+  // and must return wherever it was opened from (Account or Teams), not always Account.
+  const [activeClubAdminId, setActiveClubAdminId] = useState(null);
+  const [clubAdminReturnScreen, setClubAdminReturnScreen] = useState("account");
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
@@ -13815,6 +13821,7 @@ function CricketScorer() {
       return next;
     });
     if (activeClubId === clubId) setActiveClubId(null);
+    if (activeClubAdminId === clubId) setActiveClubAdminId(null);
   }
   async function handleDeleteClub(clubId) {
     const result = await deleteClub(clubId);
@@ -13827,6 +13834,7 @@ function CricketScorer() {
         return next;
       });
       if (activeClubId === clubId) setActiveClubId(null);
+      if (activeClubAdminId === clubId) setActiveClubAdminId(null);
     }
     return result;
   }
@@ -14206,7 +14214,10 @@ function CricketScorer() {
     clubs: clubs,
     activeClubId: activeClubId,
     onSelectSource: setActiveClubId,
-    onManageClubs: () => setScreen("club-admin"),
+    onManageClubs: () => {
+      setClubAdminReturnScreen("teams");
+      setScreen("club-admin");
+    },
     onMoveTeam: handleMoveTeam,
     currentUid: user && user.uid
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -14253,7 +14264,10 @@ function CricketScorer() {
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenClubAdmin: () => setScreen("club-admin"),
+    onOpenClubAdmin: () => {
+      setClubAdminReturnScreen("account");
+      setScreen("club-admin");
+    },
     onBack: () => setScreen("home"),
     redirectError: authError
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -14268,10 +14282,11 @@ function CricketScorer() {
     navKey: "club-admin",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(ClubFederationScreen, {
-    onBack: () => setScreen("account"),
+    onBack: () => setScreen(clubAdminReturnScreen),
+    backLabel: clubAdminReturnScreen === "teams" ? "Teams" : "Account",
     clubs: clubs,
-    activeClubId: activeClubId,
-    onSelect: setActiveClubId,
+    activeClubId: activeClubAdminId,
+    onSelect: setActiveClubAdminId,
     onCreate: handleCreateClub,
     onJoin: handleJoinClub,
     onInvite: inviteClubMemberByEmail,
