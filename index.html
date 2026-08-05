@@ -4540,7 +4540,8 @@ function HomeScreen({
   onJoinCode,
   onOpenStats,
   onOpenTournaments,
-  pendingCount
+  pendingCount,
+  tournamentNameById = {}
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -4715,7 +4716,22 @@ function HomeScreen({
       background: m.status === "complete" ? COLORS.inkSoft : COLORS.turf,
       boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
     }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.gold,
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 10
+  }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
@@ -11341,6 +11357,11 @@ function CricketScorer() {
       await saveTeams(updated);
     }
   }
+  const tournamentNameById = {};
+  for (const t of tournaments) tournamentNameById[t.id] = t.name;
+  for (const list of Object.values(clubTournamentsById)) {
+    for (const t of list) tournamentNameById[t.id] = t.name;
+  }
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -11392,7 +11413,8 @@ function CricketScorer() {
     onJoinCode: handleJoinCode,
     onOpenStats: () => setScreen("stats"),
     onOpenTournaments: () => setScreen("tournaments"),
-    pendingCount: pendingCount
+    pendingCount: pendingCount,
+    tournamentNameById: tournamentNameById
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
