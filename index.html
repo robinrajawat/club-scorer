@@ -4399,13 +4399,42 @@ function WelcomeScreen({
       color: COLORS.inkSoft,
       textAlign: "center",
       lineHeight: 1.5,
-      margin: "10px 0 22px"
+      margin: "10px 0 20px"
     }
-  }, "Sync your matches and teams across devices, join clubs, and share live scores."), /*#__PURE__*/React.createElement("button", {
+  }, "Sync your matches and teams across devices, join clubs, and share live scores."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      margin: "0 0 4px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      height: 1,
+      background: COLORS.creamDark
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, "or"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      height: 1,
+      background: COLORS.creamDark
+    }
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: onSkip,
     className: "cs-btn",
     style: {
       width: "100%",
+      minHeight: 44,
       background: "none",
       border: "none",
       color: COLORS.pitch,
@@ -4413,7 +4442,7 @@ function WelcomeScreen({
       fontWeight: 600,
       fontSize: 13.5,
       cursor: "pointer",
-      padding: 10,
+      padding: "13px 10px",
       touchAction: "manipulation",
       WebkitTapHighlightColor: "transparent"
     }
@@ -6551,10 +6580,12 @@ function TeamEditScreen({
   const [name, setName] = useState(team ? team.name : "");
   const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
     name: p,
-    number: ""
+    number: "",
+    _key: uid()
   } : {
     name: p.name,
-    number: p.number || ""
+    number: p.number || "",
+    _key: uid()
   }) : []);
   const [newPlayer, setNewPlayer] = useState("");
   const [newNumber, setNewNumber] = useState("");
@@ -6566,23 +6597,39 @@ function TeamEditScreen({
     if (!n || players.some(p => p.name === n)) return;
     setPlayers(p => [...p, {
       name: n,
-      number: newNumber.trim()
+      number: newNumber.trim(),
+      _key: uid()
     }]);
     setNewPlayer("");
     setNewNumber("");
   }
-  function removePlayer(n) {
-    setPlayers(p => p.filter(x => x.name !== n));
-    if (captain === n) setCaptain("");
-    if (keeper === n) setKeeper("");
+  function removePlayer(key) {
+    const old = players.find(p => p._key === key);
+    setPlayers(p => p.filter(x => x._key !== key));
+    if (old) {
+      if (captain === old.name) setCaptain("");
+      if (keeper === old.name) setKeeper("");
+    }
   }
-  function updateNumber(n, num) {
-    setPlayers(p => p.map(x => x.name === n ? {
+  function updateNumber(key, num) {
+    setPlayers(p => p.map(x => x._key === key ? {
       ...x,
       number: num
     } : x));
   }
-  const canSave = name.trim() && players.length > 0;
+  function updateName(key, newName) {
+    const old = players.find(p => p._key === key);
+    setPlayers(p => p.map(x => x._key === key ? {
+      ...x,
+      name: newName
+    } : x));
+    if (old) {
+      if (captain === old.name) setCaptain(newName);
+      if (keeper === old.name) setKeeper(newName);
+    }
+  }
+  const trimmedNames = players.map(p => p.name.trim());
+  const canSave = name.trim() && players.length > 0 && trimmedNames.every(n => n) && new Set(trimmedNames.map(n => n.toLowerCase())).size === players.length;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -6783,7 +6830,7 @@ function TeamEditScreen({
       gap: 6
     }
   }, players.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.name,
+    key: p._key,
     style: {
       display: "flex",
       alignItems: "center",
@@ -6799,7 +6846,7 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement("input", {
     value: p.number,
-    onChange: e => updateNumber(p.name, e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
+    onChange: e => updateNumber(p._key, e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
     placeholder: "#",
     style: {
       width: "100%",
@@ -6813,18 +6860,23 @@ function TeamEditScreen({
       borderRadius: 8,
       padding: "5px 2px"
     }
-  })), /*#__PURE__*/React.createElement("span", {
+  })), /*#__PURE__*/React.createElement("input", {
+    value: p.name,
+    onChange: e => updateName(p._key, e.target.value),
+    placeholder: "Player name",
     style: {
       flex: 1,
+      minWidth: 0,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13.5,
       color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
+      background: "#fff",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      padding: "5px 8px"
     }
-  }, p.name), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
@@ -6869,7 +6921,7 @@ function TeamEditScreen({
       justifyContent: "center"
     }
   }, "WK"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => removePlayer(p.name),
+    onClick: () => removePlayer(p._key),
     className: "cs-btn",
     style: {
       background: "rgba(42,36,32,0.12)",
@@ -6891,14 +6943,20 @@ function TeamEditScreen({
   }, "✕"))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
-    onClick: () => onSave({
-      id: team ? team.id : uid(),
-      name: name.trim(),
-      players,
-      captain,
-      keeper,
-      color: color || null
-    }),
+    onClick: () => {
+      const savedPlayers = players.map(p => ({
+        name: p.name.trim(),
+        number: p.number
+      }));
+      onSave({
+        id: team ? team.id : uid(),
+        name: name.trim(),
+        players: savedPlayers,
+        captain: captain.trim(),
+        keeper: keeper.trim(),
+        color: color || null
+      });
+    },
     style: {
       width: "100%"
     }
