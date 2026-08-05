@@ -3801,11 +3801,18 @@ function SharedLinksScreen({
 }) {
   const [busyId, setBusyId] = useState(null); // `${matchId}:share` | `${matchId}:view`
   const [error, setError] = useState("");
+  const [confirmTarget, setConfirmTarget] = useState(null); // { kind, match } | null
   const shared = matches.filter(m => m.shareCode || m.viewCode);
+  function requestRevoke(kind, m) {
+    if (busyId) return;
+    setConfirmTarget({
+      kind,
+      match: m
+    });
+  }
   async function handleRevoke(kind, m) {
     const key = `${m.id}:${kind}`;
-    if (busyId) return;
-    if (!window.confirm(kind === "share" ? `Revoke the scoring code for ${m.teamA} vs ${m.teamB}? Anyone using it will immediately lose access.` : `Revoke the live-follow link for ${m.teamA} vs ${m.teamB}? It will stop working immediately.`)) return;
+    setConfirmTarget(null);
     setBusyId(key);
     setError("");
     const result = await (kind === "share" ? onRevokeShareCode : onRevokeViewCode)(m.id);
@@ -3922,7 +3929,7 @@ function SharedLinksScreen({
       color: COLORS.ink
     }
   }, m.shareCode)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleRevoke("share", m),
+    onClick: () => requestRevoke("share", m),
     disabled: !!busyId,
     className: "cs-btn",
     style: {
@@ -3963,7 +3970,7 @@ function SharedLinksScreen({
       color: COLORS.ink
     }
   }, m.viewCode)), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleRevoke("view", m),
+    onClick: () => requestRevoke("view", m),
     disabled: !!busyId,
     className: "cs-btn",
     style: {
@@ -3978,7 +3985,13 @@ function SharedLinksScreen({
       cursor: "pointer",
       flexShrink: 0
     }
-  }, busyId === `${m.id}:view` ? "Revoking\u2026" : "Revoke")))));
+  }, busyId === `${m.id}:view` ? "Revoking\u2026" : "Revoke")))), confirmTarget && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: confirmTarget.kind === "share" ? "Revoke scoring code?" : "Revoke live-follow link?",
+    message: confirmTarget.kind === "share" ? `Revoke the scoring code for ${confirmTarget.match.teamA} vs ${confirmTarget.match.teamB}? Anyone using it will immediately lose access.` : `Revoke the live-follow link for ${confirmTarget.match.teamA} vs ${confirmTarget.match.teamB}? It will stop working immediately.`,
+    confirmLabel: "Revoke",
+    onConfirm: () => handleRevoke(confirmTarget.kind, confirmTarget.match),
+    onCancel: () => setConfirmTarget(null)
+  }));
 }
 function JoinCodeBar({
   onJoin
@@ -4086,6 +4099,7 @@ function ClubSourceSelector({
       marginBottom: 18
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
@@ -4163,6 +4177,9 @@ function ClubPanel({
   const [fedError, setFedError] = useState("");
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberBusyUid, setMemberBusyUid] = useState(null);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState(null); // { uid, name } | null
+  const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
+  const [confirmLeaveFederation, setConfirmLeaveFederation] = useState(null); // federation | null
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
@@ -4175,7 +4192,18 @@ function ClubPanel({
     const stored = activeClub.memberNames && activeClub.memberNames[currentUid];
     if (!stored || stored === "Member") onRefreshMyMemberName(activeClub.id);
   }, [activeClubId]);
-  async function handleRemoveCoOwnerClick(uid) {
+  function requestRemoveCoOwner(uid, name) {
+    setConfirmRemoveMember({
+      uid,
+      name,
+      role: "coOwner"
+    });
+  }
+  async function handleRemoveCoOwnerClick() {
+    const {
+      uid
+    } = confirmRemoveMember;
+    setConfirmRemoveMember(null);
     setMemberBusyUid(uid);
     await onRemoveCoOwner(activeClub.id, uid);
     setMemberBusyUid(null);
@@ -4192,8 +4220,18 @@ function ClubPanel({
     }
     setCoOwnerInviteCode(result.code);
   }
-  async function handleRemoveMemberClick(uid, name) {
-    if (!window.confirm(`Remove ${name} from "${activeClub.name}"?`)) return;
+  function requestRemoveMember(uid, name) {
+    setConfirmRemoveMember({
+      uid,
+      name,
+      role: "member"
+    });
+  }
+  async function handleRemoveMemberClick() {
+    const {
+      uid
+    } = confirmRemoveMember;
+    setConfirmRemoveMember(null);
     setMemberBusyUid(uid);
     await onRemoveMember(activeClub.id, uid);
     setMemberBusyUid(null);
@@ -4334,6 +4372,7 @@ function ClubPanel({
       marginBottom: 18
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
@@ -4703,9 +4742,7 @@ function ClubPanel({
       cursor: "pointer"
     }
   }, "Invite someone")), activeClub.ownerUid === currentUid ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (window.confirm(`Delete "${activeClub.name}" for everyone? This can't be undone.`)) onDelete(activeClub.id);
-    },
+    onClick: () => setConfirmDeleteClub(true),
     style: {
       padding: "6px 10px",
       borderRadius: 8,
@@ -4788,7 +4825,7 @@ function ClubPanel({
       flexShrink: 0
     }
   }, roleLabel), isCoOwner && /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleRemoveCoOwnerClick(uid),
+    onClick: () => requestRemoveCoOwner(uid, name),
     disabled: memberBusyUid === uid,
     style: {
       background: "none",
@@ -4803,7 +4840,7 @@ function ClubPanel({
       flexShrink: 0
     }
   }, memberBusyUid === uid ? "\u2026" : "Remove co-owner"), !isOwner && /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleRemoveMemberClick(uid, name),
+    onClick: () => requestRemoveMember(uid, name),
     disabled: memberBusyUid === uid,
     "aria-label": `Remove ${name}`,
     style: {
@@ -4933,9 +4970,7 @@ function ClubPanel({
       color: COLORS.pitch
     }
   }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", activeIsOwner && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (window.confirm(`Stop sharing "${activeClub.name}"'s teams with "${f.name}"?`)) onLeaveFederation(activeClub.id, f.id);
-    },
+    onClick: () => setConfirmLeaveFederation(f),
     "aria-label": `Leave ${f.name}`,
     style: {
       background: "none",
@@ -5047,7 +5082,32 @@ function ClubPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Cancel"))));
+  }, "Cancel"))), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: confirmRemoveMember.role === "coOwner" ? "Remove co-owner?" : "Remove member?",
+    message: confirmRemoveMember.role === "coOwner" ? `Remove ${confirmRemoveMember.name} as co-owner of "${activeClub.name}"? They'll stay on as a plain member.` : `Remove ${confirmRemoveMember.name} from "${activeClub.name}"?`,
+    confirmLabel: "Remove",
+    onConfirm: confirmRemoveMember.role === "coOwner" ? handleRemoveCoOwnerClick : handleRemoveMemberClick,
+    onCancel: () => setConfirmRemoveMember(null)
+  }), confirmDeleteClub && activeClub && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Delete this club?",
+    message: `Delete "${activeClub.name}" for everyone? This can't be undone.`,
+    confirmLabel: "Delete",
+    onConfirm: () => {
+      setConfirmDeleteClub(false);
+      onDelete(activeClub.id);
+    },
+    onCancel: () => setConfirmDeleteClub(false)
+  }), confirmLeaveFederation && activeClub && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Stop sharing with this federation?",
+    message: `Stop sharing "${activeClub.name}"'s teams with "${confirmLeaveFederation.name}"?`,
+    confirmLabel: "Stop sharing",
+    onConfirm: () => {
+      const fed = confirmLeaveFederation;
+      setConfirmLeaveFederation(null);
+      onLeaveFederation(activeClub.id, fed.id);
+    },
+    onCancel: () => setConfirmLeaveFederation(null)
+  }));
 }
 // Full club/federation administration lives here, off the Account screen — creating, joining,
 // renaming, member/admin management, and federation affiliation. The Teams screen only ever
@@ -5094,6 +5154,8 @@ function FederationsPanel({
   const [emailInviteError, setEmailInviteError] = useState("");
   const [emailInviteResult, setEmailInviteResult] = useState(null); // {kind, email, code}
   const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
+  const [confirmKick, setConfirmKick] = useState(null); // { federationId, clubId, clubName } | null
+  const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
@@ -5207,8 +5269,19 @@ function FederationsPanel({
       code: result.code
     });
   }
-  async function handleKick(federationId, clubId) {
-    if (!window.confirm("Remove this club from the federation? It'll stop showing up in tournament pickers for other member clubs.")) return;
+  function requestKick(federationId, clubId, clubName) {
+    setConfirmKick({
+      federationId,
+      clubId,
+      clubName
+    });
+  }
+  async function handleKick() {
+    const {
+      federationId,
+      clubId
+    } = confirmKick;
+    setConfirmKick(null);
     setKickBusyClubId(clubId);
     const result = await onKickClubFromFederation(federationId, clubId);
     setKickBusyClubId(null);
@@ -5218,9 +5291,21 @@ function FederationsPanel({
       setError(result.error || "Couldn't remove that club.");
     }
   }
-  async function handleLeave(clubId, federationId, federationName) {
+  function requestLeave(clubId, federationId, federationName) {
     const club = clubs.find(c => c.id === clubId);
-    if (!window.confirm(`Stop sharing "${club ? club.name : "this club"}"'s teams with "${federationName}"?`)) return;
+    setConfirmLeave({
+      clubId,
+      federationId,
+      federationName,
+      clubName: club ? club.name : "this club"
+    });
+  }
+  async function handleLeave() {
+    const {
+      clubId,
+      federationId
+    } = confirmLeave;
+    setConfirmLeave(null);
     setLeaveBusyClubId(clubId);
     await onLeaveFederation(clubId, federationId);
     setLeaveBusyClubId(null);
@@ -5397,7 +5482,7 @@ function FederationsPanel({
       color: COLORS.pitch
     }
   }, c.name, isClubOwner(c, currentUid) && /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleLeave(c.id, f.id, f.name),
+    onClick: () => requestLeave(c.id, f.id, f.name),
     disabled: leaveBusyClubId === c.id,
     "aria-label": `Stop sharing ${c.name} with ${f.name}`,
     style: {
@@ -5492,7 +5577,7 @@ function FederationsPanel({
       fontWeight: 600
     }
   }, c.clubName), /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleKick(f.id, c.clubId),
+    onClick: () => requestKick(f.id, c.clubId, c.clubName),
     disabled: kickBusyClubId === c.clubId,
     style: {
       background: "none",
@@ -5740,7 +5825,19 @@ function FederationsPanel({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 13,
     strokeWidth: 2.5
-  }), " Federation")));
+  }), " Federation")), confirmKick && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Remove this club?",
+    message: `Remove ${confirmKick.clubName} from the federation? It'll stop showing up in tournament pickers for other member clubs.`,
+    confirmLabel: "Remove",
+    onConfirm: handleKick,
+    onCancel: () => setConfirmKick(null)
+  }), confirmLeave && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Stop sharing with this federation?",
+    message: `Stop sharing "${confirmLeave.clubName}"'s teams with "${confirmLeave.federationName}"?`,
+    confirmLabel: "Stop sharing",
+    onConfirm: handleLeave,
+    onCancel: () => setConfirmLeave(null)
+  }));
 }
 function ClubFederationScreen({
   onBack,
@@ -7801,6 +7898,7 @@ function TournamentsScreen({
       lineHeight: 1.5
     }
   }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
@@ -8492,6 +8590,7 @@ function FixturesSection({
   const [newA, setNewA] = useState("");
   const [newB, setNewB] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const fixtures = tournament.fixtures || [];
   const matchById = new Map((matches || []).map(m => [m.id, m]));
   // Once a fixture's match is complete it's finished business for the schedule — the result lives
@@ -8509,9 +8608,12 @@ function FixturesSection({
     });
     setBusy(false);
   }
-  async function clearAll() {
+  function requestClearAll() {
     if (!canManage) return;
-    if (!window.confirm("Clear all fixtures? This only removes the schedule \u2014 already-scored matches and the table are untouched.")) return;
+    setConfirmClearAll(true);
+  }
+  async function clearAll() {
+    setConfirmClearAll(false);
     setBusy(true);
     await onUpdateTournament({
       ...tournament,
@@ -8701,7 +8803,7 @@ function FixturesSection({
       textTransform: "uppercase"
     }
   }, "Fixtures"), fixtures.length > 0 && canManage && /*#__PURE__*/React.createElement("button", {
-    onClick: clearAll,
+    onClick: requestClearAll,
     disabled: busy,
     className: "cs-btn",
     style: {
@@ -8847,40 +8949,19 @@ function FixturesSection({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14
-  }), " Add a fixture")), knockoutSection, fixtureToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setConfirmDeleteId(null)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.ball,
-      marginBottom: 10
-    }
-  }, "Remove this fixture?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 18
-    }
-  }, fixtureToConfirmDelete.teamA, " vs ", fixtureToConfirmDelete.teamB, " will be removed from the schedule. This can\u2019t be undone."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setConfirmDeleteId(null),
-    style: {
-      flex: 1
-    }
-  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
-    variant: "danger",
-    onClick: () => deleteFixture(fixtureToConfirmDelete.id),
-    style: {
-      flex: 1
-    }
-  }, "Remove"))));
+  }), " Add a fixture")), knockoutSection, fixtureToConfirmDelete && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Remove this fixture?",
+    message: `${fixtureToConfirmDelete.teamA} vs ${fixtureToConfirmDelete.teamB} will be removed from the schedule. This can\u2019t be undone.`,
+    confirmLabel: "Remove",
+    onConfirm: () => deleteFixture(fixtureToConfirmDelete.id),
+    onCancel: () => setConfirmDeleteId(null)
+  }), confirmClearAll && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Clear all fixtures?",
+    message: "This only removes the schedule \u2014 already-scored matches and the table are untouched.",
+    confirmLabel: "Clear all",
+    onConfirm: clearAll,
+    onCancel: () => setConfirmClearAll(false)
+  }));
 }
 function TournamentDetailScreen({
   tournament,
@@ -8894,6 +8975,7 @@ function TournamentDetailScreen({
 }) {
   const [matches, setMatches] = useState(null); // null = loading
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteTournament, setConfirmDeleteTournament] = useState(false);
   const [statsTab, setStatsTab] = useState("batting"); // batting | bowling
   const [editingPOT, setEditingPOT] = useState(false);
   const [potDraft, setPotDraft] = useState("");
@@ -8942,7 +9024,11 @@ function TournamentDetailScreen({
     setEditingPOT(false);
   }
   function handleDelete() {
-    if (!window.confirm(`Delete "${tournament.name}"? Matches already scored in it are untouched, but the tournament and its table go away for good.`)) return;
+    if (!canManage) return;
+    setConfirmDeleteTournament(true);
+  }
+  function confirmDelete() {
+    setConfirmDeleteTournament(false);
     setDeleting(true);
     onDeleteTournament(tournament);
   }
@@ -9509,7 +9595,13 @@ function TournamentDetailScreen({
       flexShrink: 0,
       marginLeft: 10
     }
-  }, m.status === "complete" ? matchResultText(m) || "Result unavailable" : "In progress")))));
+  }, m.status === "complete" ? matchResultText(m) || "Result unavailable" : "In progress")))), confirmDeleteTournament && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Delete this tournament?",
+    message: `Delete "${tournament.name}"? Matches already scored in it are untouched, but the tournament and its table go away for good.`,
+    confirmLabel: "Delete",
+    onConfirm: confirmDelete,
+    onCancel: () => setConfirmDeleteTournament(false)
+  }));
 }
 function TeamsScreen({
   teams,
@@ -10101,6 +10193,57 @@ function Modal({
       opacity: 0.6
     }
   }), children));
+}
+// App-specific stand-in for window.confirm(): a bottom-sheet modal with a clear Cancel/Confirm
+// pair, styled to match the rest of the app instead of the OS chrome. Used for every destructive
+// or hard-to-undo action (removing a member, deleting a club, leaving a federation, etc.) so the
+// confirmation itself is on-brand and works the same everywhere.
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel = "Remove",
+  cancelLabel = "Cancel",
+  variant = "danger",
+  busy = false,
+  onConfirm,
+  onCancel
+}) {
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: busy ? () => {} : onCancel
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: variant === "danger" ? COLORS.ball : COLORS.pitch,
+      marginBottom: 10
+    }
+  }, title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 18
+    }
+  }, message), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onCancel,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, cancelLabel), /*#__PURE__*/React.createElement(Btn, {
+    variant: variant,
+    onClick: onConfirm,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, busy ? "\u2026" : confirmLabel)));
 }
 function InningScorecard({
   inning,
