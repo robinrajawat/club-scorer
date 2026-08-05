@@ -4118,12 +4118,6 @@ function ClubPanel({
   onInviteFederation,
   onRemoveMember,
   onRemoveCoOwner,
-  onRenameFederation,
-  onUpdateFederationDescription,
-  onKickClubFromFederation,
-  onLoadFederationTeams,
-  onInviteFederationCoOwnerByEmail,
-  onRemoveFederationCoOwner,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -4151,114 +4145,9 @@ function ClubPanel({
   const [fedError, setFedError] = useState("");
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberBusyUid, setMemberBusyUid] = useState(null);
-  const [fedManageOpenId, setFedManageOpenId] = useState(null);
-  const [fedManageClubs, setFedManageClubs] = useState([]); // [{clubId, clubName}] for the currently-open federation
-  const [fedManageLoading, setFedManageLoading] = useState(false);
-  const [fedKickBusyClubId, setFedKickBusyClubId] = useState(null);
-  const [fedRenameId, setFedRenameId] = useState(null); // federationId currently being renamed, or null
-  const [fedRenameText, setFedRenameText] = useState("");
-  const [fedRenameBusy, setFedRenameBusy] = useState(false);
-  const [fedDescText, setFedDescText] = useState("");
-  const [fedDescBusy, setFedDescBusy] = useState(false);
-  const [fedEmailInviteId, setFedEmailInviteId] = useState(null); // federationId currently showing the email-invite form
-  const [fedEmailInviteKind, setFedEmailInviteKind] = useState("club"); // 'club' | 'coOwner'
-  const [fedEmailInviteText, setFedEmailInviteText] = useState("");
-  const [fedEmailInviteBusy, setFedEmailInviteBusy] = useState(false);
-  const [fedEmailInviteError, setFedEmailInviteError] = useState("");
-  const [fedEmailInviteResult, setFedEmailInviteResult] = useState(null); // {federationId, kind, email, code}
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
-  function isFederationOwner(f) {
-    return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
-  }
-  async function toggleFedManage(f) {
-    if (fedManageOpenId === f.id) {
-      setFedManageOpenId(null);
-      return;
-    }
-    setFedManageOpenId(f.id);
-    setFedRenameId(null);
-    setFedDescText(f.description || "");
-    setFedEmailInviteId(null);
-    setFedManageClubs([]);
-    setFedManageLoading(true);
-    const teams = await onLoadFederationTeams(f.id);
-    const seen = new Set();
-    const clubList = [];
-    (teams || []).forEach(t => {
-      if (seen.has(t.clubId)) return;
-      seen.add(t.clubId);
-      clubList.push({
-        clubId: t.clubId,
-        clubName: t.clubName
-      });
-    });
-    setFedManageLoading(false);
-    setFedManageClubs(clubList);
-  }
-  function startFedRename(f) {
-    setFedRenameId(f.id);
-    setFedRenameText(f.name);
-  }
-  async function submitFedRename() {
-    if (!fedRenameText.trim() || fedRenameBusy || !fedRenameId) return;
-    setFedRenameBusy(true);
-    const result = await onRenameFederation(fedRenameId, fedRenameText.trim());
-    setFedRenameBusy(false);
-    if (!result.ok) {
-      setFedError(result.error || "Couldn't rename the federation.");
-      return;
-    }
-    setFedRenameId(null);
-  }
-  async function submitFedDescription(federationId) {
-    if (fedDescBusy) return;
-    setFedDescBusy(true);
-    const result = await onUpdateFederationDescription(federationId, fedDescText.trim());
-    setFedDescBusy(false);
-    if (!result.ok) setFedError(result.error || "Couldn't update the description.");
-  }
-  function startFedEmailInvite(f, kind) {
-    setFedEmailInviteId(f.id);
-    setFedEmailInviteKind(kind);
-    setFedEmailInviteText("");
-    setFedEmailInviteError("");
-    setFedEmailInviteResult(null);
-  }
-  async function submitFedEmailInvite() {
-    if (!fedEmailInviteText.trim() || fedEmailInviteBusy || !fedEmailInviteId) return;
-    setFedEmailInviteBusy(true);
-    setFedEmailInviteError("");
-    const result = fedEmailInviteKind === "coOwner" ? await onInviteFederationCoOwnerByEmail(fedEmailInviteId, fedEmailInviteText.trim()) : await onInviteFederation(fedEmailInviteId, fedEmailInviteText.trim());
-    setFedEmailInviteBusy(false);
-    if (!result.ok) {
-      setFedEmailInviteError(result.error || "Couldn't create that invite.");
-      return;
-    }
-    setFedEmailInviteResult({
-      federationId: fedEmailInviteId,
-      kind: fedEmailInviteKind,
-      email: fedEmailInviteText.trim(),
-      code: result.code
-    });
-  }
-  async function handleRemoveFedCoOwner(federationId, uid) {
-    setMemberBusyUid(uid);
-    await onRemoveFederationCoOwner(federationId, uid);
-    setMemberBusyUid(null);
-  }
-  async function handleKickClub(federationId, clubId) {
-    if (!window.confirm("Remove this club from the federation? It'll stop showing up in tournament pickers for other member clubs.")) return;
-    setFedKickBusyClubId(clubId);
-    const result = await onKickClubFromFederation(federationId, clubId);
-    setFedKickBusyClubId(null);
-    if (result.ok) {
-      setFedManageClubs(cs => cs.filter(c => c.clubId !== clubId));
-    } else {
-      setFedError(result.error || "Couldn't remove that club.");
-    }
-  }
   async function handleRemoveCoOwnerClick(uid) {
     setMemberBusyUid(uid);
     await onRemoveCoOwner(activeClub.id, uid);
@@ -4984,6 +4873,16 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 6
+    }
+  }, "Federations this club belongs to"), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
       alignItems: "center",
       gap: 8,
@@ -5009,21 +4908,7 @@ function ClubPanel({
       fontSize: 11.5,
       color: COLORS.pitch
     }
-  }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", isFederationOwner(f) && /*#__PURE__*/React.createElement("button", {
-    onClick: () => toggleFedManage(f),
-    "aria-label": `Manage ${f.name}`,
-    style: {
-      background: fedManageOpenId === f.id ? COLORS.pitch : "rgba(255,255,255,0.7)",
-      border: "none",
-      borderRadius: 10,
-      color: fedManageOpenId === f.id ? "#fff" : COLORS.pitch,
-      cursor: "pointer",
-      padding: "3px 7px",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 10.5
-    }
-  }, "Manage"), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.confirm(`Stop sharing "${activeClub.name}"'s teams with "${f.name}"?`)) onLeaveFederation(activeClub.id, f.id);
     },
@@ -5054,263 +4939,7 @@ function ClubPanel({
       fontSize: 11.5,
       cursor: "pointer"
     }
-  }, "+ Federation")), fedManageOpenId && (function () {
-  const f = activeClubFederations.find(x => x.id === fedManageOpenId);
-  if (!f) return null;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 8,
-      padding: 10,
-      borderRadius: 12,
-      background: "rgba(255,255,255,0.7)",
-      border: `1px solid ${COLORS.willow}`
-    }
-  }, fedRenameId === f.id ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: fedRenameText,
-    onChange: setFedRenameText,
-    placeholder: "Federation name",
-    autoCapitalize: "words",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitFedRename,
-    disabled: fedRenameBusy || !fedRenameText.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 38,
-      fontSize: 12.5
-    }
-  }, fedRenameBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setFedRenameId(null),
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      padding: "0 4px"
-    }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 15,
-      color: COLORS.pitch
-    }
-  }, f.name), /*#__PURE__*/React.createElement("button", {
-    onClick: () => startFedRename(f),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11,
-      padding: 2
-    }
-  }, /*#__PURE__*/React.createElement(Pencil, {
-    size: 11
-  }), " Rename")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: fedDescText,
-    onChange: setFedDescText,
-    placeholder: "Federation description (optional)",
-    autoCapitalize: "sentences",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: true
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => submitFedDescription(f.id),
-    disabled: fedDescBusy,
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 38,
-      fontSize: 12.5
-    }
-  }, fedDescBusy ? "\u2026" : "Save")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Member clubs"), fedManageLoading ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Loading\u2026") : fedManageClubs.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontStyle: "italic"
-    }
-  }, "No clubs have published teams here yet.") : fedManageClubs.map(c => /*#__PURE__*/React.createElement("div", {
-    key: c.clubId,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: "5px 0",
-      fontFamily: "'Inter'",
-      fontSize: 12.5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.ink,
-      fontWeight: 600
-    }
-  }, c.clubName), c.clubId === activeClub.id ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10.5,
-      color: COLORS.inkSoft,
-      fontWeight: 700,
-      textTransform: "uppercase"
-    }
-  }, "This club") : /*#__PURE__*/React.createElement("button", {
-    onClick: () => handleKickClub(f.id, c.clubId),
-    disabled: fedKickBusyClubId === c.clubId,
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer",
-      textDecoration: "underline",
-      padding: 0
-    }
-  }, fedKickBusyClubId === c.clubId ? "\u2026" : "Remove"))), /*#__PURE__*/React.createElement("div", {
-  style: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: `1px dashed ${COLORS.willow}`
-  }
-}, fedEmailInviteId === f.id ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    gap: 6
-  }
-}, /*#__PURE__*/React.createElement(TextField, {
-  value: fedEmailInviteText,
-  onChange: setFedEmailInviteText,
-  placeholder: "person@example.com",
-  autoCapitalize: "none",
-  autoCorrect: "off",
-  autoComplete: "off",
-  spellCheck: false
-}), /*#__PURE__*/React.createElement(Btn, {
-  onClick: submitFedEmailInvite,
-  disabled: fedEmailInviteBusy || !fedEmailInviteText.trim(),
-  style: {
-    flexShrink: 0,
-    padding: "0 14px",
-    minHeight: 38,
-    fontSize: 12.5
-  }
-}, fedEmailInviteBusy ? "\u2026" : "Invite"), /*#__PURE__*/React.createElement("button", {
-  onClick: () => setFedEmailInviteId(null),
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 12,
-    cursor: "pointer",
-    padding: "0 4px"
-  }
-}, "Cancel")), fedEmailInviteError && /*#__PURE__*/React.createElement("div", {
-  style: {
-    color: COLORS.ball,
-    fontSize: 11.5,
-    fontFamily: "'Inter'",
-    marginTop: 6
-  }
-}, fedEmailInviteError), fedEmailInviteResult && fedEmailInviteResult.federationId === f.id && /*#__PURE__*/React.createElement("div", {
-  style: {
-    fontSize: 11.5,
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    marginTop: 6,
-    lineHeight: 1.5
-  }
-}, "Share this code with ", fedEmailInviteResult.email, " \u2014 it only works when they redeem it while signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
-  style: {
-    fontFamily: "'IBM Plex Mono'",
-    fontWeight: 700,
-    color: COLORS.pitch,
-    letterSpacing: 0.5
-  }
-}, fedEmailInviteResult.code))) : /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    gap: 12,
-    flexWrap: "wrap"
-  }
-}, /*#__PURE__*/React.createElement("button", {
-  onClick: () => startFedEmailInvite(f, "club"),
-  className: "cs-btn",
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.pitch,
-    cursor: "pointer",
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11.5,
-    padding: 0,
-    textDecoration: "underline"
-  }
-}, "+ Invite a club by email"), /*#__PURE__*/React.createElement("button", {
-  onClick: () => startFedEmailInvite(f, "coOwner"),
-  className: "cs-btn",
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.pitch,
-    cursor: "pointer",
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11.5,
-    padding: 0,
-    textDecoration: "underline"
-  }
-}, "+ Invite a co-owner by email"))))
-})(), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "+ Federation")), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -5400,6 +5029,695 @@ function ClubPanel({
 // renaming, member/admin management, and federation affiliation. The Teams screen only ever
 // needs a lightweight source picker (see ClubSourceSelector); this is where you actually manage
 // any of it, which fits better next to sign-in/account rather than the everyday scoring flow.
+// Federations, shown as their own independent section — a federation is not owned by any one
+// club, so this panel is deliberately NOT scoped to whichever club chip is selected in ClubPanel.
+// It lists every federation the account currently knows about (any federation one of the user's
+// clubs is affiliated with, or the user owns/co-owns directly), with management actions gated to
+// that federation's own owner/co-owner — completely independent of club ownership.
+function FederationsPanel({
+  federationsById = {},
+  clubs,
+  currentUid,
+  onCreateFederation,
+  onJoinFederation,
+  onLeaveFederation,
+  onLoadFederationTeams,
+  onRenameFederation,
+  onUpdateFederationDescription,
+  onInviteFederation,
+  onInviteFederationCoOwnerByEmail,
+  onKickClubFromFederation
+}) {
+  const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const [mode, setMode] = useState(null); // null | 'create' | 'join'
+  const [text, setText] = useState("");
+  const [joinClubId, setJoinClubId] = useState(clubs[0] ? clubs[0].id : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [manageOpenId, setManageOpenId] = useState(null);
+  const [manageClubs, setManageClubs] = useState([]);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [kickBusyClubId, setKickBusyClubId] = useState(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameText, setRenameText] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [descEditing, setDescEditing] = useState(false);
+  const [descText, setDescText] = useState("");
+  const [descBusy, setDescBusy] = useState(false);
+  const [emailInviteKind, setEmailInviteKind] = useState(null); // null | 'club' | 'coOwner'
+  const [emailInviteText, setEmailInviteText] = useState("");
+  const [emailInviteBusy, setEmailInviteBusy] = useState(false);
+  const [emailInviteError, setEmailInviteError] = useState("");
+  const [emailInviteResult, setEmailInviteResult] = useState(null); // {kind, email, code}
+  const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
+  function isOwner(f) {
+    return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
+  }
+  function roleLabel(f) {
+    if (!f || !currentUid) return "";
+    if (f.createdBy === currentUid) return " · Owner";
+    if ((f.coOwnerUids || []).includes(currentUid)) return " · Co-owner";
+    return "";
+  }
+  function closeAdd() {
+    setMode(null);
+    setText("");
+    setError("");
+  }
+  async function submitCreate() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    const result = await onCreateFederation(text.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't create the federation.");
+      return;
+    }
+    closeAdd();
+  }
+  async function submitJoin() {
+    if (!text.trim() || !joinClubId || busy) return;
+    setBusy(true);
+    setError("");
+    const result = await onJoinFederation(joinClubId, text.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't affiliate that club.");
+      return;
+    }
+    closeAdd();
+  }
+  async function toggleManage(f) {
+    if (manageOpenId === f.id) {
+      setManageOpenId(null);
+      return;
+    }
+    setManageOpenId(f.id);
+    setRenaming(false);
+    setDescEditing(false);
+    setDescText(f.description || "");
+    setEmailInviteKind(null);
+    setEmailInviteResult(null);
+    setManageClubs([]);
+    setManageLoading(true);
+    const teams = await onLoadFederationTeams(f.id);
+    const seen = new Set();
+    const list = [];
+    (teams || []).forEach(t => {
+      if (seen.has(t.clubId)) return;
+      seen.add(t.clubId);
+      list.push({
+        clubId: t.clubId,
+        clubName: t.clubName
+      });
+    });
+    setManageLoading(false);
+    setManageClubs(list);
+  }
+  function startRename(f) {
+    setRenaming(true);
+    setRenameText(f.name);
+  }
+  async function submitRename(federationId) {
+    if (!renameText.trim() || renameBusy) return;
+    setRenameBusy(true);
+    const result = await onRenameFederation(federationId, renameText.trim());
+    setRenameBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't rename the federation.");
+      return;
+    }
+    setRenaming(false);
+  }
+  async function submitDescription(federationId) {
+    if (descBusy) return;
+    setDescBusy(true);
+    const result = await onUpdateFederationDescription(federationId, descText.trim());
+    setDescBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't update the description.");
+      return;
+    }
+    setDescEditing(false);
+  }
+  function startEmailInvite(kind) {
+    setEmailInviteKind(kind);
+    setEmailInviteText("");
+    setEmailInviteError("");
+    setEmailInviteResult(null);
+  }
+  async function submitEmailInvite(federationId) {
+    if (!emailInviteText.trim() || emailInviteBusy) return;
+    setEmailInviteBusy(true);
+    setEmailInviteError("");
+    const result = emailInviteKind === "coOwner" ? await onInviteFederationCoOwnerByEmail(federationId, emailInviteText.trim()) : await onInviteFederation(federationId, emailInviteText.trim());
+    setEmailInviteBusy(false);
+    if (!result.ok) {
+      setEmailInviteError(result.error || "Couldn't create that invite.");
+      return;
+    }
+    setEmailInviteResult({
+      kind: emailInviteKind,
+      email: emailInviteText.trim(),
+      code: result.code
+    });
+  }
+  async function handleKick(federationId, clubId) {
+    if (!window.confirm("Remove this club from the federation? It'll stop showing up in tournament pickers for other member clubs.")) return;
+    setKickBusyClubId(clubId);
+    const result = await onKickClubFromFederation(federationId, clubId);
+    setKickBusyClubId(null);
+    if (result.ok) {
+      setManageClubs(cs => cs.filter(c => c.clubId !== clubId));
+    } else {
+      setError(result.error || "Couldn't remove that club.");
+    }
+  }
+  async function handleLeave(clubId, federationId, federationName) {
+    const club = clubs.find(c => c.id === clubId);
+    if (!window.confirm(`Stop sharing "${club ? club.name : "this club"}"'s teams with "${federationName}"?`)) return;
+    setLeaveBusyClubId(clubId);
+    await onLeaveFederation(clubId, federationId);
+    setLeaveBusyClubId(null);
+  }
+  const cardStyle = {
+    background: "rgba(255,255,255,0.6)",
+    border: `1px solid ${COLORS.willow}`,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 28
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Federations"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 12
+    }
+  }, "A federation is its own independent thing, not part of any one club \u2014 clubs opt into one to see each other's teams for tournaments. Only a federation's own owner or co-owner can rename it, edit its description, invite a club, or invite a co-owner."), federations.length === 0 && !mode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 12
+    }
+  }, "You're not connected to any federation yet."), federations.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id,
+    style: cardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 4
+    }
+  }, renaming === f.id ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: renameText,
+    onChange: setRenameText,
+    placeholder: "Federation name",
+    autoCapitalize: "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => submitRename(f.id),
+    disabled: renameBusy || !renameText.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, renameBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setRenaming(false),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch
+    }
+  }, f.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.gold
+    }
+  }, roleLabel(f)), isOwner(f) && manageOpenId !== f.id && /*#__PURE__*/React.createElement("button", {
+    onClick: () => startRename(f),
+    "aria-label": "Rename federation",
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      display: "flex",
+      padding: 2
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 12
+  }))), isOwner(f) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => toggleManage(f),
+    className: "cs-btn",
+    style: {
+      background: manageOpenId === f.id ? COLORS.pitch : "rgba(255,255,255,0.7)",
+      border: "none",
+      borderRadius: 10,
+      color: manageOpenId === f.id ? "#fff" : COLORS.pitch,
+      cursor: "pointer",
+      padding: "4px 9px",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11
+    }
+  }, manageOpenId === f.id ? "Close" : "Manage")), f.description && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, f.description), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Your clubs here"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginBottom: manageOpenId === f.id ? 10 : 0
+    }
+  }, clubs.filter(c => (c.federationIds || []).includes(f.id)).length === 0 ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "None of your clubs are affiliated with this one.") : clubs.filter(c => (c.federationIds || []).includes(f.id)).map(c => /*#__PURE__*/React.createElement("span", {
+    key: c.id,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 4,
+      padding: "4px 5px 4px 9px",
+      borderRadius: 14,
+      background: "rgba(184,137,43,0.12)",
+      border: `1px solid ${COLORS.gold}`,
+      fontWeight: 600,
+      fontSize: 11,
+      color: COLORS.pitch
+    }
+  }, c.name, isClubOwner(c, currentUid) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleLeave(c.id, f.id, f.name),
+    disabled: leaveBusyClubId === c.id,
+    "aria-label": `Stop sharing ${c.name} with ${f.name}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 0,
+      lineHeight: 1,
+      fontSize: 13
+    }
+  }, "\u00d7")))), manageOpenId === f.id && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4
+    }
+  }, descEditing ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: descText,
+    onChange: setDescText,
+    placeholder: "Federation description (optional)",
+    autoCapitalize: "sentences",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: true
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => submitDescription(f.id),
+    disabled: descBusy,
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, descBusy ? "\u2026" : "Save")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setDescEditing(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: 0,
+      textDecoration: "underline",
+      marginBottom: 12,
+      display: "block"
+    }
+  }, f.description ? "Edit description" : "+ Add a description"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "All member clubs"), manageLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'"
+    }
+  }, "Loading\u2026") : manageClubs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontStyle: "italic",
+      marginBottom: 10
+    }
+  }, "No clubs have published teams here yet.") : manageClubs.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.clubId,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "5px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.ink,
+      fontWeight: 600
+    }
+  }, c.clubName), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleKick(f.id, c.clubId),
+    disabled: kickBusyClubId === c.clubId,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, kickBusyClubId === c.clubId ? "\u2026" : "Remove")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`,
+      display: "flex",
+      gap: 14,
+      flexWrap: "wrap"
+    }
+  }, emailInviteKind ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: emailInviteText,
+    onChange: setEmailInviteText,
+    placeholder: "person@example.com",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => submitEmailInvite(f.id),
+    disabled: emailInviteBusy || !emailInviteText.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, emailInviteBusy ? "\u2026" : "Invite"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setEmailInviteKind(null),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel")), emailInviteError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 11.5,
+      fontFamily: "'Inter'",
+      marginTop: 6
+    }
+  }, emailInviteError), emailInviteResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      marginTop: 6,
+      lineHeight: 1.5
+    }
+  }, "Send this code to ", emailInviteResult.email, " \u2014 it only works while they're signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono'",
+      fontWeight: 700,
+      color: COLORS.pitch,
+      letterSpacing: 0.5
+    }
+  }, emailInviteResult.code))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => startEmailInvite("club"),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, "+ Invite a club by email"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => startEmailInvite("coOwner"),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, "+ Invite a co-owner by email")))))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12,
+      fontFamily: "'Inter'",
+      marginTop: 4,
+      marginBottom: 8
+    }
+  }, error), mode ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 12,
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.6)",
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMode("create");
+      setText("");
+      setError("");
+    },
+    style: {
+      flex: 1,
+      padding: "6px 8px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      background: mode === "create" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      color: mode === "create" ? "#fff" : COLORS.inkSoft
+    }
+  }, "New federation"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMode("join");
+      setText("");
+      setError("");
+    },
+    style: {
+      flex: 1,
+      padding: "6px 8px",
+      borderRadius: 8,
+      border: "none",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      background: mode === "join" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      color: mode === "join" ? "#fff" : COLORS.inkSoft
+    }
+  }, "Join with code")), mode === "join" && clubs.length > 1 && /*#__PURE__*/React.createElement("select", {
+    value: joinClubId,
+    onChange: e => setJoinClubId(e.target.value),
+    style: {
+      width: "100%",
+      marginBottom: 8,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      padding: "8px 6px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff"
+    }
+  }, clubs.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, "Affiliate ", c.name))), mode === "join" && clubs.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      marginBottom: 8
+    }
+  }, "You need a club of your own before you can affiliate one with a federation."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: text,
+    onChange: v => setText(mode === "join" ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : v),
+    placeholder: mode === "join" ? "Invite code, e.g. 7GQK4RTP" : "Federation name, e.g. DCF",
+    autoCapitalize: mode === "join" ? "characters" : "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: mode === "join" ? submitJoin : submitCreate,
+    disabled: busy || !text.trim() || (mode === "join" && (clubs.length === 0 || !joinClubId)),
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, busy ? "\u2026" : mode === "join" ? "Join" : "Create")), /*#__PURE__*/React.createElement("button", {
+    onClick: closeAdd,
+    style: {
+      display: "block",
+      marginTop: 8,
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline"
+    }
+  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setMode("create");
+      setText("");
+      setError("");
+    },
+    className: "cs-btn",
+    style: {
+      padding: "8px 14px",
+      borderRadius: 10,
+      border: `1px dashed ${COLORS.willow}`,
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 13,
+    strokeWidth: 2.5
+  }), " Federation")));
+}
 function ClubFederationScreen({
   onBack,
   clubs,
@@ -5484,9 +5802,23 @@ function ClubFederationScreen({
       fontFamily: "'Inter'",
       fontSize: 13.5,
       color: COLORS.inkSoft,
-      marginBottom: 20
+      marginBottom: 16
     }
-  }, "Create or join clubs. Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments — everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
+  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Clubs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12
+    }
+  }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelect,
@@ -5505,13 +5837,20 @@ function ClubFederationScreen({
     onInviteFederation: onInviteFederation,
     onRemoveMember: onRemoveMember,
     onRemoveCoOwner: onRemoveClubCoOwner,
+    currentUid: currentUid
+  }), /*#__PURE__*/React.createElement(FederationsPanel, {
+    federationsById: federationsById,
+    clubs: clubs,
+    currentUid: currentUid,
+    onCreateFederation: onCreateFederation,
+    onJoinFederation: onJoinFederation,
+    onLeaveFederation: onLeaveFederation,
+    onLoadFederationTeams: onLoadFederationTeams,
     onRenameFederation: onRenameFederation,
     onUpdateFederationDescription: onUpdateFederationDescription,
-    onKickClubFromFederation: onKickClubFromFederation,
-    onLoadFederationTeams: onLoadFederationTeams,
+    onInviteFederation: onInviteFederation,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
-    onRemoveFederationCoOwner: onRemoveFederationCoOwner,
-    currentUid: currentUid
+    onKickClubFromFederation: onKickClubFromFederation
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 20,
