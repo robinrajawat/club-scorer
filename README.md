@@ -19,6 +19,8 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - Move an existing personal team into a club (or back out) from the Teams screen without re-entering it.
 - Requires signing in with Google — clubs are per-account, not per-device.
 - Affiliate a club with a **federation** (e.g. a league or association like "DCF") using a code, the same way you'd join a club. Any other club in the same federation shows up as selectable opponents when you build a tournament — so if Billund Club and Esbjerg Club are both in DCF, Billund can build a tournament against Esbjerg's teams without ever recreating Esbjerg's roster. Federation visibility is read-only and name-only: it never exposes another club's matches, membership, or player list.
+- Club roles: the owner can promote any member to **admin** (Teams screen → Manage members). Admins can rename the club, invite others, and manage its federation affiliations; only the owner can promote/demote admins, remove members, or delete the club outright.
+- Federation roles: a federation's creator is its permanent admin and can rename it or remove a member club (kicking a club only revokes its visibility in that federation — it never touches the removed club's own data). There's no way yet to add a second federation admin from within the app, since doing that safely needs a way to look up a specific person, which nothing in this app currently has.
 
 **Live score & sharing**
 - Runs-per-over and run-rate charts, with the most expensive over highlighted and each bar labeled.

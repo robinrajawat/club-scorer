@@ -974,6 +974,10 @@ async function createClub(name) {
       name: trimmed,
       ownerUid: auth.currentUser.uid,
       memberUids: [auth.currentUser.uid],
+      adminUids: [],
+      memberNames: {
+        [auth.currentUser.uid]: auth.currentUser.displayName || "Member"
+      },
       createdAt: Date.now()
     };
     await ref.set(club);
@@ -1008,7 +1012,7 @@ async function renameClub(clubId, name) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can rename it." : e.message || "Couldn't rename the club."
+      error: e.code === "permission-denied" ? "Only the club owner or an admin can rename it." : e.message || "Couldn't rename the club."
     };
   }
 }
@@ -1035,7 +1039,7 @@ async function generateClubJoinCode(clubId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can invite others." : e.message || "Couldn't generate an invite code."
+      error: e.code === "permission-denied" ? "Only the club owner or an admin can invite others." : e.message || "Couldn't generate an invite code."
     };
   }
 }
@@ -1067,6 +1071,7 @@ async function joinClubWithCode(code) {
     // allowing the membership write — this client-side check is only for a fast error message.
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+      [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || "Member",
       joinCodeUsed: cleaned
     });
     const clubDoc = await db.collection("clubs").doc(clubId).get();
@@ -1089,7 +1094,9 @@ async function leaveClub(clubId) {
   if (!auth.currentUser) return;
   try {
     await db.collection("clubs").doc(clubId).update({
-      memberUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid)
+      memberUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
+      adminUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
+      [`memberNames.${auth.currentUser.uid}`]: firebase.firestore.FieldValue.delete()
     });
   } catch (e) {
     console.error("leave club failed", e);
@@ -1098,7 +1105,9 @@ async function leaveClub(clubId) {
 async function removeClubMember(clubId, uid) {
   try {
     await db.collection("clubs").doc(clubId).update({
-      memberUids: firebase.firestore.FieldValue.arrayRemove(uid)
+      memberUids: firebase.firestore.FieldValue.arrayRemove(uid),
+      adminUids: firebase.firestore.FieldValue.arrayRemove(uid),
+      [`memberNames.${uid}`]: firebase.firestore.FieldValue.delete()
     });
     return {
       ok: true
@@ -1107,6 +1116,39 @@ async function removeClubMember(clubId, uid) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can remove members." : e.message || "Couldn't remove that member."
+    };
+  }
+}
+// Owner-only. Promotes an existing member to admin — admins can rename the club, manage its
+// federation affiliations, and invite others, but can't remove members, promote/demote anyone,
+// or delete the club (those stay owner-only, same as before this feature existed).
+async function promoteClubAdmin(clubId, uid) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      adminUids: firebase.firestore.FieldValue.arrayUnion(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can promote admins." : e.message || "Couldn't promote that member."
+    };
+  }
+}
+async function demoteClubAdmin(clubId, uid) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      adminUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can change admins." : e.message || "Couldn't demote that admin."
     };
   }
 }
@@ -1203,6 +1245,8 @@ async function createFederation(name) {
     const federation = {
       name: trimmed,
       createdBy: auth.currentUser.uid,
+      adminUids: [],
+      kickedClubIds: [],
       createdAt: Date.now()
     };
     await ref.set(federation);
@@ -1301,7 +1345,7 @@ async function joinFederationWithCode(clubId, code) {
     console.error("join federation failed", e);
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can affiliate it." : e.message || "Couldn't join that federation."
+      error: e.code === "permission-denied" ? "Only the club owner or an admin can affiliate it." : e.message || "Couldn't join that federation."
     };
   }
 }
@@ -1318,7 +1362,86 @@ async function leaveFederation(clubId, federationId) {
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only club members can do that." : e.message || "Couldn't leave that federation."
+      error: e.code === "permission-denied" ? "Only the club owner or an admin can do that." : e.message || "Couldn't leave that federation."
+    };
+  }
+}
+async function renameFederation(federationId, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return {
+    ok: false,
+    error: "Give the federation a name."
+  };
+  try {
+    await db.collection("federations").doc(federationId).update({
+      name: trimmed
+    });
+    // Unlike a club rename, nothing needs cascading here — federations/{id}/teams entries store
+    // clubName (denormalized from the CLUB), never the federation's own name.
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only a federation admin can rename it." : e.message || "Couldn't rename the federation."
+    };
+  }
+}
+// Creator-only (see index.html notes on ClubPanel for why club admin-promotion has a bounded,
+// known member list to pick from, and federation admin-promotion currently doesn't — there's no
+// user-lookup anywhere in this app yet, so this stays creator-only until that exists).
+async function promoteFederationAdmin(federationId, uid) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      adminUids: firebase.firestore.FieldValue.arrayUnion(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation's creator can promote admins." : e.message || "Couldn't promote that admin."
+    };
+  }
+}
+async function demoteFederationAdmin(federationId, uid) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      adminUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation's creator can change admins." : e.message || "Couldn't demote that admin."
+    };
+  }
+}
+// A federation admin's "remove club" action. Deliberately does NOT touch the target club's own
+// federationIds — this app never lets one club's write touch another club's document (see the
+// clubs/{clubId} rule notes), so instead the federation blocklists the club on its OWN doc
+// (kickedClubIds) and wipes its current directory entries. The kickedClubIds check in the
+// federations/{id}/teams rule then blocks that club from ever re-publishing into this federation
+// again, even though its own federationIds array still (harmlessly) lists it as affiliated — the
+// club's own admins can still self-leave any time to clear that stale tag from their side.
+async function kickClubFromFederation(federationId, clubId) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      kickedClubIds: firebase.firestore.FieldValue.arrayUnion(clubId)
+    });
+    const snap = await db.collection("federations").doc(federationId).collection("teams").where("clubId", "==", clubId).get();
+    await Promise.all(snap.docs.map(d => d.ref.delete()));
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only a federation admin can remove a club." : e.message || "Couldn't remove that club."
     };
   }
 }
@@ -3753,6 +3876,12 @@ function ClubPanel({
   onJoinFederation,
   onLeaveFederation,
   onInviteFederation,
+  onRemoveMember,
+  onPromoteAdmin,
+  onDemoteAdmin,
+  onRenameFederation,
+  onKickClubFromFederation,
+  onLoadFederationTeams,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -3772,8 +3901,85 @@ function ClubPanel({
   const [fedInviteCode, setFedInviteCode] = useState(null); // {federationId, code} of the one just created/invited
   const [fedInviteBusyId, setFedInviteBusyId] = useState(null);
   const [fedCodeCopied, setFedCodeCopied] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [memberBusyUid, setMemberBusyUid] = useState(null);
+  const [fedManageOpenId, setFedManageOpenId] = useState(null);
+  const [fedManageClubs, setFedManageClubs] = useState([]); // [{clubId, clubName}] for the currently-open federation
+  const [fedManageLoading, setFedManageLoading] = useState(false);
+  const [fedKickBusyClubId, setFedKickBusyClubId] = useState(null);
+  const [fedRenameId, setFedRenameId] = useState(null); // federationId currently being renamed, or null
+  const [fedRenameText, setFedRenameText] = useState("");
+  const [fedRenameBusy, setFedRenameBusy] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
+  function isFederationAdmin(f) {
+    return !!f && !!currentUid && (f.createdBy === currentUid || (f.adminUids || []).includes(currentUid));
+  }
+  async function toggleFedManage(f) {
+    if (fedManageOpenId === f.id) {
+      setFedManageOpenId(null);
+      return;
+    }
+    setFedManageOpenId(f.id);
+    setFedRenameId(null);
+    setFedManageClubs([]);
+    setFedManageLoading(true);
+    const teams = await onLoadFederationTeams(f.id);
+    const seen = new Set();
+    const clubList = [];
+    (teams || []).forEach(t => {
+      if (seen.has(t.clubId)) return;
+      seen.add(t.clubId);
+      clubList.push({
+        clubId: t.clubId,
+        clubName: t.clubName
+      });
+    });
+    setFedManageLoading(false);
+    setFedManageClubs(clubList);
+  }
+  function startFedRename(f) {
+    setFedRenameId(f.id);
+    setFedRenameText(f.name);
+  }
+  async function submitFedRename() {
+    if (!fedRenameText.trim() || fedRenameBusy || !fedRenameId) return;
+    setFedRenameBusy(true);
+    const result = await onRenameFederation(fedRenameId, fedRenameText.trim());
+    setFedRenameBusy(false);
+    if (!result.ok) {
+      setFedError(result.error || "Couldn't rename the federation.");
+      return;
+    }
+    setFedRenameId(null);
+  }
+  async function handleKickClub(federationId, clubId) {
+    if (!window.confirm("Remove this club from the federation? It'll stop showing up in tournament pickers for other member clubs.")) return;
+    setFedKickBusyClubId(clubId);
+    const result = await onKickClubFromFederation(federationId, clubId);
+    setFedKickBusyClubId(null);
+    if (result.ok) {
+      setFedManageClubs(cs => cs.filter(c => c.clubId !== clubId));
+    } else {
+      setFedError(result.error || "Couldn't remove that club.");
+    }
+  }
+  async function handlePromote(uid) {
+    setMemberBusyUid(uid);
+    await onPromoteAdmin(activeClub.id, uid);
+    setMemberBusyUid(null);
+  }
+  async function handleDemote(uid) {
+    setMemberBusyUid(uid);
+    await onDemoteAdmin(activeClub.id, uid);
+    setMemberBusyUid(null);
+  }
+  async function handleRemoveMemberClick(uid, name) {
+    if (!window.confirm(`Remove ${name} from "${activeClub.name}"?`)) return;
+    setMemberBusyUid(uid);
+    await onRemoveMember(activeClub.id, uid);
+    setMemberBusyUid(null);
+  }
   function closeAdd() {
     setMode(null);
     setText("");
@@ -3806,6 +4012,9 @@ function ClubPanel({
     setFedMode(null);
     setFedError("");
     setFedInviteCode(null);
+    setMembersOpen(false);
+    setFedManageOpenId(null);
+    setFedRenameId(null);
     onSelect(id);
   }
   function startRename() {
@@ -4165,7 +4374,92 @@ function ClubPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Leave club")), /*#__PURE__*/React.createElement("div", {
+  }, "Leave club")), activeClub.ownerUid === currentUid && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: `1px dashed ${COLORS.willow}`
+  }
+}, /*#__PURE__*/React.createElement("button", {
+  onClick: () => setMembersOpen(o => !o),
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, membersOpen ? "Hide members" : `Manage members (${activeClub.memberUids.length})`), membersOpen && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 8
+  }
+}, activeClub.memberUids.map(uid => {
+  const name = activeClub.memberNames && activeClub.memberNames[uid] || `Member ${uid.slice(0, 6)}`;
+  const isOwner = uid === activeClub.ownerUid;
+  const isAdmin = (activeClub.adminUids || []).includes(uid);
+  const roleLabel = isOwner ? "Owner" : isAdmin ? "Admin" : "Member";
+  return /*#__PURE__*/React.createElement("div", {
+    key: uid,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontWeight: 600,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: isOwner ? COLORS.gold : isAdmin ? COLORS.turf : COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }, roleLabel), !isOwner && /*#__PURE__*/React.createElement("button", {
+    onClick: () => isAdmin ? handleDemote(uid) : handlePromote(uid),
+    disabled: memberBusyUid === uid,
+    style: {
+      background: "none",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      padding: "3px 8px",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 10.5,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, memberBusyUid === uid ? "\u2026" : isAdmin ? "Demote" : "Promote"), !isOwner && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRemoveMemberClick(uid, name),
+    disabled: memberBusyUid === uid,
+    "aria-label": `Remove ${name}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      fontSize: 14,
+      lineHeight: 1
+    }
+  }, "\u00d7"));
+}))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -4213,7 +4507,21 @@ function ClubPanel({
       fontSize: 10.5,
       letterSpacing: 0.4
     }
-  }, fedInviteBusyId === f.id ? "\u2026" : fedInviteCode && fedInviteCode.federationId === f.id ? fedCodeCopied ? "Copied!" : fedInviteCode.code : "Code"), /*#__PURE__*/React.createElement("button", {
+  }, fedInviteBusyId === f.id ? "\u2026" : fedInviteCode && fedInviteCode.federationId === f.id ? fedCodeCopied ? "Copied!" : fedInviteCode.code : "Code"), isFederationAdmin(f) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => toggleFedManage(f),
+    "aria-label": `Manage ${f.name}`,
+    style: {
+      background: fedManageOpenId === f.id ? COLORS.pitch : "rgba(255,255,255,0.7)",
+      border: "none",
+      borderRadius: 10,
+      color: fedManageOpenId === f.id ? "#fff" : COLORS.pitch,
+      cursor: "pointer",
+      padding: "3px 7px",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5
+    }
+  }, "Manage"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (window.confirm(`Stop sharing "${activeClub.name}"'s teams with "${f.name}"?`)) onLeaveFederation(activeClub.id, f.id);
     },
@@ -4245,7 +4553,144 @@ function ClubPanel({
       fontSize: 11.5,
       cursor: "pointer"
     }
-  }, "+ Federation")), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "+ Federation")), fedManageOpenId && (function () {
+  const f = activeClubFederations.find(x => x.id === fedManageOpenId);
+  if (!f) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      padding: 10,
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.7)",
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, fedRenameId === f.id ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: fedRenameText,
+    onChange: setFedRenameText,
+    placeholder: "Federation name",
+    autoCapitalize: "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitFedRename,
+    disabled: fedRenameBusy || !fedRenameText.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, fedRenameBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setFedRenameId(null),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 15,
+      color: COLORS.pitch
+    }
+  }, f.name), /*#__PURE__*/React.createElement("button", {
+    onClick: () => startFedRename(f),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      padding: 2
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }), " Rename")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Member clubs"), fedManageLoading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'"
+    }
+  }, "Loading\u2026") : fedManageClubs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontStyle: "italic"
+    }
+  }, "No clubs have published teams here yet.") : fedManageClubs.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.clubId,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "5px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.ink,
+      fontWeight: 600
+    }
+  }, c.clubName), c.clubId === activeClub.id ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      color: COLORS.inkSoft,
+      fontWeight: 700,
+      textTransform: "uppercase"
+    }
+  }, "This club") : /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleKickClub(f.id, c.clubId),
+    disabled: fedKickBusyClubId === c.clubId,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, fedKickBusyClubId === c.clubId ? "\u2026" : "Remove"))));
+})(), fedMode && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -7897,6 +8342,12 @@ function TeamsScreen({
   onJoinFederation,
   onLeaveFederation,
   onInviteFederation,
+  onRemoveMember,
+  onPromoteAdmin,
+  onDemoteAdmin,
+  onRenameFederation,
+  onKickClubFromFederation,
+  onLoadFederationTeams,
   onMoveTeam,
   currentUid
 }) {
@@ -7958,6 +8409,12 @@ function TeamsScreen({
     onJoinFederation: onJoinFederation,
     onLeaveFederation: onLeaveFederation,
     onInviteFederation: onInviteFederation,
+    onRemoveMember: onRemoveMember,
+    onPromoteAdmin: onPromoteAdmin,
+    onDemoteAdmin: onDemoteAdmin,
+    onRenameFederation: onRenameFederation,
+    onKickClubFromFederation: onKickClubFromFederation,
+    onLoadFederationTeams: onLoadFederationTeams,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
@@ -12078,6 +12535,69 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleRemoveMember(clubId, uid) {
+    const result = await removeClubMember(clubId, uid);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => {
+        if (c.id !== clubId) return c;
+        const memberNames = { ...(c.memberNames || {})
+        };
+        delete memberNames[uid];
+        return {
+          ...c,
+          memberUids: (c.memberUids || []).filter(u => u !== uid),
+          adminUids: (c.adminUids || []).filter(u => u !== uid),
+          memberNames
+        };
+      }));
+    }
+    return result;
+  }
+  async function handlePromoteAdmin(clubId, uid) {
+    const result = await promoteClubAdmin(clubId, uid);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        adminUids: [...(c.adminUids || []).filter(u => u !== uid), uid]
+      } : c));
+    }
+    return result;
+  }
+  async function handleDemoteAdmin(clubId, uid) {
+    const result = await demoteClubAdmin(clubId, uid);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        adminUids: (c.adminUids || []).filter(u => u !== uid)
+      } : c));
+    }
+    return result;
+  }
+  async function handleRenameFederation(federationId, name) {
+    const trimmed = (name || "").trim();
+    const result = await renameFederation(federationId, trimmed);
+    if (result.ok) {
+      setFederationsById(prev => ({
+        ...prev,
+        [federationId]: { ...(prev[federationId] || {}),
+          name: trimmed
+        }
+      }));
+    }
+    return result;
+  }
+  async function handleKickClubFromFederation(federationId, clubId) {
+    const result = await kickClubFromFederation(federationId, clubId);
+    if (result.ok) {
+      setFederationsById(prev => ({
+        ...prev,
+        [federationId]: { ...(prev[federationId] || {}),
+          kickedClubIds: [...((prev[federationId] || {}).kickedClubIds || []).filter(id => id !== clubId), clubId]
+        }
+      }));
+    }
+    return result;
+  }
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : tournaments;
   async function handleCreateTournament(name, teamNames) {
     const t = {
@@ -12306,6 +12826,12 @@ function CricketScorer() {
     onJoinFederation: handleJoinFederation,
     onLeaveFederation: handleLeaveFederation,
     onInviteFederation: generateFederationJoinCode,
+    onRemoveMember: handleRemoveMember,
+    onPromoteAdmin: handlePromoteAdmin,
+    onDemoteAdmin: handleDemoteAdmin,
+    onRenameFederation: handleRenameFederation,
+    onKickClubFromFederation: handleKickClubFromFederation,
+    onLoadFederationTeams: loadFederationTeams,
     onMoveTeam: handleMoveTeam,
     currentUid: user && user.uid
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {

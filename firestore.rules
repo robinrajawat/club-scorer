@@ -66,19 +66,37 @@ service cloud.firestore {
         && request.resource.data.memberUids == [request.auth.uid];
 
       allow update: if request.auth != null && (
-        // (A) An existing member editing club data (e.g. renaming it). Membership and ownership
-        // must not change via this branch — that's what (B)/(C)/(D) are for.
+        // (A) Owner or admin editing general club data (name, federationIds, and so on).
+        // Membership, ownership, and the admin list itself must not change via this branch —
+        // that's what (A2)/(B)/(C)/(D) are for. Uses get(field, default) throughout because
+        // clubs created before the admin-role feature existed have no adminUids field at all —
+        // a bare resource.data.adminUids on one of those errors out the whole check rather than
+        // reading as empty.
         (
-          request.auth.uid in resource.data.memberUids &&
+          (request.auth.uid == resource.data.ownerUid || request.auth.uid in resource.data.get('adminUids', [])) &&
           request.resource.data.memberUids == resource.data.memberUids &&
-          request.resource.data.ownerUid == resource.data.ownerUid
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.get('adminUids', []) == resource.data.get('adminUids', [])
+        )
+        ||
+        // (A2) Owner promoting or demoting admins. Owner-only — there's no multi-step admin
+        // invite flow, so this is the sole path onto/off of adminUids. Every admin must already
+        // be a member; you can't hand admin rights to someone outside the club.
+        (
+          request.auth.uid == resource.data.ownerUid &&
+          request.resource.data.memberUids == resource.data.memberUids &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.adminUids.hasOnly(resource.data.memberUids)
         )
         ||
         // (B) Self-join with a valid, unexpired invite code that names THIS club. The code is
         // looked up by its own ID — never queried/listed — exactly like sharedMatches/liveViews.
+        // adminUids can't change here — joining never grants admin rights.
         (
           !(request.auth.uid in resource.data.memberUids) &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.get('adminUids', []) == resource.data.get('adminUids', []) &&
           request.resource.data.name == resource.data.name &&
           request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
           'joinCodeUsed' in request.resource.data &&
@@ -86,20 +104,25 @@ service cloud.firestore {
           get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.expiresAt > request.time.toMillis()
         )
         ||
-        // (C) Self-leave. Anyone but the owner can remove only themselves.
+        // (C) Self-leave. Anyone but the owner can remove only themselves — also drops
+        // themselves from adminUids, if they were one.
         (
           request.auth.uid in resource.data.memberUids &&
           request.auth.uid != resource.data.ownerUid &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.memberUids == resource.data.memberUids.removeAll([request.auth.uid])
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.memberUids == resource.data.memberUids.removeAll([request.auth.uid]) &&
+          request.resource.data.get('adminUids', []) == resource.data.get('adminUids', []).removeAll([request.auth.uid])
         )
         ||
         // (D) Owner removing someone else, or pruning the list — ownership itself can't change
-        // here (that would need an explicit transfer flow, deliberately not built).
+        // here (that would need an explicit transfer flow, deliberately not built). adminUids
+        // must stay a subset of whatever memberUids ends up as, so a removed admin can't linger.
         (
           request.auth.uid == resource.data.ownerUid &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.memberUids.hasOnly(resource.data.memberUids)
+          request.resource.data.memberUids.hasOnly(resource.data.memberUids) &&
+          request.resource.data.get('adminUids', []).hasOnly(request.resource.data.memberUids)
         )
       );
 
@@ -118,8 +141,8 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------------
     // Club invite codes. A code is a single-purpose capability token: any signed-in user can
-    // look one up by its exact ID (that's how joining resolves code → clubId), but only existing
-    // members can mint or revoke one for their club.
+    // look one up by its exact ID (that's how joining resolves code → clubId), but only the
+    // club's owner or an admin can mint or revoke one.
     // ---------------------------------------------------------------------
     match /clubJoinCodes/{code} {
       allow get: if request.auth != null;
@@ -127,19 +150,26 @@ service cloud.firestore {
 
       allow create: if request.auth != null
         && request.resource.data.clubId is string
-        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.memberUids;
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.ownerUid
+          || request.auth.uid in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('adminUids', [])
+        );
 
       allow delete: if request.auth != null
-        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.memberUids;
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.ownerUid
+          || request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.get('adminUids', [])
+        );
 
       allow update: if false; // codes are immutable — rotate by delete + create instead
     }
 
     // ---------------------------------------------------------------------
     // Federations — a light umbrella tag (e.g. "DCF") that clubs opt into via a join code, same
-    // bearer-capability pattern as a club invite. A federation document itself carries no
-    // membership or admin concept in v1 — create + read only, no rename/delete — it exists
-    // purely so the directory below has something to hang off.
+    // bearer-capability pattern as a club invite. A federation's creator is its permanent admin;
+    // they can promote co-admins the same way a club owner promotes club admins. There's no
+    // multi-step "invite a person to be a federation admin" flow yet (this app has no user-lookup
+    // anywhere), so admin promotion is creator-only rather than admin-can-promote-admin.
     // ---------------------------------------------------------------------
     match /federations/{federationId} {
       allow read: if request.auth != null;
@@ -147,7 +177,26 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.createdBy == request.auth.uid;
 
-      allow update, delete: if false;
+      allow update: if request.auth != null && (
+        // (A) Existing admin or the creator editing federation data (rename, kickedClubIds).
+        // adminUids and createdBy must not change via this branch — that's what (B) is for.
+        // get(field, default) handles federations from before this field existed.
+        (
+          (request.auth.uid == resource.data.createdBy || request.auth.uid in resource.data.get('adminUids', [])) &&
+          request.resource.data.get('adminUids', []) == resource.data.get('adminUids', []) &&
+          request.resource.data.createdBy == resource.data.createdBy
+        )
+        ||
+        // (B) Creator promoting or demoting admins. Creator-only, and the name can't change in
+        // the same write — keeps each write single-purpose, same style as the clubs rule above.
+        (
+          request.auth.uid == resource.data.createdBy &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.name == resource.data.name
+        )
+      );
+
+      allow delete: if false;
     }
 
     match /federationJoinCodes/{code} {
@@ -168,19 +217,26 @@ service cloud.firestore {
     // directory, not a security boundary, exactly like what a federation join code itself grants
     // (see joinFederationWithCode in index.html). A write is only valid if the writer is a
     // member of the club being published AND that club currently lists this federation in its
-    // own federationIds, so leaving a federation (clubs/{clubId} update rule, branch A) or losing
-    // club membership immediately blocks further writes — existing stale entries are cleaned up
-    // client-side by leaveFederation() rather than by this rule.
+    // own federationIds AND the federation hasn't blocklisted that club (kickedClubIds — see
+    // kickClubFromFederation in index.html for why a "kick" lives here rather than as a write to
+    // the target club's own document, which this app never allows). Existing stale entries are
+    // cleaned up client-side by leaveFederation()/kickClubFromFederation() rather than by this
+    // rule; losing federation affiliation or club membership just blocks further writes.
     match /federations/{federationId}/teams/{entryId} {
       allow read: if request.auth != null;
 
       allow create, update: if request.auth != null
         && request.resource.data.clubId is string
         && request.auth.uid in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.memberUids
-        && federationId in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.federationIds;
+        && federationId in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('federationIds', [])
+        && !(request.resource.data.clubId in get(/databases/$(database)/documents/federations/$(federationId)).data.get('kickedClubIds', []));
 
       allow delete: if request.auth != null
-        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.memberUids;
+        && (
+          request.auth.uid in get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data.memberUids
+          || request.auth.uid == get(/databases/$(database)/documents/federations/$(federationId)).data.createdBy
+          || request.auth.uid in get(/databases/$(database)/documents/federations/$(federationId)).data.get('adminUids', [])
+        );
     }
   }
 }
