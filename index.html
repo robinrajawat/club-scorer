@@ -6811,6 +6811,12 @@ function FederationsPanel({
     confirmLabel: "Remove",
     onConfirm: handleRemoveCoOwnerClick,
     onCancel: () => setConfirmRemoveCoOwner(null)
+  }), confirmRevokeInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Revoke this invite?",
+    message: `Revoke the invite to ${confirmRevokeInvite.email}? The code will stop working immediately.`,
+    confirmLabel: "Revoke",
+    onConfirm: handleRevokeInviteClick,
+    onCancel: () => setConfirmRevokeInvite(null)
   }));
 }
 function ClubFederationScreen({
