@@ -5992,11 +5992,10 @@ function FederationsPanel({
     }
     closeAdd();
   }
-  async function toggleManage(f) {
-    if (manageOpenId === f.id) {
-      setManageOpenId(null);
-      return;
-    }
+  // Splits the "open" side of toggleManage out on its own so openCoOwnerInvite (and anything
+  // else that wants to jump straight into the manage panel) doesn't have to await the
+  // federation-teams fetch first — see openCoOwnerInvite below for why that mattered.
+  function openManage(f) {
     setManageOpenId(f.id);
     setRenaming(false);
     setDescEditing(false);
@@ -6005,19 +6004,27 @@ function FederationsPanel({
     setEmailInviteResult(null);
     setManageClubs([]);
     setManageLoading(true);
-    const teams = await onLoadFederationTeams(f.id);
-    const seen = new Set();
-    const list = [];
-    (teams || []).forEach(t => {
-      if (seen.has(t.clubId)) return;
-      seen.add(t.clubId);
-      list.push({
-        clubId: t.clubId,
-        clubName: t.clubName
+    onLoadFederationTeams(f.id).then(teams => {
+      const seen = new Set();
+      const list = [];
+      (teams || []).forEach(t => {
+        if (seen.has(t.clubId)) return;
+        seen.add(t.clubId);
+        list.push({
+          clubId: t.clubId,
+          clubName: t.clubName
+        });
       });
+      setManageLoading(false);
+      setManageClubs(list);
     });
-    setManageLoading(false);
-    setManageClubs(list);
+  }
+  function toggleManage(f) {
+    if (manageOpenId === f.id) {
+      setManageOpenId(null);
+      return;
+    }
+    openManage(f);
   }
   function startRename(f) {
     setRenaming(f.id);
@@ -6054,9 +6061,12 @@ function FederationsPanel({
   // A direct shortcut to "invite a co-owner" from right next to the Manage toggle itself — the
   // form for it already existed inside the Manage panel, but only after opening Manage AND
   // scrolling past the description and member-clubs list first, which made it easy to miss
-  // entirely. This opens Manage (if it wasn't already) and jumps straight to that form.
-  async function openCoOwnerInvite(f) {
-    if (manageOpenId !== f.id) await toggleManage(f);
+  // entirely. This opens Manage (if it wasn't already) and jumps straight to that form —
+  // synchronously, via openManage rather than toggleManage/await, so the invite form appears
+  // immediately instead of waiting on the federation-teams fetch to resolve first (that fetch
+  // only feeds the unrelated "member clubs" list further down the same panel).
+  function openCoOwnerInvite(f) {
+    if (manageOpenId !== f.id) openManage(f);
     startEmailInvite("coOwner");
   }
   async function submitEmailInvite(federationId) {
