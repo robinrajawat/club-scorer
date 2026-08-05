@@ -10468,14 +10468,7 @@ function TournamentDetailScreen({
   }
 }, /*#__PURE__*/React.createElement("span", {
   style: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 30,
-    height: 30,
-    borderRadius: "50%",
-    background: "#e8791c",
-    fontSize: 15,
+    fontSize: 24,
     flexShrink: 0
   }
 }, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
@@ -10490,7 +10483,7 @@ function TournamentDetailScreen({
     fontWeight: 700,
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: COLORS.inkSoft
+    color: "#e8791c"
   }
 }, "Orange Cap \u2014 most runs"), /*#__PURE__*/React.createElement("div", {
   style: {
@@ -10517,14 +10510,7 @@ function TournamentDetailScreen({
   }
 }, /*#__PURE__*/React.createElement("span", {
   style: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 30,
-    height: 30,
-    borderRadius: "50%",
-    background: "#7b3fa0",
-    fontSize: 15,
+    fontSize: 24,
     flexShrink: 0
   }
 }, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
@@ -10539,7 +10525,7 @@ function TournamentDetailScreen({
     fontWeight: 700,
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: COLORS.inkSoft
+    color: "#7b3fa0"
   }
 }, "Purple Cap \u2014 most wickets"), /*#__PURE__*/React.createElement("div", {
   style: {
@@ -13663,20 +13649,29 @@ function MatchScreen({
   // the boundary that both brings up a batsman's fifty AND the team's hundred), and showing only
   // the last one silently dropped the others from the toast (they were still logged to the
   // scorecard either way, just never surfaced in the moment). This shows each in turn instead.
+  // Split into two effects deliberately: promoting the next queued item into milestoneToast must
+  // NOT live in the same effect that schedules that toast's auto-dismiss timer, because that
+  // effect's own dependency array includes milestoneToast — setting it re-triggers the effect
+  // immediately, and its cleanup (clearTimeout) would cancel the timer it had just created, with
+  // no replacement ever scheduled. That's what made a toast look "stuck": the first one to show
+  // never actually got a working dismiss timer.
   useEffect(() => {
     if (milestoneToast || milestoneQueue.length === 0) return;
     const [next, ...rest] = milestoneQueue;
-    const key = Date.now();
     setMilestoneToast({
       milestone: next,
-      key
+      key: Date.now()
     });
     setMilestoneQueue(rest);
+  }, [milestoneToast, milestoneQueue]);
+  useEffect(() => {
+    if (!milestoneToast) return;
+    const key = milestoneToast.key;
     const timer = setTimeout(() => {
       setMilestoneToast(t => t && t.key === key ? null : t);
     }, 2600);
     return () => clearTimeout(timer);
-  }, [milestoneToast, milestoneQueue]);
+  }, [milestoneToast]);
   const [conflict, setConflict] = useState(null); // remote match, when another device's write
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
