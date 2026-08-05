@@ -11164,13 +11164,29 @@ function MatchScreen({
   // with a warning instead of a dead end
   const maxOversExcludeList = eligibleAfterMaxOvers.length > 0 ? atMaxOvers : [];
   // Every write to a shared match is optimistic-concurrency checked server-side (see
-  // transactionalMatchWrite). A plain ok result just needs its new writeSeq folded back into local
-  // state so the NEXT write's check is against the right baseline — cur => merge, never overwrite,
+  // transactionalMatchWrite): a save carries the writeSeq it EXPECTS to still be current, and the
+  // server rejects it as a conflict if that's fallen behind. Scoring balls quickly fires several
+  // saves back-to-back — each one built from the same just-rendered `match` prop, since the
+  // previous save's resolved writeSeq hasn't come back and re-rendered yet. Without something
+  // tracking the expected seq OUTSIDE of React's render cycle, every one of those in-flight saves
+  // would carry the SAME stale expectedSeq: the first to land on the server succeeds, and every
+  // other one immediately reads as "another device" raced it — even on a single device, single
+  // tab. writeSeqRef is that outside-of-render tracker (updated the instant a save resolves, not
+  // on next render), and saveQueueRef chains saves one after another so each one reads the ref
+  // AFTER the previous save has updated it, instead of racing it.
+  const writeSeqRef = useRef(match.writeSeq || 0);
+  const saveQueueRef = useRef(Promise.resolve());
+  useEffect(() => {
+    if ((match.writeSeq || 0) > writeSeqRef.current) writeSeqRef.current = match.writeSeq;
+  }, [match.writeSeq]);
+  // A plain ok result just needs its new writeSeq folded back into local state (and the ref, right
+  // away) so the NEXT write's check is against the right baseline — cur => merge, never overwrite,
   // since local state may already have moved on by the time this resolves. A conflict result means
-  // another device's write landed in between; that needs a human decision, not a silent overwrite,
-  // so it opens the resolution modal instead.
+  // another device's write genuinely landed in between; that needs a human decision, not a silent
+  // overwrite, so it opens the resolution modal instead.
   function applySaveResult(result) {
     if (result.ok && result.writeSeq != null) {
+      writeSeqRef.current = result.writeSeq;
       setMatch(cur => cur ? {
         ...cur,
         writeSeq: result.writeSeq
@@ -11178,17 +11194,30 @@ function MatchScreen({
     } else if (result.conflict) {
       setConflict(result.remoteMatch);
     }
+    return result;
+  }
+  // Every save goes through here so they're serialized: each one waits for the previous save in
+  // this tab to finish (and update writeSeqRef) before it reads the expected seq and sends its own
+  // write, rather than several firing in parallel off the same stale value.
+  function queueSave(updated) {
+    saveQueueRef.current = saveQueueRef.current.then(() => saveMatch({
+      ...updated,
+      writeSeq: writeSeqRef.current
+    })).then(applySaveResult);
+    return saveQueueRef.current;
   }
   function resolveConflictKeepMine() {
     const forced = {
       ...match,
       writeSeq: conflict.writeSeq
     };
+    writeSeqRef.current = conflict.writeSeq;
     setMatch(forced);
     setConflict(null);
-    saveMatch(forced).then(applySaveResult);
+    queueSave(forced);
   }
   function resolveConflictUseTheirs() {
+    writeSeqRef.current = conflict.writeSeq || 0;
     setMatch(conflict);
     setConflict(null);
   }
@@ -11202,7 +11231,7 @@ function MatchScreen({
     };
     checkInningEnd(updated);
     setMatch(updated);
-    saveMatch(updated).then(applySaveResult);
+    queueSave(updated);
   }
   async function handleGetCode() {
     if (match.shareCode) return {
@@ -11212,18 +11241,14 @@ function MatchScreen({
       ...match,
       shareCode: genMatchCode()
     };
-    const result = await saveMatch(updated);
+    setMatch(updated);
+    const result = await queueSave(updated);
     if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
       return {
         ok: true,
         code: updated.shareCode
       };
     }
-    if (result.conflict) setConflict(result.remoteMatch);
     return {
       ok: false,
       error: result.error || "This match changed on another device \u2014 resolve that before sharing a code."
@@ -11237,18 +11262,14 @@ function MatchScreen({
       ...match,
       viewCode: genMatchCode()
     };
-    const result = await saveMatch(updated);
+    setMatch(updated);
+    const result = await queueSave(updated);
     if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
       return {
         ok: true,
         code: updated.viewCode
       };
     }
-    if (result.conflict) setConflict(result.remoteMatch);
     return {
       ok: false,
       error: result.error || "This match changed on another device \u2014 resolve that before sharing a link."
@@ -11465,14 +11486,15 @@ function MatchScreen({
     // data but keeping the CURRENT writeSeq as the expected baseline is what's actually correct
     // here: this device is the sole author of that latest confirmed write, so its own writeSeq
     // is the right thing to check the undo against — using the stale snapshot's seq instead would
-    // make every undo spuriously look like a conflict with another device.
+    // make every undo spuriously look like a conflict with another device. queueSave reads
+    // writeSeqRef itself, so the prev object's own writeSeq field here doesn't matter.
     const prev = {
       ...history[history.length - 1],
       writeSeq: match.writeSeq
     };
     setHistory(h => h.slice(0, -1));
     setMatch(prev);
-    saveMatch(prev).then(applySaveResult);
+    queueSave(prev);
   }
   function swapStrike() {
     if (!inning.strikerName || !inning.nonStrikerName) return;
