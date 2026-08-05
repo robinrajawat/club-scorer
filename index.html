@@ -4542,6 +4542,8 @@ function HomeScreen({
   onOpenTournaments,
   pendingCount
 }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "28px 16px 40px",
@@ -4683,7 +4685,7 @@ function HomeScreen({
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => onDelete(m.id),
+    onDelete: () => setConfirmDeleteId(m.id),
     deleteLabel: "Delete"
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
@@ -4748,7 +4750,43 @@ function HomeScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")));
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setConfirmDeleteId(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.ball,
+      marginBottom: 10
+    }
+  }, "Delete this match?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 18
+    }
+  }, matchToConfirmDelete.teamA, " vs ", matchToConfirmDelete.teamB, " will be permanently removed from your saved matches. This can\u2019t be undone."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setConfirmDeleteId(null),
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: () => {
+      onDelete(matchToConfirmDelete.id);
+      setConfirmDeleteId(null);
+    },
+    style: {
+      flex: 1
+    }
+  }, "Delete"))));
 }
 function TeamChips({
   teams,
