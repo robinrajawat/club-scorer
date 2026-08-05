@@ -4736,7 +4736,9 @@ function PlayingXIPicker({
   onToggle,
   onSetCaptain,
   onSetKeeper,
-  required
+  required,
+  numbers,
+  onNumberChange
 }) {
   const count = selected.length;
   const atLimit = count >= required;
@@ -4765,7 +4767,14 @@ function PlayingXIPicker({
       fontWeight: 700,
       color: count === required ? COLORS.turf : COLORS.inkSoft
     }
-  }, count, "/", required, " selected")), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
+  }, count, "/", required, " selected")), onNumberChange && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -4785,22 +4794,55 @@ function PlayingXIPicker({
     // Once a player is in the XI, their pill grows two extra tap targets for captain/keeper —
     // needs to be a plain div (not a button) at the top level so those can be real sibling
     // buttons instead of illegally nesting buttons inside the selection button.
+    const numberInput = onNumberChange && /*#__PURE__*/React.createElement("input", {
+      key: "num",
+      type: "text",
+      inputMode: "numeric",
+      maxLength: 3,
+      value: (numbers && numbers[name]) || "",
+      onChange: e => onNumberChange(name, e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
+      onClick: e => e.stopPropagation(),
+      placeholder: "#",
+      "aria-label": `Jersey number for ${name} (this match only)`,
+      style: {
+        width: 30,
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        fontWeight: 700,
+        textAlign: "center",
+        padding: "5px 2px",
+        borderRadius: 10,
+        border: `1.5px solid ${checked ? "rgba(255,255,255,0.4)" : COLORS.creamDark}`,
+        background: checked ? "rgba(255,255,255,0.15)" : COLORS.cream,
+        color: checked ? "#fff" : COLORS.ink
+      }
+    });
     if (!checked) {
-      return /*#__PURE__*/React.createElement("button", {
+      return /*#__PURE__*/React.createElement("div", {
         key: name,
+        className: "cs-shine",
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "5px 6px 5px 5px",
+          borderRadius: 20,
+          background: "#fff",
+          boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+          opacity: disabled ? 0.45 : 1
+        }
+      }, /*#__PURE__*/React.createElement("button", {
         type: "button",
-        className: "cs-btn cs-shine",
+        className: "cs-btn",
         disabled: disabled,
         onClick: () => onToggle(name),
         style: {
-          padding: "8px 12px 8px 10px",
-          borderRadius: 20,
+          padding: "3px 6px 3px 4px",
+          borderRadius: 16,
           border: "none",
           cursor: disabled ? "not-allowed" : "pointer",
-          background: "#fff",
+          background: "none",
           color: disabled ? COLORS.inkSoft : COLORS.ink,
-          opacity: disabled ? 0.45 : 1,
-          boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
           fontFamily: "'Inter'",
           fontWeight: 600,
           fontSize: 13,
@@ -4819,7 +4861,7 @@ function PlayingXIPicker({
           alignItems: "center",
           justifyContent: "center"
         }
-      }), p.number ? `#${p.number} ${name}` : name);
+      }), name), numberInput);
     }
     const isCaptain = name === captain;
     const isKeeper = name === keeper;
@@ -4867,7 +4909,7 @@ function PlayingXIPicker({
         fontSize: 10,
         lineHeight: 1
       }
-    }, "✓")), p.number ? `#${p.number} ${name}` : name), onSetCaptain && /*#__PURE__*/React.createElement("button", {
+    }, "✓")), name), numberInput, onSetCaptain && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => onSetCaptain(isCaptain ? "" : name),
       "aria-label": isCaptain ? `Remove ${name} as captain` : `Make ${name} captain`,
@@ -4933,6 +4975,10 @@ function SetupScreen({
   const [teamBCaptain, setTeamBCaptain] = useState("");
   const [teamBKeeper, setTeamBKeeper] = useState("");
   const [teamBColor, setTeamBColor] = useState("");
+  // Jersey numbers as used for this match only — seeded from the saved squad's numbers when a
+  // team is picked, but editable here without touching the saved team roster.
+  const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
+  const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState("20");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
@@ -4966,6 +5012,9 @@ function SetupScreen({
   function defaultXI(players) {
     return players.map(p => p.name).slice(0, Math.min(11, players.length));
   }
+  function seedMatchNumbers(players) {
+    return Object.fromEntries(players.filter(p => p.number).map(p => [p.name, p.number]));
+  }
   function selectTeamA(team) {
     if (!team) {
       setTeamAId(null);
@@ -4975,6 +5024,7 @@ function SetupScreen({
       setTeamACaptain("");
       setTeamAKeeper("");
       setTeamAColor("");
+      setTeamAMatchNumbers({});
     } else {
       const label = team.name === teamBName ? `${team.name} (A)` : team.name;
       const players = normalizePlayers(team.players);
@@ -4985,6 +5035,7 @@ function SetupScreen({
       setTeamACaptain(team.captain || "");
       setTeamAKeeper(team.keeper || "");
       setTeamAColor(team.color || "");
+      setTeamAMatchNumbers(seedMatchNumbers(players));
     }
     setStrikerA("");
     setNonStrikerA("");
@@ -4998,6 +5049,7 @@ function SetupScreen({
       setTeamBCaptain("");
       setTeamBKeeper("");
       setTeamBColor("");
+      setTeamBMatchNumbers({});
     } else {
       const label = team.name === teamAName ? `${team.name} (B)` : team.name;
       const players = normalizePlayers(team.players);
@@ -5008,6 +5060,7 @@ function SetupScreen({
       setTeamBCaptain(team.captain || "");
       setTeamBKeeper(team.keeper || "");
       setTeamBColor(team.color || "");
+      setTeamBMatchNumbers(seedMatchNumbers(players));
     }
     setBowlerB("");
   }
@@ -5044,6 +5097,20 @@ function SetupScreen({
     setTeamBKeeper(k => k === name ? "" : k);
     setBowlerB("");
   }
+  // These only ever touch component state for this Setup session — the saved team's own
+  // numbers (edited via "Edit Team") are never written to here.
+  function updateTeamANumber(name, num) {
+    setTeamAMatchNumbers(n => ({
+      ...n,
+      [name]: num
+    }));
+  }
+  function updateTeamBNumber(name, num) {
+    setTeamBMatchNumbers(n => ({
+      ...n,
+      [name]: num
+    }));
+  }
   function flipCoin() {
     if (!teamAName.trim() || !teamBName.trim() || flipping) return;
     setFlipping(true);
@@ -5065,8 +5132,10 @@ function SetupScreen({
   // squad is in play, otherwise empty (falls back to free-text entry via PlayerPicker)
   const teamARoster = teamASquad.length ? teamAPlayingXI : [];
   const teamBRoster = teamBSquad.length ? teamBPlayingXI : [];
-  const teamANumbers = Object.fromEntries(teamASquad.filter(p => p.number).map(p => [p.name, p.number]));
-  const teamBNumbers = Object.fromEntries(teamBSquad.filter(p => p.number).map(p => [p.name, p.number]));
+  // Numbers actually used for this match: whatever's been edited in the Setup screen (defaults
+  // to the saved squad's numbers, but never writes back to the saved team).
+  const teamANumbers = teamAMatchNumbers;
+  const teamBNumbers = teamBMatchNumbers;
   const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
   const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
@@ -5474,7 +5543,9 @@ function SetupScreen({
     onToggle: toggleAXI,
     onSetCaptain: setTeamACaptain,
     onSetKeeper: setTeamAKeeper,
-    required: Math.min(11, teamASquad.length)
+    required: Math.min(11, teamASquad.length),
+    numbers: teamAMatchNumbers,
+    onNumberChange: updateTeamANumber
   }), teamBSquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
     label: `${teamBName || "Team B"} — pick who's playing`,
     squad: teamBSquad,
@@ -5484,7 +5555,9 @@ function SetupScreen({
     onToggle: toggleBXI,
     onSetCaptain: setTeamBCaptain,
     onSetKeeper: setTeamBKeeper,
-    required: Math.min(11, teamBSquad.length)
+    required: Math.min(11, teamBSquad.length),
+    numbers: teamBMatchNumbers,
+    onNumberChange: updateTeamBNumber
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
