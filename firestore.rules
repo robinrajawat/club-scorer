@@ -179,7 +179,7 @@ service cloud.firestore {
 
       allow update: if request.auth != null && (
         // (A) Existing admin or the creator editing federation data (rename, kickedClubIds).
-        // adminUids and createdBy must not change via this branch — that's what (B) is for.
+        // adminUids and createdBy must not change via this branch — that's what (B)/(C) are for.
         // get(field, default) handles federations from before this field existed.
         (
           (request.auth.uid == resource.data.createdBy || request.auth.uid in resource.data.get('adminUids', [])) &&
@@ -194,6 +194,19 @@ service cloud.firestore {
           request.resource.data.createdBy == resource.data.createdBy &&
           request.resource.data.name == resource.data.name
         )
+        ||
+        // (C) Self-redeeming an admin invite code addressed to MY signed-in email — see
+        // inviteFederationAdminByEmail/redeemFederationAdminInvite in index.html. Only adds
+        // the caller to adminUids; name/createdBy locked, and the code must actually name this
+        // federation and this exact email.
+        (
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.adminUids == resource.data.get('adminUids', []).concat([request.auth.uid]) &&
+          'adminInviteCodeUsed' in request.resource.data &&
+          get(/databases/$(database)/documents/federationAdminInviteCodes/$(request.resource.data.adminInviteCodeUsed)).data.federationId == federationId &&
+          get(/databases/$(database)/documents/federationAdminInviteCodes/$(request.resource.data.adminInviteCodeUsed)).data.email == request.auth.token.email.lower()
+        )
       );
 
       allow delete: if false;
@@ -205,6 +218,29 @@ service cloud.firestore {
 
       allow create: if request.auth != null
         && request.resource.data.federationId is string;
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.createdBy;
+
+      allow update: if false;
+    }
+
+    // An admin invite is addressed to one specific email, unlike every other bearer code in this
+    // app — anyone can look it up by ID (same as clubJoinCodes/federationJoinCodes), but it only
+    // becomes an actual admin grant if the redeemer's own signed-in email matches (enforced in
+    // the federations/{id} update rule, branch C, not here — this collection only controls who
+    // can mint/revoke the invite itself).
+    match /federationAdminInviteCodes/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.resource.data.federationId is string
+        && request.resource.data.email is string
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.createdBy
+          || request.auth.uid in get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('adminUids', [])
+        );
 
       allow delete: if request.auth != null
         && request.auth.uid == resource.data.createdBy;
