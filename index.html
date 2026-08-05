@@ -11002,7 +11002,18 @@ function QualificationCalculatorModal({
         rivalTeam,
         rivalNRR: rivalNRRNum,
         battingFirst,
-        oversLimit: oversLimitNum
+        oversLimit: oversLimitNum,
+        // Frozen at save time — the live banner in MatchScreen has no independent way to reach
+        // this tournament's other matches (matches don't record which club/tournament-source
+        // loaded them beyond a bare tournamentId), so it reuses this snapshot rather than
+        // recomputing standings itself. Reopen and re-save the calculator if other results come
+        // in before the match this was set up for.
+        myStats: myStats ? {
+          runsFor: myStats.runsFor,
+          oversFor: myStats.oversFor,
+          runsAgainst: myStats.runsAgainst,
+          oversAgainst: myStats.oversAgainst
+        } : null
       });
       setSaved_(true);
       setTimeout(() => setSaved_(false), 1500);
@@ -12413,7 +12424,8 @@ function MatchScreen({
   match,
   setMatch,
   onExit,
-  pendingCount
+  pendingCount,
+  tournament
 }) {
   const [padCollapsed, setPadCollapsed] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
@@ -12433,6 +12445,31 @@ function MatchScreen({
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
+  // NRR qualification banner: only meaningful once a scenario was saved (see
+  // QualificationCalculatorModal) FOR one of this match's two teams, and only shown once the
+  // batting order it assumed actually matches reality — showing a wrong-order calculation would
+  // be worse than showing nothing.
+  const qualScenario = tournament && tournament.qualificationScenario;
+  const qualMyTeam = qualScenario && qualScenario.myStats && [match.teamA, match.teamB].includes(qualScenario.myTeam) ? qualScenario.myTeam : null;
+  let qualResult = null;
+  let qualPending = false;
+  if (qualMyTeam) {
+    const firstInning = match.innings[0];
+    const iBattedFirst = firstInning.battingTeam === qualMyTeam;
+    if (iBattedFirst === qualScenario.battingFirst) {
+      if (firstInning.complete) {
+        qualResult = computeQualificationTarget({
+          stats: qualScenario.myStats,
+          rivalNRR: qualScenario.rivalNRR,
+          battingFirst: qualScenario.battingFirst,
+          oversLimit: qualScenario.oversLimit,
+          knownRuns: firstInning.runs
+        });
+      } else {
+        qualPending = true;
+      }
+    }
+  }
   // Registers this screen so a background sync (flushPendingWrites, running on a timer completely
   // outside React) can push a newly-confirmed writeSeq in here directly — see
   // notifyLiveMatchSynced. Without this, a background sync that lands while this exact match is
@@ -12855,7 +12892,19 @@ function MatchScreen({
     celebration: celebration
   }), /*#__PURE__*/React.createElement(MilestoneToast, {
     toast: milestoneToast
-  }), /*#__PURE__*/React.createElement("div", {
+  }), (qualResult || qualPending) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "8px 12px 0",
+      padding: "8px 12px",
+      borderRadius: 10,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      lineHeight: 1.4,
+      background: qualPending ? "rgba(184,137,43,0.12)" : qualResult.achievable ? "rgba(74,124,46,0.12)" : "rgba(139,30,30,0.1)",
+      color: qualPending ? "#8a641f" : qualResult.achievable ? COLORS.turf : COLORS.ball
+    }
+  }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversExact, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
       padding: "16px 16px 22px",
@@ -15087,7 +15136,8 @@ function CricketScorer() {
     match: match,
     setMatch: setMatch,
     onExit: exitToHome,
-    pendingCount: pendingCount
+    pendingCount: pendingCount,
+    tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
