@@ -33,7 +33,11 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 
 **After the match**
 - Full scorecard with batting and bowling figures, toss result, and Player of the Match.
-- Career stats — batting and bowling numbers aggregated across all your matches.
+
+**Tournaments**
+- Points table computed automatically from results, with net run rate.
+- Batting and bowling stats scoped to that tournament only — no noisy all-time numbers.
+- Player of the Tournament — auto-suggested (runs + 20 per wicket) or picked manually.
 
 **Works anywhere**
 - Installable to your phone's home screen on both iOS and Android for an app-like icon and experience.
