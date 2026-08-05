@@ -2015,6 +2015,80 @@ function computeStandings(tournament, allMatches) {
     nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
   })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
 }
+// Renders a decimal overs count (e.g. 15.667) as cricket's own overs.balls notation ("15.4") —
+// NOT a decimal number, the digit after the point is a ball count from 0-5 (or 0 to
+// ballsPerOver-1), so this must floor to the nearest legal ball rather than round.
+function decimalOversToLabel(oversDecimal, ballsPerOver) {
+  const b = ballsPerOver || 6;
+  const totalBalls = Math.floor(oversDecimal * b + 1e-9); // epsilon guards against e.g. 3.9999997
+  const whole = Math.floor(totalBalls / b);
+  const balls = totalBalls % b;
+  return `${whole}.${balls}`;
+}
+// The exact margin a team needs THIS match to finish with a higher NRR than a specified rival —
+// assumes the two are tied on points once this match is done (the calculator only knows about
+// NRR; points/qualification logic beyond that is on the person using it). `stats` is the team's
+// standings row from computeStandings BEFORE this match (a live/in-progress match is naturally
+// excluded already, since computeStandings only counts status:"complete" matches).
+//
+// The one thing that makes this tractable instead of a two-variable optimization: whichever side
+// of the match is FIXED (the team's own overs faced, or the overs they bowled at their opponent)
+// only has one free variable once you know who batted first — see the two branches below for why.
+function computeQualificationTarget({
+  stats,
+  rivalNRR,
+  battingFirst,
+  oversLimit,
+  knownRuns
+}) {
+  const RF = stats.runsFor,
+    OF = stats.oversFor,
+    RA = stats.runsAgainst,
+    OA = stats.oversAgainst;
+  const L = oversLimit;
+  if (battingFirst) {
+    // We set `knownRuns` batting first. Our own oversFor contribution is fixed at L (bowled out
+    // or all overs used — batting first never ends early). Our opponent's oversAgainst
+    // contribution against us is ALSO fixed at L, whether they're bowled out or bat out their
+    // overs (the only way it wouldn't be L is if THEY win the chase early, which isn't this
+    // scenario — we're solving for scenarios where WE win). So the only lever left is how many
+    // runs we restrict them to.
+    const R_A = knownRuns;
+    const forRate = (RF + R_A) / (OF + L);
+    const maxConcedeExact = (forRate - rivalNRR) * (OA + L) - RA;
+    return {
+      kind: "restrict",
+      maxConcedeExact,
+      maxConcede: Math.max(0, Math.ceil(maxConcedeExact) - 1),
+      achievable: maxConcedeExact > 0
+    };
+  } else {
+    // `knownRuns` is the target we're chasing (opponent's completed first-innings score). Their
+    // contribution to our AGAINST side is fixed the moment their innings ends (runs = target,
+    // overs = L, same reasoning as above — they either got bowled out or batted out their overs).
+    // A winning chase always finishes the instant we pass the target, so our runs (R_A) are
+    // pinned at target+1 — the one lever left is how many overs we take to get there.
+    const target = knownRuns;
+    const R_A = target + 1;
+    const againstRate = (RA + target) / (OA + L);
+    const requiredForRate = rivalNRR + againstRate;
+    if (requiredForRate <= 0) {
+      // Even a for-rate of 0 (technically impossible, but the threshold is non-positive) clears
+      // it — any win at all, in any number of overs, is enough.
+      return {
+        kind: "chaseWithin",
+        anyWinWorks: true,
+        achievable: true
+      };
+    }
+    const maxOversExact = (RF + R_A) / requiredForRate - OF;
+    return {
+      kind: "chaseWithin",
+      maxOversExact,
+      achievable: maxOversExact > 0
+    };
+  }
+}
 
 // ---------- Knockout stages (Quarterfinal / Semifinal / Final) ----------
 // Winner of a completed match, following the Super Over chain for a tied match — same convention
@@ -9437,6 +9511,7 @@ function TournamentDetailScreen({
   const [editingPOT, setEditingPOT] = useState(false);
   const [potDraft, setPotDraft] = useState("");
   const [potBusy, setPotBusy] = useState(false);
+  const [showQualCalc, setShowQualCalc] = useState(false);
   useEffect(() => {
     let cancelled = false;
     loadTournamentMatches(tournament.id).then(m => {
@@ -9662,7 +9737,23 @@ function TournamentDetailScreen({
       fontFamily: "'IBM Plex Mono', monospace",
       color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
     }
-  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), /*#__PURE__*/React.createElement("div", {
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), tournament.teams.length > 1 && /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowQualCalc(true),
+    style: {
+      width: "100%",
+      marginBottom: 20,
+      fontSize: 12.5,
+      padding: "10px"
+    }
+  }, "Qualification calculator"), showQualCalc && /*#__PURE__*/React.createElement(QualificationCalculatorModal, {
+    tournament: tournament,
+    standings: standings,
+    onClose: () => setShowQualCalc(false),
+    onSave: scenario => onUpdateTournament({
+      ...tournament,
+      qualificationScenario: scenario
+    })
+  }), /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, #fff, ${COLORS.cream})`,
     borderRadius: 16,
@@ -10701,6 +10792,225 @@ function ConfirmModal({
       flex: 1
     }
   }, busy ? "\u2026" : confirmLabel)));
+}
+// Standalone calculator (and, via onSave, the setup step for MatchScreen's live banner) for the
+// "what does my team need to do THIS match to have a higher NRR than a specific rival" question.
+// See computeQualificationTarget for the actual math and its assumptions.
+function QualificationCalculatorModal({
+  tournament,
+  standings,
+  onClose,
+  onSave
+}) {
+  const saved = tournament.qualificationScenario || {};
+  const [myTeam, setMyTeam] = useState(saved.myTeam || "");
+  const [rivalTeam, setRivalTeam] = useState(saved.rivalTeam || "");
+  const [rivalNRR, setRivalNRR] = useState(saved.rivalNRR != null ? String(saved.rivalNRR) : "");
+  const [battingFirst, setBattingFirst] = useState(saved.battingFirst !== false);
+  const [oversLimit, setOversLimit] = useState(saved.oversLimit ? String(saved.oversLimit) : "20");
+  const [knownRuns, setKnownRuns] = useState("");
+  const [saved_, setSaved_] = useState(false);
+  const myStats = standings.find(r => r.team === myTeam);
+  const oversLimitNum = parseFloat(oversLimit);
+  const rivalNRRNum = parseFloat(rivalNRR);
+  const knownRunsNum = parseFloat(knownRuns);
+  const canCompute = myStats && Number.isFinite(rivalNRRNum) && Number.isFinite(oversLimitNum) && oversLimitNum > 0 && Number.isFinite(knownRunsNum) && knownRunsNum >= 0;
+  const result = canCompute ? computeQualificationTarget({
+    stats: myStats,
+    rivalNRR: rivalNRRNum,
+    battingFirst,
+    oversLimit: oversLimitNum,
+    knownRuns: knownRunsNum
+  }) : null;
+  function handleRivalChange(name) {
+    setRivalTeam(name);
+    const r = standings.find(x => x.team === name);
+    if (r) setRivalNRR(r.nrr.toFixed(3));
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Qualification calculator"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, "Assumes you and the rival finish tied on points \u2014 this only works out the net run rate side of it."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("select", {
+    value: myTeam,
+    onChange: e => setMyTeam(e.target.value),
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      padding: "8px 6px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Your team\u2026"), tournament.teams.map(n => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: n
+  }, n))), /*#__PURE__*/React.createElement("select", {
+    value: rivalTeam,
+    onChange: e => handleRivalChange(e.target.value),
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      padding: "8px 6px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "Rival to beat\u2026"), tournament.teams.filter(n => n !== myTeam).map(n => /*#__PURE__*/React.createElement("option", {
+    key: n,
+    value: n
+  }, n)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Rival's NRR"), /*#__PURE__*/React.createElement(TextField, {
+    value: rivalNRR,
+    onChange: setRivalNRR,
+    inputMode: "decimal",
+    placeholder: "0.500"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Overs limit"), /*#__PURE__*/React.createElement(TextField, {
+    value: oversLimit,
+    onChange: setOversLimit,
+    inputMode: "decimal",
+    placeholder: "20"
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: battingFirst ? "primary" : "default",
+    onClick: () => setBattingFirst(true),
+    style: {
+      flex: 1,
+      fontSize: 12.5
+    }
+  }, "We bat first"), /*#__PURE__*/React.createElement(Btn, {
+    variant: !battingFirst ? "primary" : "default",
+    onClick: () => setBattingFirst(false),
+    style: {
+      flex: 1,
+      fontSize: 12.5
+    }
+  }, "We bowl first")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, battingFirst ? "Runs we set batting first" : "Target we're chasing"), /*#__PURE__*/React.createElement(TextField, {
+    value: knownRuns,
+    onChange: setKnownRuns,
+    inputMode: "decimal",
+    placeholder: battingFirst ? "e.g. 180" : "e.g. 170"
+  })), !myTeam ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "Pick your team to see its current NRR figures.") : result && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: result.achievable ? "rgba(74,124,46,0.1)" : "rgba(139,30,30,0.08)",
+      border: `1.5px solid ${result.achievable ? "rgba(74,124,46,0.3)" : "rgba(139,30,30,0.25)"}`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: result.achievable ? COLORS.turf : COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, !result.achievable ? "Not achievable this match \u2014 even the best possible result on this side of it wouldn't reach that NRR." : result.kind === "restrict" ? `Restrict ${rivalTeam || "them"} to ${Math.max(0, result.maxConcede)} or fewer.` : result.anyWinWorks ? "Any win at all gets you there." : `Chase it down within ${decimalOversToLabel(result.maxOversExact, 6)} overs.`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onClose,
+    style: {
+      flex: 1
+    }
+  }, "Close"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: !myTeam || !rivalTeam,
+    onClick: () => {
+      onSave({
+        myTeam,
+        rivalTeam,
+        rivalNRR: rivalNRRNum,
+        battingFirst,
+        oversLimit: oversLimitNum
+      });
+      setSaved_(true);
+      setTimeout(() => setSaved_(false), 1500);
+    },
+    style: {
+      flex: 1
+    }
+  }, saved_ ? "Saved!" : "Save for live tracking")));
 }
 function InningScorecard({
   inning,
