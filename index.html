@@ -6114,6 +6114,10 @@ function FixturesSection({
   const [newB, setNewB] = useState("");
   const fixtures = tournament.fixtures || [];
   const matchById = new Map((matches || []).map(m => [m.id, m]));
+  // Once a fixture's match is complete it's finished business for the schedule — the result lives
+  // in Matches now, so the fixture list only needs to keep showing what's still upcoming or in
+  // progress.
+  const isFixturePlayed = f => !!(f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
   async function generate(double) {
     setBusy(true);
     // Regenerating the group stage only ever touches group fixtures — any knockout rounds already
@@ -6143,9 +6147,12 @@ function FixturesSection({
     });
   }
   function deleteFixture(fixtureId) {
+    const target = fixtures.find(fx => fx.id === fixtureId);
+    const label = target ? `${target.teamA} vs ${target.teamB}` : "this fixture";
+    if (!window.confirm(`Remove fixture ${label}? This can't be undone.`)) return;
     onUpdateTournament({
       ...tournament,
-      fixtures: fixtures.filter(f => f.id !== fixtureId)
+      fixtures: fixtures.filter(fx => fx.id !== fixtureId)
     });
   }
   async function addFixture() {
@@ -6170,6 +6177,8 @@ function FixturesSection({
   const standings = computeStandings(tournament, matches || []);
   const stages = applicableKnockoutStages(tournament.teams.length);
   const groupFixtures = fixtures.filter(f => !f.stage);
+  const upcomingGroupFixtures = groupFixtures.filter(f => !isFixturePlayed(f));
+  const playedGroupCount = groupFixtures.length - upcomingGroupFixtures.length;
   function fixturesForStage(label) {
     return fixtures.filter(f => f.stage === label);
   }
@@ -6250,14 +6259,24 @@ function FixturesSection({
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, champion, " won the tournament")), stages.flatMap(s => fixturesForStage(s.label)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, champion, " won the tournament")), stages.flatMap(s => fixturesForStage(s.label)).filter(f => !isFixturePlayed(f)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: date => updateDate(f.id, date),
     onDelete: () => deleteFixture(f.id)
-  })), nextStageIndex !== -1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
+  })), (() => {
+    const playedKnockoutCount = stages.flatMap(s => fixturesForStage(s.label)).filter(f => isFixturePlayed(f)).length;
+    return playedKnockoutCount > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        marginBottom: 10
+      }
+    }, playedKnockoutCount, playedKnockoutCount === 1 ? " fixture played \u2014 see Matches for the result." : " fixtures played \u2014 see Matches for results.");
+  })(), nextStageIndex !== -1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: () => generateStage(nextStageIndex),
     disabled: busy || !nextStageReady,
@@ -6326,14 +6345,22 @@ function FixturesSection({
     style: {
       flex: "1 1 auto"
     }
-  }, "Home & Away")) : groupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, "Home & Away")) : upcomingGroupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: date => updateDate(f.id, date),
     onDelete: () => deleteFixture(f.id)
-  })), adding ? /*#__PURE__*/React.createElement("div", {
+  })), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: upcomingGroupFixtures.length > 0 ? 2 : 0,
+      marginBottom: 8
+    }
+  }, playedGroupCount, playedGroupCount === 1 ? " fixture played \u2014 see Matches for the result." : " fixtures played \u2014 see Matches for results."), adding ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 12,
