@@ -67,6 +67,21 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Read-only tournament share snapshot. Same open-by-code, owner-writes/anyone-reads trust
+    // model as /liveViews — a SEPARATE collection again so a tournament share code can never be
+    // confused with a match code or view code from a different feature. Deliberately a snapshot,
+    // not a live mirror: tournaments live under /clubs/{clubId}/tournaments/{id} or a personal
+    // meta doc, and their standings depend on match results that live elsewhere again (private
+    // per-user or per-club match data) — keeping that fully in sync on every relevant write would
+    // mean touching this collection from several other write paths in the app. The client
+    // (shareTournament in index.html) writes a fresh standings/fixtures snapshot here whenever the
+    // owner opens the share panel and hits refresh, not on every match update.
+    // ---------------------------------------------------------------------
+    match /tournamentViews/{code} {
+      allow read, write: if true;
+    }
+
+    // ---------------------------------------------------------------------
     // Clubs — shared team rosters gated by Google-account membership, not a bearer code.
     // Owner and co-owner are functionally identical throughout — every helper below treats them
     // as one tier by checking both ownerUid and coOwnerUids.

@@ -431,6 +431,49 @@ function genMatchCode() {
   for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
 }
+// Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
+// TEXT values, or some calendar apps (Outlook especially) mis-parse the field boundary.
+function icsEscape(text) {
+  return String(text || "").replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
+}
+// Fixture dates are stored as a floating local "YYYY-MM-DDTHH:MM" with no timezone (see
+// ISO_DATETIME_RE / parseFixtureDateTime) — deliberately not converted to/from UTC here either, so
+// the exported event lands at the same wall-clock time in whichever calendar app imports it,
+// rather than shifting by the difference between the scorer's timezone and the importer's.
+function icsLocalDateTime(iso) {
+  return iso.replace(/[-:]/g, "").slice(0, 15) + "00"; // YYYY-MM-DDTHH:MM -> YYYYMMDDTHHMM + seconds
+}
+function buildTournamentICS(tournament) {
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN"];
+  (tournament.fixtures || []).forEach(f => {
+    if (!ISO_DATETIME_RE.test(f.date || "")) return; // skip fixtures with no scheduled time
+    const start = icsLocalDateTime(f.date);
+    // Two-hour placeholder duration — the app has no fixed match length independent of overs/
+    // format, and this is just meant to block a calendar slot, not predict a finish time exactly.
+    const [datePart, timePart] = f.date.split("T");
+    const startDate = new Date(`${datePart}T${timePart}:00`);
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+    const end = icsLocalDateTime(`${endDate.getFullYear()}-${pad2(endDate.getMonth() + 1)}-${pad2(endDate.getDate())}T${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
+    lines.push("BEGIN:VEVENT", `UID:${f.id}@cricket-scorer`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(`${f.teamA} vs ${f.teamB}`)}`, `DESCRIPTION:${icsEscape(`${tournament.name} fixture`)}`, "END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function downloadTextFile(filename, mimeType, text) {
+  const blob = new Blob([text], {
+    type: mimeType
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 function getFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("follow");
@@ -439,6 +482,67 @@ function getFollowCodeFromUrl() {
     return cleaned || null;
   } catch (e) {
     return null;
+  }
+}
+function getTournamentFollowCodeFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("tournament");
+    if (!raw) return null;
+    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+// Writes/refreshes the read-only snapshot at /tournamentViews/{code} — see firestore.rules for why
+// this is a point-in-time snapshot rather than a live mirror. Reuses the tournament's own code
+// once one exists (persisted onto the tournament doc via the caller's onUpdateTournament) rather
+// than minting a new one on every refresh, so a previously-shared link keeps working.
+async function shareTournament(tournament, standings) {
+  try {
+    const code = tournament.shareCode || genMatchCode();
+    await db.collection("tournamentViews").doc(code).set({
+      name: tournament.name,
+      teams: tournament.teams,
+      fixtures: (tournament.fixtures || []).map(f => ({
+        id: f.id,
+        teamA: f.teamA,
+        teamB: f.teamB,
+        date: f.date || ""
+      })),
+      standings: standings.map(r => ({
+        team: r.team,
+        played: r.played,
+        won: r.won,
+        lost: r.lost,
+        tied: r.tied,
+        points: r.points,
+        nrr: r.nrr
+      })),
+      sharedAt: Date.now()
+    });
+    return {
+      ok: true,
+      code
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't create a share link."
+    };
+  }
+}
+async function stopSharingTournament(code) {
+  try {
+    await db.collection("tournamentViews").doc(code).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't stop sharing."
+    };
   }
 }
 
@@ -9512,6 +9616,7 @@ function TournamentDetailScreen({
   const [potDraft, setPotDraft] = useState("");
   const [potBusy, setPotBusy] = useState(false);
   const [showQualCalc, setShowQualCalc] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   useEffect(() => {
     let cancelled = false;
     loadTournamentMatches(tournament.id).then(m => {
@@ -9737,7 +9842,34 @@ function TournamentDetailScreen({
       fontFamily: "'IBM Plex Mono', monospace",
       color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
     }
-  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), tournament.teams.length > 1 && /*#__PURE__*/React.createElement(Btn, {
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(ExportTournamentPdfButton, {
+    tournament: tournament
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowShare(true),
+    style: {
+      flex: 1,
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 14
+  }), " Share"), (tournament.fixtures || []).some(f => f.date) && /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => downloadTextFile(`${tournament.name.replace(/[^a-z0-9]+/gi, "-")}-fixtures.ics`, "text/calendar", buildTournamentICS(tournament)),
+    style: {
+      flex: 1,
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 14
+  }), " Add to calendar")), /*#__PURE__*/React.createElement(TournamentPrintReport, {
+    tournament: tournament,
+    standings: standings
+  }), tournament.teams.length > 1 && /*#__PURE__*/React.createElement(Btn, {
     onClick: () => setShowQualCalc(true),
     style: {
       width: "100%",
@@ -9753,6 +9885,11 @@ function TournamentDetailScreen({
       ...tournament,
       qualificationScenario: scenario
     })
+  }), showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
+    tournament: tournament,
+    standings: standings,
+    onClose: () => setShowShare(false),
+    onUpdateTournament: onUpdateTournament
   }), /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, #fff, ${COLORS.cream})`,
@@ -11023,6 +11160,146 @@ function QualificationCalculatorModal({
     }
   }, saved_ ? "Saved!" : "Save for live tracking")));
 }
+function TournamentShareModal({
+  tournament,
+  standings,
+  onClose,
+  onUpdateTournament
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const code = tournament.shareCode || null;
+  const link = code ? `${window.location.origin}${window.location.pathname}?tournament=${code}` : "";
+  async function handleShare() {
+    setBusy(true);
+    setError("");
+    const result = await shareTournament(tournament, standings);
+    setBusy(false);
+    if (result.ok) {
+      if (!tournament.shareCode) onUpdateTournament({
+        ...tournament,
+        shareCode: result.code
+      });
+    } else {
+      setError(result.error || "Couldn't create a share link.");
+    }
+  }
+  async function handleStop() {
+    if (!code) return;
+    setBusy(true);
+    setError("");
+    const result = await stopSharingTournament(code);
+    setBusy(false);
+    if (result.ok) {
+      onUpdateTournament({
+        ...tournament,
+        shareCode: null
+      });
+    } else {
+      setError(result.error || "Couldn't stop sharing.");
+    }
+  }
+  function handleCopy() {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }).catch(() => {});
+    }
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Share this tournament"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It's a snapshot, not live: hit Refresh after new results come in."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: COLORS.cream,
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 10,
+      padding: "10px 12px",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, link), /*#__PURE__*/React.createElement("button", {
+    onClick: handleCopy,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.turf,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, copied ? "Copied!" : "Copy")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      marginBottom: 10
+    }
+  }, error), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleShare,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, busy ? "\u2026" : "Refresh snapshot"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: handleStop,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, "Stop sharing"))) : /*#__PURE__*/React.createElement(React.Fragment, null, error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      marginBottom: 10
+    }
+  }, error), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: handleShare,
+    disabled: busy,
+    style: {
+      width: "100%"
+    }
+  }, busy ? "Creating\u2026" : "Create share link")));
+}
 function InningScorecard({
   inning,
   battingCaptain,
@@ -11423,6 +11700,119 @@ function PrintReport({
     bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   })) : null));
 }
+function TournamentPrintReport({
+  tournament,
+  standings
+}) {
+  if (!tournament) return null;
+  const scheduledFixtures = (tournament.fixtures || []).filter(f => f.date);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "print-only",
+    style: {
+      padding: 24,
+      fontFamily: "'Inter', sans-serif",
+      color: "#000",
+      background: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      marginBottom: 2
+    }
+  }, tournament.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 16
+    }
+  }, tournament.teams.length, " teams \u00b7 exported ", new Date().toLocaleDateString()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 6
+    }
+  }, "Standings"), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 12,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h,
+    style: {
+      textAlign: h === "Team" ? "left" : "center",
+      borderBottom: "1.5px solid #000",
+      padding: "4px 6px"
+    }
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.team
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontWeight: 700
+    }
+  }, r.team), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.played), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.won), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.lost), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontWeight: 700
+    }
+  }, r.points), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontFamily: "'IBM Plex Mono', monospace"
+    }
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3)))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 6
+    }
+  }, "Fixtures"), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      lineHeight: 1.9
+    }
+  }, scheduledFixtures.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id
+  }, new Date(`${f.date}:00`).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }), " \u2014 ", f.teamA, " vs ", f.teamB))));
+}
 // Small "N not synced yet" pill — shown on Home (so it's visible even after you've walked away
 // from a match) and in the live scoring header (so it's visible exactly when it matters most).
 // Silent no-op render when there's nothing pending, so it never adds visual noise on the common
@@ -11648,6 +12038,39 @@ function ExportPdfButton({
   }, /*#__PURE__*/React.createElement(Printer, {
     size: 17
   }));
+}
+function ExportTournamentPdfButton({
+  tournament,
+  style
+}) {
+  const [preparing, setPreparing] = useState(false);
+  function handleExport() {
+    if (preparing) return;
+    setPreparing(true);
+    const prevTitle = document.title;
+    document.title = `${tournament.name} \u2014 Standings & Fixtures`;
+    const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready.catch(() => {}) : Promise.resolve();
+    Promise.race([fontsReady, new Promise(resolve => setTimeout(resolve, 1200))]).then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.print();
+        setPreparing(false);
+        setTimeout(() => {
+          document.title = prevTitle;
+        }, 500);
+      }));
+    });
+  }
+  return /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleExport,
+    disabled: preparing,
+    style: {
+      flex: 1,
+      fontSize: 12.5,
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement(Printer, {
+    size: 14
+  }), " ", preparing ? "Preparing\u2026" : "Export PDF");
 }
 function parseOverLabel(label, ballsPerOver) {
   const [whole, balls] = String(label).split(".").map(Number);
@@ -12419,6 +12842,234 @@ function FollowScreen({
     tab: tab,
     setTab: setTab
   }));
+}
+function FollowTournamentScreen({
+  code,
+  onExit
+}) {
+  const [data, setData] = useState(null);
+  const [status, setStatus] = useState("loading"); // loading | found | not-found | error
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!code) {
+      setStatus("not-found");
+      return;
+    }
+    db.collection("tournamentViews").doc(code).get().then(doc => {
+      if (!doc.exists) {
+        setStatus("not-found");
+        return;
+      }
+      setData(doc.data());
+      setStatus("found");
+    }).catch(err => {
+      console.error("[follow-tournament] load error \u2014 code:", err.code, "message:", err.message);
+      setError(err.code === "permission-denied" ? "This link isn't available right now." : err.message || "Couldn't load this tournament.");
+      setStatus("error");
+    });
+  }, [code]);
+  const wrapStyle = {
+    minHeight: "100vh",
+    background: COLORS.cream,
+    backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(42,36,32,0.045) 28px)"
+  };
+  if (status === "loading") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...wrapStyle,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "'Inter'",
+        color: COLORS.inkSoft,
+        fontSize: 14
+      }
+    }, "Loading tournament\u2026");
+  }
+  if (status === "not-found" || status === "error") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...wrapStyle,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        textAlign: "center"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'DM Serif Display', serif",
+        fontSize: 20,
+        color: COLORS.pitch,
+        marginBottom: 8
+      }
+    }, status === "not-found" ? "This link isn\u2019t valid" : "Couldn\u2019t load this tournament"), status === "error" && error && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.inkSoft,
+        marginBottom: 16
+      }
+    }, error), /*#__PURE__*/React.createElement(Btn, {
+      onClick: onExit
+    }, "Go to Club Scorer"));
+  }
+  const standings = [...data.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr);
+  const scheduledFixtures = (data.fixtures || []).filter(f => f.date);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...wrapStyle,
+      paddingBottom: 40
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
+      color: COLORS.cream,
+      padding: "20px 16px 26px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24
+    }
+  }, data.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 2
+    }
+  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString())), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 560,
+      margin: "0 auto",
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: "14px 4px",
+      marginBottom: 20,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "cs-no-scrollbar",
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      minWidth: 380
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h,
+    style: {
+      textAlign: h === "Team" ? "left" : "center",
+      padding: "0 8px 8px",
+      whiteSpace: "nowrap"
+    }
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.team,
+    style: {
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.ink,
+      whiteSpace: "nowrap"
+    }
+  }, r.team), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.played), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.won), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.lost), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.turf
+    }
+  }, r.points), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontFamily: "'IBM Plex Mono', monospace",
+      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
+    }
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Fixtures"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink,
+      lineHeight: 2
+    }
+  }, scheduledFixtures.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 12
+    }
+  }, new Date(`${f.date}:00`).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }), " \u2014 "), f.teamA, " vs ", f.teamB)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginTop: 20
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onExit
+  }, "Go to Club Scorer"))));
 }
 function MatchScreen({
   match,
@@ -14295,6 +14946,7 @@ const SCREEN_DEPTH = {
   match: 1,
   account: 1,
   follow: 1,
+  "follow-tournament": 1,
   tournaments: 1,
   "team-edit": 2,
   "shared-links": 2,
@@ -14303,7 +14955,8 @@ const SCREEN_DEPTH = {
 };
 function CricketScorer() {
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : "login"); // home | login | setup | match | teams | team-edit | follow
+  const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
+  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
@@ -14326,7 +14979,7 @@ function CricketScorer() {
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
-  const [loading, setLoading] = useState(!initialFollowCode);
+  const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -14606,6 +15259,16 @@ function CricketScorer() {
       /* noop — worst case the param stays in the address bar */
     }
     setFollowCode(null);
+    setScreen("home");
+  }
+  function exitFollowTournament() {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tournament");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    } catch (e) {
+      /* noop — worst case the param stays in the address bar */
+    }
     setScreen("home");
   }
   async function handleSaveTeam(team) {
@@ -15071,7 +15734,7 @@ function CricketScorer() {
     WebkitTextSizeAdjust: "100%",
     touchAction: "manipulation"
   };
-  if (loading || !authChecked && !initialFollowCode) {
+  if (loading || !authChecked && !initialFollowCode && !initialTournamentFollowCode) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         ...wrapStyle,
@@ -15264,6 +15927,12 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(FollowScreen, {
     code: followCode,
     onExit: exitFollow
+  })), screen === "follow-tournament" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "follow-tournament",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(FollowTournamentScreen, {
+    code: initialTournamentFollowCode,
+    onExit: exitFollowTournament
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
