@@ -5863,6 +5863,8 @@ function ClubPanel({
   onRevokeInvite,
   onRefreshMyMemberName,
   onSetVisibility,
+  onSearchPublicFederations,
+  onRequestFederationAffiliation,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -5870,6 +5872,7 @@ function ClubPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [visBusy, setVisBusy] = useState(false);
+  const [findFedOpen, setFindFedOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
@@ -5903,6 +5906,7 @@ function ClubPanel({
     if (!activeClub || !currentUid || !onRefreshMyMemberName) return;
     const stored = activeClub.memberNames && activeClub.memberNames[currentUid];
     if (!stored || stored === "Member") onRefreshMyMemberName(activeClub.id);
+    setFindFedOpen(false);
   }, [activeClubId]);
   async function handleSetVisibility(isPublic) {
     if (!activeClub || !onSetVisibility) return;
@@ -6734,7 +6738,47 @@ function ClubPanel({
       lineHeight: 1,
       fontSize: 14
     }
-  }, "\u00d7"))))), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "\u00d7"))))), activeIsOwner && onSearchPublicFederations && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, findFedOpen ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+    placeholder: "Search public federations by name",
+    onSearch: onSearchPublicFederations,
+    idKey: "federationId",
+    actionLabel: "Request",
+    alreadyLinkedIds: activeClub.federationIds || [],
+    onRequest: fed => onRequestFederationAffiliation("club_to_federation", activeClub.id, fed.federationId)
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setFindFedOpen(false),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px",
+      marginTop: 4
+    }
+  }, "Close")) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => setFindFedOpen(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, "+ Find a federation to join")), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: confirmRemoveMember.role === "coOwner" ? "Remove co-owner?" : "Remove member?",
     message: confirmRemoveMember.role === "coOwner" ? `Remove ${confirmRemoveMember.name} as co-owner of "${activeClub.name}"? They'll stay on as a plain member.` : `Remove ${confirmRemoveMember.name} from "${activeClub.name}"?`,
     confirmLabel: "Remove",
@@ -8093,6 +8137,8 @@ function ClubFederationScreen({
     onRevokeInvite: onRevokeClubInvite,
     onRefreshMyMemberName: onRefreshMyMemberName,
     onSetVisibility: onSetClubVisibility,
+    onSearchPublicFederations: onSearchPublicFederations,
+    onRequestFederationAffiliation: onRequestFederationAffiliation,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
