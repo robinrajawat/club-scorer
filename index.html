@@ -288,6 +288,8 @@ const GLOBAL_CSS = `
   @keyframes cs-ballSpin { to { transform: rotate(360deg); } }
   @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
   @keyframes cs-toastDown { from { transform: translate(-50%, -18px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+  @keyframes cs-spin { to { transform: rotate(360deg); } }
+  .cs-spinner { display: inline-block; animation: cs-spin 0.7s linear infinite; }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
   .cs-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -6741,6 +6743,7 @@ function ClubFederationScreen({
   onUpdateFederationDescription,
   onRevokeClubInvite,
   onRevokeFederationInvite,
+  clubsLoading,
   currentUid
 }) {
   const [redeemCode, setRedeemCode] = useState("");
@@ -6800,7 +6803,31 @@ function ClubFederationScreen({
       color: COLORS.inkSoft,
       marginBottom: 16
     }
-  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), /*#__PURE__*/React.createElement("div", {
+  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), clubsLoading && clubs.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "#fff",
+      borderRadius: 12,
+      padding: "10px 14px",
+      marginBottom: 16,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "cs-spinner",
+    style: {
+      width: 13,
+      height: 13,
+      borderRadius: "50%",
+      border: `2px solid ${COLORS.creamDark}`,
+      borderTopColor: COLORS.gold,
+      flexShrink: 0
+    }
+  }), "Loading your clubs and federations\u2026"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
@@ -15567,6 +15594,11 @@ function CricketScorer() {
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
+  // Separate from the top-level `loading` splash (which only covers local-first data — matches,
+  // teams, tournaments — and clears quickly). Clubs have no local fallback (loadClubs just
+  // returns [] when signed out), so this stays true across whichever refreshClubs() call actually
+  // resolves it — see the auth-state effect below for why that's no longer the same call every time.
+  const [clubsLoading, setClubsLoading] = useState(true);
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
   // Custom left-edge swipe-to-go-back (see swipe-gesture useEffect near the bottom of this
@@ -15588,19 +15620,25 @@ function CricketScorer() {
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
   // round trip the moment you pick "New Match".
   async function refreshClubs() {
+    setClubsLoading(true);
     const clubList = await loadClubs();
     setClubs(clubList);
     const [teamEntries, tournamentEntries] = await Promise.all([Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)])), Promise.all(clubList.map(async c => [c.id, await loadClubTournaments(c.id)]))]);
     setClubTeamsById(Object.fromEntries(teamEntries));
     setClubTournamentsById(Object.fromEntries(tournamentEntries));
     const fedIds = Array.from(new Set(clubList.flatMap(c => c.federationIds || [])));
+    // Federations only depend on clubList (just fetched above), not on the team/tournament loads
+    // right above — so this used to wait behind them for no reason, adding a whole extra
+    // round-trip of latency to "why does the federation list take a while to show up".
     if (fedIds.length > 0) {
-      const feds = await loadFederationsByIds(fedIds);
-      setFederationsById(prev => ({
-        ...prev,
-        ...Object.fromEntries(feds.map(f => [f.id, f]))
-      }));
+      loadFederationsByIds(fedIds).then(feds => {
+        setFederationsById(prev => ({
+          ...prev,
+          ...Object.fromEntries(feds.map(f => [f.id, f]))
+        }));
+      });
     }
+    setClubsLoading(false);
     return clubList;
   }
   // Whenever the Tournaments screen's active club (or that club's federation affiliations)
@@ -15649,7 +15687,7 @@ function CricketScorer() {
         // account state changed after first load (sign in/out) — re-fetch from the right source
         setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
         setActiveTournamentClubId(null);
-        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs(), loadTournaments()]).then(([idx, teamList, prof, r, , tourneys]) => {
+        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
           setMatches(idx);
           setTeams(teamList);
           setProfile(prof);
@@ -15657,8 +15695,17 @@ function CricketScorer() {
           setTournaments(tourneys);
         });
       }
+      // Clubs (and federations, which are loaded off clubs' federationIds) have no local fallback
+      // — loadClubs just returns [] when signed out — so unlike the Promise.all above (which is
+      // safe to fire immediately at mount, since loadIndex/loadTeams/loadTournaments all fall back
+      // to local data), refreshClubs() waits specifically for THIS callback, which only ever fires
+      // once Firebase Auth has actually resolved the session. Calling it eagerly at mount instead
+      // used to race that resolution: lose the race and clubs loaded empty, then silently
+      // corrected themselves whenever auth actually finished — with no loading indicator either
+      // way, so it looked like clubs/federations just took an unpredictable while to show up.
+      refreshClubs();
     });
-    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), refreshClubs(), loadTournaments()]).then(([idx, teamList, prof, r, , tourneys]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
       setMatches(idx);
       setTeams(teamList);
       setProfile(prof);
@@ -16583,6 +16630,7 @@ function CricketScorer() {
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
+    clubsLoading: clubsLoading,
     currentUid: user && user.uid
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow",
