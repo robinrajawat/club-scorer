@@ -2,7 +2,7 @@
 
 Ball-by-ball cricket scoring for friendly club and social games. Single HTML file, no installs, no build step — open it in a browser and start scoring.
 
-**Live app:** https://robinrajawat.github.io/cricket-scorer
+**Live app:** https://www.clubscorer.com/
 
 ## Features
 
