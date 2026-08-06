@@ -960,6 +960,10 @@ async function transactionalMatchWrite(ref, match) {
 // though it's the same single device, just this device's own background sync racing its live UI.
 // See MatchScreen's registerLiveMatch effect and notifyLiveMatchSynced below.
 const liveMatchSetters = {};
+// Tracks which matches have already had their /tournamentMatches pointer written this session, so
+// a match being saved on every single ball (the normal case) doesn't also re-write an unchanging
+// pointer doc every single ball. Cleared for a given id on write failure so the next save retries.
+const tournamentPointerWritten = new Set();
 function registerLiveMatch(id, setMatch) {
   liveMatchSetters[id] = setMatch;
 }
@@ -1000,6 +1004,23 @@ async function savePrimaryMatch(match) {
         cloud: false
       });
       notifyLiveMatchSynced(match.id, newSeq);
+      // Best-effort, fire-and-forget: mirrors {shareCode} into /tournamentMatches/{tournamentId}/entries
+      // so loadTournamentMatches() can find this match without ever running an unscoped query
+      // against sharedMatches itself — see the Firestore rules comment on that collection. Not
+      // awaited (scoring shouldn't wait on a secondary write), and retried on the next save if it
+      // fails, since the dedup set only remembers success.
+      if (match.tournamentId && !tournamentPointerWritten.has(match.id)) {
+        tournamentPointerWritten.add(match.id);
+        db.collection("tournamentMatches").doc(match.tournamentId).collection("entries").doc(match.id).set({
+          tournamentId: match.tournamentId,
+          matchId: match.id,
+          shareCode: match.shareCode,
+          updatedAt: Date.now()
+        }).catch(e => {
+          tournamentPointerWritten.delete(match.id);
+          console.error("tournament match pointer write failed", e);
+        });
+      }
       return {
         ok: true,
         writeSeq: newSeq
@@ -1121,6 +1142,13 @@ async function revokeShareCode(matchId) {
   } catch (e) {
     console.error("revoke share code: delete failed", e);
   }
+  if (match.tournamentId) {
+    try {
+      await db.collection("tournamentMatches").doc(match.tournamentId).collection("entries").doc(matchId).delete();
+    } catch (e) {
+      console.error("revoke share code: tournament pointer delete failed", e);
+    }
+  }
   return result;
 }
 async function revokeViewCode(matchId) {
@@ -1212,6 +1240,9 @@ async function deleteMatch(id) {
   try {
     if (pointer && pointer.shareCode) {
       await db.collection("sharedMatches").doc(pointer.shareCode).delete();
+      if (pointer.tournamentId) {
+        await db.collection("tournamentMatches").doc(pointer.tournamentId).collection("entries").doc(id).delete().catch(e => console.error("tournament pointer delete failed", e));
+      }
     } else if ((!pointer || pointer.cloud) && auth.currentUser) {
       await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(id).delete();
     }
@@ -2637,29 +2668,38 @@ async function deleteClubTournament(clubId, tournamentId) {
 // caller is responsible for fetching those; this function doesn't do its own Firestore reads).
 // Fetches every full match doc tagged with this tournament — the local match index only stores
 // lightweight pointers (no innings data), so standings genuinely need a real query. Two sources:
-// this account's personal matches, and open sharedMatches (co-scored matches tagged with this
-// tournament regardless of who's signed in) — both are simple single-field equality queries,
-// which Firestore indexes automatically without any manual index setup. Also resolves any linked
-// Super Over matches, since computeStandings needs those for points even though they're
+// this account's personal matches (a simple single-field equality query, scoped to the signed-in
+// user already), and open sharedMatches (co-scored matches tagged with this tournament regardless
+// of who's signed in). The shared side goes through /tournamentMatches/{tournamentId}/entries
+// rather than a direct `sharedMatches.where("tournamentId", "==", ...)` query — see the Firestore
+// rules comment on that collection for why: sharedMatches itself only allows `get` (exact doc by
+// code), never `list`, so a match's full data can only ever be fetched one known code at a time.
+// The pointer collection is what makes "find every shared match in this tournament" possible
+// without that turning into "list every shared match that has ever existed." Also resolves any
+// linked Super Over matches, since computeStandings needs those for points even though they're
 // deliberately NOT tagged with the tournament themselves (that would double-count them as a
 // separate played match).
 async function loadTournamentMatches(tournamentId) {
-  const queries = [db.collection("sharedMatches").where("tournamentId", "==", tournamentId).get()];
-  if (auth.currentUser) {
-    queries.push(db.collection("users").doc(auth.currentUser.uid).collection("matches").where("tournamentId", "==", tournamentId).get());
-  }
-  let snaps;
-  try {
-    snaps = await Promise.all(queries);
-  } catch (e) {
-    console.error("tournament matches load failed", e);
-    return [];
-  }
   const byId = new Map();
-  for (const snap of snaps) {
-    for (const doc of snap.docs) {
-      const m = unpackMatchFromFirestore(doc.data());
-      byId.set(m.id, m);
+  try {
+    const entriesSnap = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").get();
+    const shareCodes = entriesSnap.docs.map(d => d.data().shareCode).filter(Boolean);
+    const sharedDocs = await Promise.all(shareCodes.map(code => db.collection("sharedMatches").doc(code).get()));
+    for (const doc of sharedDocs) {
+      if (doc.exists) byId.set(doc.id, unpackMatchFromFirestore(doc.data()));
+    }
+  } catch (e) {
+    console.error("tournament matches (shared) load failed", e);
+  }
+  if (auth.currentUser) {
+    try {
+      const snap = await db.collection("users").doc(auth.currentUser.uid).collection("matches").where("tournamentId", "==", tournamentId).get();
+      for (const doc of snap.docs) {
+        const m = unpackMatchFromFirestore(doc.data());
+        byId.set(m.id, m);
+      }
+    } catch (e) {
+      console.error("tournament matches (personal) load failed", e);
     }
   }
   const superOverIds = [...byId.values()].map(m => m.superOverMatchId).filter(Boolean).filter(id => !byId.has(id));
