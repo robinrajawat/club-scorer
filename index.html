@@ -8984,6 +8984,22 @@ function WelcomeScreen({
     }
   }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
 }
+// "Today" / "Yesterday" / "Sat, 14 Jun" (plus year if not this year) — used on the saved-matches
+// list. Falls back to null for matches saved before `createdAt` existed, so old matches just skip
+// the caption instead of showing a wrong or made-up date.
+const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function relativeDayLabel(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  const now = new Date();
+  const startOf = date => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((startOf(now) - startOf(d)) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
+}
 function HomeScreen({
   matches,
   onNew,
@@ -9223,7 +9239,7 @@ function HomeScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "")))))))) : /*#__PURE__*/React.createElement("div", {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`)))))))) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
@@ -10266,6 +10282,48 @@ function Field({
 // My-Teams/club switcher exactly — same chip row, same mental model, so nothing new to learn.
 // Doesn't offer club create/join here since ClubPanel (on the Teams screen) already owns that;
 // this only ever lists clubs the person is already in.
+// A tournament's status, computed only from data already sitting on the tournament object itself
+// (no per-tournament match fetch — this is the list screen, and TournamentDetailScreen already
+// does the heavier, fully-accurate isFixturePlayed check once you're actually inside one).
+// "matchId set" is treated as a light proxy for "this fixture has been started" — good enough to
+// bucket a list of many tournaments at a glance, not meant to be as precise as the detail screen.
+function tournamentStatus(t) {
+  const fixtures = t.fixtures || [];
+  if (fixtures.length === 0) return "upcoming";
+  const playedCount = fixtures.filter(f => f.matchId).length;
+  if (playedCount === 0) return "upcoming";
+  if (playedCount === fixtures.length) return "completed";
+  return "ongoing";
+}
+const TOURNAMENT_STATUS_LABELS = {
+  upcoming: "Upcoming",
+  ongoing: "Ongoing",
+  completed: "Completed"
+};
+const TOURNAMENT_STATUS_COLORS = {
+  upcoming: COLORS.gold,
+  ongoing: COLORS.turf,
+  completed: COLORS.inkSoft
+};
+// Earliest-to-latest scheduled fixture date, e.g. "12 Jun – 20 Jul". Falls back to a relative
+// "Created 3 days ago" when no fixture has a date yet (fixtures are often added after creation).
+function tournamentDateRangeLabel(t) {
+  const dates = (t.fixtures || []).filter(f => ISO_DATETIME_RE.test(f.date || "")).map(f => f.date.slice(0, 10)).sort();
+  if (dates.length === 0) {
+    if (!t.createdAt) return null;
+    const days = Math.floor((Date.now() - t.createdAt) / 86400000);
+    if (days <= 0) return "Created today";
+    if (days === 1) return "Created yesterday";
+    return `Created ${days} days ago`;
+  }
+  const fmt = iso => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return `${d} ${SHORT_MONTHS[m - 1]}`;
+  };
+  const first = dates[0],
+    last = dates[dates.length - 1];
+  return first === last ? fmt(first) : `${fmt(first)} \u2013 ${fmt(last)}`;
+}
 function TournamentsScreen({
   tournaments,
   clubs,
@@ -10283,6 +10341,9 @@ function TournamentsScreen({
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | upcoming | ongoing | completed
+  const visibleTournaments = tournaments.filter(t => (statusFilter === "all" || tournamentStatus(t) === statusFilter) && (!searchTerm.trim() || t.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
@@ -10386,7 +10447,39 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, c.name))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: searchTerm,
+    onChange: setSearchTerm,
+    placeholder: "Search tournaments by name"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
+    style: {
+      display: "flex",
+      gap: 6,
+      overflowX: "auto",
+      paddingBottom: 2,
+      marginTop: 8
+    }
+  }, [["all", "All"], ["upcoming", "Upcoming"], ["ongoing", "Ongoing"], ["completed", "Completed"]].map(([key, label]) => /*#__PURE__*/React.createElement("button", {
+    key: key,
+    onClick: () => setStatusFilter(key),
+    style: {
+      padding: "5px 11px",
+      borderRadius: 20,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      border: statusFilter === key ? "none" : `1px solid ${COLORS.willow}`,
+      background: statusFilter === key ? COLORS.pitch : "#fff",
+      color: statusFilter === key ? "#fff" : COLORS.inkSoft,
+      whiteSpace: "nowrap"
+    }
+  }, label)))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -10527,7 +10620,7 @@ function TournamentsScreen({
     style: {
       flex: 2
     }
-  }, busy ? "Creating\u2026" : "Create"))), tournaments.length > 0 ? tournaments.map(t => /*#__PURE__*/React.createElement("button", {
+  }, busy ? "Creating\u2026" : "Create"))), visibleTournaments.length > 0 ? visibleTournaments.map(t => /*#__PURE__*/React.createElement("button", {
     key: t.id,
     onClick: () => onOpenTournament(t),
     className: "cs-btn",
@@ -10545,21 +10638,47 @@ function TournamentsScreen({
       cursor: "pointer",
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      marginBottom: 3
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 14.5,
       color: COLORS.ink,
-      marginBottom: 3
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
-  }, t.name), /*#__PURE__*/React.createElement("div", {
+  }, t.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      fontFamily: "'Inter'",
+      fontSize: 9.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: "#fff",
+      background: TOURNAMENT_STATUS_COLORS[tournamentStatus(t)],
+      padding: "2px 7px",
+      borderRadius: 10
+    }
+  }, TOURNAMENT_STATUS_LABELS[tournamentStatus(t)])), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, t.teams.length, " teams")), /*#__PURE__*/React.createElement(ChevronRight, {
+  }, t.teams.length, " teams", tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`)), /*#__PURE__*/React.createElement(ChevronRight, {
     size: 18,
     style: {
       color: COLORS.inkSoft,
@@ -10574,7 +10693,7 @@ function TournamentsScreen({
       fontSize: 13.5,
       lineHeight: 1.6
     }
-  }, activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
 }
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
 // since the local match index only carries lightweight pointers — nowhere near enough to compute a
@@ -17972,6 +18091,7 @@ function CricketScorer() {
   function startNewMatch(setup) {
     const m = {
       id: uid(),
+      createdAt: Date.now(),
       teamA: setup.teamA,
       teamB: setup.teamB,
       teamAId: setup.teamAId || null,
