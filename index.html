@@ -3540,18 +3540,11 @@ function applyBall(inning, event) {
   // toast for whichever ones are new on THIS ball.
   const milestoneOver = oversLabel(cur.legalBalls, cur.ballsPerOver);
   const milestoneScore = `${cur.runs}-${cur.wickets}`;
-  // Team: 50, 100, 150... — the team total (not any one batsman) just crossed a 50-run line.
-  // Extras (byes, leg byes, wides, no-balls) all add to cur.runs same as runs off the bat, so this
-  // naturally fires on whichever ball actually gets the total there, regardless of event kind.
-  if (cur.runs >= 50 && Math.floor(cur.runs / 50) > Math.floor((inning.runs || 0) / 50)) {
-    cur.milestones.push({
-      type: "team",
-      text: `${cur.battingTeam} brings up ${Math.floor(cur.runs / 50) * 50}`,
-      over: milestoneOver,
-      score: milestoneScore
-    });
-  }
   // Batting: 50, 100, 150... — any batsman whose total just crossed a 50-run line this ball.
+  // (Team totals crossing 50/100 aren't celebrated here — that's just the scoreboard doing its
+  // job, not really a moment worth a toast. Same reasoning excludes a golden duck, which is a
+  // low point for whoever's out, not something to pop a celebration over, and a maiden over,
+  // which barely registers as an event worth interrupting the score for.)
   Object.keys(cur.batsmen).forEach(name => {
     const before = (inning.batsmen[name] && inning.batsmen[name].runs) || 0;
     const after = cur.batsmen[name].runs;
@@ -3564,18 +3557,6 @@ function applyBall(inning, event) {
       });
     }
   });
-  // Golden duck: dismissed on the very first ball faced, for nought.
-  if (event.kind === "wicket" && legalBall && dismissedName) {
-    const dismissed = cur.batsmen[dismissedName];
-    if (dismissed && dismissed.balls === 1 && dismissed.runs === 0) {
-      cur.milestones.push({
-        type: "goldenDuck",
-        text: `${dismissedName} goes for a golden duck`,
-        over: milestoneOver,
-        score: milestoneScore
-      });
-    }
-  }
   // Hat-trick: this bowler's third straight credited wicket on a legal delivery (wides/no-balls
   // neither extend nor break the streak — only legal deliveries count, per the Laws).
   if (legalBall) {
@@ -3597,22 +3578,6 @@ function applyBall(inning, event) {
       over: milestoneOver,
       score: milestoneScore
     });
-  }
-  // Maiden over: an over just completed with the bowler's maiden count freshly incremented
-  // (that increment itself already applies the real Law — zero runs off the bat or extras that
-  // count against the bowler — see the over-completion block above; this just notices it happened).
-  if (cur.overs.length > inning.overs.length) {
-    const completedBowler = cur.lastBowlerName;
-    const beforeMaidens = (inning.bowlers[completedBowler] && inning.bowlers[completedBowler].maidens) || 0;
-    const afterMaidens = (cur.bowlers[completedBowler] && cur.bowlers[completedBowler].maidens) || 0;
-    if (afterMaidens > beforeMaidens) {
-      cur.milestones.push({
-        type: "maiden",
-        text: `${completedBowler} bowls a maiden`,
-        over: milestoneOver,
-        score: milestoneScore
-      });
-    }
   }
   // Partnership: 50, 100, 150... for the current batting pair. A wicket ball resets
   // partnershipRuns to 0 as part of the same transition being compared here, so it can never
@@ -3903,17 +3868,16 @@ function BallCelebration({
     }
   }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
 }
-// A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments — 50s,
-// maidens, partnerships, golden ducks, 5-fors, hat-tricks. Slides in from the top instead of
-// bursting center-screen, and always logged to inning.milestones (see InningScorecard) even
-// after the toast itself disappears.
+// A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments —
+// individual/partnership 50s, 5-fors, hat-tricks. Slides in from the top instead of bursting
+// center-screen, and always logged to inning.milestones (see InningScorecard) even after the
+// toast itself disappears. Deliberately excludes team-total milestones (just the scoreboard doing
+// its job), golden ducks (not something to celebrate for whoever's out), and maiden overs (barely
+// registers as an event) — see applyBall's milestone-detection section.
 const MILESTONE_ICONS = {
-  team: "\u{1F4C8}",
   batting: "\u{1F3CF}",
-  goldenDuck: "\u{1F980}",
   hatTrick: "\u{1F3A9}",
   fiveFor: "\u{1F3AF}",
-  maiden: "\u{1F6E1}\uFE0F",
   partnership: "\u{1F91D}"
 };
 function MilestoneToast({
@@ -12562,12 +12526,28 @@ function TeamsScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7
+    }
+  }, t.color && /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      width: 12,
+      height: 12,
+      borderRadius: "50%",
+      background: t.color,
+      border: `1px solid ${COLORS.creamDark}`,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 14.5,
       color: COLORS.ink
     }
-  }, t.name), /*#__PURE__*/React.createElement("div", {
+  }, t.name)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -12638,6 +12618,7 @@ function TeamEditScreen({
     number: p.number || "",
     email: p.email || "",
     public: !!p.public,
+    homeClubId: p.homeClubId || null,
     // Age/role/hand live only on the shared player doc, not on the roster entry itself (avoids
     // two copies drifting apart) — so re-opening an already-published player's row starts these
     // blank rather than pre-filled; editing here always writes straight through to that doc.
@@ -12663,6 +12644,10 @@ function TeamEditScreen({
   const [browseOpen, setBrowseOpen] = useState(false);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [publicPlayers, setPublicPlayers] = useState([]);
+  // Removing a player is destructive to whatever local edits (number, captain/keeper role) they
+  // had on this team, so it goes through the same ConfirmModal pattern as every other destructive
+  // action in the app, instead of the previous single-tap X.
+  const [confirmRemove, setConfirmRemove] = useState(null); // the player row object, or null
   async function openBrowse() {
     setBrowseOpen(true);
     if (publicPlayers.length > 0) return;
@@ -12680,9 +12665,24 @@ function TeamEditScreen({
       number: "",
       email: p.email,
       public: true,
+      // Marks this row as belonging to another club's player directory entry, not this team's
+      // own roster — see isBorrowed() below, which gates name/age/role/hand editing (those stay
+      // the home club's to manage) while leaving the jersey number free to differ per team.
+      homeClubId: p.homeClubId || null,
+      age: p.age || "",
+      role: p.role || "",
+      battingHand: p.battingHand || "",
+      bowlingHand: p.bowlingHand || "",
       _key: uid()
     }]);
     setBrowseOpen(false);
+  }
+  // True when this roster row is a player published by a DIFFERENT club — their name, email, and
+  // age/role/hand are that club's to manage, not this one's. Jersey number is always local to
+  // this team's roster regardless (a borrowed player can easily wear a different number here than
+  // they do for their own club), so it's deliberately excluded from this check.
+  function isBorrowed(p) {
+    return !!(p.homeClubId && clubId && p.homeClubId !== clubId);
   }
   function addPlayer() {
     const n = newPlayer.trim();
@@ -13061,23 +13061,48 @@ function TeamEditScreen({
       borderRadius: 8,
       padding: "5px 2px"
     }
-  })), /*#__PURE__*/React.createElement("input", {
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("input", {
     value: p.name,
     onChange: e => updateName(p._key, e.target.value),
     placeholder: "Player name",
+    disabled: isBorrowed(p),
+    title: isBorrowed(p) ? "Borrowed from another club \u2014 only that club can edit their name or details." : undefined,
     style: {
       flex: 1,
       minWidth: 0,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13.5,
-      color: COLORS.ink,
-      background: "#fff",
+      color: isBorrowed(p) ? COLORS.inkSoft : COLORS.ink,
+      background: isBorrowed(p) ? COLORS.creamDark : "#fff",
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 8px"
     }
-  }), /*#__PURE__*/React.createElement("button", {
+  }), isBorrowed(p) && /*#__PURE__*/React.createElement("span", {
+    title: "This player belongs to another club's roster \u2014 only their home club can edit name, email, age, role, or batting/bowling hand. Jersey number is yours to set.",
+    style: {
+      flexShrink: 0,
+      fontFamily: "'Inter'",
+      fontSize: 9.5,
+      fontWeight: 700,
+      letterSpacing: 0.3,
+      textTransform: "uppercase",
+      color: COLORS.gold,
+      background: "rgba(184,137,43,0.16)",
+      padding: "2px 6px",
+      borderRadius: 8,
+      whiteSpace: "nowrap"
+    }
+  }, "Borrowed")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
@@ -13121,7 +13146,7 @@ function TeamEditScreen({
       alignItems: "center",
       justifyContent: "center"
     }
-  }, "WK"), clubId && /*#__PURE__*/React.createElement("button", {
+  }, "WK"), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
     "aria-label": p.public ? `${p.name} is a public player \u2014 edit details` : `Add an email to make ${p.name} a public player`,
@@ -13142,7 +13167,7 @@ function TeamEditScreen({
   }, /*#__PURE__*/React.createElement(Globe, {
     size: 13
   })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => removePlayer(p._key),
+    onClick: () => setConfirmRemove(p),
     className: "cs-btn",
     style: {
       background: "rgba(42,36,32,0.12)",
@@ -13271,7 +13296,8 @@ function TeamEditScreen({
         name: p.name.trim(),
         number: p.number,
         email: normalizeEmail(p.email),
-        public: !!p.public
+        public: !!p.public,
+        homeClubId: p.homeClubId || null
       }));
       onSave({
         id: team ? team.id : uid(),
@@ -13285,7 +13311,16 @@ function TeamEditScreen({
     style: {
       width: "100%"
     }
-  }, "Save Team"), browseOpen && /*#__PURE__*/React.createElement(Modal, {
+  }, "Save Team"), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: `Remove ${confirmRemove.name}?`,
+    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain or wicketkeeper here, that's cleared too.`,
+    confirmLabel: "Remove",
+    onConfirm: () => {
+      removePlayer(confirmRemove._key);
+      setConfirmRemove(null);
+    },
+    onCancel: () => setConfirmRemove(null)
+  }), browseOpen && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setBrowseOpen(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
