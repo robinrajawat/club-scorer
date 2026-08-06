@@ -127,15 +127,26 @@ const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
   d: "M17 5h2.5a2 2 0 0 1 0 4H18"
 }));
 // Cap: a side-profile billed cap (dome + brim), for Orange/Purple Cap — Unicode has no colored cap
-// emoji, and coloring this via `color`/currentColor (like every other icon here) reads far more
-// clearly than a plain emoji behind a colored circle.
-const Cap = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
-  d: "M3 13a9 8 0 0 1 18 0"
-}), /*#__PURE__*/React.createElement("path", {
-  d: "M2 13h14"
-}), /*#__PURE__*/React.createElement("path", {
-  d: "M16 13c3.8 0 6.8 0.7 6.8 2"
-}));
+// emoji. Unlike the other icons here, this is filled (not stroked via the shared Icon wrapper) —
+// a thin outline didn't read as "a cap" at a glance (tried it, looked wrong); a solid silhouette
+// does. Colors via `fill: currentColor`, same as the rest of the icon set colors via `color`.
+function Cap({
+  size = 18,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "currentColor",
+    style: {
+      flexShrink: 0,
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M4 14A8 8 0 0 1 20 14C21.5 14.3 23 15.3 23 16.8C22.5 18 17 17.8 13 16.3Q8 17 4 15.3Z"
+  }));
+}
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",
@@ -372,6 +383,18 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+// account-exists-with-different-credential fires when someone tries Google sign-in on an email
+// that already has a password-only account (Firebase never auto-links different providers on the
+// same email). e.email/e.credential are exactly what's needed to complete the link once they
+// prove ownership via their existing method — shared by both the popup and redirect paths below,
+// and by the mount-time getRedirectResult() handler for the same error arriving after a reload.
+function accountExistsLinkInfo(err) {
+  if (err.code !== "auth/account-exists-with-different-credential") return null;
+  return {
+    email: err.email,
+    credential: err.credential
+  };
+}
 async function signInGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   function friendlyError(err) {
@@ -397,6 +420,16 @@ async function signInGoogle() {
         error: "Sign-in was cancelled."
       };
     }
+    const link = accountExistsLinkInfo(e);
+    if (link) {
+      return {
+        ok: false,
+        needsLink: true,
+        linkEmail: link.email,
+        pendingCredential: link.credential,
+        error: `An account already exists for ${link.email} with a password \u2014 sign in below with that password, and Google will be linked to it too.`
+      };
+    }
     const shouldFallbackToRedirect = e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment";
     if (shouldFallbackToRedirect) {
       try {
@@ -406,6 +439,16 @@ async function signInGoogle() {
         }; // page is navigating away; nothing more to do here
       } catch (e2) {
         console.error("redirect sign-in failed", e2.code, e2.message);
+        const link2 = accountExistsLinkInfo(e2);
+        if (link2) {
+          return {
+            ok: false,
+            needsLink: true,
+            linkEmail: link2.email,
+            pendingCredential: link2.credential,
+            error: `An account already exists for ${link2.email} with a password \u2014 sign in below with that password, and Google will be linked to it too.`
+          };
+        }
         return {
           ok: false,
           error: friendlyError(e2)
@@ -503,6 +546,62 @@ async function sendPasswordReset(email) {
     return {
       ok: false,
       error: friendlyEmailAuthError(e)
+    };
+  }
+}
+// Lets someone already signed in (via Google, most commonly) add a password to the SAME account,
+// so either method works from then on. Requires an active session — unlike the reverse direction
+// (signInGoogle's needsLink path above), there's no error-driven flow needed here: Firebase just
+// attaches the new credential to whichever account is already authenticated.
+async function linkPasswordCredential(password) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  try {
+    const cred = firebase.auth.EmailAuthProvider.credential(auth.currentUser.email, password);
+    await auth.currentUser.linkWithCredential(cred);
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("link password failed", e.code, e.message);
+    return {
+      ok: false,
+      error: friendlyEmailAuthError(e)
+    };
+  }
+}
+// Reverse of the above: signed in via password, wants Google linked too. Also used as a manual
+// retry from Account \u2192 Sign-in methods if the automatic link after signInGoogle's needsLink
+// flow (see the pendingGoogleLink effect in CricketScorer) ever fails.
+async function linkGoogleCredential() {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  try {
+    await auth.currentUser.linkWithPopup(new firebase.auth.GoogleAuthProvider());
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("link google failed", e.code, e.message);
+    if (e.code === "auth/credential-already-in-use") {
+      return {
+        ok: false,
+        error: "That Google account is already linked to a different sign-in \u2014 sign in with it directly instead."
+      };
+    }
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") {
+      return {
+        ok: false,
+        error: "Linking was cancelled."
+      };
+    }
+    return {
+      ok: false,
+      error: e.message || "Couldn't link Google."
     };
   }
 }
@@ -3859,7 +3958,9 @@ function AccountScreen({
   onOpenSharedLinks,
   onOpenClubAdmin,
   onBack,
-  redirectError
+  redirectError,
+  linkStatus,
+  onClearLinkStatus
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
@@ -3876,9 +3977,19 @@ function AccountScreen({
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  // Sign-in methods (link a password to a Google account, or Google to a password account) — see
+  // linkPasswordCredential/linkGoogleCredential. Separate busy/error state from the sign-in form
+  // above since both can be visible on this screen at once (signed in, but only one method linked).
+  const [linkPassword, setLinkPassword] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState("");
+  const [linkSuccess, setLinkSuccess] = useState("");
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
+  const providerIds = user ? (user.providerData || []).map(p => p.providerId) : [];
+  const hasPassword = providerIds.includes("password");
+  const hasGoogle = providerIds.includes("google.com");
   // Deleting the account can never reassign ownership — a club or federation this account is the
   // SOLE owner of (no co-owners) becomes permanently stuck: nobody can ever manage, rename,
   // invite into, or (for federations, which can never be deleted at all) get rid of it again.
@@ -3891,6 +4002,10 @@ function AccountScreen({
     const result = await onSignIn();
     setBusy(false);
     if (result && result.ok === false && result.error) setActionError(result.error);
+    if (result && result.needsLink) {
+      setEmail(result.linkEmail);
+      openEmailMode("signin");
+    }
   }
   async function handleSignOut() {
     setBusy(true);
@@ -3898,6 +4013,31 @@ function AccountScreen({
     const result = await onSignOut();
     setBusy(false);
     if (result && result.ok === false && result.error) setActionError(result.error);
+  }
+  async function handleLinkPassword() {
+    if (linkBusy || !linkPassword) return;
+    setLinkBusy(true);
+    setLinkError("");
+    const result = await linkPasswordCredential(linkPassword);
+    setLinkBusy(false);
+    if (!result.ok) {
+      setLinkError(result.error);
+      return;
+    }
+    setLinkPassword("");
+    setLinkSuccess("Password added \u2014 you can now sign in with either Google or your email and this password.");
+  }
+  async function handleLinkGoogle() {
+    if (linkBusy) return;
+    setLinkBusy(true);
+    setLinkError("");
+    const result = await linkGoogleCredential();
+    setLinkBusy(false);
+    if (!result.ok) {
+      setLinkError(result.error);
+      return;
+    }
+    setLinkSuccess("Google linked \u2014 you can now sign in with either your password or Google.");
   }
   function openEmailMode(mode) {
     setEmailMode(mode);
@@ -4020,7 +4160,36 @@ function AccountScreen({
       color: COLORS.ball,
       lineHeight: 1.5
     }
-  }, displayedError), user ? /*#__PURE__*/React.createElement("div", {
+  }, displayedError), linkStatus && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(184,137,43,0.12)",
+      border: `1.5px solid ${COLORS.gold}`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.pitch,
+      lineHeight: 1.5,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 10
+    }
+  }, linkStatus, /*#__PURE__*/React.createElement("button", {
+    onClick: onClearLinkStatus,
+    "aria-label": "Dismiss",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 0,
+      lineHeight: 1,
+      fontSize: 16,
+      flexShrink: 0
+    }
+  }, "\u00d7")), user ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -4107,6 +4276,108 @@ function AccountScreen({
       marginTop: 6
     }
   }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      marginBottom: 8
+    }
+  }, "Sign-in methods"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      padding: "4px 10px",
+      borderRadius: 12,
+      background: hasGoogle ? "rgba(184,137,43,0.14)" : COLORS.creamDark,
+      color: hasGoogle ? COLORS.pitch : COLORS.inkSoft
+    }
+  }, hasGoogle ? "\u2713 Google" : "Google not linked"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      padding: "4px 10px",
+      borderRadius: 12,
+      background: hasPassword ? "rgba(184,137,43,0.14)" : COLORS.creamDark,
+      color: hasPassword ? COLORS.pitch : COLORS.inkSoft
+    }
+  }, hasPassword ? "\u2713 Password" : "Password not set")), !hasPassword && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: linkPassword,
+    onChange: e => setLinkPassword(e.target.value),
+    placeholder: "Set a password (6+ characters)",
+    autoComplete: "new-password",
+    style: {
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 15,
+      padding: "12px 14px",
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: "#fff",
+      color: COLORS.ink,
+      width: "100%",
+      boxSizing: "border-box",
+      boxShadow: "inset 0 1px 2px rgba(42,36,32,0.05)",
+      flex: 1
+    }
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleLinkPassword,
+    disabled: linkBusy || linkPassword.length < 6,
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 44
+    }
+  }, linkBusy ? "\u2026" : "Set")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 6
+    }
+  }, "Lets you sign in with ", user.email, " and a password too, in case Google sign-in isn't available.")), !hasGoogle && /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleLinkGoogle,
+    disabled: linkBusy,
+    variant: "default",
+    style: {
+      width: "100%",
+      marginBottom: 12
+    }
+  }, linkBusy ? "\u2026" : "Link Google account"), (linkError || linkSuccess) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: linkError ? COLORS.ball : COLORS.pitch,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, linkError || linkSuccess), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.creamDark,
@@ -7357,6 +7628,10 @@ function WelcomeScreen({
     const result = await onSignIn();
     setBusy(false);
     if (result && result.ok === false && result.error) setError(result.error);
+    if (result && result.needsLink) {
+      setEmail(result.linkEmail);
+      openEmailMode("signin");
+    }
   }
   function openEmailMode(mode) {
     setEmailMode(mode);
@@ -15632,6 +15907,41 @@ function CricketScorer() {
   const [profile, setProfile] = useState(null);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
+  // Account linking: {email, credential} from a Google sign-in attempt that hit
+  // account-exists-with-different-credential — either just now (popup path, in handleSignInGoogle
+  // below) or on a previous page load, recovered from getRedirectResult() after the redirect round
+  // trip (mount effect below). Consumed by the effect right under this state block, which
+  // completes the link automatically the moment `user` matches — covers both paths with one path
+  // of code instead of duplicating the completion logic per screen.
+  const [pendingGoogleLink, setPendingGoogleLink] = useState(null);
+  const [linkStatus, setLinkStatus] = useState(""); // brief feedback after an auto-link attempt
+  async function handleSignInGoogle() {
+    const result = await signInGoogle();
+    if (result.needsLink) {
+      setPendingGoogleLink({
+        email: result.linkEmail,
+        credential: result.pendingCredential
+      });
+    }
+    return result;
+  }
+  useEffect(() => {
+    if (!user || !pendingGoogleLink) return;
+    if (pendingGoogleLink.email && user.email && pendingGoogleLink.email.toLowerCase() !== user.email.toLowerCase()) {
+      // Signed in as someone else entirely (e.g. backed out and used a different account) —
+      // drop the stale pending link rather than attach Google to the wrong account.
+      setPendingGoogleLink(null);
+      return;
+    }
+    const cred = pendingGoogleLink.credential;
+    setPendingGoogleLink(null);
+    auth.currentUser.linkWithCredential(cred).then(() => {
+      setLinkStatus("Google is now linked to this account \u2014 you can sign in with either from now on.");
+    }).catch(e => {
+      console.error("auto-link google failed", e.code, e.message);
+      setLinkStatus("Signed in, but couldn't link Google automatically. You can try again from Account \u2192 Sign-in methods.");
+    });
+  }, [user, pendingGoogleLink]);
   const [pendingCount, setPendingCount] = useState(0);
   // Separate from the top-level `loading` splash (which only covers local-first data — matches,
   // teams, tournaments — and clears quickly). Clubs have no local fallback (loadClubs just
@@ -15717,6 +16027,18 @@ function CricketScorer() {
     }
     auth.getRedirectResult().catch(e => {
       console.error("sign-in redirect error", e);
+      const link = accountExistsLinkInfo(e);
+      if (link) {
+        // Same case handleSignInGoogle's popup path handles — just arriving here instead because
+        // the popup got blocked and fell back to a full-page redirect, so this is the only place
+        // that ever sees the error (the local-state version in that path can't survive the reload).
+        setPendingGoogleLink({
+          email: link.email,
+          credential: link.credential
+        });
+        setAuthError(`An account already exists for ${link.email} with a password \u2014 sign in below with that password, and Google will be linked to it too.`);
+        return;
+      }
       setAuthError(e.message || "Sign-in didn't complete. Please try again.");
     });
     const unsubAuth = auth.onAuthStateChanged(u => {
@@ -16533,7 +16855,7 @@ function CricketScorer() {
     navKey: "login",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
-    onSignIn: signInGoogle,
+    onSignIn: handleSignInGoogle,
     onSkip: () => setScreen("home")
   })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "home",
@@ -16638,7 +16960,7 @@ function CricketScorer() {
     profile: profile,
     clubs: clubs,
     federationsById: federationsById,
-    onSignIn: signInGoogle,
+    onSignIn: handleSignInGoogle,
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
     onExportData: handleExportData,
@@ -16649,7 +16971,9 @@ function CricketScorer() {
       setScreen("club-admin");
     },
     onBack: () => setScreen("home"),
-    redirectError: authError
+    redirectError: authError,
+    linkStatus: linkStatus,
+    onClearLinkStatus: () => setLinkStatus("")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
     direction: navDirection
