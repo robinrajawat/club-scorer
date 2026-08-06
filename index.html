@@ -338,10 +338,13 @@ const GLOBAL_CSS = `
   input:focus { outline: 2px solid #b8892b44; }
   .print-only { display: none; }
   @media print {
-    .no-print { display: none !important; }
-    .print-only { display: block !important; }
+    .no-print { visibility: hidden !important; }
+    .print-only {
+      display: block !important; visibility: visible !important;
+      position: absolute; top: 0; left: 0; width: 100%;
+    }
     body, html { background: #fff !important; }
-    .print-only * { box-shadow: none !important; animation: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-only * { visibility: visible !important; box-shadow: none !important; animation: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;
 function NavWrap({
@@ -1363,6 +1366,26 @@ async function unpublishPlayer(email) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only that player's home club owner can unpublish them." : e.message || "Couldn't update this player."
+    };
+  }
+}
+// Owner-only (enforced by rules) — a real, permanent delete, unlike unpublishPlayer. Safe to offer
+// alongside that softer option: career stats are computed fresh from match data each time (see
+// computePlayerCareerStats), never stored on this doc, so nothing historical is lost. Any other
+// club's roster that borrowed this player keeps its own local copy of name/number regardless (see
+// isBorrowed in TeamEditScreen) — they just won't be able to find or re-borrow this player again.
+async function deletePlayer(email) {
+  const id = normalizeEmail(email);
+  try {
+    await db.collection("players").doc(id).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("delete player failed", e.code, e.message);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only that player's home club owner can delete them." : e.message || "Couldn't delete this player."
     };
   }
 }
@@ -3133,7 +3156,14 @@ function computePlayerStats(matches) {
         wickets: 0,
         ballsBowled: 0,
         runsConceded: 0,
-        matchIds: new Set()
+        matchIds: new Set(),
+        // Personal-best tracking — best single-innings knock/bowling figures, not career totals.
+        bestBattingRuns: null,
+        bestBattingOut: null,
+        // whether THAT specific best innings ended not-out
+        bestBowlingWickets: null,
+        bestBowlingRuns: null,
+        catches: 0
       };
     }
     return players[name];
@@ -3148,6 +3178,24 @@ function computePlayerStats(matches) {
         p.battingInnings += 1;
         if (b.out) p.dismissals += 1;
         p.matchIds.add(m.id);
+        // Best batting: highest score wins outright; an unbeaten score only displaces an equal
+        // dismissed one (matches the usual convention of listing the not-out score as the better
+        // one when both are the same number of runs).
+        const runs = b.runs || 0;
+        if (p.bestBattingRuns === null || runs > p.bestBattingRuns || runs === p.bestBattingRuns && !b.out && p.bestBattingOut) {
+          p.bestBattingRuns = runs;
+          p.bestBattingOut = !!b.out;
+        }
+        // Catches: parsed from the dismissal's "how" text ("c Fielder b Bowler" or "c & b Bowler")
+        // since fielderName isn't stored as its own field on the ball event — see applyBall's
+        // wicket branch. Stumpings intentionally aren't counted here; they're a keeper's dismissal,
+        // not a catch.
+        if (b.out && b.how) {
+          const andBowledMatch = b.how.match(/^c & b (.+)$/);
+          const caughtMatch = b.how.match(/^c (.+) b .+$/);
+          const catcher = andBowledMatch ? andBowledMatch[1] : caughtMatch ? caughtMatch[1] : null;
+          if (catcher) get(catcher).catches += 1;
+        }
       });
       Object.entries(inn.bowlers || {}).forEach(([name, bw]) => {
         const p = get(name);
@@ -3155,6 +3203,14 @@ function computePlayerStats(matches) {
         p.ballsBowled += bw.ballsBowled || 0;
         p.runsConceded += bw.runs || 0;
         p.matchIds.add(m.id);
+        // Best bowling: most wickets wins outright; tied on wickets, fewer runs conceded wins —
+        // the standard "best bowling figures" convention (e.g. 4/18 beats 4/32).
+        const w = bw.wickets || 0,
+          r = bw.runs || 0;
+        if (p.bestBowlingWickets === null || w > p.bestBowlingWickets || w === p.bestBowlingWickets && r < p.bestBowlingRuns) {
+          p.bestBowlingWickets = w;
+          p.bestBowlingRuns = r;
+        }
       });
     });
   });
@@ -3164,7 +3220,9 @@ function computePlayerStats(matches) {
     battingAvg: p.dismissals > 0 ? p.runs / p.dismissals : null,
     strikeRate: p.balls > 0 ? p.runs / p.balls * 100 : null,
     bowlingAvg: p.wickets > 0 ? p.runsConceded / p.wickets : null,
-    economy: p.ballsBowled > 0 ? p.runsConceded / p.ballsBowled * 6 : null
+    economy: p.ballsBowled > 0 ? p.runsConceded / p.ballsBowled * 6 : null,
+    bestBattingLabel: p.bestBattingRuns === null ? null : `${p.bestBattingRuns}${p.bestBattingOut ? "" : "*"}`,
+    bestBowlingLabel: p.bestBowlingWickets === null ? null : `${p.bestBowlingWickets}/${p.bestBowlingRuns}`
   }));
 }
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
@@ -10706,7 +10764,7 @@ function TournamentsScreen({
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, t.teams.length, " teams", tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`)), /*#__PURE__*/React.createElement(ChevronRight, {
+  }, t.teams.length, " teams", tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`, !activeClubId && t._clubId && ` · ${(clubs.find(c => c.id === t._clubId) || {}).name || "a club"}`)), /*#__PURE__*/React.createElement(ChevronRight, {
     size: 18,
     style: {
       color: COLORS.inkSoft,
@@ -13413,6 +13471,8 @@ function PlayersScreen({
   onBack,
   onLoadPublicPlayers,
   onComputeCareerStats,
+  onDeletePlayer,
+  currentUid,
   clubs = []
 }) {
   const [query, setQuery] = useState("");
@@ -13421,6 +13481,9 @@ function PlayersScreen({
   const [selected, setSelected] = useState(null); // a player object, or null for the list view
   const [statsLoading, setStatsLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     let cancelled = false;
     onLoadPublicPlayers().then(list => {
@@ -13437,9 +13500,24 @@ function PlayersScreen({
     setSelected(p);
     setStats(null);
     setStatsLoading(true);
+    setDeleteError("");
     const s = await onComputeCareerStats(p.name, p.homeClubId);
     setStatsLoading(false);
     setStats(s);
+  }
+  async function handleDeletePlayer() {
+    if (!selected || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    const result = await onDeletePlayer(selected.email);
+    setDeleteBusy(false);
+    if (!result.ok) {
+      setDeleteError(result.error || "Couldn't delete this player.");
+      return;
+    }
+    setPlayers(list => list.filter(p => p.email !== selected.email));
+    setConfirmDelete(false);
+    setSelected(null);
   }
   const homeClub = selected ? clubs.find(c => c.id === selected.homeClubId) : null;
   const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
@@ -13557,7 +13635,7 @@ function PlayersScreen({
         flexWrap: "wrap",
         gap: 14
       }
-    }, [["Runs", stats.runs], ["Balls", stats.balls], ["Bat Avg", stats.battingAvg === null ? "\u2014" : stats.battingAvg.toFixed(1)], ["SR", stats.strikeRate === null ? "\u2014" : stats.strikeRate.toFixed(1)], ["Wkts", stats.wickets], ["Econ", stats.economy === null ? "\u2014" : stats.economy.toFixed(2)]].map(([label, value]) => /*#__PURE__*/React.createElement("div", {
+    }, [["Runs", stats.runs], ["HS", stats.bestBattingLabel || "\u2014"], ["Bat Avg", stats.battingAvg === null ? "\u2014" : stats.battingAvg.toFixed(1)], ["SR", stats.strikeRate === null ? "\u2014" : stats.strikeRate.toFixed(1)], ["Wkts", stats.wickets], ["Best", stats.bestBowlingLabel || "\u2014"], ["Econ", stats.economy === null ? "\u2014" : stats.economy.toFixed(2)], ["Catches", stats.catches]].map(([label, value]) => /*#__PURE__*/React.createElement("div", {
       key: label
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -13574,7 +13652,41 @@ function PlayersScreen({
         textTransform: "uppercase",
         letterSpacing: 0.4
       }
-    }, label))))));
+    }, label))))), homeClub && isClubOwner(homeClub, currentUid) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        textAlign: "center"
+      }
+    }, deleteError && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.ball,
+        marginBottom: 8
+      }
+    }, deleteError), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setConfirmDelete(true),
+      className: "cs-btn",
+      style: {
+        background: "none",
+        border: "none",
+        color: COLORS.ball,
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: "pointer",
+        padding: 4,
+        textDecoration: "underline"
+      }
+    }, "Delete player")), confirmDelete && /*#__PURE__*/React.createElement(ConfirmModal, {
+      title: `Delete ${selected.name}?`,
+      message: `Removes ${selected.name} from the public player directory permanently \u2014 other clubs won't be able to find or borrow them again. Teams that already borrowed them keep their own local roster copy, and nothing about past match stats changes.`,
+      confirmLabel: "Delete",
+      busy: deleteBusy,
+      onConfirm: handleDeletePlayer,
+      onCancel: () => setConfirmDelete(false)
+    }));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -18773,7 +18885,15 @@ function CricketScorer() {
     }
     return result;
   }
-  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : tournaments;
+  // "My Tournaments" (no specific club chip selected) shows a merged view — personal tournaments
+  // plus every club's, each tagged with which club it's from (see the club name caption in
+  // TournamentsScreen) — rather than requiring a separate click per club to find one. Picking a
+  // specific club chip still narrows down to just that club's list.
+  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : [...tournaments.map(t => ({ ...t,
+    _clubId: null
+  })), ...Object.entries(clubTournamentsById).flatMap(([cid, list]) => list.map(t => ({ ...t,
+    _clubId: cid
+  })))];
   async function handleCreateTournament(name, teamNames) {
     const t = {
       id: uid(),
@@ -19017,7 +19137,7 @@ function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onOpenTournament: t => {
       setViewingTournament(t);
-      setViewingTournamentClubId(activeTournamentClubId);
+      setViewingTournamentClubId(activeTournamentClubId || t._clubId || null);
       setScreen("tournament-detail");
     },
     onBack: () => setScreen("home"),
@@ -19087,6 +19207,8 @@ function CricketScorer() {
     onBack: () => setScreen("home"),
     onLoadPublicPlayers: loadPublicPlayers,
     onComputeCareerStats: computePlayerCareerStats,
+    onDeletePlayer: deletePlayer,
+    currentUid: user && user.uid,
     clubs: clubs
   })), screen === "club-admin" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "club-admin",
