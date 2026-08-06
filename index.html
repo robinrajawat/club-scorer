@@ -3250,6 +3250,8 @@ function newInning(battingTeam, bowlingTeam, rules) {
     legalBalls: 0,
     overs: [[]],
     // array of overs, each an array of ball events
+    startedAt: Date.now(),
+    // wall-clock time the innings began — powers the innings timer on the scoring screen
     batsmen: {},
     // name -> {runs, balls, out, how}
     battingOrder: [],
@@ -3630,7 +3632,8 @@ function applyBall(inning, event) {
 
 // ---------- UI atoms ----------
 function BallBadge({
-  ev
+  ev,
+  label
 }) {
   let bg = COLORS.creamDark,
     color = COLORS.ink,
@@ -3657,7 +3660,14 @@ function BallBadge({
     border = "none";
     shadow = "0 2px 6px rgba(45,80,22,0.4)";
   }
-  return /*#__PURE__*/React.createElement("span", {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     style: {
       display: "inline-flex",
       alignItems: "center",
@@ -3675,9 +3685,60 @@ function BallBadge({
       padding: "0 4px",
       animation: "cs-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)"
     }
-  }, ev.display);
+  }, ev.display), label && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 9,
+      color: COLORS.inkSoft,
+      lineHeight: 1
+    }
+  }, label));
+}
+// Computes each ball's "over.ball" label within a single over — e.g. the 3rd legal delivery of
+// over 5 is "5.3". A wide or no-ball doesn't consume a legal-ball slot (see applyBall's
+// `legalBall` flag, mirrored here since individual ball log entries don't carry that flag
+// themselves), so it's labelled with the SAME number as whichever legal ball hasn't happened yet
+// — e.g. over 2 ball 2 struck as a wide shows "2.2", and so does the legal delivery that
+// eventually completes it, rather than the wide consuming its own number.
+function ballLabelsForOver(overIndex, balls) {
+  let legalCount = 0;
+  return balls.map(ev => {
+    const isLegal = ev.kind !== "wide" && ev.kind !== "noball";
+    if (isLegal) legalCount += 1;
+    return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
+  });
 }
 
+// Ticking wall-clock timer since the innings began (inning.startedAt) — a simple elapsed-time
+// readout, not a stopwatch with pause/resume; drinks breaks, rain delays etc. just show up as
+// time passing, same as it would to someone glancing at their watch. Updates once a minute (via
+// a low-frequency interval, not every render) since second-level precision adds nothing useful
+// for an innings that runs for an hour or more.
+function InningsTimer({
+  startedAt
+}) {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = setInterval(() => forceTick(n => n + 1), 30000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  if (!startedAt) return null;
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+  const totalMinutes = Math.floor(elapsedMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const label = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 12
+  }), label);
+}
 function OversStrip({
   overs,
   ballsPerOver
@@ -3782,7 +3843,8 @@ function OversStrip({
       }
     }, "Not started") : balls.map((ev, bi) => /*#__PURE__*/React.createElement(BallBadge, {
       key: bi,
-      ev: ev
+      ev: ev,
+      label: ballLabelsForOver(i, balls)[bi]
     }))));
   })));
 }
@@ -4501,21 +4563,24 @@ function AuthBar({
     "aria-label": `${badgeCount} pending request${badgeCount === 1 ? "" : "s"}`,
     style: {
       position: "absolute",
-      top: -4,
-      right: -4,
-      minWidth: 16,
-      height: 16,
-      padding: "0 3px",
-      borderRadius: 8,
+      top: -6,
+      right: -6,
+      zIndex: 1,
+      boxSizing: "border-box",
+      minWidth: 18,
+      height: 18,
+      padding: "0 4px",
+      borderRadius: 9,
       background: COLORS.ball,
       color: "#fff",
       fontFamily: "'Inter'",
-      fontSize: 10,
-      fontWeight: 700,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: "0 0 0 2px #fff"
+      fontSize: 10.5,
+      fontWeight: 800,
+      lineHeight: "18px",
+      textAlign: "center",
+      display: "block",
+      border: "2px solid #fff",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.35)"
     }
   }, badgeCount > 9 ? "9+" : badgeCount));
 }
@@ -15784,12 +15849,12 @@ function MatchScreen({
       return trimmed;
     });
   }
-  function commit(newInningState, extra) {
+  function commit(newInningState, extra, force) {
     const updated = {
       ...match,
       innings: match.innings.map((inn, i) => i === inningIdx ? newInningState : inn)
     };
-    checkInningEnd(updated);
+    checkInningEnd(updated, force);
     setMatch(updated);
     queueSave(updated);
     // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
@@ -15842,14 +15907,14 @@ function MatchScreen({
       error: result.error || "This match changed on another device \u2014 resolve that before sharing a link."
     };
   }
-  function checkInningEnd(updated) {
+  function checkInningEnd(updated, force) {
     const inn = updated.innings[updated.currentInningIndex];
     const oversDone = inn.legalBalls >= updated.oversLimit * (inn.ballsPerOver || 6);
     // A Super Over ends early on 2 wickets lost, not 10 — that's the actual Law, not a house rule,
     // so it's tied to isSuperOver rather than being a toggle anyone would configure per match.
     const allOut = inn.wickets >= (updated.isSuperOver ? 2 : 10);
     const chaseWon = updated.currentInningIndex === 1 && inn.runs >= updated.innings[0].runs + 1;
-    if (oversDone || allOut || chaseWon) {
+    if (force || oversDone || allOut || chaseWon) {
       inn.complete = true;
       if (updated.currentInningIndex === 0) {
         updated.currentInningIndex = 1;
@@ -15960,7 +16025,9 @@ function MatchScreen({
         legal,
         isLast
       });
-      setFielderDraftName("");
+      // Most catches are taken by the keeper — pre-fill it as a starting point, still fully
+      // editable via the PlayerPicker below for the (common enough) catch taken elsewhere.
+      setFielderDraftName(keeperFor(match, inning.bowlingTeam));
       return;
     }
     pushHistory();
@@ -16034,6 +16101,29 @@ function MatchScreen({
       commit(updated);
     }
     setNewBatsmanName("");
+  }
+  const [confirmEndInning, setConfirmEndInning] = useState(false);
+  // Escape hatch for when there's genuinely no next batsman to pick — a short squad (fewer than
+  // 11 available), an injury, a forfeit, whatever. Rather than trying to auto-detect "all out" off
+  // however many players happened to be selected at match start (which the auto isLast/checkWicket
+  // logic elsewhere assumes is always 11), this just lets the innings be ended on demand from right
+  // here, gated behind a confirmation since it's not reversible the way a single ball is via Undo.
+  function endInningEarly() {
+    pushHistory();
+    if (pendingWicket) {
+      commit(applyBall(inning, {
+        kind: "wicket",
+        wicketType: pendingWicket.wicketType,
+        legal: pendingWicket.legal,
+        newBatsman: "",
+        fielderName: pendingWicket.fielderName
+      }), undefined, true);
+      setPendingWicket(null);
+    } else {
+      commit(inning, undefined, true);
+    }
+    setNewBatsmanName("");
+    setConfirmEndInning(false);
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
@@ -16277,7 +16367,9 @@ function MatchScreen({
       opacity: 0.9,
       fontWeight: 500
     }
-  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate), /*#__PURE__*/React.createElement(InningsTimer, {
+    startedAt: inning.startedAt
+  }), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
     style: {
       background: COLORS.gold,
       color: "#fff",
@@ -16575,7 +16667,31 @@ function MatchScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm")), needsNewBowler && !needsNewBatsman && !pendingWicket && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
+  }, "Confirm"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setConfirmEndInning(true),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "10px 4px 0",
+      textDecoration: "underline"
+    }
+  }, "No more batsmen \u2014 end the innings here")), confirmEndInning && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "End the innings here?",
+    message: "No more batsmen available \u2014 short squad, injury, forfeit, whatever the reason. This ends the innings right now, same as if the side were all out.",
+    confirmLabel: "End innings",
+    onConfirm: endInningEarly,
+    onCancel: () => setConfirmEndInning(false)
+  }), needsNewBowler && !needsNewBatsman && !pendingWicket && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
