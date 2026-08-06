@@ -47,6 +47,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - Sign in with Google to sync your matches, teams, and clubs across devices. No sign-in required — everything works fully offline and stays local to your device if you'd rather not create an account.
 - If you lose signal mid-match (common enough at most grounds), scoring keeps working and queues locally; it retries automatically once you're back online, with a small "not synced" indicator so you know it hasn't gone through yet.
 - If a match is being scored from two devices at once (via an "Invite to help score" code) and they genuinely diverge, you'll get a clear prompt to pick which version to keep rather than one device silently overwriting the other.
+- Full backup and restore for a signed-in account, from Account → Your data: export your profile, teams, and matches to a `.json` file, and import that file back in later — into the same account to restore, or into a different one to migrate. Doesn't cover clubs (those are shared state owned by membership, not something a personal backup can safely restore) or matches only ever shared via a match code (those were never tied to your account to begin with).
 
 **After the match**
 - Full scorecard with batting and bowling figures, toss result, and Player of the Match.

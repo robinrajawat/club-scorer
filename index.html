@@ -2978,6 +2978,73 @@ async function saveProfile(profile) {
     console.error("profile save failed", e);
   }
 }
+// Restores what exportUserData() produces: profile, teams, and personal matches, written back to
+// the CURRENTLY signed-in account — not necessarily the same one the export came from, so this
+// doubles as an account-to-account migration as well as a same-account restore. Deliberately does
+// NOT touch clubs: the export's `clubs` array is informational only (id/name/role), not a full
+// club document, and clubs are shared state gated by Firestore rules (membership, ownership,
+// rosters) — there's no safe way to "restore" a club from three fields without either creating a
+// duplicate or silently granting membership nobody approved. Matches are re-packed for Firestore
+// (the export ran them through unpackMatchFromFirestore) and written as a plain overwrite with a
+// fresh writeSeq — this is a deliberate restore the person asked for, not a background sync, so
+// there's no conflict check to route around; a match id that already exists in the destination
+// account is meant to be overwritten by the backup.
+async function importUserData(data) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  if (!data || typeof data !== "object" || (!data.profile && !Array.isArray(data.teams) && !Array.isArray(data.matches))) {
+    return {
+      ok: false,
+      error: "That doesn't look like a Club Scorer backup file."
+    };
+  }
+  const uid = auth.currentUser.uid;
+  let profileRestored = false;
+  let teamsCount = 0;
+  let matchesCount = 0;
+  const failedMatches = [];
+  if (data.profile) {
+    try {
+      await saveProfile(data.profile);
+      profileRestored = true;
+    } catch (e) {
+      console.error("import: profile restore failed", e);
+    }
+  }
+  if (Array.isArray(data.teams)) {
+    try {
+      await saveTeams(data.teams);
+      teamsCount = data.teams.length;
+    } catch (e) {
+      console.error("import: teams restore failed", e);
+    }
+  }
+  if (Array.isArray(data.matches)) {
+    for (const match of data.matches) {
+      if (!match || !match.id) continue;
+      try {
+        await db.collection("users").doc(uid).collection("matches").doc(match.id).set(packMatchForFirestore({
+          ...match,
+          writeSeq: 0,
+          updatedAt: Date.now()
+        }));
+        matchesCount++;
+      } catch (e) {
+        console.error("import: match restore failed", match.id, e);
+        failedMatches.push(match.id);
+      }
+    }
+  }
+  return {
+    ok: failedMatches.length === 0,
+    profileRestored,
+    teamsCount,
+    matchesCount,
+    failedCount: failedMatches.length
+  };
+}
 // ---------- Account data export & deletion ----------
 // Everything queryable by uid: profile, personal teams, personal cloud matches, and the clubs this
 // account belongs to. This deliberately can't include matches that only ever existed as an open
@@ -4729,6 +4796,7 @@ function AccountScreen({
   onSignOut,
   onSaveProfile,
   onExportData,
+  onImportData,
   onDeleteAccount,
   onOpenSharedLinks,
   onOpenRequests,
@@ -4744,6 +4812,11 @@ function AccountScreen({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState(null);
+  const importFileRef = useRef(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -4862,6 +4935,43 @@ function AccountScreen({
       setActionError("Couldn't export your data \u2014 try again in a moment.");
     }
     setExporting(false);
+  }
+  // File picking is two steps: pick+parse first (handleImportFile), then a confirmation step
+  // (handleConfirmImport) before anything is actually written — importing overwrites whatever
+  // profile/teams/matches already exist at those ids in the destination account, so it deserves
+  // the same "are you sure" treatment as deleting the account, not a silent one-tap action.
+  function handleImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // allow picking the same file again after a cancel
+    if (!file) return;
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        setPendingImportData(data);
+        setShowImportConfirm(true);
+      } catch (err) {
+        setImportResult({
+          ok: false,
+          error: "That file isn't valid JSON \u2014 make sure it's an export from Club Scorer."
+        });
+      }
+    };
+    reader.onerror = () => setImportResult({
+      ok: false,
+      error: "Couldn't read that file."
+    });
+    reader.readAsText(file);
+  }
+  async function handleConfirmImport() {
+    if (importing || !pendingImportData) return;
+    setImporting(true);
+    setShowImportConfirm(false);
+    const result = await onImportData(pendingImportData);
+    setPendingImportData(null);
+    setImportResult(result);
+    setImporting(false);
   }
   async function handleDeleteAccount() {
     if (deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE") return;
@@ -5471,7 +5581,39 @@ function AccountScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.5
     }
-  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account.")), /*#__PURE__*/React.createElement("div", {
+  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account."), /*#__PURE__*/React.createElement("input", {
+    ref: importFileRef,
+    type: "file",
+    accept: "application/json,.json",
+    style: {
+      display: "none"
+    },
+    onChange: handleImportFile
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => importFileRef.current && importFileRef.current.click(),
+    disabled: importing,
+    style: {
+      width: "100%",
+      marginTop: 10
+    }
+  }, importing ? "Restoring\u2026" : "Import from backup (.json)"), importResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: importResult.ok ? COLORS.turf : COLORS.ball,
+      marginTop: 8,
+      lineHeight: 1.5
+    }
+  }, importResult.ok ? `Restored ${importResult.profileRestored ? "your profile, " : ""}${importResult.teamsCount} team${importResult.teamsCount === 1 ? "" : "s"}, and ${importResult.matchesCount} match${importResult.matchesCount === 1 ? "" : "es"}.` : importResult.error || `Restored what it could, but ${importResult.failedCount} match${importResult.failedCount === 1 ? "" : "es"} failed \u2014 try again in a moment.`), showImportConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Import this backup?",
+    message: "This overwrites your profile, teams, and any matches in the backup that share an id with one already in this account. It doesn\u2019t touch your clubs \u2014 those aren\u2019t part of the backup file. This can\u2019t be undone.",
+    confirmLabel: "Import",
+    onConfirm: handleConfirmImport,
+    onCancel: () => {
+      setShowImportConfirm(false);
+      setPendingImportData(null);
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -18456,6 +18598,17 @@ function CricketScorer() {
   async function handleExportData() {
     return await exportUserData();
   }
+  async function handleImportData(data) {
+    const result = await importUserData(data);
+    // A restore can bring back matches/teams this device's in-memory state doesn't know about yet
+    // (or overwrite ones it does) — refresh both from source rather than trying to patch the
+    // existing state in place.
+    if (result.ok || result.matchesCount > 0 || result.teamsCount > 0) {
+      refreshIndex();
+      loadTeams().then(setTeams);
+    }
+    return result;
+  }
   async function handleDeleteAccount() {
     // Passes this device's own match index so deleteUserAccount can route each one through
     // deleteMatch() — the only way a match's shareCode/viewCode docs (which have no owner field to
@@ -19371,6 +19524,7 @@ function CricketScorer() {
     onSignOut: signOutUser,
     onSaveProfile: handleSaveProfile,
     onExportData: handleExportData,
+    onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenRequests: () => setScreen("requests"),
