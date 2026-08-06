@@ -404,5 +404,112 @@ service cloud.firestore {
           || isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
         );
     }
+
+    // ---------------------------------------------------------------------
+    // Public directories — a lightweight denormalized entry (name + owner name only) so a club or
+    // federation can be found by search WITHOUT exposing the real document (roster, member uids,
+    // pending invites, description). A club/federation owner publishes exactly one of these the
+    // moment they flip visibility to "public" (see setClubVisibility/setFederationVisibility in
+    // index.html), and it's deleted the instant they go private again. Same "found by design"
+    // trust level as the /players directory above — read is open to any signed-in user so the
+    // search UI can just list the whole (small) collection and filter client-side.
+    // ---------------------------------------------------------------------
+    match /clubDirectory/{clubId} {
+      allow get, list: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.clubId == clubId
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
+        && get(/databases/$(database)/documents/clubs/$(clubId)).data.get('visibility', 'private') == 'public';
+      allow delete: if request.auth != null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
+    }
+
+    match /federationDirectory/{federationId} {
+      allow get, list: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.federationId == federationId
+        && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
+        && get(/databases/$(database)/documents/federations/$(federationId)).data.get('visibility', 'private') == 'public';
+      allow delete: if request.auth != null
+        && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data);
+    }
+
+    // ---------------------------------------------------------------------
+    // Federation <-> club affiliation requests. Replaces the old federationJoinCodes email/code
+    // flow entirely (that collection's rules above are dead now, kept only so nothing throws for
+    // whatever's mid-flight; nothing in the app creates new ones any more). Either side can
+    // propose: a club owner requesting to join a PUBLIC federation ("club_to_federation"), or a
+    // federation owner inviting a PUBLIC club ("federation_to_club"). The OTHER side accepts or
+    // declines. Accepting a "federation_to_club" request lets the club owner write
+    // clubs/{clubId}.federationIds directly in the very same action, since a club owner already
+    // has unrestricted write access to their own federationIds (see clubs/{clubId} branch A) —
+    // no new capability needed there. Accepting a "club_to_federation" request only flips status
+    // to "accepted" here, because a federation must never get direct write access to a club
+    // document; the requesting club's OWNER finishes the join themselves the next time they see
+    // the acceptance (status -> "joined", see completeAcceptedFederationRequest in index.html).
+    // ---------------------------------------------------------------------
+    match /federationRequests/{requestId} {
+      function canSeeRequest(data) {
+        return isClubOwner(get(/databases/$(database)/documents/clubs/$(data.clubId)).data)
+          || isFederationOwner(get(/databases/$(database)/documents/federations/$(data.federationId)).data);
+      }
+      allow get: if request.auth != null && canSeeRequest(resource.data);
+      allow list: if request.auth != null && canSeeRequest(resource.data);
+
+      allow create: if request.auth != null
+        && request.resource.data.status == 'pending'
+        && request.resource.data.clubId is string
+        && request.resource.data.federationId is string
+        && (
+          (
+            request.resource.data.direction == 'club_to_federation' &&
+            isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data) &&
+            get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('visibility', 'private') == 'public'
+          )
+          ||
+          (
+            request.resource.data.direction == 'federation_to_club' &&
+            isFederationOwner(get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data) &&
+            get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('visibility', 'private') == 'public'
+          )
+        );
+
+      allow update: if request.auth != null && (
+        // Receiving side accepts/declines a still-pending request.
+        (
+          (
+            (resource.data.direction == 'club_to_federation' && isFederationOwner(get(/databases/$(database)/documents/federations/$(resource.data.federationId)).data))
+            ||
+            (resource.data.direction == 'federation_to_club' && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data))
+          ) &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status in ['accepted', 'declined'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
+        )
+        ||
+        // Sending side cancels their own still-pending request.
+        (
+          (
+            (resource.data.direction == 'club_to_federation' && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data))
+            ||
+            (resource.data.direction == 'federation_to_club' && isFederationOwner(get(/databases/$(database)/documents/federations/$(resource.data.federationId)).data))
+          ) &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'cancelled' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
+        )
+        ||
+        // Club owner finalizing an ACCEPTED club_to_federation request — see comment above.
+        (
+          resource.data.direction == 'club_to_federation' &&
+          resource.data.status == 'accepted' &&
+          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data) &&
+          request.resource.data.status == 'joined' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        )
+      );
+
+      allow delete: if false;
+    }
   }
 }

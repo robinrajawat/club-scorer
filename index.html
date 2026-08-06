@@ -1890,6 +1890,7 @@ async function createFederation(name) {
       name: trimmed,
       description: "",
       createdBy: auth.currentUser.uid,
+      ownerName: auth.currentUser.displayName || auth.currentUser.email || "",
       coOwnerUids: [],
       kickedClubIds: [],
       createdAt: Date.now()
@@ -2036,6 +2037,226 @@ async function leaveFederation(clubId, federationId) {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can do that." : e.message || "Couldn't leave that federation."
     };
+  }
+}
+// ---------- Discoverability: public club/federation directories, and the request workflow that
+// replaces the old federationJoinCodes email/code flow (see firestore.rules for the full model).
+// ----------
+// Owner-only. Flips a club's discoverability. A public club mirrors a lightweight entry (name +
+// owner name only, never the roster) into /clubDirectory so a federation owner can find it by
+// search; the mirror is deleted the moment the club goes private again.
+async function setClubVisibility(clubId, isPublic) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      visibility: isPublic ? "public" : "private"
+    });
+    if (isPublic) {
+      const clubDoc = await db.collection("clubs").doc(clubId).get();
+      const club = clubDoc.data() || {};
+      await db.collection("clubDirectory").doc(clubId).set({
+        clubId,
+        name: club.name || "",
+        ownerName: (club.memberNames || {})[club.ownerUid] || "",
+        updatedAt: Date.now()
+      });
+    } else {
+      await db.collection("clubDirectory").doc(clubId).delete().catch(() => {});
+    }
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can change this." : e.message || "Couldn't update visibility."
+    };
+  }
+}
+// Owner-only. Same idea as setClubVisibility, for a federation.
+async function setFederationVisibility(federationId, isPublic) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      visibility: isPublic ? "public" : "private"
+    });
+    if (isPublic) {
+      const fedDoc = await db.collection("federations").doc(federationId).get();
+      const fed = fedDoc.data() || {};
+      await db.collection("federationDirectory").doc(federationId).set({
+        federationId,
+        name: fed.name || "",
+        ownerName: fed.ownerName || "",
+        updatedAt: Date.now()
+      });
+    } else {
+      await db.collection("federationDirectory").doc(federationId).delete().catch(() => {});
+    }
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation owner can change this." : e.message || "Couldn't update visibility."
+    };
+  }
+}
+// Loads every public federation. Filtering by name happens client-side (the directory is small —
+// a handful of federations, not thousands — so a full read + client filter is simpler and more
+// forgiving than a prefix range query).
+async function searchPublicFederations(term) {
+  try {
+    const snap = await db.collection("federationDirectory").get();
+    const t = (term || "").trim().toLowerCase();
+    return snap.docs.map(d => d.data()).filter(f => !t || (f.name || "").toLowerCase().includes(t));
+  } catch (e) {
+    console.error("federation search failed", e);
+    return [];
+  }
+}
+// Loads every public club. See searchPublicFederations for why this is a full read + client filter.
+async function searchPublicClubs(term) {
+  try {
+    const snap = await db.collection("clubDirectory").get();
+    const t = (term || "").trim().toLowerCase();
+    return snap.docs.map(d => d.data()).filter(c => !t || (c.name || "").toLowerCase().includes(t));
+  } catch (e) {
+    console.error("club search failed", e);
+    return [];
+  }
+}
+// Club owner requesting to join a PUBLIC federation, or a federation owner inviting a PUBLIC
+// club — direction is "club_to_federation" or "federation_to_club". Only ever creates one pending
+// request; see firestore.rules for who's allowed to accept/decline/cancel it.
+async function requestFederationAffiliation(direction, clubId, federationId) {
+  if (!auth.currentUser) return {
+    ok: false,
+    error: "Sign in first."
+  };
+  try {
+    const ref = db.collection("federationRequests").doc();
+    const reqDoc = {
+      direction,
+      clubId,
+      federationId,
+      status: "pending",
+      fromUid: auth.currentUser.uid,
+      fromName: auth.currentUser.displayName || auth.currentUser.email || "",
+      createdAt: Date.now()
+    };
+    await ref.set(reqDoc);
+    return {
+      ok: true,
+      request: {
+        id: ref.id,
+        ...reqDoc
+      }
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "That club or federation isn't public any more, or you don't have permission." : e.message || "Couldn't send that request."
+    };
+  }
+}
+// Receiving side accepts or declines a pending request. Accepting a federation_to_club request
+// (I'm the club owner) finishes the join immediately, since I already have full write access to
+// my own club's federationIds. Accepting a club_to_federation request (I'm the federation owner)
+// only flips status — the requesting club's own owner completes the join, see
+// completeAcceptedFederationRequest.
+async function respondFederationRequest(requestId, accept) {
+  try {
+    const reqSnap = await db.collection("federationRequests").doc(requestId).get();
+    if (!reqSnap.exists) return {
+      ok: false,
+      error: "That request no longer exists."
+    };
+    const reqData = reqSnap.data();
+    await db.collection("federationRequests").doc(requestId).update({
+      status: accept ? "accepted" : "declined",
+      respondedAt: Date.now()
+    });
+    if (accept && reqData.direction === "federation_to_club") {
+      await db.collection("clubs").doc(reqData.clubId).update({
+        federationIds: firebase.firestore.FieldValue.arrayUnion(reqData.federationId)
+      });
+      await mirrorClubTeamsIntoFederation(reqData.clubId, reqData.federationId);
+    }
+    return {
+      ok: true,
+      federationId: reqData.federationId,
+      clubId: reqData.clubId
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "You can't respond to that request." : e.message || "Couldn't respond to that request."
+    };
+  }
+}
+// Sending side cancels their own still-pending request.
+async function cancelFederationRequest(requestId) {
+  try {
+    await db.collection("federationRequests").doc(requestId).update({
+      status: "cancelled",
+      respondedAt: Date.now()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "You can't cancel that request." : e.message || "Couldn't cancel that request."
+    };
+  }
+}
+// The club owner's side of finishing an ACCEPTED club_to_federation request — see the big comment
+// on /federationRequests in firestore.rules for why this is a separate step from the federation
+// owner's accept.
+async function completeAcceptedFederationRequest(requestId, clubId, federationId) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
+    });
+    await mirrorClubTeamsIntoFederation(clubId, federationId);
+    await db.collection("federationRequests").doc(requestId).update({
+      status: "joined"
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't complete that join."
+    };
+  }
+}
+// Loads every federationRequests row touching a club or federation I own/co-own — used for both
+// the notification badge count and the Requests inbox. `clubIds`/`federationIds` are the caller's
+// own owned/co-owned ids (Firestore 'in' tops out at 10, generous for how many clubs/federations
+// one person realistically owns/co-owns).
+async function loadMyFederationRequests(clubIds, federationIds) {
+  if (!auth.currentUser) return [];
+  try {
+    const queries = [];
+    if (clubIds && clubIds.length) {
+      queries.push(db.collection("federationRequests").where("clubId", "in", clubIds.slice(0, 10)).get());
+    }
+    if (federationIds && federationIds.length) {
+      queries.push(db.collection("federationRequests").where("federationId", "in", federationIds.slice(0, 10)).get());
+    }
+    if (!queries.length) return [];
+    const snaps = await Promise.all(queries);
+    const seen = new Map();
+    snaps.forEach(snap => snap.docs.forEach(d => seen.set(d.id, {
+      id: d.id,
+      ...d.data()
+    })));
+    return Array.from(seen.values());
+  } catch (e) {
+    console.error("requests load failed", e);
+    return [];
   }
 }
 // Owner-only.
@@ -3948,6 +4169,182 @@ function Btn({
     }
   }, children);
 }
+// Small public/private toggle used on a club or federation's own admin card. Owner-only —
+// callers are expected to only render this when the viewer already passed an isOwner check.
+function VisibilitySwitch({
+  isPublic,
+  busy,
+  onChange,
+  publicHint = "Public \u2014 discoverable by search",
+  privateHint = "Private \u2014 not discoverable"
+}) {
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => !busy && onChange(!isPublic),
+    disabled: busy,
+    className: "cs-btn",
+    "aria-label": isPublic ? "Make private" : "Make public",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: "none",
+      border: `1px solid ${isPublic ? COLORS.gold : COLORS.willow}`,
+      borderRadius: 20,
+      padding: "3px 9px 3px 3px",
+      cursor: busy ? "default" : "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5,
+      color: isPublic ? COLORS.gold : COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 26,
+      height: 15,
+      borderRadius: 8,
+      background: isPublic ? COLORS.gold : COLORS.willow,
+      position: "relative",
+      flexShrink: 0,
+      transition: "background 0.15s ease"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 1.5,
+      left: isPublic ? 12 : 1.5,
+      width: 12,
+      height: 12,
+      borderRadius: "50%",
+      background: "#fff",
+      transition: "left 0.15s ease",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.25)"
+    }
+  })), busy ? "\u2026" : isPublic ? "Public" : "Private");
+}
+// Search-and-request UI shared by both directions of federation affiliation: a club owner
+// searching federationDirectory to request joining one, or a federation owner searching
+// clubDirectory to invite one. `items` are the raw directory entries ({name, ownerName, id}) —
+// `idKey` picks which field is the id ("federationId" or "clubId") since the two directories key
+// their entries differently.
+function SearchAndRequestPanel({
+  placeholder,
+  onSearch,
+  idKey,
+  alreadyLinkedIds = [],
+  actionLabel,
+  onRequest,
+  emptyHint
+}) {
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState(null); // null = not searched yet
+  const [loading, setLoading] = useState(false);
+  const [requestedIds, setRequestedIds] = useState([]);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  async function runSearch() {
+    setLoading(true);
+    setError("");
+    const list = await onSearch(term);
+    setLoading(false);
+    setResults(list);
+  }
+  async function submit(item) {
+    const id = item[idKey];
+    if (busyId) return;
+    setBusyId(id);
+    setError("");
+    const result = await onRequest(item);
+    setBusyId(null);
+    if (!result.ok) {
+      setError(result.error || "Couldn't send that request.");
+      return;
+    }
+    setRequestedIds(ids => [...ids, id]);
+  }
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: term,
+    onChange: setTerm,
+    placeholder: placeholder,
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: runSearch,
+    disabled: loading,
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, loading ? "\u2026" : "Search")), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 11.5,
+      fontFamily: "'Inter'",
+      marginBottom: 8
+    }
+  }, error), results && results.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontStyle: "italic",
+      marginBottom: 8
+    }
+  }, emptyHint || "No matches \u2014 it may not be public, or the name doesn't match."), results && results.length > 0 && results.map(item => {
+    const id = item[idKey];
+    const already = alreadyLinkedIds.includes(id) || requestedIds.includes(id);
+    return /*#__PURE__*/React.createElement("div", {
+      key: id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 0",
+        borderBottom: `1px dashed ${COLORS.willow}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 13,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, item.name), item.ownerName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        color: COLORS.inkSoft
+      }
+    }, "Owner: ", item.ownerName)), /*#__PURE__*/React.createElement(Btn, {
+      onClick: () => submit(item),
+      disabled: already || busyId === id,
+      style: {
+        flexShrink: 0,
+        padding: "0 12px",
+        minHeight: 36,
+        fontSize: 12
+      }
+    }, already ? "Sent" : busyId === id ? "\u2026" : actionLabel));
+  }));
+}
 function TextField({
   value,
   onChange,
@@ -4050,7 +4447,8 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 function AuthBar({
   user,
   profile,
-  onOpenAccount
+  onOpenAccount,
+  badgeCount = 0
 }) {
   const label = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "Account").split(" ")[0] : "Sign in";
   return /*#__PURE__*/React.createElement("button", {
@@ -4058,6 +4456,7 @@ function AuthBar({
     className: "cs-btn cs-shine",
     onClick: onOpenAccount,
     style: {
+      position: "relative",
       display: "flex",
       alignItems: "center",
       gap: 7,
@@ -4095,7 +4494,27 @@ function AuthBar({
     }
   }, label.charAt(0).toUpperCase()) : /*#__PURE__*/React.createElement(LogIn, {
     size: 14
-  }), label);
+  }), label, badgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    "aria-label": `${badgeCount} pending request${badgeCount === 1 ? "" : "s"}`,
+    style: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      minWidth: 16,
+      height: 16,
+      padding: "0 3px",
+      borderRadius: 8,
+      background: COLORS.ball,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 700,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 0 0 2px #fff"
+    }
+  }, badgeCount > 9 ? "9+" : badgeCount));
 }
 function RuleChoice({
   label,
@@ -4154,6 +4573,8 @@ function AccountScreen({
   onExportData,
   onDeleteAccount,
   onOpenSharedLinks,
+  onOpenRequests,
+  requestBadgeCount = 0,
   onOpenClubAdmin,
   onBack,
   redirectError,
@@ -4811,7 +5232,39 @@ function AccountScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Manage Clubs & Federations"), user && /*#__PURE__*/React.createElement("div", {
+  }, "Manage Clubs & Federations"), user && /*#__PURE__*/React.createElement("button", {
+    onClick: onOpenRequests,
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: "100%",
+      marginTop: 10,
+      minHeight: 44,
+      background: "none",
+      border: `1.5px solid ${COLORS.willow}`,
+      borderRadius: 10,
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      cursor: "pointer"
+    }
+  }, "Requests", requestBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 18,
+      height: 18,
+      padding: "0 4px",
+      borderRadius: 9,
+      background: COLORS.ball,
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, requestBadgeCount > 9 ? "9+" : requestBadgeCount)), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -5409,12 +5862,14 @@ function ClubPanel({
   onRemoveCoOwner,
   onRevokeInvite,
   onRefreshMyMemberName,
+  onSetVisibility,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [visBusy, setVisBusy] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
@@ -5449,6 +5904,13 @@ function ClubPanel({
     const stored = activeClub.memberNames && activeClub.memberNames[currentUid];
     if (!stored || stored === "Member") onRefreshMyMemberName(activeClub.id);
   }, [activeClubId]);
+  async function handleSetVisibility(isPublic) {
+    if (!activeClub || !onSetVisibility) return;
+    setVisBusy(true);
+    const result = await onSetVisibility(activeClub.id, isPublic);
+    setVisBusy(false);
+    if (!result.ok) setError(result.error || "Couldn't update visibility.");
+  }
   function requestRemoveCoOwner(uid, name) {
     setConfirmRemoveMember({
       uid,
@@ -5864,7 +6326,17 @@ function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), /*#__PURE__*/React.createElement("div", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: activeClub.visibility === "public",
+    busy: visBusy,
+    onChange: handleSetVisibility,
+    publicHint: "Public \u2014 federations can find and invite this club",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -6309,22 +6781,26 @@ function FederationsPanel({
   clubs,
   currentUid,
   onCreateFederation,
-  onJoinFederation,
+  onSearchPublicFederations,
+  onSearchPublicClubs,
+  onRequestFederationAffiliation,
+  onSetFederationVisibility,
   onLeaveFederation,
   onLoadFederationTeams,
   onRenameFederation,
   onUpdateFederationDescription,
-  onInviteFederation,
   onInviteFederationCoOwnerByEmail,
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onRevokeInvite
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  const [mode, setMode] = useState(null); // null | 'create' | 'join'
+  const [mode, setMode] = useState(null); // null | 'create' | 'find'
   const [text, setText] = useState("");
   const [joinClubId, setJoinClubId] = useState(clubs[0] ? clubs[0].id : "");
   const [busy, setBusy] = useState(false);
+  const [visBusyId, setVisBusyId] = useState(null);
+  const [findClubOpen, setFindClubOpen] = useState(false);
   const [error, setError] = useState("");
   const [manageOpenId, setManageOpenId] = useState(null);
   const [manageClubs, setManageClubs] = useState([]);
@@ -6374,17 +6850,18 @@ function FederationsPanel({
     }
     closeAdd();
   }
-  async function submitJoin() {
-    if (!text.trim() || !joinClubId || busy) return;
-    setBusy(true);
-    setError("");
-    const result = await onJoinFederation(joinClubId, text.trim());
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error || "Couldn't affiliate that club.");
-      return;
-    }
-    closeAdd();
+  async function submitRequestJoin(federation) {
+    if (!joinClubId) return {
+      ok: false,
+      error: "Pick which of your clubs is requesting this."
+    };
+    return onRequestFederationAffiliation("club_to_federation", joinClubId, federation.federationId);
+  }
+  async function handleSetVisibility(federationId, isPublic) {
+    setVisBusyId(federationId);
+    const result = await onSetFederationVisibility(federationId, isPublic);
+    setVisBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't update visibility.");
   }
   // Splits the "open" side of toggleManage out on its own so openCoOwnerInvite (and anything
   // else that wants to jump straight into the manage panel) doesn't have to await the
@@ -6396,6 +6873,7 @@ function FederationsPanel({
     setDescText(f.description || "");
     setEmailInviteKind(null);
     setEmailInviteResult(null);
+    setFindClubOpen(false);
     setManageClubs([]);
     setManageLoading(true);
     onLoadFederationTeams(f.id).then(teams => {
@@ -6467,7 +6945,7 @@ function FederationsPanel({
     if (!emailInviteText.trim() || emailInviteBusy) return;
     setEmailInviteBusy(true);
     setEmailInviteError("");
-    const result = emailInviteKind === "coOwner" ? await onInviteFederationCoOwnerByEmail(federationId, emailInviteText.trim()) : await onInviteFederation(federationId, emailInviteText.trim());
+    const result = await onInviteFederationCoOwnerByEmail(federationId, emailInviteText.trim());
     setEmailInviteBusy(false);
     if (!result.ok) {
       setEmailInviteError(result.error || "Couldn't create that invite.");
@@ -6671,7 +7149,11 @@ function FederationsPanel({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }))), isOwner(f) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+  }))), isOwner(f) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: f.visibility === "public",
+    busy: visBusyId === f.id,
+    onChange: isPublic => handleSetVisibility(f.id, isPublic)
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -6909,7 +7391,30 @@ function FederationsPanel({
       gap: 14,
       flexWrap: "wrap"
     }
-  }, emailInviteKind ? /*#__PURE__*/React.createElement("div", {
+  }, findClubOpen ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+    placeholder: "Search public clubs by name",
+    onSearch: onSearchPublicClubs,
+    idKey: "clubId",
+    actionLabel: "Invite",
+    onRequest: club => onRequestFederationAffiliation("federation_to_club", club.clubId, f.id)
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setFindClubOpen(false),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px",
+      marginTop: 4
+    }
+  }, "Close")) : emailInviteKind ? /*#__PURE__*/React.createElement("div", {
     style: {
       width: "100%"
     }
@@ -6970,7 +7475,7 @@ function FederationsPanel({
       letterSpacing: 0.5
     }
   }, emailInviteResult.code))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => startEmailInvite("club"),
+    onClick: () => setFindClubOpen(true),
     className: "cs-btn",
     style: {
       background: "none",
@@ -6983,7 +7488,7 @@ function FederationsPanel({
       padding: 0,
       textDecoration: "underline"
     }
-  }, "+ Invite a club by email"), /*#__PURE__*/React.createElement("button", {
+  }, "+ Find a club to invite"), /*#__PURE__*/React.createElement("button", {
     onClick: () => startEmailInvite("coOwner"),
     className: "cs-btn",
     style: {
@@ -7096,7 +7601,7 @@ function FederationsPanel({
     }
   }, "New federation"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      setMode("join");
+      setMode("find");
       setText("");
       setError("");
     },
@@ -7109,10 +7614,10 @@ function FederationsPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      background: mode === "join" ? COLORS.pitch : "rgba(0,0,0,0.06)",
-      color: mode === "join" ? "#fff" : COLORS.inkSoft
+      background: mode === "find" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      color: mode === "find" ? "#fff" : COLORS.inkSoft
     }
-  }, "Join with code")), mode === "join" && clubs.length > 1 && /*#__PURE__*/React.createElement("select", {
+  }, "Find a federation")), mode === "find" && clubs.length > 1 && /*#__PURE__*/React.createElement("select", {
     value: joinClubId,
     onChange: e => setJoinClubId(e.target.value),
     style: {
@@ -7128,35 +7633,42 @@ function FederationsPanel({
   }, clubs.map(c => /*#__PURE__*/React.createElement("option", {
     key: c.id,
     value: c.id
-  }, "Affiliate ", c.name))), mode === "join" && clubs.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Request as ", c.name))), mode === "find" && clubs.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: COLORS.inkSoft,
       fontFamily: "'Inter'",
       marginBottom: 8
     }
-  }, "You need a club of your own before you can affiliate one with a federation."), /*#__PURE__*/React.createElement("div", {
+  }, "You need a club of your own before you can request to affiliate one with a federation."), mode === "find" ? clubs.length > 0 && /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+    placeholder: "Search public federations by name",
+    onSearch: onSearchPublicFederations,
+    idKey: "federationId",
+    actionLabel: "Request",
+    alreadyLinkedIds: (clubs.find(c => c.id === joinClubId) || {}).federationIds || [],
+    onRequest: submitRequestJoin
+  }) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: text,
-    onChange: v => setText(mode === "join" ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : v),
-    placeholder: mode === "join" ? "Invite code, e.g. 7GQK4RTP" : "Federation name, e.g. DCF",
-    autoCapitalize: mode === "join" ? "characters" : "words",
+    onChange: setText,
+    placeholder: "Federation name, e.g. DCF",
+    autoCapitalize: "words",
     autoCorrect: "off",
     autoComplete: "off",
     spellCheck: false
   }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: mode === "join" ? submitJoin : submitCreate,
-    disabled: busy || !text.trim() || (mode === "join" && (clubs.length === 0 || !joinClubId)),
+    onClick: submitCreate,
+    disabled: busy || !text.trim(),
     style: {
       flexShrink: 0,
       padding: "0 16px",
       minHeight: 44
     }
-  }, busy ? "\u2026" : mode === "join" ? "Join" : "Create")), /*#__PURE__*/React.createElement("button", {
+  }, busy ? "\u2026" : "Create")), /*#__PURE__*/React.createElement("button", {
     onClick: closeAdd,
     style: {
       display: "block",
@@ -7219,6 +7731,231 @@ function FederationsPanel({
     onCancel: () => setConfirmRevokeInvite(null)
   }));
 }
+function RequestsScreen({
+  requests,
+  clubs,
+  federationsById,
+  currentUid,
+  onRespond,
+  onCancel,
+  onCompleteJoin,
+  onBack
+}) {
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  function clubById(id) {
+    return clubs.find(c => c.id === id) || null;
+  }
+  function fedById(id) {
+    return federationsById[id] || null;
+  }
+  function clubName(id) {
+    const c = clubById(id);
+    return c && c.name || "a club";
+  }
+  function fedName(id) {
+    const f = fedById(id);
+    return f && f.name || "a federation";
+  }
+  function isMyClub(id) {
+    return isClubOwner(clubById(id), currentUid);
+  }
+  function isMyFederation(id) {
+    const f = fedById(id);
+    return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
+  }
+  const incoming = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyFederation(r.federationId) || r.direction === "federation_to_club" && isMyClub(r.clubId)));
+  const outgoing = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyClub(r.clubId) || r.direction === "federation_to_club" && isMyFederation(r.federationId)));
+  const needsFinalize = requests.filter(r => r.direction === "club_to_federation" && r.status === "accepted" && isMyClub(r.clubId));
+  async function handleRespond(r, accept) {
+    if (busyId) return;
+    setBusyId(r.id);
+    setError("");
+    const result = await onRespond(r.id, accept);
+    setBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't respond to that request.");
+  }
+  async function handleCancel(r) {
+    if (busyId) return;
+    setBusyId(r.id);
+    setError("");
+    const result = await onCancel(r.id);
+    setBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't cancel that request.");
+  }
+  async function handleFinalize(r) {
+    if (busyId) return;
+    setBusyId(r.id);
+    setError("");
+    const result = await onCompleteJoin(r.id, r.clubId, r.federationId);
+    setBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't complete that join.");
+  }
+  const cardStyle = {
+    background: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  };
+  const sectionTitleStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft,
+    margin: "18px 0 8px"
+  };
+  const descStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 13,
+    color: COLORS.ink,
+    lineHeight: 1.5,
+    marginBottom: 10
+  };
+  function requestLine(r) {
+    if (r.direction === "club_to_federation") {
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " wants to join ", /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)));
+    }
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
+  }
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Requests"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 18,
+      lineHeight: 1.5
+    }
+  }, "Club-federation affiliation requests you've sent or received. A federation must be public before a club can find and request it, and a club must be public before a federation owner can find and invite it."), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: "1.5px solid rgba(139,30,30,0.25)",
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, error), isEmpty && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      lineHeight: 1.6
+    }
+  }, "Nothing pending right now."), needsFinalize.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Approved \u2014 finish joining"), needsFinalize.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: cardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, requestLine(r), " \u2014 the federation approved this. Finish affiliating to start sharing teams."), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => handleFinalize(r),
+    disabled: busyId === r.id,
+    style: {
+      width: "100%"
+    }
+  }, busyId === r.id ? "\u2026" : "Finish joining")))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Needs your response"), incoming.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: cardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, requestLine(r)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => handleRespond(r, true),
+    disabled: busyId === r.id,
+    style: {
+      flex: 1
+    }
+  }, busyId === r.id ? "\u2026" : "Accept"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRespond(r, false),
+    disabled: busyId === r.id,
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "0 14px",
+      minHeight: 44,
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.willow}`,
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, "Decline"))))), outgoing.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Sent \u2014 waiting on a response"), outgoing.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    style: cardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, requestLine(r)), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancel(r),
+    disabled: busyId === r.id,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, busyId === r.id ? "\u2026" : "Cancel request")))));
+}
 function ClubFederationScreen({
   onBack,
   backLabel = "Account",
@@ -7234,9 +7971,12 @@ function ClubFederationScreen({
   onRename,
   federationsById,
   onCreateFederation,
-  onJoinFederation,
+  onSearchPublicFederations,
+  onSearchPublicClubs,
+  onRequestFederationAffiliation,
+  onSetClubVisibility,
+  onSetFederationVisibility,
   onLeaveFederation,
-  onInviteFederation,
   onRemoveMember,
   onRemoveClubCoOwner,
   onRefreshMyMemberName,
@@ -7352,18 +8092,21 @@ function ClubFederationScreen({
     onRemoveCoOwner: onRemoveClubCoOwner,
     onRevokeInvite: onRevokeClubInvite,
     onRefreshMyMemberName: onRefreshMyMemberName,
+    onSetVisibility: onSetClubVisibility,
     currentUid: currentUid
   }), /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
     clubs: clubs,
     currentUid: currentUid,
     onCreateFederation: onCreateFederation,
-    onJoinFederation: onJoinFederation,
+    onSearchPublicFederations: onSearchPublicFederations,
+    onSearchPublicClubs: onSearchPublicClubs,
+    onRequestFederationAffiliation: onRequestFederationAffiliation,
+    onSetFederationVisibility: onSetFederationVisibility,
     onLeaveFederation: onLeaveFederation,
     onLoadFederationTeams: onLoadFederationTeams,
     onRenameFederation: onRenameFederation,
     onUpdateFederationDescription: onUpdateFederationDescription,
-    onInviteFederation: onInviteFederation,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
@@ -8138,6 +8881,7 @@ function HomeScreen({
   onOpenTournaments,
   onOpenPlayers,
   pendingCount,
+  requestBadgeCount = 0,
   tournamentNameById = {}
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -8157,7 +8901,8 @@ function HomeScreen({
   }, /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
-    onOpenAccount: onOpenAccount
+    onOpenAccount: onOpenAccount,
+    badgeCount: requestBadgeCount
   })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -16725,6 +17470,7 @@ const SCREEN_DEPTH = {
   players: 1,
   "team-edit": 2,
   "shared-links": 2,
+  "requests": 2,
   "club-admin": 2,
   "tournament-detail": 2
 };
@@ -16746,6 +17492,7 @@ function CricketScorer() {
   const [clubAdminReturnScreen, setClubAdminReturnScreen] = useState("account");
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
+  const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
@@ -16843,6 +17590,40 @@ function CricketScorer() {
     setClubsLoading(false);
     return clubList;
   }
+  // Owner/co-owner-of ids feed both the federationRequests query below and the notification
+  // badge — memoized as plain values (not useMemo) since `clubs`/`federationsById` already only
+  // change on an actual data refresh.
+  const myOwnedClubIds = clubs.filter(c => isClubOwner(c, user && user.uid)).map(c => c.id);
+  const myOwnedFederationIds = Object.values(federationsById).filter(f => f && user && (f.createdBy === user.uid || (f.coOwnerUids || []).includes(user.uid))).map(f => f.id);
+  async function refreshMyFederationRequests() {
+    const rows = await loadMyFederationRequests(myOwnedClubIds, myOwnedFederationIds);
+    setMyFederationRequests(rows);
+  }
+  // Reloads whenever the set of clubs/federations I own or co-own changes (sign-in, club/
+  // federation created, ownership granted) — this is what feeds the notification badge next to
+  // the profile button, plus the Requests inbox itself.
+  useEffect(() => {
+    if (!user || (myOwnedClubIds.length === 0 && myOwnedFederationIds.length === 0)) {
+      setMyFederationRequests([]);
+      return;
+    }
+    refreshMyFederationRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
+  // accepted club_to_federation request and I'm the requesting club's owner (I still need to
+  // finish the join — see completeAcceptedFederationRequest).
+  const federationRequestsNeedingAction = myFederationRequests.filter(r => {
+    if (r.direction === "club_to_federation") {
+      if (r.status === "pending") return myOwnedFederationIds.includes(r.federationId);
+      if (r.status === "accepted") return myOwnedClubIds.includes(r.clubId);
+      return false;
+    }
+    if (r.direction === "federation_to_club") {
+      return r.status === "pending" && myOwnedClubIds.includes(r.clubId);
+    }
+    return false;
+  });
   // Whenever the Tournaments screen's active club (or that club's federation affiliations)
   // changes, refresh the read-only cross-club team directory it can offer alongside the club's
   // own roster. Excludes the active club's own entries since those already come from teamOptions.
@@ -17409,6 +18190,64 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleSetClubVisibility(clubId, isPublic) {
+    const result = await setClubVisibility(clubId, isPublic);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        visibility: isPublic ? "public" : "private"
+      } : c));
+    }
+    return result;
+  }
+  async function handleSetFederationVisibility(federationId, isPublic) {
+    const result = await setFederationVisibility(federationId, isPublic);
+    if (result.ok) {
+      setFederationsById(prev => ({
+        ...prev,
+        [federationId]: { ...(prev[federationId] || {}),
+          visibility: isPublic ? "public" : "private"
+        }
+      }));
+    }
+    return result;
+  }
+  async function handleRequestFederationAffiliation(direction, clubId, federationId) {
+    const result = await requestFederationAffiliation(direction, clubId, federationId);
+    if (result.ok) refreshMyFederationRequests();
+    return result;
+  }
+  async function handleRespondFederationRequest(requestId, accept) {
+    const result = await respondFederationRequest(requestId, accept);
+    if (result.ok) {
+      if (accept && result.clubId && result.federationId) {
+        // federation_to_club acceptance already wrote federationIds server-side above — mirror
+        // that locally so it shows up without waiting for the next full refreshClubs().
+        setClubs(cs => cs.map(c => c.id === result.clubId ? {
+          ...c,
+          federationIds: [...(c.federationIds || []).filter(id => id !== result.federationId), result.federationId]
+        } : c));
+      }
+      refreshMyFederationRequests();
+    }
+    return result;
+  }
+  async function handleCancelFederationRequest(requestId) {
+    const result = await cancelFederationRequest(requestId);
+    if (result.ok) refreshMyFederationRequests();
+    return result;
+  }
+  async function handleCompleteAcceptedFederationRequest(requestId, clubId, federationId) {
+    const result = await completeAcceptedFederationRequest(requestId, clubId, federationId);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        federationIds: [...(c.federationIds || []).filter(id => id !== federationId), federationId]
+      } : c));
+      refreshMyFederationRequests();
+    }
+    return result;
+  }
   async function handleRemoveMember(clubId, uid) {
     const result = await removeClubMember(clubId, uid);
     if (result.ok) {
@@ -17730,6 +18569,7 @@ function CricketScorer() {
     onOpenTournaments: () => setScreen("tournaments"),
     onOpenPlayers: () => setScreen("players"),
     pendingCount: pendingCount,
+    requestBadgeCount: federationRequestsNeedingAction.length,
     tournamentNameById: tournamentNameById
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
@@ -17824,6 +18664,8 @@ function CricketScorer() {
     onExportData: handleExportData,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
+    onOpenRequests: () => setScreen("requests"),
+    requestBadgeCount: federationRequestsNeedingAction.length,
     onOpenClubAdmin: () => {
       setClubAdminReturnScreen("account");
       setScreen("club-admin");
@@ -17832,6 +18674,18 @@ function CricketScorer() {
     redirectError: authError,
     linkStatus: linkStatus,
     onClearLinkStatus: () => setLinkStatus("")
+  })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "requests",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(RequestsScreen, {
+    requests: myFederationRequests,
+    clubs: clubs,
+    federationsById: federationsById,
+    currentUid: user && user.uid,
+    onRespond: handleRespondFederationRequest,
+    onCancel: handleCancelFederationRequest,
+    onCompleteJoin: handleCompleteAcceptedFederationRequest,
+    onBack: () => setScreen("account")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
     direction: navDirection
@@ -17868,9 +18722,12 @@ function CricketScorer() {
     onUpdateClubDescription: handleUpdateClubDescription,
     federationsById: federationsById,
     onCreateFederation: handleCreateFederation,
-    onJoinFederation: handleJoinFederation,
+    onSearchPublicFederations: searchPublicFederations,
+    onSearchPublicClubs: searchPublicClubs,
+    onRequestFederationAffiliation: handleRequestFederationAffiliation,
+    onSetClubVisibility: handleSetClubVisibility,
+    onSetFederationVisibility: handleSetFederationVisibility,
     onLeaveFederation: handleLeaveFederation,
-    onInviteFederation: handleInviteFederation,
     onRemoveMember: handleRemoveMember,
     onRemoveClubCoOwner: handleRemoveClubCoOwner,
     onRefreshMyMemberName: handleRefreshMyMemberName,
