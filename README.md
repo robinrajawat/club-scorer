@@ -64,6 +64,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - "My Tournaments" shows a merged view across your personal tournaments and every club's, each tagged with which club it's from — pick a specific club chip to narrow down to just that club's list.
 - **Share a live tournament** the same way you'd share a live match — a read-only link anyone can open to follow standings and fixtures as they update, revocable any time, with no way to edit anything even with the link.
 - Export fixtures to your calendar as an `.ics` file, or export the whole standings-and-fixtures view to PDF via your browser's print dialog (same mechanism as a match scorecard).
+- **Head-to-head series**: from the Tournaments screen, "start a head-to-head series instead" sets up a run of matches between exactly two teams — pick both teams and how many matches, and every fixture is generated between them automatically. Shows a running series score ("Riverside XI leads 2\u20131") instead of a points table, with the same fixture list, match-linking, and Player of the Series as a tournament. No knockout bracket, qualification calculator, live-share link, or NRR \u2014 none of that means anything for two sides just playing each other repeatedly, so it stays out rather than being included for the sake of parity.
 
 **Works anywhere**
 - Installable to your phone's home screen on both iOS and Android for an app-like icon and experience.
