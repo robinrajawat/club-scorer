@@ -20,7 +20,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Club Scorer" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="theme-color" content="#2d5016" />
+<meta name="theme-color" content="#2d5016" id="cs-theme-color" />
 <link rel="manifest" href="./manifest.json" />
 <style>
   html, body { margin: 0; padding: 0; }
@@ -302,6 +302,49 @@ const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
 const FONT_LINK = "https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap";
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  /* Theme tokens. Every COLORS.* value below resolves to one of these instead of a literal hex,
+     so switching data-theme on <html> re-themes the whole app without touching the ~700 places
+     COLORS.* is used. Light values are the app's original, unchanged palette; dark values are a
+     genuinely separate set (not just "same hue, invert lightness") chosen for legibility on a
+     dark surface, not derived mechanically. --cs-surface is new — it's what "#fff card on cream
+     page" becomes; it did not exist as a COLORS.* entry before dark mode, since a light theme
+     never needed to distinguish "the page" from "a card floating on the page." Deliberately does
+     NOT touch accent/semantic colors used for badges, jersey presets, or milestone icons — those
+     stay constant across both themes, same as most apps keep brand accent colors fixed while
+     backgrounds/text flip. */
+  :root {
+    --cs-pitch: #2d5016;
+    --cs-pitch-dark: #1f3a0f;
+    --cs-turf: #4a7c2e;
+    --cs-cream: #f2ecd9;
+    --cs-cream-dark: #e5dcc1;
+    --cs-willow: #c9a876;
+    --cs-ink: #2a2420;
+    --cs-ink-soft: #5c5347;
+    --cs-ball: #8b1e1e;
+    --cs-ball-light: #b23b3b;
+    --cs-gold: #b8892b;
+    --cs-surface: #ffffff;
+    --cs-shadow: rgba(42,36,32,0.07);
+    --cs-shadow-soft: rgba(42,36,32,0.05);
+  }
+  [data-theme="dark"] {
+    --cs-pitch: #7ac35a;
+    --cs-pitch-dark: #3d6b24;
+    --cs-turf: #6bb849;
+    --cs-cream: #17140f;
+    --cs-cream-dark: #232019;
+    --cs-willow: #c9a876;
+    --cs-ink: #f0ece3;
+    --cs-ink-soft: #b5ab9a;
+    --cs-ball: #d16257;
+    --cs-ball-light: #e08277;
+    --cs-gold: #d4a544;
+    --cs-surface: #242019;
+    --cs-shadow: rgba(0,0,0,0.35);
+    --cs-shadow-soft: rgba(0,0,0,0.25);
+  }
+  html, body { background: var(--cs-cream); }
   @keyframes cs-pulse { 0% { transform: scale(1); } 35% { transform: scale(1.06); } 100% { transform: scale(1); } }
   @keyframes cs-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes cs-slideUp { from { transform: translateY(28px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -364,17 +407,18 @@ function NavWrap({
   }, children);
 }
 const COLORS = {
-  pitch: "#2d5016",
-  pitchDark: "#1f3a0f",
-  turf: "#4a7c2e",
-  cream: "#f2ecd9",
-  creamDark: "#e5dcc1",
-  willow: "#c9a876",
-  ink: "#2a2420",
-  inkSoft: "#5c5347",
-  ball: "#8b1e1e",
-  ballLight: "#b23b3b",
-  gold: "#b8892b"
+  pitch: "var(--cs-pitch)",
+  pitchDark: "var(--cs-pitch-dark)",
+  turf: "var(--cs-turf)",
+  cream: "var(--cs-cream)",
+  creamDark: "var(--cs-cream-dark)",
+  willow: "var(--cs-willow)",
+  ink: "var(--cs-ink)",
+  inkSoft: "var(--cs-ink-soft)",
+  ball: "var(--cs-ball)",
+  ballLight: "var(--cs-ball-light)",
+  gold: "var(--cs-gold)",
+  surface: "var(--cs-surface)"
 };
 // Jersey color presets offered when editing a team — deliberately a curated set rather than
 // leaving people to the raw native color picker for the common case, since a handful of
@@ -3144,6 +3188,34 @@ function saveRulesLocal(rules) {
   const result = lsSetItem(`${LS_PREFIX}rules`, JSON.stringify(rules));
   if (!result.ok) console.error("save rules failed", result.error);
 }
+// ---------- Theme (light/dark/system) ----------
+// Device-local only, deliberately — this is a display preference, not account data, so it doesn't
+// go through Firestore/profile sync the way house rules optionally do. "system" isn't stored as a
+// resolved light/dark value; it's kept as its own distinct choice so a later change to the OS
+// setting keeps tracking it live (see the matchMedia listener in CricketScorer) instead of freezing
+// at whatever the OS happened to be set to the first time the app loaded.
+function loadThemePref() {
+  try {
+    const v = localStorage.getItem(`${LS_PREFIX}theme`);
+    return v === "light" || v === "dark" ? v : "system";
+  } catch (e) {
+    return "system";
+  }
+}
+function saveThemePref(pref) {
+  const result = lsSetItem(`${LS_PREFIX}theme`, pref);
+  if (!result.ok) console.error("save theme pref failed", result.error);
+}
+function resolveTheme(pref) {
+  if (pref === "dark" || pref === "light") return pref;
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function applyTheme(pref) {
+  const resolved = resolveTheme(pref);
+  document.documentElement.dataset.theme = resolved;
+  const meta = document.getElementById("cs-theme-color");
+  if (meta) meta.setAttribute("content", resolved === "dark" ? "#17140f" : "#2d5016");
+}
 async function loadRules() {
   if (auth.currentUser) {
     const prof = await loadProfile();
@@ -4354,7 +4426,7 @@ function Btn({
   };
   const variants = {
     default: {
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
     },
@@ -4439,7 +4511,7 @@ function VisibilitySwitch({
       width: 12,
       height: 12,
       borderRadius: "50%",
-      background: "#fff",
+      background: COLORS.surface,
       transition: "left 0.15s ease",
       boxShadow: "0 1px 2px rgba(0,0,0,0.25)"
     }
@@ -4593,7 +4665,7 @@ function TextField({
       padding: "12px 14px",
       borderRadius: 10,
       border: `1.5px solid ${COLORS.creamDark}`,
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       width: "100%",
       boxSizing: "border-box",
@@ -4682,7 +4754,7 @@ function AuthBar({
       display: "flex",
       alignItems: "center",
       gap: 7,
-      background: "#fff",
+      background: COLORS.surface,
       border: `1.5px solid ${COLORS.creamDark}`,
       borderRadius: 20,
       padding: user ? "5px 12px 5px 5px" : "7px 14px",
@@ -4797,6 +4869,8 @@ function AccountScreen({
   onSaveProfile,
   onExportData,
   onImportData,
+  themePref,
+  onSetTheme,
   onDeleteAccount,
   onOpenSharedLinks,
   onOpenRequests,
@@ -5078,7 +5152,7 @@ function AccountScreen({
     }
   }, "\u00d7")), user ? /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginBottom: 14,
@@ -5226,7 +5300,7 @@ function AccountScreen({
       padding: "12px 14px",
       borderRadius: 10,
       border: `1.5px solid ${COLORS.creamDark}`,
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       width: "100%",
       boxSizing: "border-box",
@@ -5286,7 +5360,7 @@ function AccountScreen({
     }
   }, busy ? "Signing out…" : "Sign out")) : /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginBottom: 14,
@@ -5399,7 +5473,7 @@ function AccountScreen({
       padding: "12px 14px",
       borderRadius: 10,
       border: `1.5px solid ${COLORS.creamDark}`,
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       width: "100%",
       boxSizing: "border-box",
@@ -5466,7 +5540,7 @@ function AccountScreen({
     }
   }, "Forgot password?")) : null))), user && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginBottom: 14,
@@ -5521,6 +5595,48 @@ function AccountScreen({
     }
   }, requestBadgeCount > 9 ? "9+" : requestBadgeCount))), /*#__PURE__*/React.createElement("div", {
     style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Appearance"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, [{
+    value: "light",
+    label: "Light"
+  }, {
+    value: "dark",
+    label: "Dark"
+  }, {
+    value: "system",
+    label: "System"
+  }].map(opt => /*#__PURE__*/React.createElement(Btn, {
+    key: opt.value,
+    variant: themePref === opt.value ? "primary" : "default",
+    onClick: () => onSetTheme(opt.value),
+    style: {
+      flex: 1,
+      fontSize: 13.5,
+      padding: "10px 8px",
+      minHeight: 40
+    }
+  }, opt.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
       background: "rgba(255,255,255,0.5)",
       borderRadius: 16,
       padding: 16,
@@ -5551,7 +5667,7 @@ function AccountScreen({
     }
   }, "Manage Shared Links"), user && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginTop: 14,
@@ -5615,7 +5731,7 @@ function AccountScreen({
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginTop: 14,
@@ -5958,7 +6074,7 @@ function SharedLinksScreen({
   }, "Nothing currently shared.", /*#__PURE__*/React.createElement("br", null), "Codes and links you generate from a match will show up here.") : shared.map(m => /*#__PURE__*/React.createElement("div", {
     key: m.id,
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 12,
@@ -6726,7 +6842,7 @@ function ClubPanel({
       padding: "6px 10px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff",
+      background: COLORS.surface,
       fontFamily: "'IBM Plex Mono'",
       fontWeight: 600,
       fontSize: 12.5,
@@ -6798,7 +6914,7 @@ function ClubPanel({
       padding: "6px 10px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.pitch,
       fontFamily: "'Inter'",
       fontWeight: 600,
@@ -8038,7 +8154,7 @@ function FederationsPanel({
       padding: "8px 6px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff"
+      background: COLORS.surface
     }
   }, clubs.map(c => /*#__PURE__*/React.createElement("option", {
     key: c.id,
@@ -8202,7 +8318,7 @@ function RequestsScreen({
     if (!result.ok) setError(result.error || "Couldn't complete that join.");
   }
   const cardStyle = {
-    background: "#fff",
+    background: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -8464,7 +8580,7 @@ function ClubFederationScreen({
     label: "Loading your clubs and federations\u2026",
     size: 22,
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 12,
       padding: "10px 14px",
       marginBottom: 16,
@@ -9187,7 +9303,7 @@ function WelcomeScreen({
       padding: "12px 14px",
       borderRadius: 10,
       border: `1.5px solid ${COLORS.creamDark}`,
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       width: "100%",
       boxSizing: "border-box",
@@ -9476,7 +9592,7 @@ function HomeScreen({
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       padding: "14px 14px",
       display: "flex",
       alignItems: "center",
@@ -9737,7 +9853,7 @@ function PlayingXIPicker({
           gap: 4,
           padding: "5px 6px 5px 5px",
           borderRadius: 20,
-          background: "#fff",
+          background: COLORS.surface,
           boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
           opacity: disabled ? 0.45 : 1
         }
@@ -10052,7 +10168,7 @@ function SetupScreen({
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
   const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
   const cardStyle = {
-    background: "#fff",
+    background: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
@@ -10387,7 +10503,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10817,7 +10933,7 @@ function TournamentsScreen({
     }
   }, activeClubName ? `${activeClubName} needs at least 2 saved (or federation-visible) teams first.` : "Save at least 2 teams first (Teams screen)."), creating && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 16,
@@ -10934,7 +11050,7 @@ function TournamentsScreen({
       justifyContent: "space-between",
       width: "100%",
       textAlign: "left",
-      background: "#fff",
+      background: COLORS.surface,
       border: "none",
       borderRadius: 14,
       padding: "14px 16px",
@@ -11121,7 +11237,7 @@ function FixtureDateTimeModal({
     padding: "8px 6px",
     borderRadius: 8,
     border: `1px solid ${COLORS.willow}`,
-    background: "#fff",
+    background: COLORS.surface,
     color: COLORS.ink
   };
   return /*#__PURE__*/React.createElement(Modal, {
@@ -11323,7 +11439,7 @@ function FixtureRow({
   const friendlyDateTime = formatFixtureDateTime(rawDate);
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 12,
       padding: "12px 14px",
       marginBottom: 8,
@@ -11735,7 +11851,7 @@ function FixturesSection({
     }
   }, playedGroupCount, playedGroupCount === 1 ? " fixture played \u2014 see Matches for the result." : " fixtures played \u2014 see Matches for results."), adding ? /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 12,
       padding: 14,
       marginTop: 8,
@@ -11758,7 +11874,7 @@ function FixturesSection({
       padding: "8px 6px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
@@ -11776,7 +11892,7 @@ function FixturesSection({
       padding: "8px 6px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
@@ -12019,7 +12135,7 @@ function TournamentDetailScreen({
     }
   })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: "14px 4px",
       marginBottom: 20,
@@ -12182,7 +12298,7 @@ function TournamentDetailScreen({
     padding: "9px 8px",
     borderRadius: 8,
     border: `1px solid ${COLORS.willow}`,
-    background: "#fff",
+    background: COLORS.surface,
     marginBottom: 10
   }
 }, /*#__PURE__*/React.createElement("option", {
@@ -12450,7 +12566,7 @@ function TournamentDetailScreen({
   }
 }, "Tournament Stats"), tournamentPlayerStats.length === 0 ? /*#__PURE__*/React.createElement("div", {
   style: {
-    background: "#fff",
+    background: COLORS.surface,
     borderRadius: 16,
     padding: 20,
     textAlign: "center",
@@ -12484,7 +12600,7 @@ function TournamentDetailScreen({
   }
 }, t))), /*#__PURE__*/React.createElement("div", {
   style: {
-    background: "#fff",
+    background: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
@@ -12658,7 +12774,7 @@ function TournamentDetailScreen({
       justifyContent: "space-between",
       width: "100%",
       textAlign: "left",
-      background: "#fff",
+      background: COLORS.surface,
       border: "none",
       borderRadius: 12,
       padding: "12px 14px",
@@ -12787,7 +12903,7 @@ function TeamsScreen({
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       padding: "14px 14px",
       display: "flex",
       alignItems: "center",
@@ -13112,7 +13228,7 @@ function TeamEditScreen({
     }
   }, team ? "Edit Team" : "New Team"), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -13211,7 +13327,7 @@ function TeamEditScreen({
     }
   }, "Clear")))), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 16,
@@ -13332,7 +13448,7 @@ function TeamEditScreen({
       fontSize: 13,
       fontWeight: 700,
       color: COLORS.turf,
-      background: "#fff",
+      background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 2px"
@@ -13483,7 +13599,7 @@ function TeamEditScreen({
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.ink,
-      background: "#fff",
+      background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 8px"
@@ -13507,7 +13623,7 @@ function TeamEditScreen({
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.ink,
-      background: "#fff",
+      background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 4px"
@@ -13644,7 +13760,7 @@ function TeamEditScreen({
       padding: "10px 12px",
       borderRadius: 12,
       border: "none",
-      background: "#fff",
+      background: COLORS.surface,
       cursor: "pointer",
       textAlign: "left",
       opacity: players.some(x => x.email && x.email === p.email) ? 0.5 : 1
@@ -13770,7 +13886,7 @@ function PlayersScreen({
       size: 16
     }), " Players"), /*#__PURE__*/React.createElement("div", {
       style: {
-        background: "#fff",
+        background: COLORS.surface,
         borderRadius: 16,
         padding: 18,
         marginBottom: 14,
@@ -13823,7 +13939,7 @@ function PlayersScreen({
       }
     }, "Home club: ", homeClub.name)), /*#__PURE__*/React.createElement("div", {
       style: {
-        background: "#fff",
+        background: COLORS.surface,
         borderRadius: 16,
         padding: 18,
         boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
@@ -13968,7 +14084,7 @@ function PlayersScreen({
       padding: "12px 14px",
       borderRadius: 12,
       border: "none",
-      background: "#fff",
+      background: COLORS.surface,
       cursor: "pointer",
       textAlign: "left",
       boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
@@ -14145,7 +14261,7 @@ function QualificationCalculatorModal({
       padding: "8px 6px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
@@ -14163,7 +14279,7 @@ function QualificationCalculatorModal({
       padding: "8px 6px",
       borderRadius: 8,
       border: `1px solid ${COLORS.willow}`,
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
@@ -14786,7 +14902,7 @@ function PrintReport({
       padding: 24,
       fontFamily: "'Inter', sans-serif",
       color: "#000",
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14865,7 +14981,7 @@ function TournamentPrintReport({
       padding: 24,
       fontFamily: "'Inter', sans-serif",
       color: "#000",
-      background: "#fff"
+      background: COLORS.surface
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15063,7 +15179,7 @@ function SyncConflictModal({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 12,
       padding: "10px 12px",
       boxShadow: "0 1px 3px rgba(42,36,32,0.08)"
@@ -15094,7 +15210,7 @@ function SyncConflictModal({
   }, "(", oversLabel(localInn.legalBalls, localInn.ballsPerOver), ")"))), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 12,
       padding: "10px 12px",
       boxShadow: "0 1px 3px rgba(42,36,32,0.08)"
@@ -15282,7 +15398,7 @@ function RunRateChart({
   const wicketMarkerRadius = 3.4;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -15489,7 +15605,7 @@ function RunsPerOverChart({
   const barH = runs => runs == null ? 0 : Math.max(2, runs / maxOverRuns * plotH);
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -15730,7 +15846,7 @@ function MatchStatsPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -16117,7 +16233,7 @@ function FollowTournamentScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: "14px 4px",
       marginBottom: 20,
@@ -16196,7 +16312,7 @@ function FollowTournamentScreen({
     }
   }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
@@ -16992,7 +17108,7 @@ function MatchScreen({
     }
   }, "FREE HIT")))), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       margin: "-10px 12px 0",
       borderRadius: 14,
       boxShadow: "0 1px 3px rgba(42,36,32,0.07), 0 6px 18px rgba(42,36,32,0.06)",
@@ -17689,7 +17805,7 @@ function SuperOverOpenersSetup({
     }
   }, inn.battingTeam, " bat first."), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
@@ -17813,7 +17929,7 @@ function SecondInningsSetup({
     }
   }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
@@ -17886,7 +18002,7 @@ function PlayerOfMatchCard({
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -17987,7 +18103,7 @@ function PlayerOfMatchCard({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: "#fff",
+      background: COLORS.surface,
       color: COLORS.ink,
       boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -18238,7 +18354,7 @@ function ResultScreen({
       display: "block",
       width: "100%",
       textAlign: "center",
-      background: "#fff",
+      background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 12,
       padding: "10px 14px",
@@ -18278,7 +18394,7 @@ function ResultScreen({
   }), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
-      background: "#fff",
+      background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
@@ -18339,6 +18455,7 @@ function CricketScorer() {
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
   const [activeTournamentClubId, setActiveTournamentClubId] = useState(null); // Tournaments screen's own source selector
   const [viewingTournament, setViewingTournament] = useState(null);
+  const [themePref, setThemePrefState] = useState(loadThemePref);
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
@@ -18365,6 +18482,22 @@ function CricketScorer() {
       });
     }
     return result;
+  }
+  // Applied on mount and whenever the person explicitly changes it (see handleSetTheme). When set
+  // to "system", also tracks the OS-level preference live via matchMedia's change event, so
+  // switching the phone's system theme re-themes the app without needing a reload — the listener
+  // is a no-op (and gets torn down) the moment the person picks an explicit light/dark instead.
+  useEffect(() => {
+    applyTheme(themePref);
+    if (themePref !== "system" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyTheme("system");
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [themePref]);
+  function handleSetTheme(pref) {
+    setThemePrefState(pref);
+    saveThemePref(pref);
   }
   useEffect(() => {
     if (!user || !pendingGoogleLink) return;
@@ -19525,6 +19658,8 @@ function CricketScorer() {
     onSaveProfile: handleSaveProfile,
     onExportData: handleExportData,
     onImportData: handleImportData,
+    themePref: themePref,
+    onSetTheme: handleSetTheme,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenRequests: () => setScreen("requests"),
