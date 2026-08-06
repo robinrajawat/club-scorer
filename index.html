@@ -650,11 +650,17 @@ async function linkGoogleCredential() {
 }
 // Generic random-code generator, reused for match score codes, match view codes, and club join
 // codes. Every use of this treats the code as a bearer capability scoped to exactly one
-// collection/document — see the Firestore rules doc for the exact permissions each grants.
+// collection/document — see the Firestore rules doc for the exact permissions each grants. Uses
+// crypto.getRandomValues() rather than Math.random(): Math.random() isn't a CSPRNG in any browser
+// (V8/SpiderMonkey/JSC all use a fast, non-cryptographic xorshift-family generator), and a code
+// generated from it is the ENTIRE credential for full read/write on a shared match — worth the
+// one extra API call to get an actually-unpredictable one. 256 is evenly divisible by the
+// 32-character alphabet below, so `byte % 32` introduces no modulo bias.
 function genMatchCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
   let s = "";
-  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) s += chars[bytes[i] % chars.length];
   return s;
 }
 // Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
@@ -782,6 +788,32 @@ async function stopSharingTournament(code) {
 // A lightweight pointer for every match (wherever it lives) is always mirrored into the local
 // index so the Home screen can render the list instantly without a network round trip.
 const LS_PREFIX = "cricket-scorer:";
+// Every localStorage.setItem in this file goes through here instead of calling it directly. A
+// full device (years of ball-by-ball history is not a small amount of JSON, and localStorage caps
+// out around 5-10MB depending on the browser) throws QuotaExceededError on write, and until this
+// wrapper existed that exception propagated straight out of whatever save path triggered it —
+// most dangerously in savePrimaryMatch's guest/fallback branches, which call setItem directly
+// with no try/catch of their own and would crash the whole save (see the callers below). Returns
+// a result instead of throwing so a caller that genuinely needs to tell the person "this didn't
+// save" (savePrimaryMatch) can, while callers where a quiet console.error was always the right
+// level of concern (index bookkeeping, undo history) can keep ignoring the result exactly as
+// before.
+function lsSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return {
+      ok: true
+    };
+  } catch (e) {
+    const quotaExceeded = e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
+    console.error("localStorage.setItem failed —", key, e);
+    return {
+      ok: false,
+      quotaExceeded,
+      error: quotaExceeded ? "This device's local storage is full — free up space (delete old matches, or clear other apps' data) so this can be saved." : e && e.message || "Couldn't save locally."
+    };
+  }
+}
 function lsGetIndex() {
   try {
     return JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
@@ -790,11 +822,8 @@ function lsGetIndex() {
   }
 }
 function lsSetIndex(idx) {
-  try {
-    localStorage.setItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
-  } catch (e) {
-    console.error("index save failed", e);
-  }
+  const result = lsSetItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
+  if (!result.ok) console.error("index save failed", result.error);
 }
 function upsertLocalPointer(match, extra) {
   let idx = lsGetIndex().filter(m => m.id !== match.id);
@@ -857,15 +886,16 @@ function lsPendingIds() {
   }
 }
 function lsSetPendingIds(ids) {
-  try {
-    localStorage.setItem(`${LS_PREFIX}pending-ids`, JSON.stringify(ids));
-  } catch (e) {
-    console.error("save pending-ids failed", e);
-  }
+  const result = lsSetItem(`${LS_PREFIX}pending-ids`, JSON.stringify(ids));
+  if (!result.ok) console.error("save pending-ids failed", result.error);
 }
 function queuePendingWrite(match) {
   try {
-    localStorage.setItem(PENDING_PREFIX + match.id, JSON.stringify(match));
+    const result = lsSetItem(PENDING_PREFIX + match.id, JSON.stringify(match));
+    if (!result.ok) {
+      console.error("queue pending write failed", result.error);
+      return;
+    }
     const ids = lsPendingIds();
     if (!ids.includes(match.id)) lsSetPendingIds([...ids, match.id]);
   } catch (e) {
@@ -1052,7 +1082,13 @@ async function savePrimaryMatch(match) {
         writeSeq: newSeq
       };
     } else {
-      localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+      const result = lsSetItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error
+        };
+      }
       upsertLocalPointer(match, {
         cloud: false
       });
@@ -1064,14 +1100,18 @@ async function savePrimaryMatch(match) {
     console.error("[saveMatch] threw —", match.shareCode ? "(match code)" : "(account)", "code:", e.code, "message:", e.message);
     // Still keep this device usable even when the cloud write fails, but a match-code save that
     // only lands in localStorage is actively misleading — nothing exists for another phone to
-    // find — so this is surfaced as a real failure rather than silently treated as success.
-    localStorage.setItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
-    upsertLocalPointer(match, {
+    // find — so this is surfaced as a real failure rather than silently treated as success. If
+    // the local fallback save ALSO fails (e.g. the device's storage is full), that's strictly
+    // worse than the original cloud error — nothing saved anywhere — so it takes over as the
+    // reported error rather than being masked by whatever the original network/permission
+    // failure said.
+    const fallback = lsSetItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+    if (fallback.ok) upsertLocalPointer(match, {
       cloud: false
     });
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
+      error: !fallback.ok ? fallback.error : e.code === "permission-denied" ? "Firestore rules aren't published yet for this project \u2014 see Firebase Console \u2192 Firestore Database \u2192 Rules." : e.message || "Couldn't reach the server."
     };
   }
 }
@@ -1284,11 +1324,8 @@ function loadUndoHistory(matchId) {
   }
 }
 function saveUndoHistory(matchId, history) {
-  try {
-    localStorage.setItem(undoHistoryKey(matchId), JSON.stringify(history));
-  } catch (e) {
-    console.error("save undo history failed", e);
-  }
+  const result = lsSetItem(undoHistoryKey(matchId), JSON.stringify(history));
+  if (!result.ok) console.error("save undo history failed", result.error);
 }
 function clearUndoHistory(matchId) {
   try {
@@ -1487,11 +1524,8 @@ async function saveTeams(teams) {
       console.error("cloud teams save failed, falling back to local", e);
     }
   }
-  try {
-    localStorage.setItem(`${LS_PREFIX}teams`, JSON.stringify(teams));
-  } catch (e) {
-    console.error("save teams failed", e);
-  }
+  const result = lsSetItem(`${LS_PREFIX}teams`, JSON.stringify(teams));
+  if (!result.ok) console.error("save teams failed", result.error);
 }
 
 // ---------- Clubs (shared team rosters) ----------
@@ -2615,11 +2649,8 @@ async function saveTournaments(tournaments) {
       console.error("cloud tournaments save failed, falling back to local", e);
     }
   }
-  try {
-    localStorage.setItem(`${LS_PREFIX}tournaments`, JSON.stringify(tournaments));
-  } catch (e) {
-    console.error("save tournaments failed", e);
-  }
+  const result = lsSetItem(`${LS_PREFIX}tournaments`, JSON.stringify(tournaments));
+  if (!result.ok) console.error("save tournaments failed", result.error);
 }
 async function loadClubTournaments(clubId) {
   try {
@@ -3043,11 +3074,8 @@ function loadRulesLocal() {
   }
 }
 function saveRulesLocal(rules) {
-  try {
-    localStorage.setItem(`${LS_PREFIX}rules`, JSON.stringify(rules));
-  } catch (e) {
-    console.error("save rules failed", e);
-  }
+  const result = lsSetItem(`${LS_PREFIX}rules`, JSON.stringify(rules));
+  if (!result.ok) console.error("save rules failed", result.error);
 }
 async function loadRules() {
   if (auth.currentUser) {
