@@ -126,6 +126,16 @@ const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
 }), /*#__PURE__*/React.createElement("path", {
   d: "M17 5h2.5a2 2 0 0 1 0 4H18"
 }));
+// Cap: a side-profile billed cap (dome + brim), for Orange/Purple Cap — Unicode has no colored cap
+// emoji, and coloring this via `color`/currentColor (like every other icon here) reads far more
+// clearly than a plain emoji behind a colored circle.
+const Cap = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M3 13a9 8 0 0 1 18 0"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M2 13h14"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M16 13c3.8 0 6.8 0.7 6.8 2"
+}));
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",
@@ -288,8 +298,6 @@ const GLOBAL_CSS = `
   @keyframes cs-ballSpin { to { transform: rotate(360deg); } }
   @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
   @keyframes cs-toastDown { from { transform: translate(-50%, -18px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-  @keyframes cs-spin { to { transform: rotate(360deg); } }
-  .cs-spinner { display: inline-block; animation: cs-spin 0.7s linear infinite; }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
   .cs-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -3504,16 +3512,20 @@ function EmptyStateBallIllustration() {
     strokeLinecap: "round"
   }));
 }
-function LoadingBallIllustration() {
+function LoadingBallIllustration({
+  size = 44,
+  style
+}) {
   return /*#__PURE__*/React.createElement("svg", {
-    width: "44",
-    height: "44",
+    width: size,
+    height: size,
     viewBox: "0 0 44 44",
     fill: "none",
     style: {
-      margin: "0 auto 12px",
       display: "block",
-      animation: "cs-ballSpin 0.9s linear infinite"
+      animation: "cs-ballSpin 0.9s linear infinite",
+      flexShrink: 0,
+      ...style
     }
   }, /*#__PURE__*/React.createElement("circle", {
     cx: "22",
@@ -3547,6 +3559,30 @@ function LoadingBallIllustration() {
     offset: "100%",
     stopColor: COLORS.ball
   }))));
+}
+// One shared "still loading" row — the spinning ball + a label — for every in-place loading state
+// in the app (standings, tournament/live-score follow screens, the federation manage panel, the
+// clubs & federations list, etc.), instead of each spot inventing its own plain "Loading…" text
+// with no animation at all. Small inline footprint by default; callers that want it centered in a
+// bigger empty state (like a full-screen "Loading tournament…") wrap it themselves.
+function LoadingNote({
+  label = "Loading\u2026",
+  size = 16,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      ...style
+    }
+  }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+    size
+  }), label);
 }
 function Btn({
   children,
@@ -6298,13 +6334,9 @@ function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "All member clubs"), manageLoading ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Loading\u2026") : manageClubs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "All member clubs"), manageLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    size: 14
+  }) : manageClubs.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: COLORS.inkSoft,
@@ -6803,31 +6835,17 @@ function ClubFederationScreen({
       color: COLORS.inkSoft,
       marginBottom: 16
     }
-  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), clubsLoading && clubs.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), clubsLoading && clubs.length === 0 && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading your clubs and federations\u2026",
+    size: 22,
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
       background: "#fff",
       borderRadius: 12,
       padding: "10px 14px",
       marginBottom: 16,
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
       boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "cs-spinner",
-    style: {
-      width: 13,
-      height: 13,
-      borderRadius: "50%",
-      border: `2px solid ${COLORS.creamDark}`,
-      borderTopColor: COLORS.gold,
-      flexShrink: 0
-    }
-  }), "Loading your clubs and federations\u2026"), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
@@ -10201,12 +10219,16 @@ function TournamentDetailScreen({
   }), " Score an Extra Match (not on the fixture list)"), matches === null ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 0",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontSize: 13
+      padding: "30px 0"
     }
-  }, "Loading standings\u2026") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading standings\u2026",
+    size: 28,
+    style: {
+      flexDirection: "column",
+      justifyContent: "center"
+    }
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -10493,12 +10515,13 @@ function TournamentDetailScreen({
     alignItems: "center",
     gap: 10
   }
-}, /*#__PURE__*/React.createElement("span", {
+}, /*#__PURE__*/React.createElement(Cap, {
+  size: 26,
   style: {
-    fontSize: 24,
+    color: "#e8791c",
     flexShrink: 0
   }
-}, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
+}), /*#__PURE__*/React.createElement("div", {
   style: {
     flex: 1,
     minWidth: 0
@@ -10535,12 +10558,13 @@ function TournamentDetailScreen({
     alignItems: "center",
     gap: 10
   }
-}, /*#__PURE__*/React.createElement("span", {
+}, /*#__PURE__*/React.createElement(Cap, {
+  size: 26,
   style: {
-    fontSize: 24,
+    color: "#7b3fa0",
     flexShrink: 0
   }
-}, "\u{1F9E2}"), /*#__PURE__*/React.createElement("div", {
+}), /*#__PURE__*/React.createElement("div", {
   style: {
     flex: 1,
     minWidth: 0
@@ -13285,7 +13309,11 @@ function FollowScreen({
       style: {
         textAlign: "center"
       }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, null), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+      style: {
+        margin: "0 auto 12px"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'Inter'",
         color: COLORS.inkSoft,
@@ -13458,12 +13486,15 @@ function FollowTournamentScreen({
         ...wrapStyle,
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "'Inter'",
-        color: COLORS.inkSoft,
-        fontSize: 14
+        justifyContent: "center"
       }
-    }, "Loading tournament\u2026");
+    }, /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Loading tournament\u2026",
+      size: 32,
+      style: {
+        flexDirection: "column"
+      }
+    }));
   }
   if (status === "not-found" || status === "error") {
     return /*#__PURE__*/React.createElement("div", {
@@ -16456,7 +16487,11 @@ function CricketScorer() {
       style: {
         textAlign: "center"
       }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, null), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+      style: {
+        margin: "0 auto 12px"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'Inter'",
         color: COLORS.inkSoft,
