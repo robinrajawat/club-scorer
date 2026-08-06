@@ -1383,16 +1383,23 @@ async function loadPublicPlayers() {
 // already exists at this exact email and nobody's linked to it yet, attach it to this account.
 // Silent no-op otherwise (no matching player, or already linked to someone) — this is a courtesy
 // auto-link, not something the person asked for, so it never surfaces an error either way.
-async function linkPlayerIfMatch(uid, email) {
+// Also denormalizes the signed-in person's Google account picture (if any) onto the player doc
+// as photoURL, so the public player profile can show it without ever reading another account's
+// private users/{uid} data (which nobody but that account can read — see firestore.rules). The
+// rules only accept a photoURL that matches this exact auth token's own picture claim, so this
+// can never attach an arbitrary image to someone else's player doc.
+async function linkPlayerIfMatch(uid, email, photoURL) {
   const id = normalizeEmail(email);
   if (!id) return;
   try {
     const ref = db.collection("players").doc(id);
     const doc = await ref.get();
     if (doc.exists && !doc.data().linkedUid) {
-      await ref.update({
+      const update = {
         linkedUid: uid
-      });
+      };
+      if (photoURL) update.photoURL = photoURL;
+      await ref.update(update);
     }
   } catch (e) {
     console.error("auto-link player failed", e.code, e.message);
@@ -12396,12 +12403,28 @@ function PlayersScreen({
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        fontFamily: "'DM Serif Display', serif",
-        fontSize: 24,
-        color: COLORS.pitch,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
         marginBottom: 4
       }
-    }, selected.name), info.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    }, selected.photoURL && /*#__PURE__*/React.createElement("img", {
+      src: selected.photoURL,
+      alt: "",
+      style: {
+        width: 48,
+        height: 48,
+        borderRadius: "50%",
+        flexShrink: 0,
+        objectFit: "cover"
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'DM Serif Display', serif",
+        fontSize: 24,
+        color: COLORS.pitch
+      }
+    }, selected.name)), info.length > 0 ? /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 13,
@@ -16897,7 +16920,7 @@ function CricketScorer() {
       refreshClubs();
       // Courtesy auto-link, not something worth blocking or surfacing errors for — see
       // linkPlayerIfMatch's own comment for exactly what it will and won't touch.
-      if (u && u.email) linkPlayerIfMatch(u.uid, u.email);
+      if (u && u.email) linkPlayerIfMatch(u.uid, u.email, u.photoURL);
     });
     Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
       setMatches(idx);

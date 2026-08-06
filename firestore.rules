@@ -237,13 +237,20 @@ service cloud.firestore {
         )
         ||
         // (B) Auto-link on sign-in: the signed-in person's own verified email exactly matches
-        // this doc, nobody's linked to it yet, and the ONLY field changing is linkedUid, to
-        // exactly this person's own uid — see linkPlayerIfMatch in index.html.
+        // this doc, nobody's linked to it yet, and the only fields changing are linkedUid (to
+        // exactly this person's own uid) and, optionally, photoURL — see linkPlayerIfMatch in
+        // index.html. photoURL must come verbatim from the auth token's own `picture` claim
+        // (never an arbitrary client-supplied value), so this can only ever mirror the signed-in
+        // person's own Google account picture, not attach an arbitrary image to someone else.
         (
           request.auth.token.email.lower() == resource.data.email &&
           resource.data.get('linkedUid', null) == null &&
           request.resource.data.linkedUid == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUid'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUid', 'photoURL']) &&
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL']) ||
+            request.resource.data.photoURL == request.auth.token.get('picture', null)
+          )
         )
       );
 
