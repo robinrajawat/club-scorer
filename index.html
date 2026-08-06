@@ -5264,12 +5264,13 @@ function AccountScreen({
       fontFamily: "'Inter'",
       fontSize: 12
     }
-  }, "Forgot password?")) : null))), /*#__PURE__*/React.createElement("div", {
+  }, "Forgot password?")) : null))), user && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(255,255,255,0.5)",
+      background: "#fff",
       borderRadius: 16,
-      padding: 16,
-      border: `1.5px dashed ${COLORS.willow}`
+      padding: 18,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5279,28 +5280,14 @@ function AccountScreen({
       letterSpacing: 1,
       color: COLORS.inkSoft,
       textTransform: "uppercase",
-      marginBottom: 8
+      marginBottom: 10
     }
-  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")), /*#__PURE__*/React.createElement(Btn, {
-    onClick: onOpenSharedLinks,
-    style: {
-      width: "100%",
-      marginTop: 14
-    }
-  }, "Manage Shared Links"), user && /*#__PURE__*/React.createElement(Btn, {
+  }, "Clubs & Federations"), /*#__PURE__*/React.createElement(Btn, {
     onClick: onOpenClubAdmin,
     style: {
-      width: "100%",
-      marginTop: 10
+      width: "100%"
     }
-  }, "Manage Clubs & Federations"), user && /*#__PURE__*/React.createElement("button", {
+  }, "Manage Clubs & Federations"), /*#__PURE__*/React.createElement("button", {
     onClick: onOpenRequests,
     className: "cs-btn",
     style: {
@@ -5332,7 +5319,37 @@ function AccountScreen({
       fontSize: 11,
       fontWeight: 700
     }
-  }, requestBadgeCount > 9 ? "9+" : requestBadgeCount)), user && /*#__PURE__*/React.createElement("div", {
+  }, requestBadgeCount > 9 ? "9+" : requestBadgeCount))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(255,255,255,0.5)",
+      borderRadius: 16,
+      padding: 16,
+      border: `1.5px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 8
+    }
+  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onOpenSharedLinks,
+    style: {
+      width: "100%",
+      marginTop: 14
+    }
+  }, "Manage Shared Links"), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -5362,127 +5379,9 @@ function AccountScreen({
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
-      marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.creamDark,
-      margin: "4px 0 16px"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      fontWeight: 700,
-      color: COLORS.ball,
-      marginBottom: 6
-    }
-  }, "Delete account"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginBottom: 12,
-      lineHeight: 1.5
-    }
-  }, "Permanently deletes your profile, teams, and matches saved to this account, and removes you from any clubs. This can\u2019t be undone."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setDeleteConfirmText("");
-      setDeleteError("");
-      setShowDeleteConfirm(true);
-    },
-    className: "cs-btn",
-    style: {
-      width: "100%",
-      background: "none",
-      border: `1.5px solid ${COLORS.ball}`,
-      borderRadius: 10,
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13,
-      padding: "10px 0",
-      cursor: "pointer"
-    }
-  }, "Delete my account")), showDeleteConfirm && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => !deleting && setShowDeleteConfirm(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.ball,
-      marginBottom: 10
-    }
-  }, "Delete your account?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 14
-    }
-  }, "This permanently deletes your profile, your teams, every match saved to this account, and removes you from your clubs. It does not delete matches you only ever shared via a match code on another device. This cannot be undone."), (soleOwnerClubs.length > 0 || soleOwnerFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "rgba(139,30,30,0.08)",
-      border: `1.5px solid rgba(139,30,30,0.25)`,
-      borderRadius: 12,
-      padding: "12px 14px",
-      marginBottom: 14,
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.ball,
-      lineHeight: 1.5
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      marginBottom: 4
-    }
-  }, "You're the only owner here \u2014 deleting your account leaves ", soleOwnerClubs.length > 0 && soleOwnerFederations.length > 0 ? "these permanently stuck" : soleOwnerClubs.length > 0 ? "this club permanently stuck" : "this federation permanently stuck", ":"), soleOwnerClubs.map(c => /*#__PURE__*/React.createElement("div", {
-    key: c.id
-  }, "\u2022 ", c.name, " (club) \u2014 nobody will ever be able to manage or rename it, invite anyone, or remove members again. It could still be deleted outright by a co-owner, but there won't be one.")), soleOwnerFederations.map(f => /*#__PURE__*/React.createElement("div", {
-    key: f.id
-  }, "\u2022 ", f.name, " (federation) \u2014 a federation can never be deleted by anyone, so this one is stuck this way for good, not just until someone deletes it.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 6
-    }
-  }, "If you'd rather avoid that, add a co-owner from Clubs & Federations first \u2014 co-owners have identical rights, so any of them can take over.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Type DELETE to confirm"), /*#__PURE__*/React.createElement(TextField, {
-    value: deleteConfirmText,
-    onChange: setDeleteConfirmText,
-    placeholder: "DELETE",
-    autoCapitalize: "characters",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false,
-    style: {
-      marginBottom: 12
-    }
-  }), deleteError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.ball,
-      marginBottom: 12,
-      lineHeight: 1.5
-    }
-  }, deleteError), /*#__PURE__*/React.createElement(Btn, {
-    variant: "danger",
-    onClick: handleDeleteAccount,
-    disabled: deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE",
-    style: {
-      width: "100%"
-    }
-  }, deleting ? "Deleting\u2026" : "Permanently delete my account")), /*#__PURE__*/React.createElement("div", {
+  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account.")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#fff",
       borderRadius: 16,
@@ -5602,7 +5501,136 @@ function AccountScreen({
       cursor: "pointer",
       boxShadow: "0 2px 8px rgba(184,137,43,0.3)"
     }
-  }, "\u2615 Support on Ko-fi")));
+  }, "\u2615 Buy me a coffee")), user && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.05)",
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      border: `1.5px solid rgba(139,30,30,0.25)`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.ball,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Danger zone"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 700,
+      color: COLORS.ball,
+      marginBottom: 6
+    }
+  }, "Delete account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "Permanently deletes your profile, teams, and matches saved to this account, and removes you from any clubs. This can\u2019t be undone."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDeleteConfirmText("");
+      setDeleteError("");
+      setShowDeleteConfirm(true);
+    },
+    className: "cs-btn",
+    style: {
+      width: "100%",
+      background: "none",
+      border: `1.5px solid ${COLORS.ball}`,
+      borderRadius: 10,
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      padding: "10px 0",
+      cursor: "pointer"
+    }
+  }, "Delete my account")), showDeleteConfirm && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => !deleting && setShowDeleteConfirm(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.ball,
+      marginBottom: 10
+    }
+  }, "Delete your account?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 14
+    }
+  }, "This permanently deletes your profile, your teams, every match saved to this account, and removes you from your clubs. It does not delete matches you only ever shared via a match code on another device. This cannot be undone."), (soleOwnerClubs.length > 0 || soleOwnerFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(139,30,30,0.08)",
+      border: `1.5px solid rgba(139,30,30,0.25)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ball,
+      lineHeight: 1.5
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      marginBottom: 4
+    }
+  }, "You're the only owner here \u2014 deleting your account leaves ", soleOwnerClubs.length > 0 && soleOwnerFederations.length > 0 ? "these permanently stuck" : soleOwnerClubs.length > 0 ? "this club permanently stuck" : "this federation permanently stuck", ":"), soleOwnerClubs.map(c => /*#__PURE__*/React.createElement("div", {
+    key: c.id
+  }, "\u2022 ", c.name, " (club) \u2014 nobody will ever be able to manage or rename it, invite anyone, or remove members again. It could still be deleted outright by a co-owner, but there won't be one.")), soleOwnerFederations.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id
+  }, "\u2022 ", f.name, " (federation) \u2014 a federation can never be deleted by anyone, so this one is stuck this way for good, not just until someone deletes it.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, "If you'd rather avoid that, add a co-owner from Clubs & Federations first \u2014 co-owners have identical rights, so any of them can take over.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Type DELETE to confirm"), /*#__PURE__*/React.createElement(TextField, {
+    value: deleteConfirmText,
+    onChange: setDeleteConfirmText,
+    placeholder: "DELETE",
+    autoCapitalize: "characters",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    style: {
+      marginBottom: 12
+    }
+  }), deleteError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, deleteError), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: handleDeleteAccount,
+    disabled: deleting || deleteConfirmText.trim().toUpperCase() !== "DELETE",
+    style: {
+      width: "100%"
+    }
+  }, deleting ? "Deleting\u2026" : "Permanently delete my account")));
 }
 
 // Every match this device/account knows about that currently has an active score code and/or
