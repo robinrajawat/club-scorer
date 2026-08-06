@@ -24,6 +24,10 @@ rules_version = '2';
 // matches, or roster access of its own — only a read-only name directory (federations/{id}/teams)
 // that says "this club has a team called X", so a tournament organizer in one member club can
 // pick another member club's team without ever seeing that club's private data.
+// Players add a sixth tier, thinner still: a directory entry for one real person, keyed by email,
+// that any club's owner/co-owner can publish (make public/borrowable) or a roster can simply
+// reference by email without publishing anything at all. See the /players/{playerEmail} rule
+// below for the full reasoning.
 //
 // ---- The permission model in one paragraph ----
 // Clubs and federations each have exactly one privileged tier: "owner", which covers both the
@@ -190,6 +194,61 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
       allow write: if request.auth != null
         && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
+    }
+
+    // ---------------------------------------------------------------------
+    // Players — a directory entry for a real person, keyed by their (lowercased) email so the
+    // same person resolves to the same doc no matter which club adds them: e.g. two clubs each
+    // adding "alex@x.com" to a roster share one Player, rather than becoming two unrelated
+    // people. A roster entry with no email is just a plain name, exactly as before this
+    // collection existed — nothing here is required.
+    //
+    // homeClubId is whichever club FIRST published this player (made them public/borrowable) and
+    // is the only club whose owner/co-owner can edit or unpublish them; it's immutable afterward,
+    // same reasoning as ownerUid on a club. linkedUid is set once, automatically, the moment
+    // someone signs in with this exact email (see linkPlayerIfMatch in index.html) — it can only
+    // ever move from unset to that one specific person, never reassigned or cleared via this rule.
+    //
+    // Reads are open to any signed-in user, not just the home club — needed for the cross-club
+    // "browse public players" directory itself to work as a query rather than a per-doc lookup.
+    // This is the same bearer-style trust the rest of this file already extends to match/view
+    // codes: nothing sensitive lives on this doc beyond a name and an email, and it's genuinely
+    // meant to be found by other clubs, unlike club/federation membership data.
+    // ---------------------------------------------------------------------
+    match /players/{playerEmail} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+
+      allow create: if request.auth != null
+        && playerEmail == request.resource.data.email
+        && request.resource.data.get('linkedUid', null) == null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.homeClubId)).data);
+
+      allow update: if request.auth != null && (
+        // (A) Home club's owner/co-owner editing name/public. homeClubId, email, and linkedUid
+        // must not change via this branch — homeClubId transfer isn't supported (same reasoning
+        // as a club's ownerUid never moving through its general-edit branch), and linkedUid is
+        // exclusively branch (B)'s to set.
+        (
+          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data) &&
+          request.resource.data.homeClubId == resource.data.homeClubId &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.get('linkedUid', null) == resource.data.get('linkedUid', null)
+        )
+        ||
+        // (B) Auto-link on sign-in: the signed-in person's own verified email exactly matches
+        // this doc, nobody's linked to it yet, and the ONLY field changing is linkedUid, to
+        // exactly this person's own uid — see linkPlayerIfMatch in index.html.
+        (
+          request.auth.token.email.lower() == resource.data.email &&
+          resource.data.get('linkedUid', null) == null &&
+          request.resource.data.linkedUid == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUid'])
+        )
+      );
+
+      allow delete: if request.auth != null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data);
     }
 
     // ---------------------------------------------------------------------

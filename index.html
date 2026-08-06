@@ -170,6 +170,18 @@ const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
   x2: "15.4",
   y2: "17.6"
 }));
+const Globe = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "9"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "3",
+  y1: "12",
+  x2: "21",
+  y2: "12"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"
+}));
 const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "12",
   y1: "5",
@@ -1232,6 +1244,112 @@ function clearUndoHistory(matchId) {
     localStorage.removeItem(undoHistoryKey(matchId));
   } catch (e) {
     /* noop */
+  }
+}
+
+// ---------- Players (shared cross-club directory, keyed by email) ----------
+// A roster entry is still just {name, number} by default — nothing here is required. Giving a
+// player an email and publishing them (via publishPlayer) creates a shared /players/{email} doc
+// so the SAME person resolves consistently no matter which club's roster references them, and
+// other clubs can borrow them into their own rosters via loadPublicPlayers. See firestore.rules
+// for the full permission model (home club administers; auto-links to an account on sign-in).
+function normalizeEmail(email) {
+  return (email || "").trim().toLowerCase();
+}
+// Publishes a player (creates the shared doc if this is the first time anyone has, or just
+// returns the existing one otherwise — deliberately doesn't overwrite an already-published
+// player's name/homeClubId, since whichever club got there first keeps administering them).
+async function publishPlayer(homeClubId, name, email) {
+  const id = normalizeEmail(email);
+  if (!id || !id.includes("@")) return {
+    ok: false,
+    error: "Enter a valid email to make this player public."
+  };
+  try {
+    const ref = db.collection("players").doc(id);
+    const existing = await ref.get();
+    if (existing.exists) {
+      return {
+        ok: true,
+        player: {
+          id: existing.id,
+          ...existing.data()
+        }
+      };
+    }
+    const player = {
+      email: id,
+      name: (name || "").trim(),
+      homeClubId,
+      public: true,
+      linkedUid: null,
+      createdAt: Date.now()
+    };
+    await ref.set(player);
+    return {
+      ok: true,
+      player: {
+        id,
+        ...player
+      }
+    };
+  } catch (e) {
+    console.error("publish player failed", e.code, e.message);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only that player's home club owner can publish them." : e.message || "Couldn't make this player public."
+    };
+  }
+}
+// Owner-only (enforced by rules) — takes a player back out of the cross-club directory without
+// deleting them, so existing rosters that already reference this email keep working.
+async function unpublishPlayer(email) {
+  const id = normalizeEmail(email);
+  try {
+    await db.collection("players").doc(id).update({
+      public: false
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("unpublish player failed", e.code, e.message);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only that player's home club owner can unpublish them." : e.message || "Couldn't update this player."
+    };
+  }
+}
+// The cross-club "borrow a player" directory — every player any club has published.
+async function loadPublicPlayers() {
+  try {
+    const snap = await db.collection("players").where("public", "==", true).get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("load public players failed", e);
+    return [];
+  }
+}
+// Called once right after sign-in (see the auth effect in CricketScorer) — if a player doc
+// already exists at this exact email and nobody's linked to it yet, attach it to this account.
+// Silent no-op otherwise (no matching player, or already linked to someone) — this is a courtesy
+// auto-link, not something the person asked for, so it never surfaces an error either way.
+async function linkPlayerIfMatch(uid, email) {
+  const id = normalizeEmail(email);
+  if (!id) return;
+  try {
+    const ref = db.collection("players").doc(id);
+    const doc = await ref.get();
+    if (doc.exists && !doc.data().linkedUid) {
+      await ref.update({
+        linkedUid: uid
+      });
+    }
+  } catch (e) {
+    console.error("auto-link player failed", e.code, e.message);
   }
 }
 
@@ -11359,6 +11477,10 @@ function TeamsScreen({
 }
 function TeamEditScreen({
   team,
+  clubId,
+  onPublishPlayer,
+  onUnpublishPlayer,
+  onLoadPublicPlayers,
   onSave,
   onCancel
 }) {
@@ -11366,10 +11488,14 @@ function TeamEditScreen({
   const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
     name: p,
     number: "",
+    email: "",
+    public: false,
     _key: uid()
   } : {
     name: p.name,
     number: p.number || "",
+    email: p.email || "",
+    public: !!p.public,
     _key: uid()
   }) : []);
   const [newPlayer, setNewPlayer] = useState("");
@@ -11377,12 +11503,46 @@ function TeamEditScreen({
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
   const [color, setColor] = useState(team ? team.color || "" : "");
+  // Player details (email + public toggle) are tucked behind a per-row expand, rather than always
+  // shown, since most rec-league rosters will never touch this — one row open at a time.
+  const [expandedKey, setExpandedKey] = useState(null);
+  const [publishBusyKey, setPublishBusyKey] = useState(null);
+  const [publishError, setPublishError] = useState("");
+  // Cross-club "borrow a player" directory — only relevant for a club-owned team (clubId set);
+  // loaded lazily the first time the picker opens rather than on mount, since most edits never
+  // need it.
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [publicPlayers, setPublicPlayers] = useState([]);
+  async function openBrowse() {
+    setBrowseOpen(true);
+    if (publicPlayers.length > 0) return;
+    setBrowseLoading(true);
+    setPublicPlayers(await onLoadPublicPlayers());
+    setBrowseLoading(false);
+  }
+  function addBorrowedPlayer(p) {
+    if (players.some(x => x.email && x.email === p.email)) {
+      setBrowseOpen(false);
+      return;
+    }
+    setPlayers(list => [...list, {
+      name: p.name,
+      number: "",
+      email: p.email,
+      public: true,
+      _key: uid()
+    }]);
+    setBrowseOpen(false);
+  }
   function addPlayer() {
     const n = newPlayer.trim();
     if (!n || players.some(p => p.name === n)) return;
     setPlayers(p => [...p, {
       name: n,
       number: newNumber.trim(),
+      email: "",
+      public: false,
       _key: uid()
     }]);
     setNewPlayer("");
@@ -11412,6 +11572,28 @@ function TeamEditScreen({
       if (captain === old.name) setCaptain(newName);
       if (keeper === old.name) setKeeper(newName);
     }
+  }
+  function updateEmail(key, email) {
+    setPlayers(p => p.map(x => x._key === key ? {
+      ...x,
+      email
+    } : x));
+  }
+  async function togglePublic(key) {
+    const row = players.find(p => p._key === key);
+    if (!row || publishBusyKey) return;
+    setPublishError("");
+    setPublishBusyKey(key);
+    const result = row.public ? await onUnpublishPlayer(row.email) : await onPublishPlayer(clubId, row.name, row.email);
+    setPublishBusyKey(null);
+    if (!result.ok) {
+      setPublishError(result.error);
+      return;
+    }
+    setPlayers(p => p.map(x => x._key === key ? {
+      ...x,
+      public: !x.public
+    } : x));
   }
   const trimmedNames = players.map(p => p.name.trim());
   const canSave = name.trim() && players.length > 0 && trimmedNames.every(n => n) && new Set(trimmedNames.map(n => n.toLowerCase())).size === players.length;
@@ -11601,7 +11783,35 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }))), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }))), clubId && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: openBrowse,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      padding: 0,
+      textDecoration: "underline",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Globe, {
+    size: 13
+  }), "Borrow a public player from another club"), publishError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 11.5,
+      fontFamily: "'Inter'",
+      marginBottom: 10
+    }
+  }, publishError), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -11614,8 +11824,9 @@ function TeamEditScreen({
       flexDirection: "column",
       gap: 6
     }
-  }, players.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p._key,
+  }, players.map(p => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: p._key
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -11705,7 +11916,27 @@ function TeamEditScreen({
       alignItems: "center",
       justifyContent: "center"
     }
-  }, "WK"), /*#__PURE__*/React.createElement("button", {
+  }, "WK"), clubId && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
+    "aria-label": p.public ? `${p.name} is a public player \u2014 edit details` : `Add an email to make ${p.name} a public player`,
+    title: "Player details (email, public)",
+    style: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      flexShrink: 0,
+      border: expandedKey === p._key ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: expandedKey === p._key ? COLORS.pitch : p.public ? "rgba(184,137,43,0.16)" : "#fff",
+      color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Globe, {
+    size: 13
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => removePlayer(p._key),
     className: "cs-btn",
     style: {
@@ -11725,13 +11956,51 @@ function TeamEditScreen({
       flexShrink: 0
     },
     "aria-label": `Remove ${p.name}`
-  }, "✕"))))), /*#__PURE__*/React.createElement(Btn, {
+  }, "✕")), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 8px 10px 58px"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: p.email,
+    onChange: e => updateEmail(p._key, e.target.value),
+    placeholder: "Email \u2014 lets other clubs borrow this player",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "off",
+    inputMode: "email",
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      background: "#fff",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      padding: "5px 8px"
+    }
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: p.public ? "gold" : "default",
+    onClick: () => togglePublic(p._key),
+    disabled: publishBusyKey === p._key || !p.email.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 12px",
+      minHeight: 32,
+      fontSize: 11.5
+    }
+  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Public \u2713" : "Make public"))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => {
       const savedPlayers = players.map(p => ({
         name: p.name.trim(),
-        number: p.number
+        number: p.number,
+        email: normalizeEmail(p.email),
+        public: !!p.public
       }));
       onSave({
         id: team ? team.id : uid(),
@@ -11745,7 +12014,89 @@ function TeamEditScreen({
     style: {
       width: "100%"
     }
-  }, "Save Team"));
+  }, "Save Team"), browseOpen && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setBrowseOpen(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Borrow a public player"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 14
+    }
+  }, "Published by another club \u2014 adding one here doesn't remove them from anywhere else."), browseLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading public players\u2026"
+  }) : publicPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      textAlign: "center",
+      padding: "20px 0"
+    }
+  }, "No public players yet \u2014 make one of your own players public first, from their row above.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      maxHeight: "50vh",
+      overflowY: "auto"
+    }
+  }, publicPlayers.map(p => /*#__PURE__*/React.createElement("button", {
+    key: p.id,
+    type: "button",
+    onClick: () => addBorrowedPlayer(p),
+    disabled: players.some(x => x.email && x.email === p.email),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "none",
+      background: "#fff",
+      cursor: "pointer",
+      textAlign: "left",
+      opacity: players.some(x => x.email && x.email === p.email) ? 0.5 : 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.email)), /*#__PURE__*/React.createElement(Globe, {
+    size: 15,
+    style: {
+      color: COLORS.gold,
+      flexShrink: 0
+    }
+  }))))))); 
 }
 
 function Modal({
@@ -16086,6 +16437,9 @@ function CricketScorer() {
       // corrected themselves whenever auth actually finished — with no loading indicator either
       // way, so it looked like clubs/federations just took an unpredictable while to show up.
       refreshClubs();
+      // Courtesy auto-link, not something worth blocking or surfacing errors for — see
+      // linkPlayerIfMatch's own comment for exactly what it will and won't touch.
+      if (u && u.email) linkPlayerIfMatch(u.uid, u.email);
     });
     Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
       setMatches(idx);
@@ -17056,6 +17410,10 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
+    clubId: activeClubId,
+    onPublishPlayer: publishPlayer,
+    onUnpublishPlayer: unpublishPlayer,
+    onLoadPublicPlayers: loadPublicPlayers,
     onSave: handleSaveTeam,
     onCancel: () => setScreen("teams")
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
