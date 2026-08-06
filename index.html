@@ -9748,6 +9748,7 @@ function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState("20");
+  const [venue, setVenue] = useState("");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
   const [bowlerB, setBowlerB] = useState("");
@@ -10001,6 +10002,12 @@ function SetupScreen({
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
     placeholder: "20"
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Venue (optional)"
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: venue,
+    onChange: setVenue,
+    placeholder: "e.g. Willow Park"
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
@@ -10388,6 +10395,7 @@ function SetupScreen({
       teamAId,
       teamBId,
       oversLimit: parseInt(overs || "0", 10),
+      venue: venue.trim() || null,
       strikerA: strikerA.trim(),
       nonStrikerA: nonStrikerA.trim(),
       bowlerB: bowlerB.trim(),
@@ -14407,7 +14415,7 @@ function InningScorecard({
         color: COLORS.inkSoft,
         fontStyle: b.out ? "normal" : "italic"
       }
-    }, b.out ? b.how : "not out"), /*#__PURE__*/React.createElement("span", {
+    }, b.out ? b.how : b.retiredHurt ? "retired hurt" : "not out"), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace"
@@ -14650,7 +14658,13 @@ function PrintReport({
       color: "#555",
       marginBottom: 4
     }
-  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), tossText(match.toss) && /*#__PURE__*/React.createElement("div", {
+  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), match.venue && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, "\uD83D\uDCCD ", match.venue), tossText(match.toss) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: "#555",
@@ -15530,7 +15544,16 @@ function MatchStatsPanel({
   tab,
   setTab
 }) {
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(MatchInfoFold, {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, match.venue && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft
+    }
+  }, "\uD83D\uDCCD ", match.venue), /*#__PURE__*/React.createElement(MatchInfoFold, {
     match: match
   }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -16501,6 +16524,7 @@ function MatchScreen({
     setNewBatsmanName("");
   }
   const [confirmEndInning, setConfirmEndInning] = useState(false);
+  const [showRetireModal, setShowRetireModal] = useState(false);
   // Escape hatch for when there's genuinely no next batsman to pick — a short squad (fewer than
   // 11 available), an injury, a forfeit, whatever. Rather than trying to auto-detect "all out" off
   // however many players happened to be selected at match start (which the auto isLast/checkWicket
@@ -16563,6 +16587,53 @@ function MatchScreen({
       strikerName: inning.nonStrikerName,
       nonStrikerName: inning.strikerName
     };
+    commit(updated);
+  }
+  // Retiring isn't a delivery — no ball is bowled, no bowler is credited or debited, over/ball
+  // counts don't move — so this bypasses the ball-event reducer entirely and mutates the inning
+  // directly, same pattern as swapStrike above. Scoped to the ON-STRIKE batsman only, matching
+  // this app's existing wicket model (every dismissal branch in the ball reducer already assumes
+  // it's always the striker's slot that empties, including run-outs — see dismissedName there);
+  // swap strike first if it's actually the non-striker who needs to leave.
+  // "Retired hurt" is genuinely not out — wickets doesn't increment, no fall-of-wickets entry —
+  // and reuses the same needsNewBatsman prompt as a real dismissal to get the next batsman in,
+  // since one player did just leave the crease either way. There's deliberately no "return from
+  // retired hurt" flow yet: once retired, a batsman doesn't reappear in the picker for this
+  // innings. That's a real, known gap (the Laws do allow a fit-again batsman to resume), not an
+  // oversight — flagging it here rather than pretending this is the complete rule.
+  // "Retired out" is treated exactly like any other dismissal (wickets increments, a
+  // fall-of-wickets entry is recorded, "retired out" shows wherever a normal "how" would) except
+  // no bowler is credited, since nobody dismissed them.
+  function retireBatsman(kind) {
+    if (!inning.strikerName) return;
+    pushHistory();
+    const name = inning.strikerName;
+    const isOut = kind === "out";
+    const updatedBatsman = isOut ? {
+      ...inning.batsmen[name],
+      out: true,
+      retiredOut: true,
+      how: "retired out"
+    } : {
+      ...inning.batsmen[name],
+      retiredHurt: true
+    };
+    const updated = {
+      ...inning,
+      batsmen: {
+        ...inning.batsmen,
+        [name]: updatedBatsman
+      },
+      wickets: isOut ? inning.wickets + 1 : inning.wickets,
+      fallOfWickets: isOut ? [...inning.fallOfWickets, {
+        score: inning.runs,
+        wicket: inning.wickets + 1,
+        over: oversLabel(inning.legalBalls, inning.ballsPerOver),
+        batsman: name
+      }] : inning.fallOfWickets,
+      strikerName: ""
+    };
+    setShowRetireModal(false);
     commit(updated);
   }
 
@@ -16791,9 +16862,25 @@ function MatchScreen({
     style: {
       display: "flex",
       justifyContent: "flex-end",
+      gap: 14,
       marginBottom: 2
     }
   }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowRetireModal(true),
+    disabled: !inning.strikerName,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: !inning.strikerName ? "not-allowed" : "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: "2px 2px",
+      opacity: !inning.strikerName ? 0.4 : 1
+    }
+  }, "Retire"), /*#__PURE__*/React.createElement("button", {
     onClick: swapStrike,
     disabled: !inning.strikerName || !inning.nonStrikerName,
     className: "cs-btn",
@@ -17089,7 +17176,54 @@ function MatchScreen({
     confirmLabel: "End innings",
     onConfirm: endInningEarly,
     onCancel: () => setConfirmEndInning(false)
-  }), needsNewBowler && !needsNewBatsman && !pendingWicket && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
+  }), showRetireModal && inning.strikerName && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowRetireModal(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 8
+    }
+  }, "Retire ", inning.strikerName, "?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 16
+    }
+  }, "Retired hurt doesn't count as a wicket \u2014 use it for an injury or anything that pulls them away mid-innings. Retired out counts the same as any other dismissal."), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => retireBatsman("hurt"),
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, "Retired hurt (not out)"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "danger",
+    onClick: () => retireBatsman("out"),
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, "Retired out (counts as a wicket)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowRetireModal(false),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "4px"
+    }
+  }, "Cancel")), needsNewBowler && !needsNewBatsman && !pendingWicket && /*#__PURE__*/React.createElement(Modal, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
@@ -18386,6 +18520,7 @@ function CricketScorer() {
       teamANumbers: setup.teamANumbers || {},
       teamBNumbers: setup.teamBNumbers || {},
       oversLimit: setup.oversLimit,
+      venue: setup.venue || null,
       currentInningIndex: 0,
       status: "in-progress",
       rules: setup.rules || DEFAULT_RULES,
