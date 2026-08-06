@@ -437,7 +437,7 @@ async function signOutUser() {
 function friendlyEmailAuthError(err) {
   switch (err.code) {
     case "auth/email-already-in-use":
-      return "That email already has an account \u2014 try signing in instead.";
+      return "That email already has an account \u2014 try signing in instead. If you originally signed up with Google, use \u201cContinue with Google\u201d rather than a password.";
     case "auth/weak-password":
       return "Password must be at least 6 characters.";
     case "auth/invalid-email":
@@ -447,10 +447,15 @@ function friendlyEmailAuthError(err) {
     // Current Firebase Auth SDKs return this single generic code for both "no such user" and
     // "wrong password" (a deliberate change on Google's part, to avoid leaking which emails have
     // accounts) — older SDKs may still surface them separately, so both are handled the same way.
+    // This is also exactly what you get if the email only ever signed in via Google — Firebase
+    // treats that as a completely separate credential with no password set at all, so any password
+    // "fails" the same way a wrong one would. Can't distinguish the two cases reliably (Firebase's
+    // email-enumeration protection makes fetchSignInMethodsForEmail unreliable for this on newer
+    // projects), so the message covers both rather than confidently guessing wrong.
     case "auth/invalid-credential":
     case "auth/user-not-found":
     case "auth/wrong-password":
-      return "Email or password didn't match \u2014 double-check them, or use \u201cForgot password?\u201d.";
+      return "Email or password didn't match \u2014 double-check them, use \u201cForgot password?\u201d, or if you originally signed up with Google, use \u201cContinue with Google\u201d instead.";
     case "auth/too-many-requests":
       return "Too many attempts \u2014 wait a bit and try again.";
     case "auth/operation-not-allowed":
@@ -4895,7 +4900,10 @@ function ClubSourceSelector({
     style: chipStyle(!activeClubId)
   }, "My Teams"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
-    onClick: () => onSelect(c.id),
+    onClick: () => {
+      console.log("[cs-club] chip clicked:", c.id, c.name);
+      onSelect(c.id);
+    },
     style: chipStyle(activeClubId === c.id)
   }, c.name))), currentUid && /*#__PURE__*/React.createElement("button", {
     onClick: onManage,
@@ -15984,20 +15992,39 @@ function CricketScorer() {
     const SWIPE_THRESHOLD = 70;
     function onTouchStart(e) {
       const t = e.touches[0];
+      // Skip arming entirely inside a horizontally-scrollable row (club/team chip strips, the
+      // overs strip, etc. — anything marked .cs-no-scrollbar) — scrolling one of those is a large,
+      // mostly-horizontal drag that satisfies the exact same thresholds as an intentional
+      // edge-swipe-back, so without this check, scrolling through your clubs on an iPhone could
+      // silently fire backActionRef and bounce you off the screen mid-scroll. Reported as "can't
+      // click on existing clubs" — the tap itself likely landed fine; a moment later a scroll
+      // elsewhere in the same gesture set was what actually navigated away.
+      const inScroller = t && t.target && t.target.closest && t.target.closest(".cs-no-scrollbar");
+      if (inScroller) {
+        console.log("[cs-swipe] touchstart inside .cs-no-scrollbar, not arming", t.clientX, t.clientY);
+        swipeStartRef.current = null;
+        return;
+      }
       swipeStartRef.current = t && t.clientX <= EDGE_ZONE ? {
         x: t.clientX,
         y: t.clientY
       } : null;
+      if (swipeStartRef.current) {
+        console.log("[cs-swipe] armed at", swipeStartRef.current.x, swipeStartRef.current.y, "target:", t.target && t.target.tagName, t.target && t.target.className);
+      }
     }
     function onTouchEnd(e) {
       const start = swipeStartRef.current;
       swipeStartRef.current = null;
-      if (!start || !backActionRef.current) return;
+      if (!start) return;
       const t = e.changedTouches[0];
       if (!t) return;
       const dx = t.clientX - start.x;
       const dy = t.clientY - start.y;
-      if (dx > SWIPE_THRESHOLD && dx > Math.abs(dy) * 1.5) {
+      const qualifies = dx > SWIPE_THRESHOLD && dx > Math.abs(dy) * 1.5;
+      console.log("[cs-swipe] end dx:", dx, "dy:", dy, "qualifies:", qualifies, "hasBackAction:", !!backActionRef.current);
+      if (qualifies && backActionRef.current) {
+        console.log("[cs-swipe] firing backActionRef");
         backActionRef.current();
       }
     }
