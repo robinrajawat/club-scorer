@@ -378,6 +378,23 @@ const COLORS = {
 // well-separated, readable-on-white options is faster to pick from and harder to end up with two
 // teams that are nearly indistinguishable on a chart.
 const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
+const PLAYER_ROLES = [{
+  value: "batsman",
+  label: "Batsman"
+}, {
+  value: "bowler",
+  label: "Bowler"
+}, {
+  value: "allrounder",
+  label: "All-rounder"
+}];
+const PLAYER_HANDS = [{
+  value: "right",
+  label: "Right"
+}, {
+  value: "left",
+  label: "Left"
+}];
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -1259,7 +1276,7 @@ function normalizeEmail(email) {
 // Publishes a player (creates the shared doc if this is the first time anyone has, or just
 // returns the existing one otherwise — deliberately doesn't overwrite an already-published
 // player's name/homeClubId, since whichever club got there first keeps administering them).
-async function publishPlayer(homeClubId, name, email) {
+async function publishPlayer(homeClubId, name, email, info) {
   const id = normalizeEmail(email);
   if (!id || !id.includes("@")) return {
     ok: false,
@@ -1283,6 +1300,10 @@ async function publishPlayer(homeClubId, name, email) {
       homeClubId,
       public: true,
       linkedUid: null,
+      age: info && info.age || null,
+      role: info && info.role || null,
+      battingHand: info && info.battingHand || null,
+      bowlingHand: info && info.bowlingHand || null,
       createdAt: Date.now()
     };
     await ref.set(player);
@@ -1298,6 +1319,31 @@ async function publishPlayer(homeClubId, name, email) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only that player's home club owner can publish them." : e.message || "Couldn't make this player public."
+    };
+  }
+}
+// Owner-only (enforced by rules) — editing name/age/role/hand on an already-published player,
+// without touching public/homeClubId/linkedUid. Separate from publishPlayer since re-publishing
+// an existing player is a no-op by design (see the "already exists" branch above) — this is the
+// actual edit path once a player has a doc.
+async function updatePlayerInfo(email, info) {
+  const id = normalizeEmail(email);
+  try {
+    await db.collection("players").doc(id).update({
+      name: info.name,
+      age: info.age || null,
+      role: info.role || null,
+      battingHand: info.battingHand || null,
+      bowlingHand: info.bowlingHand || null
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("update player info failed", e.code, e.message);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only that player's home club owner can edit them." : e.message || "Couldn't update this player."
     };
   }
 }
@@ -2890,6 +2936,22 @@ function computePlayerStats(matches) {
     bowlingAvg: p.wickets > 0 ? p.runsConceded / p.wickets : null,
     economy: p.ballsBowled > 0 ? p.runsConceded / p.ballsBowled * 6 : null
   }));
+}
+// Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
+// tournaments — matches are stored per-scorer's account and only mirrored to a queryable
+// collection when explicitly shared (see loadTournamentMatches's own comment), so there's no way
+// to find every match a player has ever appeared in across the whole app without either requiring
+// every match to be shared or building real backend indexing. The UI must label this as scoped to
+// their home club, not present it as comprehensive career stats.
+async function computePlayerCareerStats(name, homeClubId) {
+  if (!homeClubId) return null;
+  const tournaments = await loadClubTournaments(homeClubId);
+  if (tournaments.length === 0) return null;
+  const matchLists = await Promise.all(tournaments.map(t => loadTournamentMatches(t.id)));
+  const allMatches = matchLists.flat().filter(m => m.status === "complete");
+  if (allMatches.length === 0) return null;
+  const stats = computePlayerStats(allMatches);
+  return stats.find(p => p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
 }
 function suggestPlayerOfMatch(match) {
   // simple, transparent heuristic: runs scored + 20 per wicket taken, combined across both innings
@@ -8069,6 +8131,7 @@ function HomeScreen({
   onOpenAccount,
   onJoinCode,
   onOpenTournaments,
+  onOpenPlayers,
   pendingCount,
   tournamentNameById = {}
 }) {
@@ -8174,7 +8237,32 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 17
-  }), " Cups")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), " Cups")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenPlayers,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(Globe, {
+    size: 14
+  }), "Search players")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11480,6 +11568,7 @@ function TeamEditScreen({
   clubId,
   onPublishPlayer,
   onUnpublishPlayer,
+  onUpdatePlayerInfo,
   onLoadPublicPlayers,
   onSave,
   onCancel
@@ -11490,12 +11579,23 @@ function TeamEditScreen({
     number: "",
     email: "",
     public: false,
+    age: "",
+    role: "",
+    battingHand: "",
+    bowlingHand: "",
     _key: uid()
   } : {
     name: p.name,
     number: p.number || "",
     email: p.email || "",
     public: !!p.public,
+    // Age/role/hand live only on the shared player doc, not on the roster entry itself (avoids
+    // two copies drifting apart) — so re-opening an already-published player's row starts these
+    // blank rather than pre-filled; editing here always writes straight through to that doc.
+    age: "",
+    role: "",
+    battingHand: "",
+    bowlingHand: "",
     _key: uid()
   }) : []);
   const [newPlayer, setNewPlayer] = useState("");
@@ -11579,12 +11679,68 @@ function TeamEditScreen({
       email
     } : x));
   }
-  async function togglePublic(key) {
+  function updatePlayerField(key, field, value) {
+    setPlayers(p => p.map(x => x._key === key ? {
+      ...x,
+      [field]: value
+    } : x));
+  }
+  // Small pill toggle shared by the role/batting-hand/bowling-hand selectors below — same visual
+  // language as the color swatches above, just text instead of a color fill.
+  function pillBtn(active, label, onClick, key) {
+    return /*#__PURE__*/React.createElement("button", {
+      key,
+      type: "button",
+      onClick,
+      style: {
+        padding: "4px 10px",
+        borderRadius: 12,
+        border: active ? "none" : `1.5px solid ${COLORS.willow}`,
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        color: active ? "#fff" : COLORS.inkSoft,
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 11.5,
+        cursor: "pointer"
+      }
+    }, label);
+  }
+  // Not-yet-public: publishes with whatever age/role/hand fields are already filled in. Already
+  // public: saves any edits to those fields straight through instead (name/public/homeClubId
+  // never change via this path — see updatePlayerInfo).
+  async function savePlayerDetails(key) {
     const row = players.find(p => p._key === key);
     if (!row || publishBusyKey) return;
     setPublishError("");
     setPublishBusyKey(key);
-    const result = row.public ? await onUnpublishPlayer(row.email) : await onPublishPlayer(clubId, row.name, row.email);
+    const info = {
+      age: row.age,
+      role: row.role,
+      battingHand: row.battingHand,
+      bowlingHand: row.bowlingHand
+    };
+    const result = row.public ? await onUpdatePlayerInfo(row.email, {
+      name: row.name,
+      ...info
+    }) : await onPublishPlayer(clubId, row.name, row.email, info);
+    setPublishBusyKey(null);
+    if (!result.ok) {
+      setPublishError(result.error);
+      return;
+    }
+    if (!row.public) {
+      setPlayers(p => p.map(x => x._key === key ? {
+        ...x,
+        public: true
+      } : x));
+    }
+  }
+  async function makePrivate(key) {
+    const row = players.find(p => p._key === key);
+    if (!row || publishBusyKey) return;
+    setPublishError("");
+    setPublishBusyKey(key);
+    const result = await onUnpublishPlayer(row.email);
     setPublishBusyKey(null);
     if (!result.ok) {
       setPublishError(result.error);
@@ -11592,7 +11748,7 @@ function TeamEditScreen({
     }
     setPlayers(p => p.map(x => x._key === key ? {
       ...x,
-      public: !x.public
+      public: false
     } : x));
   }
   const trimmedNames = players.map(p => p.name.trim());
@@ -11959,9 +12115,9 @@ function TeamEditScreen({
   }, "✕")), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      alignItems: "center",
+      flexDirection: "column",
       gap: 8,
-      padding: "6px 8px 10px 58px"
+      padding: "6px 8px 12px 58px"
     }
   }, /*#__PURE__*/React.createElement("input", {
     value: p.email,
@@ -11972,8 +12128,8 @@ function TeamEditScreen({
     autoComplete: "off",
     inputMode: "email",
     style: {
-      flex: 1,
-      minWidth: 0,
+      width: "100%",
+      boxSizing: "border-box",
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.ink,
@@ -11982,9 +12138,60 @@ function TeamEditScreen({
       borderRadius: 8,
       padding: "5px 8px"
     }
-  }), /*#__PURE__*/React.createElement(Btn, {
+  }), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: p.age,
+    onChange: e => updatePlayerField(p._key, "age", e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
+    placeholder: "Age",
+    inputMode: "numeric",
+    style: {
+      width: 52,
+      boxSizing: "border-box",
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      background: "#fff",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8,
+      padding: "5px 4px"
+    }
+  }), PLAYER_ROLES.map(r => pillBtn(p.role === r.value, r.label, () => updatePlayerField(p._key, "role", p.role === r.value ? "" : r.value), r.value))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginRight: 2
+    }
+  }, "Bats"), PLAYER_HANDS.map(h => pillBtn(p.battingHand === h.value, h.label, () => updatePlayerField(p._key, "battingHand", p.battingHand === h.value ? "" : h.value), "bat-" + h.value)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      margin: "0 2px 0 8px"
+    }
+  }, "Bowls"), PLAYER_HANDS.map(h => pillBtn(p.bowlingHand === h.value, h.label, () => updatePlayerField(p._key, "bowlingHand", p.bowlingHand === h.value ? "" : h.value), "bowl-" + h.value))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
     variant: p.public ? "gold" : "default",
-    onClick: () => togglePublic(p._key),
+    onClick: () => savePlayerDetails(p._key),
     disabled: publishBusyKey === p._key || !p.email.trim(),
     style: {
       flexShrink: 0,
@@ -11992,7 +12199,22 @@ function TeamEditScreen({
       minHeight: 32,
       fontSize: 11.5
     }
-  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Public \u2713" : "Make public"))))), /*#__PURE__*/React.createElement(Btn, {
+  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Save details" : "Make public"), p.public && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => makePrivate(p._key),
+    disabled: publishBusyKey === p._key,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, "Make private"))))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => {
@@ -12099,6 +12321,243 @@ function TeamEditScreen({
   }))))))); 
 }
 
+// Search + profile for the public player directory (see publishPlayer/loadPublicPlayers).
+// clubs is passed through only to resolve a player's homeClubId into a readable name for the
+// stats section's "scoped to X's tournaments" label — see computePlayerCareerStats for why
+// that's the honest scope rather than implying comprehensive career stats.
+function PlayersScreen({
+  onBack,
+  onLoadPublicPlayers,
+  onComputeCareerStats,
+  clubs = []
+}) {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [players, setPlayers] = useState([]);
+  const [selected, setSelected] = useState(null); // a player object, or null for the list view
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    onLoadPublicPlayers().then(list => {
+      if (cancelled) return;
+      setPlayers(list);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const filtered = query.trim() ? players.filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase())) : players;
+  async function openPlayer(p) {
+    setSelected(p);
+    setStats(null);
+    setStatsLoading(true);
+    const s = await onComputeCareerStats(p.name, p.homeClubId);
+    setStatsLoading(false);
+    setStats(s);
+  }
+  const homeClub = selected ? clubs.find(c => c.id === selected.homeClubId) : null;
+  const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
+  const handLabel = v => (PLAYER_HANDS.find(h => h.value === v) || {}).label;
+  const backBtnStyle = {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: "pointer",
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "center",
+    gap: 3,
+    padding: 4
+  };
+  if (selected) {
+    const info = [selected.age && `${selected.age} yrs`, roleLabel(selected.role), selected.battingHand && `${handLabel(selected.battingHand)}-hand bat`, selected.bowlingHand && (selected.role === "bowler" || selected.role === "allrounder") && `${handLabel(selected.bowlingHand)}-arm bowler`].filter(Boolean);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "20px 16px 60px",
+        maxWidth: 560,
+        margin: "0 auto"
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setSelected(null),
+      className: "cs-btn",
+      style: backBtnStyle
+    }, /*#__PURE__*/React.createElement(ChevronLeft, {
+      size: 16
+    }), " Players"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#fff",
+        borderRadius: 16,
+        padding: 18,
+        marginBottom: 14,
+        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'DM Serif Display', serif",
+        fontSize: 24,
+        color: COLORS.pitch,
+        marginBottom: 4
+      }
+    }, selected.name), info.length > 0 ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.inkSoft
+      }
+    }, info.join(" \u00b7 ")) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.inkSoft,
+        fontStyle: "italic"
+      }
+    }, "No further details added yet."), homeClub && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: `1px dashed ${COLORS.creamDark}`
+      }
+    }, "Home club: ", homeClub.name)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#fff",
+        borderRadius: 16,
+        padding: 18,
+        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 10
+      }
+    }, "Stats", homeClub ? ` \u2014 ${homeClub.name}'s tournaments` : ""), statsLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Loading stats\u2026"
+    }) : !stats ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.inkSoft,
+        fontStyle: "italic"
+      }
+    }, "No completed matches to show stats from yet \u2014 either they haven't played in a tournament at their home club, or you don't have access to see it.") : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 14
+      }
+    }, [["Runs", stats.runs], ["Balls", stats.balls], ["Bat Avg", stats.battingAvg === null ? "\u2014" : stats.battingAvg.toFixed(1)], ["SR", stats.strikeRate === null ? "\u2014" : stats.strikeRate.toFixed(1)], ["Wkts", stats.wickets], ["Econ", stats.economy === null ? "\u2014" : stats.economy.toFixed(2)]].map(([label, value]) => /*#__PURE__*/React.createElement("div", {
+      key: label
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 17,
+        fontWeight: 700,
+        color: COLORS.pitch
+      }
+    }, value), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        letterSpacing: 0.4
+      }
+    }, label))))));
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: backBtnStyle
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Players"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginBottom: 16
+    }
+  }, "Every player a club has made public \u2014 see their info, or borrow them onto a roster from Team editing."), /*#__PURE__*/React.createElement(TextField, {
+    value: query,
+    onChange: setQuery,
+    placeholder: "Search by name",
+    style: {
+      marginBottom: 14
+    }
+  }), loading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading players\u2026"
+  }) : filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, players.length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filtered.map(p => /*#__PURE__*/React.createElement("button", {
+    key: p.id,
+    type: "button",
+    onClick: () => openPlayer(p),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: "none",
+      background: "#fff",
+      cursor: "pointer",
+      textAlign: "left",
+      boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14,
+      color: COLORS.ink
+    }
+  }, p.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))));
+}
 function Modal({
   children,
   onClose
@@ -16242,6 +16701,7 @@ const SCREEN_DEPTH = {
   follow: 1,
   "follow-tournament": 1,
   tournaments: 1,
+  players: 1,
   "team-edit": 2,
   "shared-links": 2,
   "club-admin": 2,
@@ -16660,6 +17120,7 @@ function CricketScorer() {
         case "teams":
         case "tournaments":
         case "account":
+        case "players":
           return () => setScreen("home");
         case "tournament-detail":
           return () => setScreen("tournaments");
@@ -17246,6 +17707,7 @@ function CricketScorer() {
     onOpenAccount: () => setScreen("account"),
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
+    onOpenPlayers: () => setScreen("players"),
     pendingCount: pendingCount,
     tournamentNameById: tournamentNameById
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -17357,6 +17819,14 @@ function CricketScorer() {
     onRevokeShareCode: handleRevokeShareCode,
     onRevokeViewCode: handleRevokeViewCode,
     onBack: () => setScreen("account")
+  })), screen === "players" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "players",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(PlayersScreen, {
+    onBack: () => setScreen("home"),
+    onLoadPublicPlayers: loadPublicPlayers,
+    onComputeCareerStats: computePlayerCareerStats,
+    clubs: clubs
   })), screen === "club-admin" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "club-admin",
     direction: navDirection
@@ -17413,6 +17883,7 @@ function CricketScorer() {
     clubId: activeClubId,
     onPublishPlayer: publishPlayer,
     onUnpublishPlayer: unpublishPlayer,
+    onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
     onSave: handleSaveTeam,
     onCancel: () => setScreen("teams")
