@@ -51,12 +51,16 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - Saved matches show a relative date at a glance — Today, Yesterday, or the day and date further back.
 
 **Tournaments**
-- Search tournaments by name and filter by status — Upcoming, Ongoing, Completed — computed from whether any of the tournament's fixtures have actually been played. Newest tournaments sort to the top, and each one shows its scheduled date range at a glance.
-- "My Tournaments" shows a merged view across your personal tournaments and every club's, each tagged with which club it's from — pick a specific club chip to narrow down to just that club's list.
+- Build a group stage with one tap — round-robin fixtures (single or double, so every team plays every other team once or twice) generated automatically from whichever teams you pick, including teams borrowed from other clubs in the same federation. Dates are left blank on generation and filled in later per-fixture with a native date/time picker, since a real club season's scheduling rarely maps onto anything a generator could guess.
+- Once the group stage is far enough along, a knockout bracket generates itself from the standings — Quarterfinal, Semifinal, or straight to a Final depending on how many teams are in it — seeded so the top two seeds can't meet before the final. The champion is declared automatically the moment the Final is decided.
+- A **qualification calculator**: pick your team and a rival, plug in their current net run rate, and it works out the run target or rate you need in an upcoming fixture to overtake them in the table — handy in the business end of a round-robin where net run rate is close.
 - Points table computed automatically from results, with net run rate.
 - Batting and bowling stats scoped to that tournament only — no noisy all-time numbers.
 - Player of the Tournament — auto-suggested (runs + 20 per wicket) or picked manually.
-- Export standings and fixtures to PDF via your browser's print dialog, same as a match scorecard.
+- Search tournaments by name and filter by status — Upcoming, Ongoing, Completed — computed from whether any of the tournament's fixtures have actually been played. Newest tournaments sort to the top, and each one shows its scheduled date range at a glance.
+- "My Tournaments" shows a merged view across your personal tournaments and every club's, each tagged with which club it's from — pick a specific club chip to narrow down to just that club's list.
+- **Share a live tournament** the same way you'd share a live match — a read-only link anyone can open to follow standings and fixtures as they update, revocable any time, with no way to edit anything even with the link.
+- Export fixtures to your calendar as an `.ics` file, or export the whole standings-and-fixtures view to PDF via your browser's print dialog (same mechanism as a match scorecard).
 
 **Works anywhere**
 - Installable to your phone's home screen on both iOS and Android for an app-like icon and experience.
@@ -71,7 +75,7 @@ By default, matches and teams are saved in your browser's `localStorage`, tied t
 
 - **Sign in with Google** — tap the account button on the home screen. Your matches, teams, and clubs then follow you to any device you sign into. No password is ever seen by this app.
 - **Score codes** — no sign-in needed. Tap "Invite to help score" on an in-progress match and share the code with a teammate so they can score along from their own phone. Anyone with this code can read *and write* that match, so treat it like a shared password, not a link to hand out publicly.
-- **View links** — tap "Share live score" for a link anyone can open to watch the score update live. This is read-only: opening it, or even knowing the code inside the URL, never grants scoring access.
+- **View links** — tap "Share live score" for a link anyone can open to watch the score update live. This is read-only: opening it, or even knowing the code inside the URL, never grants scoring access. Tournaments have the same read-only sharing for standings and fixtures.
 - **Clubs** — team rosters shared with people who've joined via an invite code you generated. Only members can see or edit a club's teams; membership is by Google account, not by device. Club membership and co-ownership invites are always addressed to one specific email address, and only become real once someone signs in with that exact email — there's no way to invite "whoever finds this."
 - **Public clubs & federations** — a club or federation owner can switch on a **Public** toggle, which publishes a lightweight directory entry (just the name and owner's name — never the roster, member list, or anything else) so the other side can find and request affiliation. This is the one place in the app with an actual search/directory feature; everything else (club membership, co-ownership, federation co-ownership) stays strictly email-invite-only, with no way to browse or discover a person.
 - **Federations** — affiliating a club with a federation publishes that club's team *names* (nothing else) into the federation's directory, purely so tournaments can pick opponents from another club without recreating their roster. It grants no access to matches, membership, or players.
