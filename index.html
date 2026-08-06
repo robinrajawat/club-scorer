@@ -2046,26 +2046,48 @@ async function leaveFederation(clubId, federationId) {
 // owner name only, never the roster) into /clubDirectory so a federation owner can find it by
 // search; the mirror is deleted the moment the club goes private again.
 async function setClubVisibility(clubId, isPublic) {
+  console.log("[CS] setClubVisibility called", {
+    clubId,
+    isPublic
+  });
   try {
     await db.collection("clubs").doc(clubId).update({
+      visibility: isPublic ? "public" : "private"
+    });
+    console.log("[CS] setClubVisibility: clubs doc updated", {
+      clubId,
       visibility: isPublic ? "public" : "private"
     });
     if (isPublic) {
       const clubDoc = await db.collection("clubs").doc(clubId).get();
       const club = clubDoc.data() || {};
-      await db.collection("clubDirectory").doc(clubId).set({
+      const dirEntry = {
         clubId,
         name: club.name || "",
         ownerName: (club.memberNames || {})[club.ownerUid] || "",
         updatedAt: Date.now()
+      };
+      console.log("[CS] setClubVisibility: writing clubDirectory entry", dirEntry);
+      await db.collection("clubDirectory").doc(clubId).set(dirEntry);
+      console.log("[CS] setClubVisibility: clubDirectory write succeeded", {
+        clubId
       });
     } else {
-      await db.collection("clubDirectory").doc(clubId).delete().catch(() => {});
+      await db.collection("clubDirectory").doc(clubId).delete().catch(e => console.error("[CS] setClubVisibility: clubDirectory delete failed", clubId, e));
+      console.log("[CS] setClubVisibility: clubDirectory entry removed", {
+        clubId
+      });
     }
     return {
       ok: true
     };
   } catch (e) {
+    console.error("[CS] setClubVisibility FAILED", {
+      clubId,
+      isPublic,
+      code: e.code,
+      message: e.message
+    });
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can change this." : e.message || "Couldn't update visibility."
@@ -2074,26 +2096,48 @@ async function setClubVisibility(clubId, isPublic) {
 }
 // Owner-only. Same idea as setClubVisibility, for a federation.
 async function setFederationVisibility(federationId, isPublic) {
+  console.log("[CS] setFederationVisibility called", {
+    federationId,
+    isPublic
+  });
   try {
     await db.collection("federations").doc(federationId).update({
+      visibility: isPublic ? "public" : "private"
+    });
+    console.log("[CS] setFederationVisibility: federations doc updated", {
+      federationId,
       visibility: isPublic ? "public" : "private"
     });
     if (isPublic) {
       const fedDoc = await db.collection("federations").doc(federationId).get();
       const fed = fedDoc.data() || {};
-      await db.collection("federationDirectory").doc(federationId).set({
+      const dirEntry = {
         federationId,
         name: fed.name || "",
         ownerName: fed.ownerName || "",
         updatedAt: Date.now()
+      };
+      console.log("[CS] setFederationVisibility: writing federationDirectory entry", dirEntry);
+      await db.collection("federationDirectory").doc(federationId).set(dirEntry);
+      console.log("[CS] setFederationVisibility: federationDirectory write succeeded", {
+        federationId
       });
     } else {
-      await db.collection("federationDirectory").doc(federationId).delete().catch(() => {});
+      await db.collection("federationDirectory").doc(federationId).delete().catch(e => console.error("[CS] setFederationVisibility: federationDirectory delete failed", federationId, e));
+      console.log("[CS] setFederationVisibility: federationDirectory entry removed", {
+        federationId
+      });
     }
     return {
       ok: true
     };
   } catch (e) {
+    console.error("[CS] setFederationVisibility FAILED", {
+      federationId,
+      isPublic,
+      code: e.code,
+      message: e.message
+    });
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the federation owner can change this." : e.message || "Couldn't update visibility."
@@ -2104,23 +2148,55 @@ async function setFederationVisibility(federationId, isPublic) {
 // a handful of federations, not thousands — so a full read + client filter is simpler and more
 // forgiving than a prefix range query).
 async function searchPublicFederations(term) {
+  console.log("[CS] searchPublicFederations called", {
+    term
+  });
   try {
     const snap = await db.collection("federationDirectory").get();
+    console.log("[CS] searchPublicFederations: federationDirectory fetch returned", {
+      docCount: snap.size,
+      ids: snap.docs.map(d => d.id),
+      data: snap.docs.map(d => d.data())
+    });
     const t = (term || "").trim().toLowerCase();
-    return snap.docs.map(d => d.data()).filter(f => !t || (f.name || "").toLowerCase().includes(t));
+    const results = snap.docs.map(d => d.data()).filter(f => !t || (f.name || "").toLowerCase().includes(t));
+    console.log("[CS] searchPublicFederations: after client-side filter", {
+      term: t,
+      resultCount: results.length
+    });
+    return results;
   } catch (e) {
-    console.error("federation search failed", e);
+    console.error("[CS] searchPublicFederations FAILED", {
+      code: e.code,
+      message: e.message
+    });
     return [];
   }
 }
 // Loads every public club. See searchPublicFederations for why this is a full read + client filter.
 async function searchPublicClubs(term) {
+  console.log("[CS] searchPublicClubs called", {
+    term
+  });
   try {
     const snap = await db.collection("clubDirectory").get();
+    console.log("[CS] searchPublicClubs: clubDirectory fetch returned", {
+      docCount: snap.size,
+      ids: snap.docs.map(d => d.id),
+      data: snap.docs.map(d => d.data())
+    });
     const t = (term || "").trim().toLowerCase();
-    return snap.docs.map(d => d.data()).filter(c => !t || (c.name || "").toLowerCase().includes(t));
+    const results = snap.docs.map(d => d.data()).filter(c => !t || (c.name || "").toLowerCase().includes(t));
+    console.log("[CS] searchPublicClubs: after client-side filter", {
+      term: t,
+      resultCount: results.length
+    });
+    return results;
   } catch (e) {
-    console.error("club search failed", e);
+    console.error("[CS] searchPublicClubs FAILED", {
+      code: e.code,
+      message: e.message
+    });
     return [];
   }
 }
@@ -4245,9 +4321,19 @@ function SearchAndRequestPanel({
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
   async function runSearch() {
+    console.log("[CS] SearchAndRequestPanel.runSearch", {
+      idKey,
+      term
+    });
     setLoading(true);
     setError("");
     const list = await onSearch(term);
+    console.log("[CS] SearchAndRequestPanel.runSearch: onSearch returned", {
+      idKey,
+      term,
+      count: Array.isArray(list) ? list.length : "not-an-array",
+      list
+    });
     setLoading(false);
     setResults(list);
   }
