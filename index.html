@@ -3291,6 +3291,14 @@ function bowlersAtMaxOvers(inning) {
   const maxBalls = inning.maxOversPerBowler * (inning.ballsPerOver || 6);
   return Object.entries(inning.bowlers || {}).filter(([, bw]) => (bw.ballsBowled || 0) >= maxBalls).map(([name]) => name);
 }
+// Powerplay in this app is informational only, deliberately — there's no fielder-position
+// tracking anywhere in the app for an actual "max 2 outside the circle" restriction to attach to,
+// so this just marks the window (a badge during play, a note on the scorecard/summary
+// afterward) rather than pretending to enforce a rule it has no way to check.
+function inPowerplay(inning) {
+  if (!inning.powerplayOvers || inning.complete) return false;
+  return inning.legalBalls < inning.powerplayOvers * (inning.ballsPerOver || 6);
+}
 function numberFor(match, teamName, playerName) {
   const map = teamName === match.teamA ? match.teamANumbers : match.teamBNumbers;
   return map && map[playerName] ? map[playerName] : "";
@@ -3310,7 +3318,8 @@ const DEFAULT_RULES = {
   noballRuns: 1,
   freeHit: false,
   superOver: false,
-  maxOversPerBowler: null
+  maxOversPerBowler: null,
+  powerplayOvers: null
 };
 function nonStandardRulesText(rules) {
   if (!rules) return null;
@@ -3320,6 +3329,7 @@ function nonStandardRulesText(rules) {
   if (rules.noballRuns && rules.noballRuns !== DEFAULT_RULES.noballRuns) bits.push(`${rules.noballRuns} runs on a no-ball`);
   if (rules.freeHit) bits.push("Free Hit enabled");
   if (rules.superOver) bits.push("Super Over on a tie");
+  if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   return bits.length ? bits.join(" · ") : null;
 }
 function tossText(toss) {
@@ -3587,7 +3597,8 @@ function newInning(battingTeam, bowlingTeam, rules) {
     noballRuns: r.noballRuns,
     freeHitEnabled: r.freeHit,
     freeHitActive: false,
-    maxOversPerBowler: r.maxOversPerBowler || null
+    maxOversPerBowler: r.maxOversPerBowler || null,
+    powerplayOvers: r.powerplayOvers || null
   };
 }
 function ensureBatsman(inning, name) {
@@ -10589,7 +10600,89 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "No limit")))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "No limit")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      marginTop: -6,
+      animation: "cs-slideUp 0.3s ease 0.05s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Powerplay"), matchRules.powerplayOvers === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      const n = parseInt(overs || "20", 10);
+      setMatchRules(r => ({
+        ...r,
+        powerplayOvers: Math.min(n, n <= 20 ? 6 : Math.round(n / 5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.powerplayOvers),
+    onChange: v => {
+      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      setMatchRules(r => ({
+        ...r,
+        powerplayOvers: isNaN(n) ? 1 : Math.max(1, n)
+      }));
+    },
+    style: {
+      textAlign: "center"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "overs at the start of each innings \u2014 shown as a badge while it's in effect, not enforced (there's no fielder tracking here to enforce it against)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      powerplayOvers: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None"))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -17552,7 +17645,17 @@ function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate), /*#__PURE__*/React.createElement(InningsTimer, {
     startedAt: inning.startedAt
-  }), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
+  }), inPowerplay(inning) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: COLORS.turf,
+      color: "#fff",
+      fontWeight: 700,
+      padding: "2px 9px",
+      borderRadius: 20,
+      letterSpacing: 0.5,
+      fontSize: 11.5
+    }
+  }, "POWERPLAY"), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
     style: {
       background: COLORS.gold,
       color: "#fff",
