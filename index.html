@@ -401,6 +401,9 @@ async function signInGoogle() {
     if (err.code === "auth/unauthorized-domain") {
       return "This site isn't yet authorized for sign-in \u2014 add it under Firebase Console \u2192 Authentication \u2192 Settings \u2192 Authorized domains.";
     }
+    if (err.code === "auth/network-request-failed") {
+      return "Couldn't reach the server \u2014 check your connection and try again.";
+    }
     return err.message || "Sign-in failed.";
   }
   try {
@@ -501,6 +504,8 @@ function friendlyEmailAuthError(err) {
       return "Email or password didn't match \u2014 double-check them, use \u201cForgot password?\u201d, or if you originally signed up with Google, use \u201cContinue with Google\u201d instead.";
     case "auth/too-many-requests":
       return "Too many attempts \u2014 wait a bit and try again.";
+    case "auth/network-request-failed":
+      return "Couldn't reach the server \u2014 check your connection and try again.";
     case "auth/operation-not-allowed":
       return "Email/password sign-in isn't turned on for this app yet.";
     default:
@@ -597,6 +602,12 @@ async function linkGoogleCredential() {
       return {
         ok: false,
         error: "Linking was cancelled."
+      };
+    }
+    if (e.code === "auth/network-request-failed") {
+      return {
+        ok: false,
+        error: "Couldn't reach the server \u2014 check your connection and try again."
       };
     }
     return {
@@ -10884,10 +10895,20 @@ function TournamentDetailScreen({
     alignItems: "center",
     gap: 10
   }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    width: 26,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
+  }
 }, /*#__PURE__*/React.createElement(Trophy, {
   size: 20,
-  color: COLORS.gold
-}), /*#__PURE__*/React.createElement("div", {
+  style: {
+    color: COLORS.gold
+  }
+})), /*#__PURE__*/React.createElement("div", {
   style: {
     flex: 1,
     minWidth: 0
