@@ -4428,13 +4428,15 @@ function applyBall(inning, event) {
   // Same detection idea as above, but pushed to cur.toastMilestones instead of cur.milestones —
   // worth a celebration pop-up, not worth permanently cluttering the scorecard (see
   // toastMilestones' definition in newInning and MatchScreen's commit()).
-  // Team total: 50, 100, 150... crossed this ball.
+  // Team total: 50, 100, 150... crossed this ball. Worded distinctly from the individual batting
+  // milestone above ("reaches" vs "brings up") so the two don't read like the same event at a
+  // glance when both fire close together.
   const beforeTeamRuns = inning.runs || 0;
   const afterTeamRuns = cur.runs;
   if (afterTeamRuns >= 50 && Math.floor(afterTeamRuns / 50) > Math.floor(beforeTeamRuns / 50)) {
     cur.toastMilestones.push({
       type: "teamTotal",
-      text: `${cur.battingTeam} brings up ${Math.floor(afterTeamRuns / 50) * 50}`,
+      text: `${cur.battingTeam} reach ${Math.floor(afterTeamRuns / 50) * 50}`,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -4449,11 +4451,14 @@ function applyBall(inning, event) {
     });
   }
   // Duck: batsman dismissed for 0. Uses the same dismissedName tracked for fallOfWickets above,
-  // so it fires on any duck (not just a first-ball golden duck).
+  // so it fires on any duck — but a "golden duck" (out on the very first ball faced, before this
+  // one) gets its own, more pointed wording rather than the generic version.
   if (dismissedName && cur.batsmen[dismissedName] && cur.batsmen[dismissedName].runs === 0) {
+    const facedBefore = (inning.batsmen[dismissedName] && inning.batsmen[dismissedName].balls) || 0;
+    const isGolden = facedBefore === 0;
     cur.toastMilestones.push({
       type: "duck",
-      text: `${dismissedName} out for a duck`,
+      text: isGolden ? `${dismissedName} out for a golden duck` : `${dismissedName} out for a duck`,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -20263,45 +20268,45 @@ function SecondInningsSetup({
     type: "button",
     onClick: () => setShowScorecard(true),
     className: "cs-btn cs-shine",
-    title: "Scorecard",
     "aria-label": "Scorecard",
     style: {
       display: "flex",
       alignItems: "center",
-      justifyContent: "center",
-      width: 38,
-      height: 38,
-      borderRadius: "50%",
-      border: "none",
+      gap: 6,
+      padding: "8px 12px",
+      borderRadius: 20,
+      border: `1.5px solid ${COLORS.creamDark}`,
       background: COLORS.surface,
       color: COLORS.ink,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
       cursor: "pointer"
     }
   }, /*#__PURE__*/React.createElement(Table2, {
-    size: 17
-  })), /*#__PURE__*/React.createElement("button", {
+    size: 15
+  }), "Scorecard"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setConfirmGoBack(true),
     className: "cs-btn cs-shine",
-    title: "Back to 1st innings",
     "aria-label": "Back to 1st innings",
     style: {
       display: "flex",
       alignItems: "center",
-      justifyContent: "center",
-      width: 38,
-      height: 38,
-      borderRadius: "50%",
-      border: "none",
+      gap: 6,
+      padding: "8px 12px",
+      borderRadius: 20,
+      border: `1.5px solid ${COLORS.creamDark}`,
       background: COLORS.surface,
       color: COLORS.ink,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
       cursor: "pointer"
     }
   }, /*#__PURE__*/React.createElement(Undo2, {
-    size: 17
-  })))), /*#__PURE__*/React.createElement("div", {
+    size: 15
+  }), "Correct"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 14,
