@@ -20338,7 +20338,9 @@ function MatchScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, opt.label)))), (wicketDraft.wicketType === "Caught" || wicketDraft.wicketType === "Run out") && /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, opt.label)))), (wicketDraft.wicketType === "Caught" || wicketDraft.wicketType === "Run out") && /*#__PURE__*/React.createElement(Field, {
+    label: "Fielder"
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: fielderDraftName,
     onChange: setFielderDraftName,
@@ -20346,7 +20348,7 @@ function MatchScreen({
     captain: captainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
-  }), /*#__PURE__*/React.createElement(Btn, {
+  })), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: wicketDraft.wicketType === "Caught" && !fielderDraftName.trim(),
     onClick: () => confirmWicketDetails(),
