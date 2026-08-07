@@ -3327,6 +3327,14 @@ const DEFAULT_RULES = {
   maxOversPerBowler: null,
   powerplayOvers: null
 };
+// Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
+const SETUP_PAGE_LABELS = {
+  teams: "Teams & Format",
+  rules: "Match Rules",
+  xi: "Playing XI",
+  openers: "Opening Line-up",
+  review: "Review"
+};
 function nonStandardRulesText(rules) {
   if (!rules) return null;
   const bits = [];
@@ -10318,7 +10326,15 @@ function SetupScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, "New Match"), presetTournament && /*#__PURE__*/React.createElement("div", {
+  }, "New Match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 18
+    }
+  }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", SETUP_PAGE_LABELS[currentPage]), presetTournament && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -10897,13 +10913,7 @@ function SetupScreen({
       textAlign: "center",
       marginBottom: 10
     }
-  }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", {
-    teams: "Teams & Format",
-    rules: "Match Rules",
-    xi: "Playing XI",
-    openers: "Opening Line-up",
-    review: "Review"
-  }[currentPage]), /*#__PURE__*/React.createElement("div", {
+  }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", SETUP_PAGE_LABELS[currentPage]), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
