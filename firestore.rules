@@ -347,6 +347,32 @@ service cloud.firestore {
     function isFederationOwner(federation) {
       return request.auth.uid == federation.createdBy || request.auth.uid in federation.get('coOwnerUids', []);
     }
+    // Helpers for keeping federations/{id}.affiliatedClubIds in sync with which clubs currently
+    // list this federation in their OWN federationIds (the source of truth). This denormalized
+    // list exists for exactly one reason: it's what makes "delete an EMPTY federation" (see the
+    // delete rule below) checkable at all — a security rule can never run a query across the whole
+    // clubs collection to ask "does any club still reference me?", so the only way to know is to
+    // maintain the answer as data, updated by whichever club owner is actually joining/leaving
+    // (see joinFederationWithCode/leaveFederation/respondFederationRequest/
+    // completeAcceptedFederationRequest/kickClubFromFederation/deleteClub in index.html — every
+    // site that touches a club's federationIds also makes the matching companion write here).
+    // Each helper is scoped to touching exactly one id, on exactly this field, by exactly the
+    // owner/co-owner of the one club being added or removed — nothing else about the federation
+    // doc may change in the same write, and the caller can never claim to add/remove someone
+    // else's club.
+    function canSyncFederationClubJoin(federationId, oldIds, newIds) {
+      let added = newIds.removeAll(oldIds);
+      return added.size() == 1
+        && oldIds.hasOnly(newIds)
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(added[0])).data)
+        && federationId in get(/databases/$(database)/documents/clubs/$(added[0])).data.get('federationIds', []);
+    }
+    function canSyncFederationClubLeave(oldIds, newIds) {
+      let removed = oldIds.removeAll(newIds);
+      return removed.size() == 1
+        && newIds.hasOnly(oldIds)
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(removed[0])).data);
+    }
 
     match /federations/{federationId} {
       allow read: if request.auth != null;
@@ -355,7 +381,8 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid;
 
       allow update: if request.auth != null && (
-        // (A) Owner/co-owner editing federation data (rename, description, kickedClubIds).
+        // (A) Owner/co-owner editing federation data (rename, description, kickedClubIds,
+        // affiliatedClubIds — e.g. kickClubFromFederation removing an entry on their own doc).
         // coOwnerUids and createdBy must not change via this branch — that's what (B) is for.
         // get(field, default) handles federations from before these fields existed.
         (
@@ -384,17 +411,40 @@ service cloud.firestore {
         // entirely), and a co-owner removing THEMSELVES (mirrors clubs' self-leave branch; also
         // what account deletion relies on to clean up a departing co-owner's federations, see
         // deleteUserAccount). createdBy can never be removed this way — deliberately: there is no
-        // ownership-transfer flow, and a federation can never be deleted (see below), so the
-        // original creator is a permanent, unremovable anchor.
+        // ownership-transfer flow, so the original creator is a permanent, unremovable anchor
+        // (though the federation ITSELF can now be deleted once empty — see below).
         (
           isFederationOwner(resource.data) &&
           request.resource.data.createdBy == resource.data.createdBy &&
           request.resource.data.name == resource.data.name &&
           request.resource.data.get('coOwnerUids', []).hasOnly(resource.data.get('coOwnerUids', []))
         )
+        ||
+        // (D) A club owner/co-owner syncing THEIR OWN club's id into affiliatedClubIds right
+        // after affiliating. Requires that club to already list this federation in its own
+        // federationIds, so this can only mirror a join that genuinely just happened elsewhere,
+        // never manufacture one.
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['affiliatedClubIds']) &&
+          canSyncFederationClubJoin(federationId, resource.data.get('affiliatedClubIds', []), request.resource.data.affiliatedClubIds)
+        )
+        ||
+        // (E) A club owner/co-owner syncing THEIR OWN club's id back OUT of affiliatedClubIds —
+        // self-leaving, or the last step of deleting their own club while it's still affiliated.
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['affiliatedClubIds']) &&
+          canSyncFederationClubLeave(resource.data.get('affiliatedClubIds', []), request.resource.data.affiliatedClubIds)
+        )
       );
 
-      allow delete: if false;
+      // A federation can be deleted once it's EMPTY — no club currently affiliated — by its
+      // owner/co-owner. Safe specifically because affiliatedClubIds (kept in sync by (D)/(E)
+      // above and by branch (A) for kicks) is the authoritative "is anything still relying on
+      // this?" signal; there is deliberately still no ownership-transfer flow, so only the
+      // permanent owner tier can do this, same as every other federation-level action.
+      allow delete: if request.auth != null
+        && isFederationOwner(resource.data)
+        && resource.data.get('affiliatedClubIds', []).size() == 0;
     }
 
     // A club-affiliation invite, addressed to one email. Only that signed-in email may even read

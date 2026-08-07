@@ -1956,6 +1956,10 @@ async function deleteClub(clubId) {
     await Promise.all([...snap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
       const teamSnap = await db.collection("federations").doc(fedId).collection("teams").where("clubId", "==", clubId).get();
       await Promise.all(teamSnap.docs.map(d => d.ref.delete()));
+      // Must happen before the club doc is deleted below — the rule authorizing this write
+      // checks club ownership via a live get() on that doc (see canSyncFederationClubLeave in
+      // firestore.rules).
+      await syncFederationAffiliation(fedId, clubId, false);
     })]);
     await db.collection("clubs").doc(clubId).delete();
     return {
@@ -2048,6 +2052,7 @@ async function createFederation(name) {
       ownerName: auth.currentUser.displayName || auth.currentUser.email || "",
       coOwnerUids: [],
       kickedClubIds: [],
+      affiliatedClubIds: [],
       createdAt: Date.now()
     };
     await ref.set(federation);
@@ -2063,6 +2068,38 @@ async function createFederation(name) {
       ok: false,
       error: e.message || "Couldn't create the federation."
     };
+  }
+}
+// Owner-only, and only once EMPTY (firestore.rules enforces both — see the comment there). A
+// federation with any club still affiliated will hit permission-denied here, since there's
+// deliberately no way to force-remove someone else's club affiliation from this side.
+async function deleteFederation(federationId) {
+  try {
+    await db.collection("federations").doc(federationId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation owner can delete it, and only once no clubs are still affiliated." : e.message || "Couldn't delete the federation."
+    };
+  }
+}
+// Best-effort companion write kept alongside every place a club's OWN federationIds gains or
+// loses an entry (join/leave/kick/club-delete) — mirrors that change into
+// federations/{federationId}.affiliatedClubIds, the denormalized "is anything still relying on
+// this federation?" signal that firestore.rules checks before allowing a federation delete (see
+// deleteFederation). Deliberately swallow-and-log rather than surface an error: if this write is
+// ever a no-op or a race (e.g. already synced), the primary action (the join/leave itself)
+// already succeeded and that's what the user is waiting on.
+async function syncFederationAffiliation(federationId, clubId, joining) {
+  try {
+    await db.collection("federations").doc(federationId).update({
+      affiliatedClubIds: joining ? firebase.firestore.FieldValue.arrayUnion(clubId) : firebase.firestore.FieldValue.arrayRemove(clubId)
+    });
+  } catch (e) {
+    console.error("affiliatedClubIds sync failed", e);
   }
 }
 async function loadFederationsByIds(ids) {
@@ -2160,6 +2197,7 @@ async function joinFederationWithCode(clubId, code) {
     await db.collection("clubs").doc(clubId).update({
       federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
     });
+    await syncFederationAffiliation(federationId, clubId, true);
     await mirrorClubTeamsIntoFederation(clubId, federationId);
     return {
       ok: true,
@@ -2182,6 +2220,7 @@ async function leaveFederation(clubId, federationId) {
     await db.collection("clubs").doc(clubId).update({
       federationIds: firebase.firestore.FieldValue.arrayRemove(federationId)
     });
+    await syncFederationAffiliation(federationId, clubId, false);
     const snap = await db.collection("federations").doc(federationId).collection("teams").where("clubId", "==", clubId).get();
     await Promise.all(snap.docs.map(d => d.ref.delete()));
     return {
@@ -2336,6 +2375,7 @@ async function respondFederationRequest(requestId, accept) {
       await db.collection("clubs").doc(reqData.clubId).update({
         federationIds: firebase.firestore.FieldValue.arrayUnion(reqData.federationId)
       });
+      await syncFederationAffiliation(reqData.federationId, reqData.clubId, true);
       await mirrorClubTeamsIntoFederation(reqData.clubId, reqData.federationId);
     }
     return {
@@ -2375,6 +2415,7 @@ async function completeAcceptedFederationRequest(requestId, clubId, federationId
     await db.collection("clubs").doc(clubId).update({
       federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
     });
+    await syncFederationAffiliation(federationId, clubId, true);
     await mirrorClubTeamsIntoFederation(clubId, federationId);
     await db.collection("federationRequests").doc(requestId).update({
       status: "joined"
@@ -2465,7 +2506,8 @@ async function updateFederationDescription(federationId, description) {
 async function kickClubFromFederation(federationId, clubId) {
   try {
     await db.collection("federations").doc(federationId).update({
-      kickedClubIds: firebase.firestore.FieldValue.arrayUnion(clubId)
+      kickedClubIds: firebase.firestore.FieldValue.arrayUnion(clubId),
+      affiliatedClubIds: firebase.firestore.FieldValue.arrayRemove(clubId)
     });
     const snap = await db.collection("federations").doc(federationId).collection("teams").where("clubId", "==", clubId).get();
     await Promise.all(snap.docs.map(d => d.ref.delete()));
@@ -3285,10 +3327,12 @@ async function saveDummyDataMeta(meta) {
   }
 }
 // Removes everything the generator below created: every dummy club (deleteClub already cascades
-// to a club's own teams AND its entries in the federation directory). Deliberately leaves the ICC
-// federation doc itself alone — federations can't be deleted (see firestore.rules, `allow delete:
-// if false`, by design: there's no ownership-transfer flow, so the creator is a permanent anchor)
-// — so it's meant to be reused, empty, next time Generate runs rather than spawning a new one.
+// to a club's own teams AND its entries in the federation directory, and now also clears the
+// club's own id out of the federation's affiliatedClubIds — see syncFederationAffiliation).
+// Deliberately leaves the ICC federation doc itself alone even though it's now empty and
+// (as of the "Delete this federation" feature) technically deletable — it's meant to be reused
+// next time Generate runs rather than recreated from scratch. Delete it yourself from Clubs &
+// Federations if you'd rather not keep it around between runs.
 async function wipeDummyData() {
   const meta = await loadDummyDataMeta();
   const clubIds = meta.clubIds || [];
@@ -3330,6 +3374,7 @@ async function generateDummyData() {
       dummy: true,
       federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
     });
+    await syncFederationAffiliation(federationId, clubId, true);
     for (const def of country.teams) {
       await saveClubTeam(clubId, buildDummyTeam(def));
     }
@@ -3469,10 +3514,10 @@ async function deleteUserAccount(localMatchIds) {
   // createdBy and coOwnerUids). Relies on the federations/{federationId} update rule's branch
   // (C) — if that hasn't been published to this Firestore project yet, this best-effort write
   // fails harmlessly (caught below) and the now-deleted account stays listed as a co-owner. A
-  // federation this account CREATED (createdBy) can never be reassigned or removed — federations
-  // can never be deleted at all (see the rule's `allow delete: if false`), so a federation whose
-  // creator's account is gone stays exactly as owned/manageable as it was via any co-owner, but
-  // permanently carries a dead createdBy uid with no way to ever change that.
+  // federation this account CREATED (createdBy) can never be reassigned — there's still no
+  // ownership-transfer flow — but it CAN now be deleted by any remaining co-owner once it's empty
+  // (see canSyncFederationClubJoin/Leave + the delete rule in firestore.rules), so a dead
+  // createdBy uid no longer permanently strands it.
   const fedSnap = await db.collection("federations").where("coOwnerUids", "array-contains", uid).get();
   await Promise.all(fedSnap.docs.map(d => d.ref.update({
     coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
@@ -5817,7 +5862,7 @@ function AccountScreen({
     }
   }, dummyStatus), showWipeConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Wipe dummy data?",
-    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (federations can't be deleted) but ends up empty.",
+    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (reused next time) but ends up empty \u2014 you can delete it yourself from Clubs & Federations if you don't want to keep it.",
     confirmLabel: "Wipe",
     variant: "danger",
     busy: dummyBusy,
@@ -6456,7 +6501,7 @@ function AccountScreen({
     key: c.id
   }, "\u2022 ", c.name, " (club) \u2014 nobody will ever be able to manage or rename it, invite anyone, or remove members again. It could still be deleted outright by a co-owner, but there won't be one.")), soleOwnerFederations.map(f => /*#__PURE__*/React.createElement("div", {
     key: f.id
-  }, "\u2022 ", f.name, " (federation) \u2014 a federation can never be deleted by anyone, so this one is stuck this way for good, not just until someone deletes it.")), /*#__PURE__*/React.createElement("div", {
+  }, "\u2022 ", f.name, " (federation) \u2014 nobody will ever be able to manage it, invite anyone, or remove clubs again. It could still be deleted outright by a co-owner once it's empty of affiliated clubs, but there won't be one.")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 6
     }
@@ -8116,6 +8161,7 @@ function FederationsPanel({
   onInviteFederationCoOwnerByEmail,
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
+  onDeleteFederation,
   onRevokeInvite
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -8130,6 +8176,9 @@ function FederationsPanel({
   const [manageClubs, setManageClubs] = useState([]);
   const [manageLoading, setManageLoading] = useState(false);
   const [kickBusyClubId, setKickBusyClubId] = useState(null);
+  const [deleteFedBusy, setDeleteFedBusy] = useState(false);
+  const [deleteFedConfirmId, setDeleteFedConfirmId] = useState(null);
+  const [deleteFedError, setDeleteFedError] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
@@ -8320,6 +8369,20 @@ function FederationsPanel({
       setManageClubs(cs => cs.filter(c => c.clubId !== clubId));
     } else {
       setError(result.error || "Couldn't remove that club.");
+    }
+  }
+  function requestDeleteFederation(federationId) {
+    setDeleteFedError("");
+    setDeleteFedConfirmId(federationId);
+  }
+  async function handleDeleteFederationConfirm() {
+    const federationId = deleteFedConfirmId;
+    setDeleteFedConfirmId(null);
+    setDeleteFedBusy(true);
+    const result = await onDeleteFederation(federationId);
+    setDeleteFedBusy(false);
+    if (!result.ok) {
+      setDeleteFedError(result.error || "Couldn't delete that federation.");
     }
   }
   function requestLeave(clubId, federationId, federationName) {
@@ -8886,7 +8949,51 @@ function FederationsPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))))), error && /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))))), manageOpenId === f.id && isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => requestDeleteFederation(f.id),
+    disabled: deleteFedBusy,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, deleteFedBusy ? "\u2026" : "Delete this federation"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginTop: 4,
+      lineHeight: 1.5
+    }
+  }, "No clubs are affiliated, so this is safe to remove for good."), deleteFedError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.ball,
+      marginTop: 6
+    }
+  }, deleteFedError)), deleteFedConfirmId === f.id && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Delete federation?",
+    message: `This permanently deletes "${f.name}". It can't be undone, and this is only possible because no clubs are currently affiliated with it.`,
+    confirmLabel: "Delete",
+    variant: "danger",
+    busy: deleteFedBusy,
+    onConfirm: handleDeleteFederationConfirm,
+    onCancel: () => setDeleteFedConfirmId(null)
+  }), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12,
@@ -9308,6 +9415,7 @@ function ClubFederationScreen({
   onRefreshMyMemberName,
   onRenameFederation,
   onKickClubFromFederation,
+  onDeleteFederation,
   onLoadFederationTeams,
   onInviteFederationCoOwnerByEmail,
   onRemoveFederationCoOwner,
@@ -9438,6 +9546,7 @@ function ClubFederationScreen({
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
+    onDeleteFederation: onDeleteFederation,
     onRevokeInvite: onRevokeFederationInvite
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -21202,9 +21311,23 @@ function CricketScorer() {
       setFederationsById(prev => ({
         ...prev,
         [federationId]: { ...(prev[federationId] || {}),
-          kickedClubIds: [...((prev[federationId] || {}).kickedClubIds || []).filter(id => id !== clubId), clubId]
+          kickedClubIds: [...((prev[federationId] || {}).kickedClubIds || []).filter(id => id !== clubId), clubId],
+          affiliatedClubIds: ((prev[federationId] || {}).affiliatedClubIds || []).filter(id => id !== clubId)
         }
       }));
+    }
+    return result;
+  }
+  // Only reachable once a federation has no affiliated clubs left (see FederationsPanel, which
+  // hides the button otherwise, and firestore.rules, which enforces it regardless).
+  async function handleDeleteFederation(federationId) {
+    const result = await deleteFederation(federationId);
+    if (result.ok) {
+      setFederationsById(prev => {
+        const next = { ...prev };
+        delete next[federationId];
+        return next;
+      });
     }
     return result;
   }
@@ -21656,6 +21779,7 @@ function CricketScorer() {
     onRenameFederation: handleRenameFederation,
     onUpdateFederationDescription: handleUpdateFederationDescription,
     onKickClubFromFederation: handleKickClubFromFederation,
+    onDeleteFederation: handleDeleteFederation,
     onLoadFederationTeams: loadFederationTeams,
     onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
     onRevokeFederationInvite: handleRevokeFederationInvite,
