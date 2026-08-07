@@ -328,6 +328,7 @@ const GLOBAL_CSS = `
   :root {
     --cs-pitch: #2d5016;
     --cs-pitch-dark: #1f3a0f;
+    --cs-pitch-dark-fixed: #1f3a0f;
     --cs-turf: #4a7c2e;
     --cs-cream: #f2ecd9;
     --cs-cream-dark: #e5dcc1;
@@ -427,6 +428,7 @@ function NavWrap({
 const COLORS = {
   pitch: "var(--cs-pitch)",
   pitchDark: "var(--cs-pitch-dark)",
+  pitchDarkFixed: "var(--cs-pitch-dark-fixed)",
   turf: "var(--cs-turf)",
   cream: "var(--cs-cream)",
   creamDark: "var(--cs-cream-dark)",
@@ -4828,7 +4830,7 @@ function BallCelebration({
       padding: "16px 38px",
       borderRadius: 22,
       letterSpacing: 1,
-      background: isWicket ? `linear-gradient(160deg, #b3392f, ${COLORS.ball})` : isSix ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})` : `linear-gradient(160deg, #5c9436, ${COLORS.turf})`,
+      background: isWicket ? `linear-gradient(160deg, #b3392f, ${COLORS.ballFixed})` : isSix ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})` : `linear-gradient(160deg, #5c9436, ${COLORS.turfFixed})`,
       boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(45,80,22,0.55)" : "0 16px 44px rgba(74,124,46,0.45)",
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
@@ -10517,7 +10519,7 @@ function WelcomeScreen({
       height: 64,
       borderRadius: "50%",
       margin: "0 auto 16px",
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -10831,7 +10833,7 @@ function HomeScreen({
       height: 56,
       borderRadius: "50%",
       margin: "0 auto 14px",
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -18325,7 +18327,7 @@ function ScorecardOverlay({
     style: {
       position: "sticky",
       top: 0,
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       color: COLORS.creamFixed,
       padding: "16px 16px",
       display: "flex",
@@ -18491,7 +18493,7 @@ function FollowScreen({
     style: {
       position: "sticky",
       top: 0,
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       color: COLORS.creamFixed,
       padding: "16px 16px",
       boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
@@ -18650,7 +18652,7 @@ function FollowTournamentScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed} 0%, ${COLORS.pitchFixed} 45%, ${COLORS.pitchDarkFixed} 100%)`,
       color: COLORS.creamFixed,
       padding: "20px 16px 26px"
     }
@@ -19400,7 +19402,7 @@ function MatchScreen({
     }
   }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversExact, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed} 0%, ${COLORS.pitchFixed} 45%, ${COLORS.pitchDarkFixed} 100%)`,
       padding: "16px 16px 22px",
       color: COLORS.creamFixed,
       position: "relative",
@@ -20865,20 +20867,20 @@ function ResultScreen({
     onGetCode: handleGetCode,
     onGetViewCode: handleGetViewCode,
     style: {
-      background: COLORS.pitch,
+      background: COLORS.pitchFixed,
       border: "none",
       color: "#fff"
     }
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match,
     style: {
-      background: COLORS.pitch,
+      background: COLORS.pitchFixed,
       border: "none",
       color: "#fff"
     }
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       color: COLORS.creamFixed,
       borderRadius: 18,
       padding: "26px 20px",
