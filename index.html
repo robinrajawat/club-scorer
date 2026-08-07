@@ -12068,10 +12068,17 @@ function SetupScreen({
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "overs each"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft
     }
-  }, "overs each \u2014 suggested from your total overs, editable"), /*#__PURE__*/React.createElement("button", {
+  }, "\u2014 suggested from your total overs, editable"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       setMaxOversTouched(true);
@@ -12157,10 +12164,17 @@ function SetupScreen({
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "overs"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft
     }
-  }, "overs at the start of each innings \u2014 shown as a badge while it's in effect, not enforced (there's no fielder tracking here to enforce it against)"), /*#__PURE__*/React.createElement("button", {
+  }, "\u2014 at the start of each innings, shown as a badge while it's in effect, not enforced (there's no fielder tracking here to enforce it against)"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setMatchRules(r => ({
       ...r,
@@ -12249,10 +12263,17 @@ function SetupScreen({
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "minutes"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft
     }
-  }, "minutes \u2014 a flag once you're past it, not a stop. The innings keeps going; an \u201cOVER TIME\u201d badge just shows up so whoever's scoring can decide what to do about it."), /*#__PURE__*/React.createElement("button", {
+  }, "\u2014 a flag once you're past it, not a stop. The innings keeps going; an \u201cOVER TIME\u201d badge just shows up so whoever's scoring can decide what to do about it."), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setMatchRules(r => ({
       ...r,
