@@ -311,13 +311,18 @@ const GLOBAL_CSS = `
      never needed to distinguish "the page" from "a card floating on the page." Deliberately does
      NOT touch accent/semantic colors used for badges, jersey presets, or milestone icons — those
      stay constant across both themes, same as most apps keep brand accent colors fixed while
-     backgrounds/text flip. */
+     backgrounds/text flip. --cs-cream-fixed is the other deliberate exception: COLORS.cream got
+     reused in two genuinely different roles — the page background (should flip dark) and light
+     text/icons sitting on a permanently-colored surface like the pitch-gradient match header
+     (should NOT flip, or that text goes near-black-on-dark-green in dark mode). --cs-cream-fixed
+     is the second role, split out and pinned to the light value in both themes. */
   :root {
     --cs-pitch: #2d5016;
     --cs-pitch-dark: #1f3a0f;
     --cs-turf: #4a7c2e;
     --cs-cream: #f2ecd9;
     --cs-cream-dark: #e5dcc1;
+    --cs-cream-fixed: #f2ecd9;
     --cs-willow: #c9a876;
     --cs-ink: #2a2420;
     --cs-ink-soft: #5c5347;
@@ -418,7 +423,8 @@ const COLORS = {
   ball: "var(--cs-ball)",
   ballLight: "var(--cs-ball-light)",
   gold: "var(--cs-gold)",
-  surface: "var(--cs-surface)"
+  surface: "var(--cs-surface)",
+  creamFixed: "var(--cs-cream-fixed)"
 };
 // Jersey color presets offered when editing a team — deliberately a curated set rather than
 // leaving people to the raw native color picker for the common case, since a handful of
@@ -4487,7 +4493,7 @@ function Btn({
     },
     ghost: {
       background: "rgba(242,236,217,0.1)",
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       border: "1.5px solid rgba(242,236,217,0.35)"
     }
   };
@@ -8800,7 +8806,7 @@ function MoveTeamMenu({
       right: pos.right,
       minWidth: 170,
       background: COLORS.ink,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       borderRadius: 12,
       padding: 6,
       fontFamily: "'Inter'",
@@ -8826,7 +8832,7 @@ function MoveTeamMenu({
       textAlign: "left",
       background: "none",
       border: "none",
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontSize: 13,
       fontWeight: 600,
@@ -8984,7 +8990,7 @@ function ShareMenu({
       right: pos.right,
       width: 270,
       background: COLORS.ink,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       borderRadius: 12,
       padding: 8,
       fontFamily: "'Inter'",
@@ -9010,7 +9016,7 @@ function ShareMenu({
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'IBM Plex Mono'",
       fontWeight: 600,
       fontSize: 13,
@@ -9027,7 +9033,7 @@ function ShareMenu({
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12.5,
@@ -9074,7 +9080,7 @@ function ShareMenu({
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12.5,
@@ -9099,7 +9105,7 @@ function ShareMenu({
       background: "rgba(242,236,217,0.14)",
       border: `1px solid rgba(242,236,217,0.35)`,
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       cursor: "pointer",
       width: 38,
       height: 38,
@@ -9201,7 +9207,7 @@ function WelcomeScreen({
     size: 30,
     fill: COLORS.ball,
     style: {
-      color: COLORS.cream
+      color: COLORS.creamFixed
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -9513,11 +9519,11 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(Circle, {
     size: 26,
-    color: COLORS.cream,
+    color: COLORS.creamFixed,
     strokeWidth: 2.5,
     fill: COLORS.ball,
     style: {
-      color: COLORS.cream
+      color: COLORS.creamFixed
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11361,9 +11367,10 @@ function TournamentsScreen({
       fontWeight: 700,
       letterSpacing: 0.4,
       textTransform: "uppercase",
-      color: "#fff",
-      background: TOURNAMENT_STATUS_COLORS[tournamentStatus(t)],
-      padding: "2px 7px",
+      color: TOURNAMENT_STATUS_COLORS[tournamentStatus(t)],
+      background: `color-mix(in srgb, ${TOURNAMENT_STATUS_COLORS[tournamentStatus(t)]} 16%, ${COLORS.surface})`,
+      border: `1px solid color-mix(in srgb, ${TOURNAMENT_STATUS_COLORS[tournamentStatus(t)]} 45%, transparent)`,
+      padding: "1.5px 6px",
       borderRadius: 10
     }
   }, TOURNAMENT_STATUS_LABELS[tournamentStatus(t)])), /*#__PURE__*/React.createElement("div", {
@@ -12536,7 +12543,7 @@ function TournamentDetailScreen({
     onUpdateTournament: onUpdateTournament
   }), /*#__PURE__*/React.createElement("div", {
   style: {
-    background: `linear-gradient(160deg, #fff, ${COLORS.cream})`,
+    background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
     borderRadius: 16,
     padding: "16px 18px",
     marginBottom: 20,
@@ -12678,7 +12685,7 @@ function TournamentDetailScreen({
   }
 }, "pick one manually"), ".")), (orangeCap || purpleCap || tableTopper) && /*#__PURE__*/React.createElement("div", {
   style: {
-    background: `linear-gradient(160deg, #fff, ${COLORS.cream})`,
+    background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
     borderRadius: 16,
     padding: "16px 18px",
     marginBottom: 20,
@@ -15658,7 +15665,7 @@ function SyncStatusBanner({
       background: dark ? "rgba(242,236,217,0.14)" : "rgba(230,84,75,0.1)",
       border: `1px solid ${dark ? "rgba(242,236,217,0.35)" : "#e6544b55"}`,
       borderRadius: 10,
-      color: dark ? COLORS.cream : "#b3392f",
+      color: dark ? COLORS.creamFixed : "#b3392f",
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
@@ -15843,7 +15850,7 @@ function ExportPdfButton({
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       cursor: preparing ? "default" : "pointer",
       opacity: preparing ? 0.6 : 1,
       width: 38,
@@ -16434,7 +16441,7 @@ function ScorecardOverlay({
       position: "sticky",
       top: 0,
       background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       padding: "16px 16px",
       display: "flex",
       alignItems: "center",
@@ -16466,7 +16473,7 @@ function ScorecardOverlay({
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13,
@@ -16600,7 +16607,7 @@ function FollowScreen({
       position: "sticky",
       top: 0,
       background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       padding: "16px 16px",
       boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
       zIndex: 2
@@ -16644,7 +16651,7 @@ function FollowScreen({
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13,
@@ -16759,7 +16766,7 @@ function FollowTournamentScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       padding: "20px 16px 26px"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -17495,7 +17502,7 @@ function MatchScreen({
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf} 0%, ${COLORS.pitch} 45%, ${COLORS.pitchDark} 100%)`,
       padding: "16px 16px 22px",
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       position: "relative",
       overflow: "hidden"
     }
@@ -17524,7 +17531,7 @@ function MatchScreen({
     style: {
       background: "none",
       border: "none",
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontSize: 13,
       fontWeight: 600,
@@ -17551,7 +17558,7 @@ function MatchScreen({
       background: "rgba(242,236,217,0.14)",
       border: `1px solid rgba(242,236,217,0.35)`,
       borderRadius: 8,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       cursor: "pointer",
       width: 38,
       height: 38,
@@ -17647,8 +17654,9 @@ function MatchScreen({
     startedAt: inning.startedAt
   }), inPowerplay(inning) && /*#__PURE__*/React.createElement("span", {
     style: {
-      background: COLORS.turf,
-      color: "#fff",
+      background: "rgba(242,236,217,0.16)",
+      border: "1px solid rgba(242,236,217,0.4)",
+      color: COLORS.creamFixed,
       fontWeight: 700,
       padding: "2px 9px",
       borderRadius: 20,
@@ -17657,8 +17665,9 @@ function MatchScreen({
     }
   }, "POWERPLAY"), inning.freeHitActive && /*#__PURE__*/React.createElement("span", {
     style: {
-      background: COLORS.gold,
-      color: "#fff",
+      background: "rgba(242,236,217,0.16)",
+      border: "1px solid rgba(242,236,217,0.4)",
+      color: COLORS.creamFixed,
       fontWeight: 700,
       padding: "2px 9px",
       borderRadius: 20,
@@ -18867,7 +18876,7 @@ function ResultScreen({
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitchDark})`,
-      color: COLORS.cream,
+      color: COLORS.creamFixed,
       borderRadius: 18,
       padding: "26px 20px",
       textAlign: "center",
