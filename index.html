@@ -5703,43 +5703,7 @@ function AccountScreen({
       padding: "10px 8px",
       minHeight: 40
     }
-  }, opt.label)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginTop: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenHelp,
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      padding: 0,
-      fontFamily: "'Inter'"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Help & FAQ"), /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 18,
-    style: {
-      color: COLORS.inkSoft
-    }
-  }))), user && /*#__PURE__*/React.createElement("div", {
+  }, opt.label)))), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -5804,6 +5768,42 @@ function AccountScreen({
       setPendingImportData(null);
     }
   })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenHelp,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Help & FAQ"), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -6270,9 +6270,10 @@ function FirstLaunchTour({
   }, isLast ? "Get started" : "Next")));
 }
 function HelpScreen({
-  onBack
+  onBack,
+  onReplayTour
 }) {
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
       maxWidth: 560,
@@ -6351,7 +6352,25 @@ function HelpScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.55
     }
-  }, e.a))))));
+  }, e.a))))), onReplayTour && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onReplayTour,
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "10px 4px",
+      textDecoration: "underline"
+    }
+  }, "Replay the welcome tour")));
 }
 function SharedLinksScreen({
   matches,
@@ -20789,7 +20808,11 @@ function CricketScorer() {
     navKey: "help",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HelpScreen, {
-    onBack: () => setScreen("account")
+    onBack: () => setScreen("account"),
+    onReplayTour: () => {
+      setShowTour(true);
+      setScreen("home");
+    }
   })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "requests",
     direction: navDirection

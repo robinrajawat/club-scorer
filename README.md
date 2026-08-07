@@ -75,7 +75,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 
 **Help & orientation**
 - A short, dismissible tour on first launch — just the handful of things you genuinely wouldn't discover by exploring (score codes vs. view codes, borrowing a player, clubs/federations, tournaments vs. series), not a full walkthrough. Shown once per device, skippable at any point.
-- A Help & FAQ screen (Account → Help & FAQ) for looking the same things up again later — short, curated answers to the non-obvious stuff, not a duplicate of this README.
+- A Help & FAQ screen (Account → Help & FAQ) for looking the same things up again later — short, curated answers to the non-obvious stuff, not a duplicate of this README. Includes a link to replay the first-launch tour any time.
 
 **No ads, no locked features**
 - Everything in this app is free, with nothing gated behind a paywall or subscription. If Club Scorer is useful for your club, there's a low-key "Buy me a coffee" link tucked into Account → About — genuinely optional, never asked for anywhere else.
