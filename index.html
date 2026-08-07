@@ -3848,7 +3848,11 @@ function battingTeamXISize(match, teamName) {
 // A side is all out one wicket before it runs out of batsmen, i.e. XI size minus 1 — a 9-a-side
 // team is all out on the 8th wicket, not the 10th. A Super Over is the one fixed exception (Law-set
 // at 2, regardless of squad size), so that check comes first and short-circuits the roster lookup.
+// Prefers inning.maxWickets (baked in once at newInning time — see there) over recomputing live,
+// since applyBall itself needs this value and has no access to `match` to recompute it; recomputing
+// here is only a fallback for innings saved before this field existed.
 function maxWicketsFor(match, inning) {
+  if (inning && inning.maxWickets != null) return inning.maxWickets;
   if (match.isSuperOver) return 2;
   return battingTeamXISize(match, inning.battingTeam) - 1;
 }
@@ -4082,7 +4086,7 @@ function allMatchPlayers(match) {
   });
   return Array.from(names);
 }
-function newInning(battingTeam, bowlingTeam, rules) {
+function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
   const r = {
     ...DEFAULT_RULES,
     ...rules
@@ -4161,7 +4165,12 @@ function newInning(battingTeam, bowlingTeam, rules) {
     freeHitActive: false,
     maxOversPerBowler: r.maxOversPerBowler || null,
     powerplayOvers: r.powerplayOvers || null,
-    timeCapMinutes: r.timeCapMinutes || null
+    timeCapMinutes: r.timeCapMinutes || null,
+    // Baked in once here rather than recomputed from the roster on every check — this is what
+    // lets applyBall (which has no access to the match object, only this inning) use the right
+    // all-out threshold instead of a hardcoded 10. Falls back to 10 only if a caller genuinely
+    // didn't pass one, which every real call site below does.
+    maxWickets: maxWickets != null ? maxWickets : 10
   };
 }
 function ensureBatsman(inning, name) {
@@ -4298,7 +4307,13 @@ function applyBall(inning, event) {
     runsThisBall = (cur.noballRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
-    cur.extras.noball += 1;
+    // BUG FIX: this used to always add exactly 1 here regardless of the configured no-ball
+    // penalty (cur.noballRuns) — fine for the default 1-run no-ball, but for any match using a
+    // custom no-ball rule (e.g. 2 runs), extras.noball silently under-counted by the difference
+    // every time, so the scorecard's Extras total stopped reconciling with the actual score
+    // (batting total + extras < inning.runs). Any runs off the bat still go to the batsman below,
+    // same as before — only the penalty portion belongs in extras.
+    cur.extras.noball += cur.noballRuns || 1;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
@@ -4381,7 +4396,10 @@ function applyBall(inning, event) {
   if (legalBall) {
     cur.legalBalls += 1;
     cur.freeHitActive = false; // a fair (or fair-but-illegal-for-batsman... i.e. any counted) ball consumes the free hit
-    if (cur.legalBalls % (cur.ballsPerOver || 6) === 0 && cur.wickets < 10) {
+    // Was hardcoded to `< 10` — same bug class as checkInningEnd's allOut and needsNewBatsman
+    // (see maxWicketsFor). cur.maxWickets is baked in at newInning time since applyBall has no
+    // access to the match object (rosters) to compute it live.
+    if (cur.legalBalls % (cur.ballsPerOver || 6) === 0 && cur.wickets < (cur.maxWickets != null ? cur.maxWickets : 10)) {
       const finishedOver = cur.overs[lastOverIdx];
       const bowlerRunsThisOver = finishedOver.reduce((s, b) => s + (b.kind === "bye" || b.kind === "legbye" ? 0 : b.runs || 0), 0);
       if (bowlerRunsThisOver === 0 && cur.bowlers[cur.bowlerName]) {
@@ -19009,7 +19027,7 @@ function MatchScreen({
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
           timeCapMinutes: inn.timeCapMinutes
-        });
+        }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1);
         updated.awaitingSecondInningsSetup = true;
       } else {
         updated.status = "complete";
@@ -19103,7 +19121,11 @@ function MatchScreen({
     }, 1000);
   }
   function handleWicket(wicketType, legal = true) {
-    const isLast = inning.wickets + 1 >= 10;
+    // Same bug class as checkInningEnd's allOut / needsNewBatsman / applyBall's over-completion
+    // check — was hardcoded to `+ 1 >= 10`, so a 9-a-side match's real last wicket (the 8th) still
+    // fell through to the "who's the new batsman?" prompt below instead of ending the innings
+    // immediately, since 9 >= 10 is false. maxWicketsFor reads the actual roster-based threshold.
+    const isLast = inning.wickets + 1 >= maxWicketsFor(match, inning);
     if (wicketType === "Caught") {
       setShowWicket(false);
       setCatchDraft({
@@ -19190,11 +19212,11 @@ function MatchScreen({
   }
   const [confirmEndInning, setConfirmEndInning] = useState(false);
   const [showRetireModal, setShowRetireModal] = useState(false);
-  // Escape hatch for when there's genuinely no next batsman to pick — a short squad (fewer than
-  // 11 available), an injury, a forfeit, whatever. Rather than trying to auto-detect "all out" off
-  // however many players happened to be selected at match start (which the auto isLast/checkWicket
-  // logic elsewhere assumes is always 11), this just lets the innings be ended on demand from right
-  // here, gated behind a confirmation since it's not reversible the way a single ball is via Undo.
+  // Escape hatch for when there's genuinely no next batsman to pick — an injury, a forfeit, or a
+  // squad smaller than what was recorded at match start, whatever the reason. isLast/needsNewBatsman
+  // (see handleWicket/maxWicketsFor above) now correctly auto-detect all-out for any known roster
+  // size, so this is for the residual cases that aren't a plain "ran out of batsmen at the expected
+  // count" — not reversible the way a single ball is via Undo, hence the confirmation gate.
   function endInningEarly() {
     pushHistory();
     if (pendingWicket) {
@@ -20692,7 +20714,7 @@ function ResultScreen({
       rules: superOverRules,
       toss: null,
       playerOfMatch: null,
-      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules)],
+      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules, 2), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules, 2)],
       awaitingSecondInningsSetup: false,
       awaitingFirstInningsSetup: true,
       isSuperOver: true,
@@ -21314,6 +21336,13 @@ function CricketScorer() {
     };
   }
   function startNewMatch(setup) {
+    const battingFirstTeam = setup.battingFirstTeam || setup.teamA;
+    const bowlingFirstTeam = setup.battingFirstTeam === setup.teamB ? setup.teamA : setup.teamB;
+    // Same XI-size lookup as battingTeamXISize/maxWicketsFor, done inline here since `m` (the
+    // match object those helpers expect) doesn't exist yet at this point — it's what we're about
+    // to build, and its innings array needs this value passed in up front.
+    const battingFirstRoster = battingFirstTeam === setup.teamA ? setup.teamARoster : setup.teamBRoster;
+    const battingFirstXISize = battingFirstRoster && battingFirstRoster.length || setup.rules && setup.rules.playersPerSide || DEFAULT_RULES.playersPerSide;
     const m = {
       id: uid(),
       createdAt: Date.now(),
@@ -21343,7 +21372,7 @@ function CricketScorer() {
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
       // SetupScreen from the actual toss decision, defaulting to teamA if no toss was recorded)
       // is what makes this track reality instead.
-      innings: [newInning(setup.battingFirstTeam || setup.teamA, setup.battingFirstTeam === setup.teamB ? setup.teamA : setup.teamB, setup.rules)],
+      innings: [newInning(battingFirstTeam, bowlingFirstTeam, setup.rules, battingFirstXISize - 1)],
       awaitingSecondInningsSetup: false
     };
     m.innings[0].strikerName = setup.strikerA;
