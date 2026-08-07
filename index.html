@@ -315,7 +315,15 @@ const GLOBAL_CSS = `
      reused in two genuinely different roles — the page background (should flip dark) and light
      text/icons sitting on a permanently-colored surface like the pitch-gradient match header
      (should NOT flip, or that text goes near-black-on-dark-green in dark mode). --cs-cream-fixed
-     is the second role, split out and pinned to the light value in both themes. */
+     is the second role, split out and pinned to the light value in both themes.
+     --cs-turf-fixed/--cs-pitch-fixed/--cs-ball-fixed/--cs-ball-light-fixed are the same fix for
+     the same reason: the turf/pitch and ball/ballLight gradient pair is used everywhere as a
+     solid button/chip background with white text on top. In dark mode COLORS.turf/pitch/ball/
+     ballLight are brightened (correctly) for use as accent text/icon color against a dark page --
+     but that brightening drops white-on-gradient contrast to ~2.1-2.5:1, failing WCAG AA 4.5:1.
+     The *-fixed variants pin the light-mode (darker) values in both themes so white text on these
+     gradients stays legible everywhere; COLORS.turf/pitch/ball/ballLight themselves are untouched
+     and keep flipping for their existing text/icon uses. */
   :root {
     --cs-pitch: #2d5016;
     --cs-pitch-dark: #1f3a0f;
@@ -323,6 +331,10 @@ const GLOBAL_CSS = `
     --cs-cream: #f2ecd9;
     --cs-cream-dark: #e5dcc1;
     --cs-cream-fixed: #f2ecd9;
+    --cs-turf-fixed: #4a7c2e;
+    --cs-pitch-fixed: #2d5016;
+    --cs-ball-fixed: #8b1e1e;
+    --cs-ball-light-fixed: #b23b3b;
     --cs-willow: #c9a876;
     --cs-ink: #2a2420;
     --cs-ink-soft: #5c5347;
@@ -424,7 +436,11 @@ const COLORS = {
   ballLight: "var(--cs-ball-light)",
   gold: "var(--cs-gold)",
   surface: "var(--cs-surface)",
-  creamFixed: "var(--cs-cream-fixed)"
+  creamFixed: "var(--cs-cream-fixed)",
+  turfFixed: "var(--cs-turf-fixed)",
+  pitchFixed: "var(--cs-pitch-fixed)",
+  ballFixed: "var(--cs-ball-fixed)",
+  ballLightFixed: "var(--cs-ball-light-fixed)"
 };
 // Jersey color presets offered when editing a team — deliberately a curated set rather than
 // leaving people to the raw native color picker for the common case, since a handful of
@@ -4020,7 +4036,7 @@ function BallBadge({
     shadow = "0 1px 2px rgba(42,36,32,0.1)",
     border = `1px solid ${COLORS.willow}`;
   if (ev.kind === "wicket") {
-    bg = `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`;
+    bg = `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`;
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(139,30,30,0.4)";
@@ -4035,7 +4051,7 @@ function BallBadge({
     border = "none";
     shadow = "0 2px 6px rgba(74,124,46,0.35)";
   } else if (ev.runs === 6) {
-    bg = `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`;
+    bg = `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`;
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(45,80,22,0.4)";
@@ -4413,7 +4429,7 @@ function SwipeableRow({
     className: "cs-btn",
     style: {
       width: REVEAL,
-      background: `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`,
+      background: `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`,
       color: "#fff",
       border: "none",
       display: "flex",
@@ -4584,12 +4600,12 @@ function Btn({
       boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
     },
     primary: {
-      background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
       color: "#fff",
       boxShadow: "0 3px 12px rgba(45,80,22,0.4)"
     },
     danger: {
-      background: `linear-gradient(160deg, ${COLORS.ballLight}, ${COLORS.ball})`,
+      background: `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`,
       color: "#fff",
       boxShadow: "0 3px 12px rgba(139,30,30,0.35)"
     },
@@ -4860,7 +4876,7 @@ function PlayerPicker({
           borderRadius: 20,
           border: "none",
           cursor: "pointer",
-          background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+          background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
           color: active ? "#fff" : COLORS.ink,
           boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
           fontFamily: "'Inter'",
@@ -5002,7 +5018,7 @@ function RuleChoice({
         borderRadius: 20,
         border: "none",
         cursor: "pointer",
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+        background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
         color: active ? "#fff" : COLORS.ink,
         boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
         fontFamily: "'Inter'",
@@ -10211,7 +10227,7 @@ function TeamChips({
         borderRadius: 20,
         border: "none",
         cursor: "pointer",
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+        background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
         color: active ? "#fff" : COLORS.ink,
         boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
         fontFamily: "'Inter'",
@@ -10380,7 +10396,7 @@ function PlayingXIPicker({
       style: {
         padding: "5px 6px 5px 10px",
         borderRadius: 20,
-        background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+        background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
         boxShadow: "0 2px 8px rgba(45,80,22,0.3)",
         display: "inline-flex",
         alignItems: "center",
@@ -10899,7 +10915,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: tossWonBy === name.trim() ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: tossWonBy === name.trim() ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: tossWonBy === name.trim() ? "#fff" : COLORS.ink,
       boxShadow: tossWonBy === name.trim() ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10929,7 +10945,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: tossDecision === d ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: tossDecision === d ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: tossDecision === d ? "#fff" : COLORS.ink,
       boxShadow: tossDecision === d ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11051,7 +11067,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: matchRules.freeHit ? "#fff" : COLORS.ink,
       boxShadow: matchRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11082,7 +11098,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: matchRules.superOver ? "#fff" : COLORS.ink,
       boxShadow: matchRules.superOver ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11950,7 +11966,7 @@ function TournamentsScreen({
       borderRadius: 18,
       border: "none",
       cursor: "pointer",
-      background: selectedTeams.includes(n) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: selectedTeams.includes(n) ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: selectedTeams.includes(n) ? "#fff" : COLORS.ink,
       boxShadow: selectedTeams.includes(n) ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11984,7 +12000,7 @@ function TournamentsScreen({
       borderRadius: 18,
       border: selectedTeams.includes(t.teamName) ? "none" : `1px dashed ${COLORS.gold}`,
       cursor: "pointer",
-      background: selectedTeams.includes(t.teamName) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: selectedTeams.includes(t.teamName) ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: selectedTeams.includes(t.teamName) ? "#fff" : COLORS.ink,
       boxShadow: selectedTeams.includes(t.teamName) ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -12024,7 +12040,7 @@ function TournamentsScreen({
       borderRadius: 18,
       border: "none",
       cursor: "pointer",
-      background: useGroups ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: useGroups ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: useGroups ? "#fff" : COLORS.ink,
       boxShadow: useGroups ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -12069,7 +12085,7 @@ function TournamentsScreen({
       borderRadius: 17,
       border: "none",
       cursor: "pointer",
-      background: numGroups === n ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: numGroups === n ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: numGroups === n ? "#fff" : COLORS.ink,
       boxShadow: numGroups === n ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -12099,7 +12115,7 @@ function TournamentsScreen({
       borderRadius: 17,
       border: "none",
       cursor: "pointer",
-      background: advancePerGroup === n ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: advancePerGroup === n ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: advancePerGroup === n ? "#fff" : COLORS.ink,
       boxShadow: advancePerGroup === n ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -12474,7 +12490,7 @@ function FixtureDateTimeModal({
       fontSize: 12.5,
       fontWeight: isSelected(d) ? 700 : 500,
       cursor: "pointer",
-      background: isSelected(d) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "transparent",
+      background: isSelected(d) ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : "transparent",
       color: isSelected(d) ? "#fff" : COLORS.ink,
       boxShadow: isSelected(d) ? "0 2px 8px rgba(45,80,22,0.35)" : "none",
       outline: !isSelected(d) && isToday(d) ? `1.5px solid ${COLORS.willow}` : "none",
@@ -12534,7 +12550,7 @@ function FixtureDateTimeModal({
       fontWeight: 600,
       fontSize: 12.5,
       cursor: "pointer",
-      background: period === p ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: period === p ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: period === p ? "#fff" : COLORS.inkSoft
     }
   }, p)))), onClear && /*#__PURE__*/React.createElement("button", {
@@ -13783,7 +13799,7 @@ function TournamentDetailScreen({
     padding: "9px 0",
     borderRadius: 10,
     border: "none",
-    background: statsTab === t ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+    background: statsTab === t ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
     color: statsTab === t ? "#fff" : COLORS.ink,
     boxShadow: statsTab === t ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
     fontFamily: "'Inter'",
@@ -14606,7 +14622,7 @@ function TeamEditScreen({
         padding: "4px 10px",
         borderRadius: 12,
         border: active ? "none" : `1.5px solid ${COLORS.willow}`,
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+        background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
         color: active ? "#fff" : COLORS.inkSoft,
         fontFamily: "'Inter'",
         fontWeight: 600,
@@ -14996,7 +15012,7 @@ function TeamEditScreen({
       borderRadius: 13,
       flexShrink: 0,
       border: keeper === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: keeper === p.name ? "#fff" : COLORS.inkSoft,
       boxShadow: keeper === p.name ? "0 1px 4px rgba(45,80,22,0.4)" : "none",
       fontFamily: "'Inter'",
@@ -17299,7 +17315,7 @@ function MatchStatsPanel({
       padding: "9px 0",
       borderRadius: 10,
       border: "none",
-      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      background: tab === i ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
       color: tab === i ? "#fff" : COLORS.ink,
       boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
       fontFamily: "'Inter'",
@@ -17498,7 +17514,7 @@ function FollowScreen({
       className: "cs-btn cs-shine",
       onClick: onExit,
       style: {
-        background: `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})`,
+        background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
         border: "none",
         borderRadius: 10,
         color: "#fff",
