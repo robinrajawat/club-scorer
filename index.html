@@ -6965,7 +6965,16 @@ const HELP_SECTIONS = [{
     a: "Turn it on in Match Rules. After a no-ball, only a run out counts as a dismissal until the next legal delivery — the app handles this automatically once it's on."
   }, {
     q: "What's the difference between retired hurt and retired out?",
-    a: "Retired hurt doesn't count as a wicket and credits no bowler — use it for an injury or anything that pulls someone away mid-innings. Retired out counts exactly like a normal dismissal. Both are on the \u201cRetire\u201d button next to Swap Strike, and only apply to whoever's currently on strike."
+    a: "Retired hurt doesn't count as a wicket and credits no bowler — use it for an injury or anything that pulls someone away mid-innings. Retired out counts exactly like a normal dismissal. Both are on the \u201cRetire\u201d button and only apply to whoever's currently on strike \u2014 there's a Swap Strike button right in that popup if it's actually the other end who needs to leave."
+  }, {
+    q: "How do I record a non-striker run out?",
+    a: "Every dismissal is recorded against whoever's currently on strike \u2014 there's no separate \u201cwhich end\u201d concept. If it was actually the non-striker who was run out, tap Swap Strike (it's right there in the run-out popup, no need to back out first) so the correct batsman is in the striker slot before you confirm."
+  }, {
+    q: "Can I record a run out or stumping that happened on a wide or no-ball?",
+    a: "Yes \u2014 the run-out/stumped popup asks whether the ball was fair, a wide, or (run out only) a no-ball, and credits the extra run alongside the dismissal. It also asks how many runs the pair had completed before the wicket fell, since that's common on a run out and easy to lose track of otherwise."
+  }, {
+    q: "I found a scoring mistake after the match already ended \u2014 can I fix it?",
+    a: "\u201cFix a mistake\u201d on the result screen reopens the match's last innings \u2014 Undo and every other correction tool work again from there, same as live scoring. It only works on the most recent innings: an earlier one can't be reopened once a later one has real balls in it, since the target, the result, and (in a tournament) NRR all depend on that total by then."
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
