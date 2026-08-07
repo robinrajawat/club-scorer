@@ -2819,6 +2819,28 @@ function generateRoundRobinFixtures(teamNames, double) {
   }
   return fixtures;
 }
+// tournament.groups, when set, is [{label, teams: [...]}, ...] in display order — a multi-pool
+// tournament (e.g. "Group A" / "Group B", each playing round-robin only within itself, then a
+// cross-group knockout) instead of one combined round-robin. Absent/null groups means the
+// tournament behaves exactly as it always has — every function below that checks
+// `tournament.groups` falls straight through to the original single-pool behavior otherwise, so
+// this is fully backward compatible with every tournament created before groups existed.
+//
+// Generates round-robin fixtures WITHIN each group only (a team never meets a team from another
+// group here — cross-group matches only happen in the knockout stage) — tags each fixture with
+// its group's label so the fixture list and standings can partition by it later.
+function generateGroupRoundRobinFixtures(groups, double) {
+  const fixtures = [];
+  for (const g of groups) {
+    for (const f of generateRoundRobinFixtures(g.teams, double)) {
+      fixtures.push({
+        ...f,
+        group: g.label
+      });
+    }
+  }
+  return fixtures;
+}
 function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {
@@ -2884,6 +2906,53 @@ function computeStandings(tournament, allMatches) {
     ...r,
     nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
   })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
+}
+// One standings table per group instead of one combined table — reuses computeStandings itself
+// rather than re-deriving the points/NRR math, by handing it a "tournament" scoped to just that
+// group's teams (same real tournament id, so match-tagging still resolves correctly; a restricted
+// teams array so cross-group results — which only exist once the knockout stage starts — don't
+// pollute a group's own table). Returns null when the tournament has no groups, so callers can use
+// `computeGroupStandings(t, matches) || [{label: null, standings: computeStandings(t, matches)}]`
+// as a uniform shape if they want to render single-pool and grouped tournaments the same way.
+function computeGroupStandings(tournament, allMatches) {
+  if (!tournament.groups || !tournament.groups.length) return null;
+  return tournament.groups.map(g => ({
+    label: g.label,
+    standings: computeStandings({
+      ...tournament,
+      teams: g.teams
+    }, allMatches)
+  }));
+}
+// First-knockout-round pairing for a multi-group tournament: qualifier rank R from group i faces
+// qualifier rank (advancePerGroup - 1 - R) from the NEXT group, cycling group order. For the
+// standard 2-group case this produces exactly "Group A #1 vs Group B #2" and "Group B #1 vs Group
+// A #2" — the same pattern most club and franchise tournaments use to keep each group's top two
+// apart until later. For 3+ groups this cycles the same rule through every group in turn; it's a
+// reasonable generalization but only the 2-group case is the one this was actually validated
+// against, since that's the shape real requests for this feature have taken so far.
+function crossGroupKnockoutPairs(groupStandings, advancePerGroup) {
+  const n = groupStandings.length;
+  const paired = new Set();
+  const pairs = [];
+  for (let i = 0; i < n; i++) {
+    for (let rank = 0; rank < advancePerGroup; rank++) {
+      const key = `${i}:${rank}`;
+      if (paired.has(key)) continue;
+      const teamA = groupStandings[i].standings[rank] && groupStandings[i].standings[rank].team;
+      if (!teamA) continue;
+      const otherGroup = (i + 1) % n;
+      const otherRank = advancePerGroup - 1 - rank;
+      const otherKey = `${otherGroup}:${otherRank}`;
+      if (otherGroup === i || paired.has(otherKey)) continue;
+      const teamB = groupStandings[otherGroup].standings[otherRank] && groupStandings[otherGroup].standings[otherRank].team;
+      if (!teamB) continue;
+      pairs.push([teamA, teamB]);
+      paired.add(key);
+      paired.add(otherKey);
+    }
+  }
+  return pairs;
 }
 // Renders a decimal overs count (e.g. 15.667) as cricket's own overs.balls notation ("15.4") —
 // NOT a decimal number, the digit after the point is a ball count from 0-5 (or 0 to
@@ -11379,6 +11448,24 @@ function TournamentsScreen({
   const [busy, setBusy] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | upcoming | ongoing | completed
+  const [useGroups, setUseGroups] = useState(false);
+  const [numGroups, setNumGroups] = useState(2);
+  const [advancePerGroup, setAdvancePerGroup] = useState(2);
+  const [groupOverrides, setGroupOverrides] = useState({}); // team name -> group index, only for teams manually re-assigned off the auto-split
+  const GROUP_LABELS = ["Group A", "Group B", "Group C", "Group D"];
+  // Auto-split (round-robin through the group count, in selection order) unless the person
+  // tapped a team to move it to a different group — new teams added after that still fall into
+  // the auto-split rather than needing every team re-assigned from scratch.
+  function teamGroupIndex(team) {
+    if (groupOverrides[team] !== undefined) return groupOverrides[team];
+    return selectedTeams.indexOf(team) % numGroups;
+  }
+  function cycleTeamGroup(team) {
+    setGroupOverrides(o => ({
+      ...o,
+      [team]: (teamGroupIndex(team) + 1) % numGroups
+    }));
+  }
   const [creatingSeries, setCreatingSeries] = useState(false);
   const [seriesName, setSeriesName] = useState("");
   const [seriesTeamA, setSeriesTeamA] = useState("");
@@ -11404,7 +11491,11 @@ function TournamentsScreen({
     if (!name.trim() || selectedTeams.length < 2 || busy) return;
     setBusy(true);
     setError("");
-    const result = await onCreateTournament(name.trim(), selectedTeams);
+    const groups = useGroups ? GROUP_LABELS.slice(0, numGroups).map((label, i) => ({
+      label,
+      teams: selectedTeams.filter(t => teamGroupIndex(t) === i)
+    })).filter(g => g.teams.length > 0) : null;
+    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't create the tournament.");
@@ -11770,7 +11861,159 @@ function TournamentsScreen({
       opacity: 0.65,
       fontWeight: 500
     }
-  }, "\u00b7 ", t.clubName)))), error && /*#__PURE__*/React.createElement("div", {
+  }, "\u00b7 ", t.clubName)))), selectedTeams.length >= 4 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: useGroups ? 10 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, "Split into groups"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setUseGroups(g => !g),
+    style: {
+      padding: "6px 13px",
+      borderRadius: 18,
+      border: "none",
+      cursor: "pointer",
+      background: useGroups ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      color: useGroups ? "#fff" : COLORS.ink,
+      boxShadow: useGroups ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, useGroups ? "On" : "Off")), useGroups && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 10
+    }
+  }, "Each group plays round-robin only within itself, then the top teams from every group cross over into a knockout \u2014 e.g. Group A's #1 plays Group B's #2."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 14,
+      marginBottom: 12,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, "Number of groups"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [2, 3, 4].map(n => /*#__PURE__*/React.createElement("button", {
+    key: n,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setNumGroups(n),
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      border: "none",
+      cursor: "pointer",
+      background: numGroups === n ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      color: numGroups === n ? "#fff" : COLORS.ink,
+      boxShadow: numGroups === n ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, n)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, "Advance per group"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [1, 2, 3].map(n => /*#__PURE__*/React.createElement("button", {
+    key: n,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setAdvancePerGroup(n),
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      border: "none",
+      cursor: "pointer",
+      background: advancePerGroup === n ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
+      color: advancePerGroup === n ? "#fff" : COLORS.ink,
+      boxShadow: advancePerGroup === n ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, n))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Tap a team to move it to a different group"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, selectedTeams.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => cycleTeamGroup(t),
+    style: {
+      padding: "7px 12px",
+      borderRadius: 16,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      color: COLORS.ink,
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, t, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.pitch,
+      background: `color-mix(in srgb, ${COLORS.pitch} 14%, ${COLORS.surface})`,
+      padding: "1.5px 6px",
+      borderRadius: 8
+    }
+  }, GROUP_LABELS[teamGroupIndex(t)].replace("Group ", ""))))))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -12360,9 +12603,10 @@ function FixturesSection({
     setBusy(true);
     // Regenerating the group stage only ever touches group fixtures — any knockout rounds already
     // proposed (which only make sense once fixed teams/results exist) are left alone.
+    const generated = tournament.groups && tournament.groups.length ? generateGroupRoundRobinFixtures(tournament.groups, double) : generateRoundRobinFixtures(tournament.teams, double);
     await onUpdateTournament({
       ...tournament,
-      fixtures: [...generateRoundRobinFixtures(tournament.teams, double), ...fixtures.filter(f => f.stage)]
+      fixtures: [...generated, ...fixtures.filter(f => f.stage)]
     });
     setBusy(false);
   }
@@ -12422,7 +12666,13 @@ function FixturesSection({
   }
   // ---- Knockout stages (Quarterfinal / Semifinal / Final), proposed once applicable ----
   const standings = computeStandings(tournament, matches || []);
-  const stages = applicableKnockoutStages(tournament.teams.length);
+  const groupStandings = computeGroupStandings(tournament, matches || []);
+  const advancePerGroup = tournament.advancePerGroup || 2;
+  // A grouped tournament's bracket size is the QUALIFIER count (groups × advancePerGroup), not the
+  // total team count — a straight round-robin with 8 teams goes to a Quarterfinal, but 2 groups of
+  // 4 with the top 2 advancing is only ever 4 qualifiers, i.e. a Semifinal. Using teams.length here
+  // would ask for an 8-team bracket that this format never produces enough winners for.
+  const stages = applicableKnockoutStages(groupStandings ? groupStandings.length * advancePerGroup : tournament.teams.length);
   const groupFixtures = fixtures.filter(f => !f.stage);
   const upcomingGroupFixtures = groupFixtures.filter(f => !isFixturePlayed(f));
   const playedGroupCount = groupFixtures.length - upcomingGroupFixtures.length;
@@ -12443,7 +12693,11 @@ function FixturesSection({
     if (!canManage) return;
     const stage = stages[index];
     let pairs;
-    if (index === 0) {
+    if (index === 0 && groupStandings) {
+      // Entry round of a grouped tournament: cross-group pairing (Group A #1 vs Group B #2, etc.)
+      // instead of a single overall-standings seed — see crossGroupKnockoutPairs for why.
+      pairs = crossGroupKnockoutPairs(groupStandings, advancePerGroup);
+    } else if (index === 0) {
       // Entry round: seed straight off the standings, keeping #1 and #2 apart until the final.
       const top = standings.map(r => r.team).slice(0, stage.size);
       pairs = (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
@@ -12602,14 +12856,26 @@ function FixturesSection({
       fontStyle: "italic",
       marginBottom: 12
     }
-  }, "No fixtures yet \u2014 only the club owner can add them.")) : upcomingGroupFixtures.map(f => /*#__PURE__*/React.createElement(FixtureRow, {
-    key: f.id,
+  }, "No fixtures yet \u2014 only the club owner can add them.")) : upcomingGroupFixtures.map((f, i) => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: f.id
+  }, f.group && f.group !== (upcomingGroupFixtures[i - 1] && upcomingGroupFixtures[i - 1].group) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginTop: i > 0 ? 10 : 0,
+      marginBottom: 4
+    }
+  }, f.group), /*#__PURE__*/React.createElement(FixtureRow, {
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
     onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
-  })), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
+  }))), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -12721,6 +12987,95 @@ function FixturesSection({
     onCancel: () => setConfirmClearAll(false)
   }));
 }
+// Extracted so a grouped tournament can render one of these per group instead of one combined
+// table — the JSX here is unchanged from what used to be inline in TournamentDetailScreen, just
+// parameterized on `standings` (tableTopper now derives from the prop instead of an outer
+// closure variable, since each group's topper is its own group's #1, not the whole tournament's).
+function StandingsTable({
+  standings
+}) {
+  const tableTopper = standings[0] && standings[0].played > 0 ? standings[0] : null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "14px 4px",
+      marginBottom: 20,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      overflowX: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      minWidth: 420
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map((h, i) => /*#__PURE__*/React.createElement("th", {
+    key: h,
+    style: {
+      textAlign: i === 0 ? "left" : "center",
+      padding: "0 8px 8px",
+      whiteSpace: "nowrap"
+    }
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map((r, i) => /*#__PURE__*/React.createElement("tr", {
+    key: r.team,
+    style: {
+      borderTop: `1px solid ${COLORS.creamDark}`,
+      background: tableTopper && r.team === tableTopper.team ? "rgba(184,137,43,0.08)" : "transparent"
+    }
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.ink,
+      whiteSpace: "nowrap"
+    }
+  }, r.team), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.played), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.won), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.lost), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontWeight: 700,
+      color: COLORS.turf
+    }
+  }, r.points), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px",
+      fontFamily: "'IBM Plex Mono', monospace",
+      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
+    }
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3)))))));
+}
 function TournamentDetailScreen({
   tournament,
   onBack,
@@ -12750,6 +13105,7 @@ function TournamentDetailScreen({
     };
   }, [tournament.id]);
   const standings = matches ? computeStandings(tournament, matches) : [];
+  const groupStandings = matches ? computeGroupStandings(tournament, matches) : null;
   const tournamentMatches = matches ? matches.filter(m => m.tournamentId === tournament.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : [];
   const completedTournamentMatches = tournamentMatches.filter(m => m.status === "complete");
   const tournamentPlayerStats = computePlayerStats(completedTournamentMatches);
@@ -12901,86 +13257,21 @@ function TournamentDetailScreen({
       flexDirection: "column",
       justifyContent: "center"
     }
-  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings ? /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: g.label
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: "14px 4px",
-      marginBottom: 20,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    style: {
-      width: "100%",
-      borderCollapse: "collapse",
       fontFamily: "'Inter'",
-      fontSize: 12.5,
-      minWidth: 420
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
-    style: {
-      color: COLORS.inkSoft,
-      fontSize: 10.5,
+      fontSize: 13,
       fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5
+      color: COLORS.pitch,
+      marginBottom: 8
     }
-  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map((h, i) => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: {
-      textAlign: i === 0 ? "left" : "center",
-      padding: "0 8px 8px",
-      whiteSpace: "nowrap"
-    }
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map((r, i) => /*#__PURE__*/React.createElement("tr", {
-    key: r.team,
-    style: {
-      borderTop: `1px solid ${COLORS.creamDark}`,
-      background: tableTopper && r.team === tableTopper.team ? "rgba(184,137,43,0.08)" : "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.ink,
-      whiteSpace: "nowrap"
-    }
-  }, r.team), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.played), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.won), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.lost), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.tied), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.turf
-    }
-  }, r.points), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontFamily: "'IBM Plex Mono', monospace",
-      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
-    }
-  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), /*#__PURE__*/React.createElement("div", {
+  }, g.label), /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: g.standings
+  })))) : /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: standings
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -20451,11 +20742,13 @@ function CricketScorer() {
   })), ...Object.entries(clubTournamentsById).flatMap(([cid, list]) => list.map(t => ({ ...t,
     _clubId: cid
   })))];
-  async function handleCreateTournament(name, teamNames) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup) {
     const t = {
       id: uid(),
       name,
       teams: teamNames,
+      groups: groups || null,
+      advancePerGroup: groups ? advancePerGroup || 2 : null,
       createdAt: Date.now()
     };
     if (activeTournamentClubId) {
