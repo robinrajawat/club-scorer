@@ -469,6 +469,36 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// ---------- Feedback & error reporting: rolling console buffer ----------
+// Wraps console.error (installed as early as possible, before anything else can throw) to keep a
+// capped rolling log of recent error-level console output. Purely in-memory, never sent anywhere
+// on its own — it's attached as context on whichever crash/feedback report actually gets
+// submitted, so "what else was going wrong right before this" doesn't get lost by the time a
+// report is filed. Wrapped in try/catch throughout: this must never itself be a source of crashes.
+const RECENT_CONSOLE_ERRORS = [];
+(function installConsoleErrorBuffer() {
+  const original = console.error.bind(console);
+  console.error = (...args) => {
+    try {
+      const msg = args.map(a => {
+        if (a instanceof Error) return a.stack || a.message;
+        if (typeof a === "string") return a;
+        try {
+          return JSON.stringify(a);
+        } catch (e) {
+          return String(a);
+        }
+      }).join(" ");
+      RECENT_CONSOLE_ERRORS.push({
+        t: Date.now(),
+        msg: msg.slice(0, 500)
+      });
+      if (RECENT_CONSOLE_ERRORS.length > 20) RECENT_CONSOLE_ERRORS.shift();
+    } catch (e) {}
+    original(...args);
+  };
+})();
+
 // ---------- Firebase (accounts + cross-device match codes) ----------
 const firebaseConfig = {
   apiKey: "AIzaSyD57hwAbN_GfWLB-kFGf7hsmOjOgT7gIMg",
@@ -482,6 +512,97 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+// ---------- Feedback & error reporting ----------
+// One write-only collection for both: a person's own message ("feedback") and an
+// automatically-captured crash ("error"). Write-only by design (see firestore.rules — create is
+// open, read/update/delete are all denied to every client) so this can never become a way to read
+// other people's reports; Robin reviews these directly in the Firebase Console, which isn't
+// bound by client security rules. No account needed — errors can happen before anyone's signed
+// in, and feedback shouldn't require one either.
+async function submitFeedback({
+  kind,
+  message,
+  email,
+  extra
+}) {
+  const trimmed = (message || "").trim();
+  if (!trimmed) return {
+    ok: false,
+    error: "Enter a message first."
+  };
+  try {
+    await db.collection("feedback").add({
+      kind,
+      message: trimmed.slice(0, 6000),
+      email: (email || "").trim() || null,
+      uid: auth.currentUser ? auth.currentUser.uid : null,
+      userAgent: navigator.userAgent,
+      url: window.location.href,
+      createdAt: Date.now(),
+      ...(extra || {})
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("feedback submit failed", e);
+    return {
+      ok: false,
+      error: "Couldn't send that \u2014 check your connection and try again."
+    };
+  }
+}
+// Best-effort automatic crash report — called from ErrorBoundary (React render crashes) and the
+// window-level error/unhandledrejection handlers below (everything else: event handlers, async
+// code, code outside any component tree). Session-scoped dedupe + a hard cap guard against a
+// crash loop hammering Firestore with duplicate writes; both reset on reload, which is fine since
+// a fresh session reporting the same recurring bug once more is exactly what's useful to see.
+const _reportedErrorSignatures = new Set();
+let _autoReportCount = 0;
+async function reportErrorAuto(message, extra) {
+  try {
+    const signature = (message || "").slice(0, 200);
+    if (_reportedErrorSignatures.has(signature)) return {
+      ok: false,
+      skipped: true
+    };
+    if (_autoReportCount >= 10) return {
+      ok: false,
+      skipped: true
+    };
+    _reportedErrorSignatures.add(signature);
+    _autoReportCount++;
+    return await submitFeedback({
+      kind: "error",
+      message: message || "Unknown error",
+      extra: {
+        auto: true,
+        consoleLog: RECENT_CONSOLE_ERRORS.slice(-10),
+        ...(extra || {})
+      }
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message
+    };
+  }
+}
+window.addEventListener("error", e => {
+  reportErrorAuto(e.message, {
+    source: "window.onerror",
+    filename: e.filename,
+    lineno: e.lineno,
+    stack: e.error && e.error.stack
+  });
+});
+window.addEventListener("unhandledrejection", e => {
+  const reason = e.reason;
+  reportErrorAuto(reason instanceof Error ? reason.message : String(reason), {
+    source: "unhandledrejection",
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
+});
 // account-exists-with-different-credential fires when someone tries Google sign-in on an email
 // that already has a password-only account (Firebase never auto-links different providers on the
 // same email). e.email/e.credential are exactly what's needed to complete the link once they
@@ -5323,6 +5444,7 @@ function AccountScreen({
   onOpenSharedLinks,
   onOpenRequests,
   onOpenHelp,
+  onOpenFeedback,
   requestBadgeCount = 0,
   onOpenClubAdmin,
   onBack,
@@ -6285,6 +6407,40 @@ function AccountScreen({
     style: {
       color: COLORS.inkSoft
     }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "12px 0"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenFeedback,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Send Feedback"), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft
+    }
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -6862,6 +7018,130 @@ function HelpScreen({
       textDecoration: "underline"
     }
   }, "Replay the welcome tour")));
+}
+function FeedbackScreen({
+  onBack,
+  userEmail
+}) {
+  const [message, setMessage] = useState("");
+  const [email, setEmail] = useState(userEmail || "");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  async function handleSend() {
+    if (!message.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    const result = await submitFeedback({
+      kind: "feedback",
+      message,
+      email
+    });
+    setBusy(false);
+    if (result.ok) {
+      setSent(true);
+    } else {
+      setError(result.error || "Couldn't send that.");
+    }
+  }
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Send Feedback"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, "Bug reports, missing features, anything that felt off \u2014 this goes straight to the person building the app."), sent ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.pitch,
+      lineHeight: 1.6
+    }
+  }, "Thanks \u2014 that's been sent.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: message,
+    onChange: e => setMessage(e.target.value),
+    placeholder: "What's on your mind?",
+    rows: 6,
+    style: {
+      width: "100%",
+      boxSizing: "border-box",
+      fontFamily: "'Inter', sans-serif",
+      fontSize: 14,
+      padding: 12,
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.cream,
+      resize: "vertical",
+      marginBottom: 10
+    }
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: email,
+    onChange: setEmail,
+    placeholder: "Your email, if you'd like a reply (optional)",
+    autoCapitalize: "none",
+    autoCorrect: "off",
+    autoComplete: "email",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: handleSend,
+    disabled: !message.trim() || busy,
+    style: {
+      width: "100%",
+      marginTop: 12
+    }
+  }, busy ? "Sending\u2026" : "Send"), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginTop: 8
+    }
+  }, error))));
 }
 function SharedLinksScreen({
   matches,
@@ -21734,6 +22014,7 @@ function CricketScorer() {
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenRequests: () => setScreen("requests"),
     onOpenHelp: () => setScreen("help"),
+    onOpenFeedback: () => setScreen("feedback"),
     requestBadgeCount: federationRequestsNeedingAction.length,
     onOpenClubAdmin: () => {
       setClubAdminReturnScreen("account");
@@ -21752,6 +22033,12 @@ function CricketScorer() {
       setShowTour(true);
       setScreen("home");
     }
+  })), screen === "feedback" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "feedback",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(FeedbackScreen, {
+    onBack: () => setScreen("account"),
+    userEmail: user && user.email
   })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "requests",
     direction: navDirection
@@ -21854,8 +22141,17 @@ class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      hasError: false
+      hasError: false,
+      reportStatus: "pending",
+      // "pending" | "sent" | "failed"
+      note: "",
+      noteSent: false,
+      noteSending: false
     };
+    this.handleNoteChange = e => this.setState({
+      note: e.target.value
+    });
+    this.handleSendNote = () => this.sendNote();
   }
   static getDerivedStateFromError() {
     return {
@@ -21864,6 +22160,32 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     console.error("Cricket Scorer crashed:", error, info && info.componentStack);
+    reportErrorAuto((error && (error.stack || error.message)) || "Unknown render error", {
+      source: "ErrorBoundary",
+      componentStack: info && info.componentStack
+    }).then(result => {
+      this.setState({
+        reportStatus: result.ok || result.skipped ? "sent" : "failed"
+      });
+    });
+  }
+  async sendNote() {
+    if (!this.state.note.trim() || this.state.noteSending) return;
+    this.setState({
+      noteSending: true
+    });
+    const result = await submitFeedback({
+      kind: "error",
+      message: `Follow-up note on a crash: ${this.state.note.trim()}`,
+      extra: {
+        auto: false,
+        consoleLog: RECENT_CONSOLE_ERRORS.slice(-10)
+      }
+    });
+    this.setState({
+      noteSending: false,
+      noteSent: result.ok
+    });
   }
   render() {
     if (this.state.hasError) {
@@ -21895,11 +22217,18 @@ class ErrorBoundary extends React.Component {
         style: {
           fontSize: 13.5,
           color: COLORS.inkSoft,
-          marginBottom: 20,
+          marginBottom: 14,
           maxWidth: 320,
           lineHeight: 1.6
         }
-      }, "The app hit an unexpected error. Your saved matches and teams are safe \u2014 reloading should fix this."), /*#__PURE__*/React.createElement("button", {
+      }, "The app hit an unexpected error. Your saved matches and teams are safe \u2014 reloading should fix this."), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11.5,
+          color: this.state.reportStatus === "failed" ? COLORS.ball : COLORS.inkSoft,
+          marginBottom: 18,
+          fontStyle: "italic"
+        }
+      }, this.state.reportStatus === "pending" ? "Reporting this automatically\u2026" : this.state.reportStatus === "sent" ? "This has been reported automatically." : "Couldn't report this automatically \u2014 your connection may be down."), /*#__PURE__*/React.createElement("button", {
         onClick: () => window.location.reload(),
         style: {
           background: COLORS.pitch,
@@ -21910,9 +22239,51 @@ class ErrorBoundary extends React.Component {
           fontSize: 14,
           fontWeight: 700,
           cursor: "pointer",
-          fontFamily: "'Inter'"
+          fontFamily: "'Inter'",
+          marginBottom: 20
         }
-      }, "Reload"));
+      }, "Reload"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          maxWidth: 320,
+          width: "100%"
+        }
+      }, this.state.noteSent ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12.5,
+          color: COLORS.pitch
+        }
+      }, "Thanks \u2014 that extra detail has been sent too.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("textarea", {
+        value: this.state.note,
+        onChange: this.handleNoteChange,
+        placeholder: "What were you doing when this happened? (optional, helps a lot)",
+        rows: 3,
+        style: {
+          width: "100%",
+          boxSizing: "border-box",
+          fontFamily: "'Inter', sans-serif",
+          fontSize: 13,
+          padding: 10,
+          borderRadius: 10,
+          border: "1.5px solid rgba(42,36,32,0.15)",
+          resize: "vertical",
+          marginBottom: 8
+        }
+      }), /*#__PURE__*/React.createElement("button", {
+        onClick: this.handleSendNote,
+        disabled: !this.state.note.trim() || this.state.noteSending,
+        style: {
+          background: "none",
+          border: `1.5px solid ${COLORS.pitch}`,
+          color: COLORS.pitch,
+          borderRadius: 8,
+          padding: "8px 16px",
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: this.state.note.trim() ? "pointer" : "not-allowed",
+          fontFamily: "'Inter'",
+          opacity: this.state.note.trim() ? 1 : 0.5
+        }
+      }, this.state.noteSending ? "Sending\u2026" : "Send this detail too"))));
     }
     return this.props.children;
   }

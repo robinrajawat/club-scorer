@@ -618,5 +618,22 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // ---------------------------------------------------------------------
+    // Feedback & automatic error reports — a write-only mailbox. Anyone (signed in or not, since
+    // an error can happen before sign-in and feedback shouldn't require an account) can file one;
+    // NO client can ever read, list, update, or delete ANY of them, including their own — this is
+    // deliberately one-directional, like dropping a letter in a mailbox slot. Robin reads these
+    // directly in the Firebase Console (Console access isn't bound by these rules at all). Basic
+    // shape validation only: a non-empty, size-capped message and a known kind, so this can't be
+    // used to dump arbitrary large blobs.
+    // ---------------------------------------------------------------------
+    match /feedback/{feedbackId} {
+      allow create: if request.resource.data.kind in ['feedback', 'error']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() < 6000;
+      allow read, update, delete: if false;
+    }
   }
 }
