@@ -8983,7 +8983,7 @@ function FederationsPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))))), manageOpenId === f.id && isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -9019,15 +9019,7 @@ function FederationsPanel({
       color: COLORS.ball,
       marginTop: 6
     }
-  }, deleteFedError)), deleteFedConfirmId === f.id && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Delete federation?",
-    message: `This permanently deletes "${f.name}". It can't be undone, and this is only possible because no clubs are currently affiliated with it.`,
-    confirmLabel: "Delete",
-    variant: "danger",
-    busy: deleteFedBusy,
-    onConfirm: handleDeleteFederationConfirm,
-    onCancel: () => setDeleteFedConfirmId(null)
-  }), error && /*#__PURE__*/React.createElement("div", {
+  }, deleteFedError))))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12,
@@ -9172,7 +9164,15 @@ function FederationsPanel({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 13,
     strokeWidth: 2.5
-  }), " Federation")), confirmKick && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }), " Federation"), deleteFedConfirmId && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Delete federation?",
+    message: `This permanently deletes "${(federationsById[deleteFedConfirmId] || {}).name || "this federation"}". It can't be undone, and this is only possible because no clubs are currently affiliated with it.`,
+    confirmLabel: "Delete",
+    variant: "danger",
+    busy: deleteFedBusy,
+    onConfirm: handleDeleteFederationConfirm,
+    onCancel: () => setDeleteFedConfirmId(null)
+  }), confirmKick && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Remove this club?",
     message: `Remove ${confirmKick.clubName} from the federation? It'll stop showing up in tournament pickers for other member clubs.`,
     confirmLabel: "Remove",
