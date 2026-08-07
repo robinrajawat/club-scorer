@@ -5681,37 +5681,7 @@ function AccountScreen({
       padding: "10px 8px",
       minHeight: 40
     }
-  }, opt.label)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "rgba(255,255,255,0.5)",
-      borderRadius: 16,
-      padding: 16,
-      border: `1.5px dashed ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 8
-    }
-  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, "Every in-progress match has a \"Get Code\" button on its scoring screen — share the code with a teammate and they can pick up scoring on their phone, no sign-in required. (Balls per over, wide/no-ball runs, and free hit now live on the New Match screen, per match.)")), /*#__PURE__*/React.createElement(Btn, {
-    onClick: onOpenSharedLinks,
-    style: {
-      width: "100%",
-      marginTop: 14
-    }
-  }, "Manage Shared Links"), user && /*#__PURE__*/React.createElement("div", {
+  }, opt.label)))), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -5776,6 +5746,37 @@ function AccountScreen({
       setPendingImportData(null);
     }
   })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 14
+    }
+  }, "Every in-progress match has a \"Get Code\" button on its scoring screen \u2014 share the code with a teammate and they can pick up scoring on their phone, no sign-in required."), /*#__PURE__*/React.createElement(Btn, {
+    onClick: onOpenSharedLinks,
+    style: {
+      width: "100%"
+    }
+  }, "Manage Shared Links")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -10073,6 +10074,11 @@ function SetupScreen({
     maxOversPerBowler: (rules && rules.maxOversPerBowler) || Math.ceil(20 / 5)
   });
   const [maxOversTouched, setMaxOversTouched] = useState(false);
+  // Collapsed by default: match rules rarely change from one match to the next for a given club,
+  // and matchRules already starts from whatever was saved last time (see the useState above) —
+  // showing the full editor open every single time someone starts a match forces a re-scroll
+  // through 7 settings that are almost always already right. "Customize" reveals it on demand.
+  const [rulesExpanded, setRulesExpanded] = useState(false);
   useEffect(() => {
     if (maxOversTouched) return;
     const n = parseInt(overs || "0", 10);
@@ -10236,6 +10242,12 @@ function SetupScreen({
   }, [teamAIsBattingFirst]);
   const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
   const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
+  // Shown collapsed instead of the full rule editor. Unlike nonStandardRulesText (used in the
+  // match summary/PDF, which stays silent about anything at its default value), this always shows
+  // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
+  // they're the standard values, since "is this actually a normal match" is exactly what someone
+  // glancing at a collapsed card wants to confirm before they trust it and move on.
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
   const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
   const cardStyle = {
@@ -10432,8 +10444,40 @@ function SetupScreen({
       animation: "cs-slideUp 0.3s ease 0.04s backwards"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Match Rules"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: rulesExpanded ? 16 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...sectionLabel,
+      marginBottom: 0
+    }
+  }, "Match Rules"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setRulesExpanded(e => !e),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 4
+    }
+  }, rulesExpanded ? "Hide" : "Customize")), !rulesExpanded && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, rulesSummaryText), rulesExpanded && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -10631,11 +10675,9 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "No limit")))), /*#__PURE__*/React.createElement("div", {
+  }, "No limit"))), /*#__PURE__*/React.createElement("div", {
     style: {
-      ...cardStyle,
-      marginTop: -6,
-      animation: "cs-slideUp 0.3s ease 0.05s backwards"
+      marginTop: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10713,7 +10755,7 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "None"))))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
