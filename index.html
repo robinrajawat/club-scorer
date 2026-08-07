@@ -11580,7 +11580,13 @@ function TournamentsScreen({
   // tapped a team to move it to a different group — new teams added after that still fall into
   // the auto-split rather than needing every team re-assigned from scratch.
   function teamGroupIndex(team) {
-    if (groupOverrides[team] !== undefined) return groupOverrides[team];
+    // If numGroups shrinks after a team was manually cycled to a higher-numbered group (e.g. moved
+    // to Group D, then the count drops back to 2), that stored override is now out of range —
+    // falling through to the auto-split default here instead of returning it directly is what
+    // stops the team from silently vanishing out of every group at submit time (nothing would
+    // match an index that no longer exists).
+    const override = groupOverrides[team];
+    if (override !== undefined && override < numGroups) return override;
     return selectedTeams.indexOf(team) % numGroups;
   }
   function cycleTeamGroup(team) {
