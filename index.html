@@ -3163,46 +3163,90 @@ async function loadBetaStatus() {
 }
 // ---------- Beta: dummy international data generator ----------
 // Real international team rosters used purely as realistic placeholder names, so a beta tester
-// has teams/players/a club/a federation to try new features against without typing a roster by
-// hand. Just names — no stats, no quotes, nothing else about the players.
-const DUMMY_INTL_TEAMS = {
-  // Saved to the signed-in account's own personal team list (like any team a person adds
-  // themselves).
-  personal: [{
+// has clubs/teams/players/a federation to try new features against without typing a roster by
+// hand. Just names — no stats, no quotes, nothing else about the players. One club per country
+// (named after its board, the way real cricket boards run their national teams), each with a
+// senior XI and a "B" side — not personal teams, since a personal team can't be entered into a
+// federation's tournaments anyway.
+const DUMMY_INTL_DATA = [{
+  board: "BCCI",
+  teams: [{
     name: "India",
     captain: "Rohit Sharma",
     keeper: "Rishabh Pant",
     players: ["Rohit Sharma", "Virat Kohli", "Shubman Gill", "Rishabh Pant", "Hardik Pandya", "Ravindra Jadeja", "KL Rahul", "Axar Patel", "Jasprit Bumrah", "Mohammed Shami", "Kuldeep Yadav"]
   }, {
+    name: "India B",
+    captain: "Shreyas Iyer",
+    keeper: "Sanju Samson",
+    players: ["Yashasvi Jaiswal", "Ishan Kishan", "Suryakumar Yadav", "Shreyas Iyer", "Washington Sundar", "Ravichandran Ashwin", "Sanju Samson", "Arshdeep Singh", "Prasidh Krishna", "Mohammed Siraj", "Avesh Khan"]
+  }]
+}, {
+  board: "Cricket Australia",
+  teams: [{
     name: "Australia",
     captain: "Pat Cummins",
     keeper: "Alex Carey",
     players: ["Pat Cummins", "Steve Smith", "David Warner", "Travis Head", "Mitchell Marsh", "Marnus Labuschagne", "Glenn Maxwell", "Alex Carey", "Josh Hazlewood", "Mitchell Starc", "Adam Zampa"]
   }, {
+    name: "Australia A",
+    captain: "Marcus Stoinis",
+    keeper: "Josh Inglis",
+    players: ["Cameron Green", "Matthew Short", "Josh Inglis", "Marcus Stoinis", "Tim David", "Nathan Ellis", "Sean Abbott", "Ashton Agar", "Spencer Johnson", "Aaron Hardie", "Jake Fraser-McGurk"]
+  }]
+}, {
+  board: "ECB",
+  teams: [{
     name: "England",
     captain: "Jos Buttler",
     keeper: "Jonny Bairstow",
     players: ["Jos Buttler", "Ben Stokes", "Joe Root", "Harry Brook", "Jonny Bairstow", "Moeen Ali", "Chris Woakes", "Mark Wood", "Adil Rashid", "Jofra Archer", "Liam Livingstone"]
   }, {
+    name: "England Lions",
+    captain: "Dawid Malan",
+    keeper: "Tom Banton",
+    players: ["Will Jacks", "Phil Salt", "Sam Curran", "Reece Topley", "Tom Banton", "Dawid Malan", "Zak Crawley", "Sam Hain", "Brydon Carse", "Matthew Potts", "Rehan Ahmed"]
+  }]
+}, {
+  board: "PCB",
+  teams: [{
     name: "Pakistan",
     captain: "Babar Azam",
     keeper: "Mohammad Rizwan",
     players: ["Babar Azam", "Mohammad Rizwan", "Shaheen Afridi", "Shadab Khan", "Naseem Shah", "Fakhar Zaman", "Imam-ul-Haq", "Haris Rauf", "Iftikhar Ahmed", "Mohammad Nawaz", "Abdullah Shafique"]
-  }],
-  // Saved under the dummy club, so club-scoped features (shared rosters, tournaments) have
-  // something to work with too.
-  club: [{
+  }, {
+    name: "Pakistan Shaheens",
+    captain: "Shan Masood",
+    keeper: "Azam Khan",
+    players: ["Saim Ayub", "Usman Khan", "Azam Khan", "Mohammad Wasim Jr", "Faheem Ashraf", "Zaman Khan", "Abrar Ahmed", "Tayyab Tahir", "Salman Ali Agha", "Khushdil Shah", "Shan Masood"]
+  }]
+}, {
+  board: "CSA",
+  teams: [{
     name: "South Africa",
     captain: "Temba Bavuma",
     keeper: "Quinton de Kock",
     players: ["Temba Bavuma", "Quinton de Kock", "Kagiso Rabada", "David Miller", "Aiden Markram", "Heinrich Klaasen", "Marco Jansen", "Lungi Ngidi", "Rassie van der Dussen", "Tabraiz Shamsi", "Keshav Maharaj"]
   }, {
+    name: "South Africa A",
+    captain: "Wiaan Mulder",
+    keeper: "Ryan Rickelton",
+    players: ["Reeza Hendricks", "Tristan Stubbs", "Wiaan Mulder", "Gerald Coetzee", "Andile Phehlukwayo", "Bjorn Fortuin", "Ryan Rickelton", "Dewald Brevis", "Nqabayomzi Peter", "Ottniel Baartman", "Sisanda Magala"]
+  }]
+}, {
+  board: "NZC",
+  teams: [{
     name: "New Zealand",
     captain: "Kane Williamson",
     keeper: "Tom Latham",
     players: ["Kane Williamson", "Tom Latham", "Trent Boult", "Devon Conway", "Daryl Mitchell", "Glenn Phillips", "Mitchell Santner", "Tim Southee", "Lockie Ferguson", "Rachin Ravindra", "Kyle Jamieson"]
+  }, {
+    name: "New Zealand A",
+    captain: "Tom Blundell",
+    keeper: "Tom Blundell",
+    players: ["Finn Allen", "Mark Chapman", "Will Young", "Michael Bracewell", "Ish Sodhi", "Matt Henry", "Adam Milne", "Tom Blundell", "Henry Nicholls", "Jacob Duffy", "Ben Sears"]
   }]
-};
+}];
 function buildDummyTeam(def) {
   return {
     id: uid(),
@@ -3240,66 +3284,63 @@ async function saveDummyDataMeta(meta) {
     console.error("dummy data meta save failed", e);
   }
 }
-// Removes everything the generator below created: the dummy club (deleteClub already cascades to
-// its teams AND its entries in the federation directory), plus any dummy-flagged personal teams.
-// Deliberately leaves the ICC federation doc itself alone — federations can't be deleted (see
-// firestore.rules) and it's meant to be reused, empty, next time Generate runs rather than
-// spawning a new one on every click.
-async function wipeDummyData(personalTeams) {
+// Removes everything the generator below created: every dummy club (deleteClub already cascades
+// to a club's own teams AND its entries in the federation directory). Deliberately leaves the ICC
+// federation doc itself alone — federations can't be deleted (see firestore.rules, `allow delete:
+// if false`, by design: there's no ownership-transfer flow, so the creator is a permanent anchor)
+// — so it's meant to be reused, empty, next time Generate runs rather than spawning a new one.
+async function wipeDummyData() {
   const meta = await loadDummyDataMeta();
-  if (meta.clubId) {
-    await deleteClub(meta.clubId);
-  }
-  const keptTeams = (personalTeams || []).filter(t => !t.dummy);
-  await saveTeams(keptTeams);
+  const clubIds = meta.clubIds || [];
+  await Promise.all(clubIds.map(id => deleteClub(id)));
   await saveDummyDataMeta({
-    clubId: null
+    clubIds: []
   });
-  return keptTeams;
 }
-// Builds (or reuses) one shared "ICC (Demo)" federation, one dummy club affiliated with it, four
-// personal teams, and two club teams under that club — all populated with real international
-// rosters. Idempotent: always wipes any previous run's club/personal teams first, so repeat
-// clicks rebuild cleanly instead of piling up duplicate clubs.
-async function generateDummyData(personalTeams) {
+// Builds (or reuses) one shared "ICC" federation and one club per country — named after that
+// country's board, e.g. BCCI for India — each affiliated with ICC and holding a senior XI plus a
+// "B" side. Idempotent: always wipes any previous run's clubs first, so repeat clicks rebuild
+// cleanly instead of piling up duplicates.
+async function generateDummyData() {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
   };
-  const keptTeams = await wipeDummyData(personalTeams);
+  await wipeDummyData();
   let federationId = (await loadDummyDataMeta()).federationId || null;
   if (federationId) {
     const fedDoc = await db.collection("federations").doc(federationId).get();
     if (!fedDoc.exists) federationId = null;
   }
   if (!federationId) {
-    const fedResult = await createFederation("ICC (Demo)");
+    const fedResult = await createFederation("ICC");
     if (!fedResult.ok) return fedResult;
     federationId = fedResult.federation.id;
     await db.collection("federations").doc(federationId).update({
       dummy: true
     });
   }
-  const clubResult = await createClub("International CC (Demo)");
-  if (!clubResult.ok) return clubResult;
-  const clubId = clubResult.club.id;
-  await db.collection("clubs").doc(clubId).update({
-    dummy: true,
-    federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
-  });
-  for (const def of DUMMY_INTL_TEAMS.club) {
-    await saveClubTeam(clubId, buildDummyTeam(def));
+  const clubIds = [];
+  for (const country of DUMMY_INTL_DATA) {
+    const clubResult = await createClub(country.board);
+    if (!clubResult.ok) return clubResult;
+    const clubId = clubResult.club.id;
+    clubIds.push(clubId);
+    await db.collection("clubs").doc(clubId).update({
+      dummy: true,
+      federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
+    });
+    for (const def of country.teams) {
+      await saveClubTeam(clubId, buildDummyTeam(def));
+    }
   }
-  const newPersonalTeams = [...keptTeams, ...DUMMY_INTL_TEAMS.personal.map(buildDummyTeam)].sort((a, b) => a.name.localeCompare(b.name));
-  await saveTeams(newPersonalTeams);
   await saveDummyDataMeta({
     federationId,
-    clubId
+    clubIds
   });
   return {
     ok: true,
-    personalTeams: newPersonalTeams,
-    clubId,
+    clubIds,
     federationId
   };
 }
@@ -5412,7 +5453,7 @@ function AccountScreen({
     setDummyStatus("");
     const result = await onGenerateDummyData();
     setDummyBusy(false);
-    setDummyStatus(result && result.ok ? "Dummy data generated — 4 personal teams, a demo club with 2 more teams, affiliated with ICC (Demo)." : (result && result.error) || "Couldn't generate dummy data.");
+    setDummyStatus(result && result.ok ? `Dummy data generated — ${result.clubIds.length} boards, each with a senior XI and a "B" side, affiliated with ICC.` : (result && result.error) || "Couldn't generate dummy data.");
   }
   async function handleWipeDummy() {
     setShowWipeConfirm(false);
@@ -5744,7 +5785,7 @@ function AccountScreen({
       marginBottom: 10,
       lineHeight: 1.5
     }
-  }, "Fill your account with real international teams, players, a demo club, and a shared federation to try new features against."), /*#__PURE__*/React.createElement("div", {
+  }, "Fill your account with a club per country (named after its board), real international teams and players, and a shared ICC federation to try new features against."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -5776,7 +5817,7 @@ function AccountScreen({
     }
   }, dummyStatus), showWipeConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Wipe dummy data?",
-    message: "Removes the demo club, its teams, and any dummy-flagged personal teams. The shared ICC (Demo) federation itself stays (federations can't be deleted) but ends up empty.",
+    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (federations can't be deleted) but ends up empty.",
     confirmLabel: "Wipe",
     variant: "danger",
     busy: dummyBusy,
@@ -20819,21 +20860,17 @@ function CricketScorer() {
     }
     return result;
   }
-  // Beta tools (see AccountScreen): generate/wipe a realistic set of international teams,
-  // players, a club, and a shared federation, so beta testers have something to try new features
-  // against right away. refreshClubs() re-syncs clubTeamsById/federationsById after either call,
-  // since both can add or remove a club and its teams.
+  // Beta tools (see AccountScreen): generate/wipe a realistic set of clubs (one per country,
+  // named after its board), teams, players, and a shared federation, so beta testers have
+  // something to try new features against right away. refreshClubs() re-syncs
+  // clubTeamsById/federationsById after either call, since both add or remove clubs and teams.
   async function handleGenerateDummyData() {
-    const result = await generateDummyData(teams);
-    if (result.ok) {
-      setTeams(result.personalTeams);
-      await refreshClubs();
-    }
+    const result = await generateDummyData();
+    if (result.ok) await refreshClubs();
     return result;
   }
   async function handleWipeDummyData() {
-    const keptTeams = await wipeDummyData(teams);
-    setTeams(keptTeams);
+    await wipeDummyData();
     await refreshClubs();
   }
   function mirrorPendingInvite(setClubsOrFeds, id, code, entry) {
