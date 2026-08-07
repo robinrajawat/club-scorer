@@ -6208,6 +6208,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
+  }, {
+    q: "How do I set up a 9-a-side (or other short-format) match?",
+    a: "\u201cPlayers per side\u201d is on the Teams & Format step of setup (6\u201311, standard is 11). It controls how many players the Playing XI step asks you to select \u2014 set it before picking your XI, or a saved squad with more than 9 registered players would otherwise ask for a full 11."
   }]
 }, {
   title: "Sharing & sync",
@@ -6238,6 +6241,9 @@ const HELP_SECTIONS = [{
   entries: [{
     q: "Tournament vs. series \u2014 which one do I want?",
     a: "A tournament is built for 3+ teams \u2014 round-robin group stage, an optional self-seeding knockout bracket, a points table with NRR. A series is for exactly two teams playing a set of matches head-to-head (like a 3-match ODI series) \u2014 just a running score, no table or bracket."
+  }, {
+    q: "What does splitting a tournament into groups actually do?",
+    a: "Turn it on when you create the tournament (2\u20134 groups, e.g. \u201cGroup A\u201d / \u201cGroup B\u201d) and set how many teams advance from each. Round-robin then only happens within a group \u2014 a team never plays a team from another group until the knockout stage \u2014 and each group gets its own points table. The knockout bracket seeds itself cross-group (Group A's #1 plays Group B's #2, and vice versa) once every group fixture is played."
   }, {
     q: "Why do some fixtures skip the Match Rules step?",
     a: "The first fixture scored for a tournament or series sets its default rules and venue automatically \u2014 every fixture after that inherits them, so you're not re-entering the same 7 settings every time. You can still override a single fixture if it genuinely needs different rules."
