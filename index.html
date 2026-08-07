@@ -3961,6 +3961,11 @@ function computePlayerStats(matches) {
         battingInnings: 0,
         wickets: 0,
         ballsBowled: 0,
+        // Separate from ballsBowled (a raw count, meaningless to sum across matches with
+        // different ballsPerOver) — this accumulates each innings's contribution already scaled
+        // to standard 6-ball-over terms, so economy stays correct for anyone who's played matches
+        // with a non-default overs rule.
+        oversBowledEquiv: 0,
         runsConceded: 0,
         matchIds: new Set(),
         // Personal-best tracking — best single-innings knock/bowling figures, not career totals.
@@ -4007,6 +4012,7 @@ function computePlayerStats(matches) {
         const p = get(name);
         p.wickets += bw.wickets || 0;
         p.ballsBowled += bw.ballsBowled || 0;
+        p.oversBowledEquiv += (bw.ballsBowled || 0) / (inn.ballsPerOver || 6);
         p.runsConceded += bw.runs || 0;
         p.matchIds.add(m.id);
         // Best bowling: most wickets wins outright; tied on wickets, fewer runs conceded wins —
@@ -4026,7 +4032,7 @@ function computePlayerStats(matches) {
     battingAvg: p.dismissals > 0 ? p.runs / p.dismissals : null,
     strikeRate: p.balls > 0 ? p.runs / p.balls * 100 : null,
     bowlingAvg: p.wickets > 0 ? p.runsConceded / p.wickets : null,
-    economy: p.ballsBowled > 0 ? p.runsConceded / p.ballsBowled * 6 : null,
+    economy: p.oversBowledEquiv > 0 ? p.runsConceded / p.oversBowledEquiv : null,
     bestBattingLabel: p.bestBattingRuns === null ? null : `${p.bestBattingRuns}${p.bestBattingOut ? "" : "*"}`,
     bestBowlingLabel: p.bestBowlingWickets === null ? null : `${p.bestBowlingWickets}/${p.bestBowlingRuns}`
   }));
@@ -21349,6 +21355,11 @@ function CricketScorer() {
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
+  // Set only while openMatch's Firestore/localStorage read is in flight — a match can be sizeable
+  // (a full ball-by-ball innings) and the fetch is a real network round trip, so on a slow
+  // connection tapping a match previously just sat there with the list still showing and nothing
+  // to indicate the tap registered. See the loading overlay near the end of this component's render.
+  const [matchLoading, setMatchLoading] = useState(false);
   const [teams, setTeams] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
@@ -21784,10 +21795,15 @@ function CricketScorer() {
     }
   }
   async function openMatch(id) {
-    const m = await loadMatch(id);
-    if (m) {
-      setMatch(m);
-      setScreen("match");
+    setMatchLoading(true);
+    try {
+      const m = await loadMatch(id);
+      if (m) {
+        setMatch(m);
+        setScreen("match");
+      }
+    } finally {
+      setMatchLoading(false);
     }
   }
   async function handleDelete(id) {
@@ -22814,7 +22830,36 @@ function CricketScorer() {
     onCancel: () => setScreen("teams")
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
     match: match
-  }));
+  }), matchLoading && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(23,20,15,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 200,
+      animation: "cs-fadeIn 0.15s ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "24px 28px",
+      boxShadow: "0 8px 30px rgba(0,0,0,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+    style: {
+      margin: "0 auto 12px"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      color: COLORS.inkSoft,
+      fontSize: 13
+    }
+  }, "Opening match\u2026"))));
 }
 class ErrorBoundary extends React.Component {
   constructor(props) {
