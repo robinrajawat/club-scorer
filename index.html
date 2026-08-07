@@ -4753,7 +4753,7 @@ function PlayerPicker({
           borderRadius: 20,
           border: "none",
           cursor: "pointer",
-          background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+          background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
           color: active ? "#fff" : COLORS.ink,
           boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
           fontFamily: "'Inter'",
@@ -4895,7 +4895,7 @@ function RuleChoice({
         borderRadius: 20,
         border: "none",
         cursor: "pointer",
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
         color: active ? "#fff" : COLORS.ink,
         boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
         fontFamily: "'Inter'",
@@ -6327,7 +6327,7 @@ function ClubSourceSelector({
     fontSize: 12.5,
     cursor: "pointer",
     border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitch : "#fff",
+    background: active ? COLORS.pitch : COLORS.surface,
     color: active ? "#fff" : COLORS.inkSoft,
     whiteSpace: "nowrap"
   });
@@ -6579,7 +6579,7 @@ function ClubPanel({
     fontSize: 12.5,
     cursor: "pointer",
     border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitch : "#fff",
+    background: active ? COLORS.pitch : COLORS.surface,
     color: active ? "#fff" : COLORS.inkSoft,
     whiteSpace: "nowrap"
   });
@@ -9774,7 +9774,7 @@ function TeamChips({
         borderRadius: 20,
         border: "none",
         cursor: "pointer",
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
         color: active ? "#fff" : COLORS.ink,
         boxShadow: active ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
         fontFamily: "'Inter'",
@@ -10209,6 +10209,23 @@ function SetupScreen({
   // to the saved squad's numbers, but never writes back to the saved team).
   const teamANumbers = teamAMatchNumbers;
   const teamBNumbers = teamBMatchNumbers;
+  // Which team actually bats first, per the toss (or Team A by default if the toss was skipped —
+  // matches the pre-toss-recording behavior). BUG FIX: this used to be assumed as always Team A
+  // regardless of the toss outcome — the Opening Line-up card always asked for "Team A"'s
+  // openers and "Team B"'s bowler no matter who actually won the toss and chose to bat, so a
+  // Team-B-elects-to-bat result silently started the match with the wrong team's players in the
+  // striker/non-striker/bowler slots. Everything below (teamAIsBattingFirst and the picker props
+  // that use it) exists to make the Opening Line-up card track the toss instead of hard-coding A.
+  const teamAIsBattingFirst = !(tossWonBy && tossDecision) ? true : tossDecision === "Bat" ? tossWonBy === teamAName.trim() : tossWonBy !== teamAName.trim();
+  // A striker/non-striker/bowler already picked belongs to whichever team's roster was showing at
+  // the time — if the toss decision then changes (or gets recorded after they were already
+  // picked against the default assumption), those picks are now against the WRONG team's roster
+  // and must not silently carry over.
+  useEffect(() => {
+    setStrikerA("");
+    setNonStrikerA("");
+    setBowlerB("");
+  }, [teamAIsBattingFirst]);
   const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
   const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
@@ -10364,7 +10381,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: tossWonBy === name.trim() ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: tossWonBy === name.trim() ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: tossWonBy === name.trim() ? "#fff" : COLORS.ink,
       boxShadow: tossWonBy === name.trim() ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10394,7 +10411,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: tossDecision === d ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: tossDecision === d ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: tossDecision === d ? "#fff" : COLORS.ink,
       boxShadow: tossDecision === d ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10484,7 +10501,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: matchRules.freeHit ? "#fff" : COLORS.ink,
       boxShadow: matchRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10515,7 +10532,7 @@ function SetupScreen({
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: matchRules.superOver ? "#fff" : COLORS.ink,
       boxShadow: matchRules.superOver ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -10727,37 +10744,37 @@ function SetupScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabel
   }, "Opening Line-up"), /*#__PURE__*/React.createElement(Field, {
-    label: `Striker (${teamAName || "Team A"})`
+    label: `Striker (${(teamAIsBattingFirst ? teamAName : teamBName) || (teamAIsBattingFirst ? "Team A" : "Team B")})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
-    roster: teamARoster,
+    roster: teamAIsBattingFirst ? teamARoster : teamBRoster,
     value: strikerA,
     onChange: setStrikerA,
     exclude: nonStrikerA,
     placeholder: "Batsman name",
-    captain: teamACaptain,
-    keeper: teamAKeeper,
-    numbers: teamANumbers
+    captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
+    numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), /*#__PURE__*/React.createElement(Field, {
-    label: `Non-striker (${teamAName || "Team A"})`
+    label: `Non-striker (${(teamAIsBattingFirst ? teamAName : teamBName) || (teamAIsBattingFirst ? "Team A" : "Team B")})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
-    roster: teamARoster,
+    roster: teamAIsBattingFirst ? teamARoster : teamBRoster,
     value: nonStrikerA,
     onChange: setNonStrikerA,
     exclude: strikerA,
     placeholder: "Batsman name",
-    captain: teamACaptain,
-    keeper: teamAKeeper,
-    numbers: teamANumbers
+    captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
+    numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), /*#__PURE__*/React.createElement(Field, {
-    label: `Bowler (${teamBName || "Team B"})`
+    label: `Bowler (${(teamAIsBattingFirst ? teamBName : teamAName) || (teamAIsBattingFirst ? "Team B" : "Team A")})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
-    roster: teamBRoster,
+    roster: teamAIsBattingFirst ? teamBRoster : teamARoster,
     value: bowlerB,
     onChange: setBowlerB,
     placeholder: "Bowler name",
-    captain: teamBCaptain,
-    keeper: teamBKeeper,
-    numbers: teamBNumbers
+    captain: teamAIsBattingFirst ? teamBCaptain : teamACaptain,
+    keeper: teamAIsBattingFirst ? teamBKeeper : teamAKeeper,
+    numbers: teamAIsBattingFirst ? teamBNumbers : teamANumbers
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -10782,6 +10799,7 @@ function SetupScreen({
       teamBId,
       oversLimit: parseInt(overs || "0", 10),
       venue: venue.trim() || null,
+      battingFirstTeam: teamAIsBattingFirst ? teamAName.trim() : teamBName.trim(),
       strikerA: strikerA.trim(),
       nonStrikerA: nonStrikerA.trim(),
       bowlerB: bowlerB.trim(),
@@ -11014,7 +11032,7 @@ function TournamentsScreen({
       fontSize: 12.5,
       cursor: "pointer",
       border: !activeClubId ? "none" : `1px solid ${COLORS.willow}`,
-      background: !activeClubId ? COLORS.pitch : "#fff",
+      background: !activeClubId ? COLORS.pitch : COLORS.surface,
       color: !activeClubId ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -11029,7 +11047,7 @@ function TournamentsScreen({
       fontSize: 12.5,
       cursor: "pointer",
       border: activeClubId === c.id ? "none" : `1px solid ${COLORS.willow}`,
-      background: activeClubId === c.id ? COLORS.pitch : "#fff",
+      background: activeClubId === c.id ? COLORS.pitch : COLORS.surface,
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -11061,7 +11079,7 @@ function TournamentsScreen({
       fontSize: 11.5,
       cursor: "pointer",
       border: statusFilter === key ? "none" : `1px solid ${COLORS.willow}`,
-      background: statusFilter === key ? COLORS.pitch : "#fff",
+      background: statusFilter === key ? COLORS.pitch : COLORS.surface,
       color: statusFilter === key ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -11237,7 +11255,7 @@ function TournamentsScreen({
       borderRadius: 18,
       border: "none",
       cursor: "pointer",
-      background: selectedTeams.includes(n) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: selectedTeams.includes(n) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: selectedTeams.includes(n) ? "#fff" : COLORS.ink,
       boxShadow: selectedTeams.includes(n) ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11271,7 +11289,7 @@ function TournamentsScreen({
       borderRadius: 18,
       border: selectedTeams.includes(t.teamName) ? "none" : `1px dashed ${COLORS.gold}`,
       cursor: "pointer",
-      background: selectedTeams.includes(t.teamName) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: selectedTeams.includes(t.teamName) ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: selectedTeams.includes(t.teamName) ? "#fff" : COLORS.ink,
       boxShadow: selectedTeams.includes(t.teamName) ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
@@ -11669,7 +11687,7 @@ function FixtureDateTimeModal({
       fontWeight: 600,
       fontSize: 12.5,
       cursor: "pointer",
-      background: period === p ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: period === p ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: period === p ? "#fff" : COLORS.inkSoft
     }
   }, p)))), onClear && /*#__PURE__*/React.createElement("button", {
@@ -12870,7 +12888,7 @@ function TournamentDetailScreen({
     padding: "9px 0",
     borderRadius: 10,
     border: "none",
-    background: statsTab === t ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+    background: statsTab === t ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
     color: statsTab === t ? "#fff" : COLORS.ink,
     boxShadow: statsTab === t ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
     fontFamily: "'Inter'",
@@ -13693,7 +13711,7 @@ function TeamEditScreen({
         padding: "4px 10px",
         borderRadius: 12,
         border: active ? "none" : `1.5px solid ${COLORS.willow}`,
-        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+        background: active ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
         color: active ? "#fff" : COLORS.inkSoft,
         fontFamily: "'Inter'",
         fontWeight: 600,
@@ -14030,7 +14048,7 @@ function TeamEditScreen({
       fontWeight: 600,
       fontSize: 13.5,
       color: isBorrowed(p) ? COLORS.inkSoft : COLORS.ink,
-      background: isBorrowed(p) ? COLORS.creamDark : "#fff",
+      background: isBorrowed(p) ? COLORS.creamDark : COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 8px"
@@ -14061,7 +14079,7 @@ function TeamEditScreen({
       borderRadius: "50%",
       flexShrink: 0,
       border: captain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: captain === p.name ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "#fff",
+      background: captain === p.name ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
       color: captain === p.name ? "#fff" : COLORS.inkSoft,
       boxShadow: captain === p.name ? "0 1px 4px rgba(184,137,43,0.4)" : "none",
       fontFamily: "'Inter'",
@@ -14083,7 +14101,7 @@ function TeamEditScreen({
       borderRadius: 13,
       flexShrink: 0,
       border: keeper === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: keeper === p.name ? "#fff" : COLORS.inkSoft,
       boxShadow: keeper === p.name ? "0 1px 4px rgba(45,80,22,0.4)" : "none",
       fontFamily: "'Inter'",
@@ -14105,7 +14123,7 @@ function TeamEditScreen({
       borderRadius: "50%",
       flexShrink: 0,
       border: expandedKey === p._key ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: expandedKey === p._key ? COLORS.pitch : p.public ? "rgba(184,137,43,0.16)" : "#fff",
+      background: expandedKey === p._key ? COLORS.pitch : p.public ? "rgba(184,137,43,0.16)" : COLORS.surface,
       color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
       cursor: "pointer",
       display: "flex",
@@ -16386,7 +16404,7 @@ function MatchStatsPanel({
       padding: "9px 0",
       borderRadius: 10,
       border: "none",
-      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : "#fff",
+      background: tab === i ? `linear-gradient(160deg, ${COLORS.turf}, ${COLORS.pitch})` : COLORS.surface,
       color: tab === i ? "#fff" : COLORS.ink,
       boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
       fontFamily: "'Inter'",
@@ -19381,7 +19399,11 @@ function CricketScorer() {
       toss: setup.toss || null,
       playerOfMatch: null,
       tournamentId: setup.tournamentId || null,
-      innings: [newInning(setup.teamA, setup.teamB, setup.rules)],
+      // BUG FIX: this used to always be newInning(setup.teamA, setup.teamB, ...) — the first
+      // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
+      // SetupScreen from the actual toss decision, defaulting to teamA if no toss was recorded)
+      // is what makes this track reality instead.
+      innings: [newInning(setup.battingFirstTeam || setup.teamA, setup.battingFirstTeam === setup.teamB ? setup.teamA : setup.teamB, setup.rules)],
       awaitingSecondInningsSetup: false
     };
     m.innings[0].strikerName = setup.strikerA;
