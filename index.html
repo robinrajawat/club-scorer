@@ -10061,17 +10061,22 @@ function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState("20");
-  const [venue, setVenue] = useState("");
+  const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
   const [bowlerB, setBowlerB] = useState("");
   const [tossWonBy, setTossWonBy] = useState("");
   const [tossDecision, setTossDecision] = useState("");
   const [flipping, setFlipping] = useState(false);
+  // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
+  // fixture scored for a tournament silently becomes its default, so nobody has to configure this
+  // up front) take priority over this device's own last-used rules, since a club playing in
+  // someone else's tournament wants THAT tournament's rules, not whatever this phone scored last.
   const [matchRules, setMatchRules] = useState({
     ...DEFAULT_RULES,
     ...rules,
-    maxOversPerBowler: (rules && rules.maxOversPerBowler) || Math.ceil(20 / 5)
+    ...(presetTournament && presetTournament.defaultRules || {}),
+    maxOversPerBowler: (presetTournament && presetTournament.defaultRules && presetTournament.defaultRules.maxOversPerBowler) || (rules && rules.maxOversPerBowler) || Math.ceil(20 / 5)
   });
   const [maxOversTouched, setMaxOversTouched] = useState(false);
   // Collapsed by default: match rules rarely change from one match to the next for a given club,
@@ -10249,7 +10254,41 @@ function SetupScreen({
   // glancing at a collapsed card wants to confirm before they trust it and move on.
   const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
+  const hasSquads = teamASquad.length > 0 || teamBSquad.length > 0;
+  // A phone screen can only show one of these at a time anyway (it's all scroll either way) — the
+  // real point of paging isn't saving space, it's turning "scroll past 7 rules you probably didn't
+  // change" into "confirm this page and move on." xi is left out entirely when neither team has a
+  // saved squad, rather than shown as an empty/skippable page — there's nothing to page through.
+  const pageOrder = ["teams", "rules", ...(hasSquads ? ["xi"] : []), "openers", "review"];
+  const [currentPage, setCurrentPage] = useState(pageOrder[0]);
+  const currentPageIndex = pageOrder.indexOf(currentPage);
+  // Per-page validity — Next/Review stays disabled until the page in front of you is actually
+  // complete, same fields canStart always required, just attributed to the page that owns them.
+  const pageValid = {
+    teams: teamAName.trim() && teamBName.trim() && !sameLabel && overs,
+    rules: true,
+    xi: aXIReady && bXIReady,
+    openers: strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim(),
+    review: true
+  }[currentPage];
   const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
+  function goNext() {
+    if (!pageValid || currentPageIndex >= pageOrder.length - 1) return;
+    setCurrentPage(pageOrder[currentPageIndex + 1]);
+  }
+  function goBack() {
+    if (currentPageIndex <= 0) {
+      onCancel();
+      return;
+    }
+    setCurrentPage(pageOrder[currentPageIndex - 1]);
+  }
+  // Swapping which card renders doesn't move the scroll position on its own — without this, going
+  // Back from partway down a long page (e.g. Playing XI) to a shorter page could leave the person
+  // staring at blank space or a confusing mid-scroll view of the new page.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [currentPage]);
   const cardStyle = {
     background: COLORS.surface,
     borderRadius: 16,
@@ -10296,7 +10335,7 @@ function SetupScreen({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 15
-  }), "Playing in: ", presetTournament.name), /*#__PURE__*/React.createElement("div", {
+  }), "Playing in: ", presetTournament.name), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease backwards"
@@ -10349,7 +10388,7 @@ function SetupScreen({
     value: venue,
     onChange: setVenue,
     placeholder: "e.g. Willow Park"
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.02s backwards"
@@ -10438,7 +10477,7 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, d))))), /*#__PURE__*/React.createElement("div", {
+  }, d))))), currentPage === "rules" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.04s backwards"
@@ -10755,7 +10794,7 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))))), (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "None"))))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -10786,7 +10825,7 @@ function SetupScreen({
     required: Math.min(11, teamBSquad.length),
     numbers: teamBMatchNumbers,
     onNumberChange: updateTeamBNumber
-  })), /*#__PURE__*/React.createElement("div", {
+  })), currentPage === "openers" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.08s backwards"
@@ -10825,53 +10864,98 @@ function SetupScreen({
     captain: teamAIsBattingFirst ? teamBCaptain : teamACaptain,
     keeper: teamAIsBattingFirst ? teamBKeeper : teamAKeeper,
     numbers: teamAIsBattingFirst ? teamBNumbers : teamANumbers
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Review"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink,
+      lineHeight: 1.9
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
+    wonBy: tossWonBy,
+    decision: tossDecision || null
+  }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, rulesSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 12,
+      lineHeight: 1.5
+    }
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginBottom: 10
+    }
+  }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", {
+    teams: "Teams & Format",
+    rules: "Match Rules",
+    xi: "Playing XI",
+    openers: "Opening Line-up",
+    review: "Review"
+  }[currentPage]), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
       marginTop: 6
     }
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: onCancel,
+    onClick: goBack,
     style: {
       flex: 1
     }
-  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+  }, currentPageIndex === 0 ? "Cancel" : "Back"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !canStart,
+    disabled: currentPage === "review" ? !canStart : !pageValid,
     style: {
       flex: 2
     },
-    onClick: () => onStart({
-      teamA: teamAName.trim(),
-      teamB: teamBName.trim(),
-      teamAId,
-      teamBId,
-      oversLimit: parseInt(overs || "0", 10),
-      venue: venue.trim() || null,
-      battingFirstTeam: teamAIsBattingFirst ? teamAName.trim() : teamBName.trim(),
-      strikerA: strikerA.trim(),
-      nonStrikerA: nonStrikerA.trim(),
-      bowlerB: bowlerB.trim(),
-      teamARoster,
-      teamBRoster,
-      teamACaptain,
-      teamAKeeper,
-      teamAColor,
-      teamBCaptain,
-      teamBKeeper,
-      teamBColor,
-      teamANumbers,
-      teamBNumbers,
-      rules: matchRules,
-      toss: tossWonBy ? {
-        wonBy: tossWonBy,
-        decision: tossDecision || null
-      } : null,
-      tournamentId: presetTournament ? presetTournament.id : null,
-      fixtureId: presetTournament ? presetTournament.fixtureId || null : null
-    })
-  }, "Start Match")));
+    onClick: () => {
+      if (currentPage !== "review") {
+        goNext();
+        return;
+      }
+      onStart({
+        teamA: teamAName.trim(),
+        teamB: teamBName.trim(),
+        teamAId,
+        teamBId,
+        oversLimit: parseInt(overs || "0", 10),
+        venue: venue.trim() || null,
+        battingFirstTeam: teamAIsBattingFirst ? teamAName.trim() : teamBName.trim(),
+        strikerA: strikerA.trim(),
+        nonStrikerA: nonStrikerA.trim(),
+        bowlerB: bowlerB.trim(),
+        teamARoster,
+        teamBRoster,
+        teamACaptain,
+        teamAKeeper,
+        teamAColor,
+        teamBCaptain,
+        teamBKeeper,
+        teamBColor,
+        teamANumbers,
+        teamBNumbers,
+        rules: matchRules,
+        toss: tossWonBy ? {
+          wonBy: tossWonBy,
+          decision: tossDecision || null
+        } : null,
+        tournamentId: presetTournament ? presetTournament.id : null,
+        fixtureId: presetTournament ? presetTournament.fixtureId || null : null
+      });
+    }
+  }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
 }
 
 
@@ -19480,9 +19564,17 @@ function CricketScorer() {
     // played instead of staying listed as upcoming. viewingTournament/viewingTournamentClubId are
     // still valid here since navigating to Setup never clears them, only actually leaving the
     // tournament (back, delete) does.
+    //
+    // Same update also backfills defaultRules/venue onto the tournament/series itself, but only if
+    // it doesn't already have them — the FIRST fixture scored for a tournament silently becomes its
+    // default going forward (see the matchRules useState in SetupScreen), so nobody has to
+    // separately configure "this tournament's rules" up front, and a deliberately-set default is
+    // never clobbered by a later fixture using different rules for a one-off reason.
     if (setup.fixtureId && viewingTournament && viewingTournament.id === setup.tournamentId) {
       handleUpdateTournament({
         ...viewingTournament,
+        defaultRules: viewingTournament.defaultRules || setup.rules || null,
+        venue: viewingTournament.venue || setup.venue || null,
         fixtures: (viewingTournament.fixtures || []).map(f => f.id === setup.fixtureId ? {
           ...f,
           matchId: m.id
