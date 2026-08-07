@@ -4463,6 +4463,30 @@ function applyBall(inning, event) {
       score: milestoneScore
     });
   }
+  // 3-wicket haul: this bowler's tally just reached exactly three. A step below the 5-for (which
+  // stays a permanent scorecard milestone), so this one's toast-only.
+  if (event.kind === "wicket" && legalBall && creditsBowler && cur.bowlers[ballBowlerName] && cur.bowlers[ballBowlerName].wickets === 3) {
+    cur.toastMilestones.push({
+      type: "threeFor",
+      text: `${ballBowlerName} picks up a 3-wicket haul`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Double-wicket over: 2 wickets (any kind — run outs count too) falling in the same over. Uses
+  // cur.overs[lastOverIdx], the over this ball actually landed in, which stays correct even on the
+  // ball that closes the over out (lastOverIdx is captured before a fresh empty over is appended).
+  if (event.kind === "wicket") {
+    const wicketsThisOver = cur.overs[lastOverIdx].filter(b => b.kind === "wicket").length;
+    if (wicketsThisOver === 2) {
+      cur.toastMilestones.push({
+        type: "doubleWicket",
+        text: `Two wickets in the over for ${ballBowlerName}`,
+        over: milestoneOver,
+        score: milestoneScore
+      });
+    }
+  }
   return cur;
 }
 
@@ -4754,7 +4778,9 @@ const MILESTONE_ICONS = {
   partnership: "\u{1F91D}",
   teamTotal: "\u{1F4C8}",
   maiden: "\u{1F6E1}\u{FE0F}",
-  duck: "\u{1F986}"
+  duck: "\u{1F986}",
+  threeFor: "\u{1F94A}",
+  doubleWicket: "\u{1F4A5}"
 };
 function MilestoneToast({
   toast
