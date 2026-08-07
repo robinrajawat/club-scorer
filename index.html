@@ -21051,8 +21051,33 @@ function ResultScreen({
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
   const [startingSuperOver, setStartingSuperOver] = useState(false);
+  const [confirmReopen, setConfirmReopen] = useState(false);
   const isTied = resultText === "Match tied";
   const canOfferSuperOver = isTied && match.rules && match.rules.superOver && !match.superOverMatchId;
+  // Extends the same "reopen for corrections" mechanism the innings break already offers
+  // (goBackToFirstInnings, above) one step further: the match's LAST innings only, from full
+  // completion. Reverting inn.complete/match.status is the entire footprint of what
+  // checkInningEnd changed when the match finished (see there) -- undoing exactly that, nothing
+  // more, is what makes reopening safe rather than a half-applied "sort of complete" state.
+  // Deliberately not offered for an EARLIER innings once a later one has real balls in it (e.g.
+  // reopening the 1st innings after the 2nd has started): the 2nd innings' target, its "chase
+  // complete" result, and (in a tournament) NRR/standings all derive from that 1st-innings total,
+  // and none of that gets reconciled by this — that's a bigger edit than a correction tool should
+  // silently attempt. Also withheld once a Super Over already exists off this match
+  // (match.superOverMatchId) -- the two matches' data stops making sense together otherwise.
+  function reopenLastInnings() {
+    const lastIdx = match.innings.length - 1;
+    const updatedMatch = {
+      ...match,
+      innings: match.innings.map((inn, i) => i === lastIdx ? {
+        ...inn,
+        complete: false
+      } : inn),
+      status: "in-progress"
+    };
+    setMatch(updatedMatch);
+    saveTransition(updatedMatch, setMatch);
+  }
   // The team that CHASED in this match bats first in the super over — that's the standard
   // convention (whoever set the target doesn't also get the advantage of knowing exactly what's
   // needed twice in a row). Everything else about it is just a fresh 1-over 2-innings match; the
@@ -21295,7 +21320,40 @@ function ResultScreen({
       width: "100%",
       marginBottom: 14
     }
-  }, "View Super Over"), isTied && match.rules && match.rules.superOver ? /*#__PURE__*/React.createElement("div", {
+  }, "View Super Over"), !match.superOverMatchId && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setConfirmReopen(true),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "4px 4px 14px"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 13
+  }), "Fix a mistake"), confirmReopen && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Reopen this match?",
+    message: `This reopens ${match.innings[match.innings.length - 1].battingTeam}'s completed innings so you can fix a mistake -- Undo and everything else work again from there, same as during live scoring. Only the last innings can be reopened this way; if the mistake was actually in an earlier innings, this can't fix it without also affecting what came after.`,
+    confirmLabel: "Reopen",
+    cancelLabel: "Cancel",
+    variant: "default",
+    onConfirm: () => {
+      setConfirmReopen(false);
+      reopenLastInnings();
+    },
+    onCancel: () => setConfirmReopen(false)
+  }), isTied && match.rules && match.rules.superOver ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
