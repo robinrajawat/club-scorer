@@ -3251,6 +3251,19 @@ function applyTheme(pref) {
   const meta = document.getElementById("cs-theme-color");
   if (meta) meta.setAttribute("content", resolved === "dark" ? "#17140f" : "#2d5016");
 }
+// Device-local, same reasoning as theme: a first-launch tour is about orienting THIS device's
+// first session, not something that should follow an account and skip the tour on a second phone.
+function hasSeenTour() {
+  try {
+    return localStorage.getItem(`${LS_PREFIX}tour-seen`) === "1";
+  } catch (e) {
+    return true; // if localStorage is unavailable, don't repeatedly try to show the tour
+  }
+}
+function markTourSeen() {
+  const result = lsSetItem(`${LS_PREFIX}tour-seen`, "1");
+  if (!result.ok) console.error("save tour-seen failed", result.error);
+}
 async function loadRules() {
   if (auth.currentUser) {
     const prof = await loadProfile();
@@ -4928,6 +4941,7 @@ function AccountScreen({
   onDeleteAccount,
   onOpenSharedLinks,
   onOpenRequests,
+  onOpenHelp,
   requestBadgeCount = 0,
   onOpenClubAdmin,
   onBack,
@@ -5689,7 +5703,43 @@ function AccountScreen({
       padding: "10px 8px",
       minHeight: 40
     }
-  }, opt.label)))), user && /*#__PURE__*/React.createElement("div", {
+  }, opt.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginTop: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenHelp,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Help & FAQ"), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }))), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -6047,6 +6097,262 @@ function AccountScreen({
 // Every match this device/account knows about that currently has an active score code and/or
 // view link, with a revoke button for each — the account-level "what have I shared" overview that
 // individual matches don't give you on their own.
+// Curated, not exhaustive — this is for the handful of things a person genuinely wouldn't
+// discover just by exploring the app (score code vs. view code, borrowing a player, the public
+// club/federation directory, series vs. tournaments, retired hurt vs. out) rather than a full
+// manual duplicating the README. Each entry stays to a couple of sentences, same register as the
+// rest of the app's own inline copy — this isn't a different voice, just a dedicated place to
+// find it. Keep this in sync with README.md and the first-launch tour whenever a covered feature
+// changes; a stale help entry is worse than none, since it actively misleads instead of just
+// not helping.
+const HELP_SECTIONS = [{
+  title: "Scoring",
+  entries: [{
+    q: "What does the powerplay badge actually do?",
+    a: "It marks the window (however many overs you set at the start of an innings) — nothing more. There's no fielder-position tracking in the app, so it can't enforce a fielding restriction; it just shows a badge while you're in it."
+  }, {
+    q: "How does Free Hit work here?",
+    a: "Turn it on in Match Rules. After a no-ball, only a run out counts as a dismissal until the next legal delivery — the app handles this automatically once it's on."
+  }, {
+    q: "What's the difference between retired hurt and retired out?",
+    a: "Retired hurt doesn't count as a wicket and credits no bowler — use it for an injury or anything that pulls someone away mid-innings. Retired out counts exactly like a normal dismissal. Both are on the \u201cRetire\u201d button next to Swap Strike, and only apply to whoever's currently on strike."
+  }, {
+    q: "What happens if a match ties with Super Over on?",
+    a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
+  }]
+}, {
+  title: "Sharing & sync",
+  entries: [{
+    q: "Score code vs. view code \u2014 what's the difference?",
+    a: "A score code (\u201cInvite to help score\u201d) gives full read-and-write scoring access \u2014 treat it like a shared password, only for someone you actually want scoring alongside you. A view code (\u201cShare live score\u201d) is read-only \u2014 anyone with the link can watch, nobody can edit, even if they have both codes."
+  }, {
+    q: "Do I need an account?",
+    a: "No. Score codes and view codes work with no sign-in at all. Signing in with Google is only needed if you want your matches, teams, and clubs to follow you across devices."
+  }, {
+    q: "What does exporting/importing my data actually cover?",
+    a: "Export (Account \u2192 Your data) gives you a JSON backup of your profile, teams, and matches saved to that account. Import restores it \u2014 into the same account, or a different one to migrate. It doesn't cover clubs (shared state, not personal data) or matches only ever shared via a score code."
+  }]
+}, {
+  title: "Clubs & federations",
+  entries: [{
+    q: "What can a club co-owner do that a member can't?",
+    a: "Co-owners have identical rights to the owner \u2014 rename the club, manage teams and tournaments, invite or remove members, affiliate with a federation. Members can use the club's teams for scoring but can't change them. Only the original owner can delete the club outright."
+  }, {
+    q: "What does making a club or federation \u201cPublic\u201d actually expose?",
+    a: "Just its name and owner's name \u2014 never the roster or member list \u2014 so the other side can find it and request affiliation. It's the one place in the app with real search; everything else (club membership, co-ownership) stays strictly invite-by-email, with no way to browse for a person."
+  }, {
+    q: "How do I borrow a player from another club?",
+    a: "On the Teams screen, search the public player directory (players another club has chosen to publish) and add them to your roster. Their name, email, age, role, and batting/bowling hand stay locked to their home club \u2014 only their jersey number is yours to set."
+  }]
+}, {
+  title: "Tournaments & series",
+  entries: [{
+    q: "Tournament vs. series \u2014 which one do I want?",
+    a: "A tournament is built for 3+ teams \u2014 round-robin group stage, an optional self-seeding knockout bracket, a points table with NRR. A series is for exactly two teams playing a set of matches head-to-head (like a 3-match ODI series) \u2014 just a running score, no table or bracket."
+  }, {
+    q: "Why do some fixtures skip the Match Rules step?",
+    a: "The first fixture scored for a tournament or series sets its default rules and venue automatically \u2014 every fixture after that inherits them, so you're not re-entering the same 7 settings every time. You can still override a single fixture if it genuinely needs different rules."
+  }, {
+    q: "What does the qualification calculator do?",
+    a: "Pick your team and a rival inside a tournament, and it works out the run target or rate you'd need in an upcoming fixture to get past them on net run rate \u2014 handy when NRR is close in the run-up to a knockout stage."
+  }]
+}, {
+  title: "Appearance",
+  entries: [{
+    q: "Does my theme choice (Light/Dark/System) follow my account?",
+    a: "No \u2014 it's saved per device, on purpose, same as house rules default to being local-first. Switch it separately on each device from Account \u2192 Appearance."
+  }]
+}];
+// Shown once per device (see hasSeenTour/markTourSeen), only on the Home screen so it never
+// interrupts an auth redirect or a deep link into a shared match. Deliberately narrow — just the
+// handful of things someone genuinely wouldn't discover by exploring (score codes, borrowing a
+// player, clubs/federations, series vs. tournaments), not a full walkthrough of the app. Keep this
+// in sync with HELP_SECTIONS and README.md whenever a covered feature changes.
+const TOUR_SLIDES = [{
+  icon: Table2,
+  title: "Score ball-by-ball, works offline",
+  body: "Runs, wides, no-balls, every dismissal type \u2014 no sign-in needed, and it keeps working with no signal once it's loaded."
+}, {
+  icon: Share,
+  title: "Share your score two ways",
+  body: "A score code gives full scoring access \u2014 for a teammate co-scoring alongside you. A view code is read-only, for anyone just following along. They're never interchangeable."
+}, {
+  icon: Users,
+  title: "Clubs, federations, and borrowed players",
+  body: "Save a team's roster once and reuse it. A club can affiliate with a federation to play other clubs' teams, and you can borrow a player from another club's public directory without retyping their details."
+}, {
+  icon: Trophy,
+  title: "Tournaments or a simple series",
+  body: "Build a full tournament \u2014 round-robin, self-seeding knockout, points table \u2014 or a head-to-head series between two teams with just a running score."
+}];
+function FirstLaunchTour({
+  onDone
+}) {
+  const [slide, setSlide] = useState(0);
+  const isLast = slide === TOUR_SLIDES.length - 1;
+  function finish() {
+    markTourSeen();
+    onDone();
+  }
+  const current = TOUR_SLIDES[slide];
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: finish
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      gap: 6,
+      marginBottom: 18
+    }
+  }, TOUR_SLIDES.map((_, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      width: i === slide ? 18 : 6,
+      height: 6,
+      borderRadius: 3,
+      background: i === slide ? COLORS.pitch : COLORS.creamDark,
+      transition: "width 0.2s ease"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement(current.icon, {
+    size: 40,
+    style: {
+      color: COLORS.pitch
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 21,
+      color: COLORS.pitch,
+      textAlign: "center",
+      marginBottom: 8
+    }
+  }, current.title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      lineHeight: 1.6,
+      marginBottom: 22,
+      padding: "0 6px"
+    }
+  }, current.body), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, !isLast && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: finish,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      flex: 1
+    }
+  }, "Skip"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: isLast ? finish : () => setSlide(s => s + 1),
+    style: {
+      flex: isLast ? 1 : 2
+    }
+  }, isLast ? "Get started" : "Next")));
+}
+function HelpScreen({
+  onBack
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Account"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Help & FAQ"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, "The things that genuinely aren't obvious just from exploring \u2014 not a full manual. See the README on GitHub for everything else."), HELP_SECTIONS.map(section => /*#__PURE__*/React.createElement("div", {
+    key: section.title,
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, section.title), section.entries.map((e, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: COLORS.surface,
+      borderRadius: 14,
+      padding: "14px 16px",
+      marginBottom: 8,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      color: COLORS.ink,
+      marginBottom: 5
+    }
+  }, e.q), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.55
+    }
+  }, e.a))))));
+}
 function SharedLinksScreen({
   matches,
   onRevokeShareCode,
@@ -19186,6 +19492,7 @@ function CricketScorer() {
   const [activeTournamentClubId, setActiveTournamentClubId] = useState(null); // Tournaments screen's own source selector
   const [viewingTournament, setViewingTournament] = useState(null);
   const [themePref, setThemePrefState] = useState(loadThemePref);
+  const [showTour, setShowTour] = useState(() => !hasSeenTour());
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
@@ -20355,7 +20662,9 @@ function CricketScorer() {
     pendingCount: pendingCount,
     requestBadgeCount: federationRequestsNeedingAction.length,
     tournamentNameById: tournamentNameById
-  })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
+  })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
+    onDone: () => setShowTour(false)
+  }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(SetupScreen, {
@@ -20466,6 +20775,7 @@ function CricketScorer() {
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenRequests: () => setScreen("requests"),
+    onOpenHelp: () => setScreen("help"),
     requestBadgeCount: federationRequestsNeedingAction.length,
     onOpenClubAdmin: () => {
       setClubAdminReturnScreen("account");
@@ -20475,6 +20785,11 @@ function CricketScorer() {
     redirectError: authError,
     linkStatus: linkStatus,
     onClearLinkStatus: () => setLinkStatus("")
+  })), screen === "help" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "help",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(HelpScreen, {
+    onBack: () => setScreen("account")
   })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "requests",
     direction: navDirection
