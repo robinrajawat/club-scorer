@@ -11580,7 +11580,7 @@ function SetupScreen({
   // Per-page validity — Next/Review stays disabled until the page in front of you is actually
   // complete, same fields canStart always required, just attributed to the page that owns them.
   const pageValid = {
-    teams: teamAName.trim() && teamBName.trim() && !sameLabel && overs,
+    teams: teamAName.trim() && teamBName.trim() && !sameLabel && overs && (!tossWonBy || tossDecision),
     rules: true,
     xi: aXIReady && bXIReady,
     openers: strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim(),
@@ -12141,7 +12141,7 @@ function SetupScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 64
+      width: 76
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: String(matchRules.powerplayOvers),
@@ -12159,7 +12159,8 @@ function SetupScreen({
       });
     },
     style: {
-      textAlign: "center"
+      textAlign: "center",
+      padding: "12px 8px"
     }
   })), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -12234,7 +12235,7 @@ function SetupScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 64
+      width: 84
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: String(matchRules.timeCapMinutes),
@@ -12258,7 +12259,8 @@ function SetupScreen({
       });
     },
     style: {
-      textAlign: "center"
+      textAlign: "center",
+      padding: "12px 8px"
     }
   })), /*#__PURE__*/React.createElement("span", {
     style: {
