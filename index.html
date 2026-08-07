@@ -4087,6 +4087,22 @@ function newInning(battingTeam, bowlingTeam, rules) {
     ...DEFAULT_RULES,
     ...rules
   };
+  // Defensive coercion: SetupScreen stores these as raw digit-strings while the user is actively
+  // typing (see the maxOversPerBowler/powerplayOvers/timeCapMinutes TextFields), only clamping to
+  // a real number on blur. This is the actual point these get used for scoring math, so make sure
+  // a stray string can never reach here even if blur didn't fire for some reason.
+  if (r.maxOversPerBowler != null) {
+    const n = parseInt(String(r.maxOversPerBowler), 10);
+    r.maxOversPerBowler = isNaN(n) || n < 1 ? null : n;
+  }
+  if (r.powerplayOvers != null) {
+    const n = parseInt(String(r.powerplayOvers), 10);
+    r.powerplayOvers = isNaN(n) || n < 1 ? null : n;
+  }
+  if (r.timeCapMinutes != null) {
+    const n = parseInt(String(r.timeCapMinutes), 10);
+    r.timeCapMinutes = isNaN(n) || n < 1 ? null : n;
+  }
   return {
     battingTeam,
     bowlingTeam,
@@ -5315,6 +5331,7 @@ function SearchAndRequestPanel({
 function TextField({
   value,
   onChange,
+  onBlur,
   placeholder,
   style,
   autoCapitalize,
@@ -5326,6 +5343,7 @@ function TextField({
   return /*#__PURE__*/React.createElement("input", {
     value: value,
     onChange: e => onChange(e.target.value),
+    onBlur: onBlur,
     placeholder: placeholder,
     autoCapitalize: autoCapitalize,
     autoCorrect: autoCorrect,
@@ -12010,11 +12028,21 @@ function SetupScreen({
     value: String(matchRules.maxOversPerBowler),
     onChange: v => {
       setMaxOversTouched(true);
-      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      // Store the digits as typed, even mid-edit (including empty while the field is briefly
+      // cleared before a new number is typed) instead of snapping to a coerced number on every
+      // keystroke — that snap-back was fighting real typing (clear then type "45" was landing as
+      // "145", since the field would jump to "1" the instant it went empty and the next digits
+      // typed onto THAT rather than a blank field). Clamped for real on blur, below.
       setMatchRules(r => ({
         ...r,
-        maxOversPerBowler: isNaN(n) ? 1 : Math.max(1, n)
+        maxOversPerBowler: v.replace(/[^0-9]/g, "")
       }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.maxOversPerBowler), 10);
+        return { ...r, maxOversPerBowler: isNaN(n) || n < 1 ? 1 : n };
+      });
     },
     style: {
       textAlign: "center"
@@ -12093,11 +12121,17 @@ function SetupScreen({
   }, /*#__PURE__*/React.createElement(TextField, {
     value: String(matchRules.powerplayOvers),
     onChange: v => {
-      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      // Same fix as maxOversPerBowler above — store as typed, clamp on blur.
       setMatchRules(r => ({
         ...r,
-        powerplayOvers: isNaN(n) ? 1 : Math.max(1, n)
+        powerplayOvers: v.replace(/[^0-9]/g, "")
       }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.powerplayOvers), 10);
+        return { ...r, powerplayOvers: isNaN(n) || n < 1 ? 1 : n };
+      });
     },
     style: {
       textAlign: "center"
@@ -12173,11 +12207,23 @@ function SetupScreen({
   }, /*#__PURE__*/React.createElement(TextField, {
     value: String(matchRules.timeCapMinutes),
     onChange: v => {
-      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      // THE BUG: this used to coerce straight to a number on every keystroke, defaulting to 1 the
+      // instant the field went empty (e.g. select-all + backspace before typing a fresh value).
+      // That "1" landed in the DOM immediately, so the next digit typed appended onto it instead
+      // of replacing a blank field — typing "45" after clearing actually produced "145". Now it
+      // just stores the digits as typed (including empty mid-edit) and only clamps to a real
+      // number on blur, below — so the field behaves like a normal text input while you're
+      // actively typing into it.
       setMatchRules(r => ({
         ...r,
-        timeCapMinutes: isNaN(n) ? 1 : Math.max(1, n)
+        timeCapMinutes: v.replace(/[^0-9]/g, "")
       }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.timeCapMinutes), 10);
+        return { ...r, timeCapMinutes: isNaN(n) || n < 1 ? 1 : n };
+      });
     },
     style: {
       textAlign: "center"
