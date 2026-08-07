@@ -3143,6 +3143,24 @@ async function saveProfile(profile) {
     console.error("profile save failed", e);
   }
 }
+// ---------- Beta tester flag ----------
+// Deliberately a TOP-LEVEL /betaTesters/{uid} doc, not something under /users/{uid} — the rules
+// there grant the signed-in owner full read+write over their own subtree, which would let anyone
+// self-grant beta access from the browser console. /betaTesters/{uid} is read-only from the
+// client (see firestore.rules); Robin flips it on/off per person directly in the Firebase
+// Console. Absence of the doc, or `enabled` not === true, both mean "not a beta tester" — treat
+// any read failure the same way rather than surfacing an error, since this gate should fail closed
+// and silently for everyone but the person debugging it.
+async function loadBetaStatus() {
+  if (!auth.currentUser) return false;
+  try {
+    const doc = await db.collection("betaTesters").doc(auth.currentUser.uid).get();
+    return doc.exists && doc.data().enabled === true;
+  } catch (e) {
+    console.error("beta status load failed", e);
+    return false;
+  }
+}
 // Restores what exportUserData() produces: profile, teams, and personal matches, written back to
 // the CURRENTLY signed-in account — not necessarily the same one the export came from, so this
 // doubles as an account-to-account migration as well as a same-account restore. Deliberately does
@@ -5032,6 +5050,7 @@ function RuleChoice({
 function AccountScreen({
   user,
   profile,
+  isBetaTester = false,
   clubs = [],
   federationsById = {},
   onSignIn,
@@ -5372,7 +5391,21 @@ function AccountScreen({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, currentName || "Signed in"), /*#__PURE__*/React.createElement("div", {
+  }, currentName || "Signed in", isBetaTester && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: "#fff",
+      background: COLORS.willow,
+      borderRadius: 8,
+      padding: "2px 7px",
+      marginLeft: 8,
+      letterSpacing: 0.3,
+      verticalAlign: "middle"
+    },
+    title: "You have access to beta features"
+  }, "BETA")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -19979,6 +20012,7 @@ function CricketScorer() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [isBetaTester, setIsBetaTester] = useState(false);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
   // Account linking: {email, credential} from a Google sign-in attempt that hit
@@ -20172,12 +20206,13 @@ function CricketScorer() {
         // account state changed after first load (sign in/out) — re-fetch from the right source
         setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
         setActiveTournamentClubId(null);
-        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
+        Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
           setMatches(idx);
           setTeams(teamList);
           setProfile(prof);
           setRules(r);
           setTournaments(tourneys);
+          setIsBetaTester(beta);
         });
       }
       // Clubs (and federations, which are loaded off clubs' federationIds) have no local fallback
@@ -20193,12 +20228,13 @@ function CricketScorer() {
       // linkPlayerIfMatch's own comment for exactly what it will and won't touch.
       if (u && u.email) linkPlayerIfMatch(u.uid, u.email, u.photoURL);
     });
-    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments()]).then(([idx, teamList, prof, r, tourneys]) => {
+    Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
       setMatches(idx);
       setTeams(teamList);
       setProfile(prof);
       setRules(r);
       setTournaments(tourneys);
+      setIsBetaTester(beta);
       setLoading(false);
       initialLoadDone.current = true;
     });
@@ -21244,6 +21280,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(AccountScreen, {
     user: user,
     profile: profile,
+    isBetaTester: isBetaTester,
     clubs: clubs,
     federationsById: federationsById,
     onSignIn: handleSignInGoogle,

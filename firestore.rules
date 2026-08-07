@@ -51,6 +51,19 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Beta tester flag. Deliberately its OWN top-level collection rather than
+    // living under /users/{uid} — the rule above grants the signed-in owner
+    // full write access to their own subtree, which would let anyone flip
+    // their own beta flag on from the browser console. Read-only from the
+    // client; only edited via the Firebase Console (or an admin script),
+    // which bypasses these rules entirely.
+    // ---------------------------------------------------------------------
+    match /betaTesters/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------------
     // Full-access co-scoring. Knowledge of the 8-character code IS the credential — this is
     // intentional (it's how a teammate resumes scoring on another phone with no account needed)
     // and is unchanged from before. What changed is that this code is no longer also accepted as
