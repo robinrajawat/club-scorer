@@ -11580,13 +11580,13 @@ function SetupScreen({
   // Per-page validity — Next/Review stays disabled until the page in front of you is actually
   // complete, same fields canStart always required, just attributed to the page that owns them.
   const pageValid = {
-    teams: teamAName.trim() && teamBName.trim() && !sameLabel && overs && (!tossWonBy || tossDecision),
+    teams: teamAName.trim() && teamBName.trim() && !sameLabel && overs && tossWonBy && tossDecision,
     rules: true,
     xi: aXIReady && bXIReady,
     openers: strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim(),
     review: true
   }[currentPage];
-  const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
+  const canStart = teamAName.trim() && teamBName.trim() && !sameLabel && overs && tossWonBy && tossDecision && aXIReady && bXIReady && strikerA.trim() && nonStrikerA.trim() && strikerA.trim() !== nonStrikerA.trim() && bowlerB.trim();
   function goNext() {
     if (!pageValid || currentPageIndex >= pageOrder.length - 1) return;
     setCurrentPage(pageOrder[currentPageIndex + 1]);
@@ -11773,7 +11773,7 @@ function SetupScreen({
       ...sectionLabel,
       marginBottom: 0
     }
-  }, "Toss (optional)"), /*#__PURE__*/React.createElement("button", {
+  }, "Toss"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
     onClick: flipCoin,
