@@ -20230,13 +20230,37 @@ function MatchScreen({
     }
   }, wicketDraft.wicketType === "Caught" ? "Who took the catch?" : wicketDraft.wicketType === "Run out" ? "Who ran them out?" : "Stumped \u2014 was it off a wide?"), wicketDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
     style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
-      marginBottom: 12,
-      lineHeight: 1.5
+      lineHeight: 1.5,
+      marginBottom: 8
     }
-  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), wicketDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
+  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, swap strike below first."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: swapStrike,
+    className: "cs-btn cs-shine",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "7px 13px",
+      borderRadius: 20,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 13
+  }), "Swap Strike")), wicketDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
