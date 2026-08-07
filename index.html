@@ -4026,7 +4026,7 @@ function BallBadge({
     shadow = "0 2px 6px rgba(139,30,30,0.4)";
   } else if (ev.kind === "wide" || ev.kind === "noball") {
     bg = `linear-gradient(160deg, #d4a544, ${COLORS.gold})`;
-    color = "#fff";
+    color = "#2e1c04";
     border = "none";
     shadow = "0 2px 6px rgba(184,137,43,0.35)";
   } else if (ev.runs === 4) {
@@ -4319,7 +4319,7 @@ function MilestoneToast({
       alignItems: "center",
       gap: 9,
       background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      color: "#fff",
+      color: "#2e1c04",
       padding: "10px 18px",
       borderRadius: 30,
       boxShadow: "0 8px 24px rgba(184,137,43,0.45)",
@@ -4595,7 +4595,7 @@ function Btn({
     },
     gold: {
       background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      color: "#fff",
+      color: "#2e1c04",
       boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
     },
     ghost: {
@@ -10430,7 +10430,7 @@ function PlayingXIPicker({
         flexShrink: 0,
         border: "none",
         background: isCaptain ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "rgba(255,255,255,0.2)",
-        color: "#fff",
+        color: isCaptain ? "#2e1c04" : "#fff",
         fontFamily: "'Inter'",
         fontSize: 9,
         fontWeight: 800,
@@ -12885,7 +12885,7 @@ function FixturesSection({
       borderRadius: 12,
       padding: "12px 14px",
       marginBottom: 10,
-      color: "#fff",
+      color: "#2e1c04",
       boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
@@ -14975,7 +14975,7 @@ function TeamEditScreen({
       flexShrink: 0,
       border: captain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
       background: captain === p.name ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
-      color: captain === p.name ? "#fff" : COLORS.inkSoft,
+      color: captain === p.name ? "#2e1c04" : COLORS.inkSoft,
       boxShadow: captain === p.name ? "0 1px 4px rgba(184,137,43,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 10,
