@@ -4450,15 +4450,13 @@ function applyBall(inning, event) {
       score: milestoneScore
     });
   }
-  // Duck: batsman dismissed for 0. Uses the same dismissedName tracked for fallOfWickets above,
-  // so it fires on any duck — but a "golden duck" (out on the very first ball faced, before this
-  // one) gets its own, more pointed wording rather than the generic version.
+  // Duck: batsman dismissed for 0. Uses the same dismissedName tracked for fallOfWickets above.
+  // Called "golden duck" for any dismissal at 0 here (per house preference), not the stricter
+  // first-ball-only definition some scorers use.
   if (dismissedName && cur.batsmen[dismissedName] && cur.batsmen[dismissedName].runs === 0) {
-    const facedBefore = (inning.batsmen[dismissedName] && inning.batsmen[dismissedName].balls) || 0;
-    const isGolden = facedBefore === 0;
     cur.toastMilestones.push({
       type: "duck",
-      text: isGolden ? `${dismissedName} out for a golden duck` : `${dismissedName} out for a duck`,
+      text: `${dismissedName} out for a golden duck`,
       over: milestoneOver,
       score: milestoneScore
     });
