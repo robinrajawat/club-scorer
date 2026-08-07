@@ -4339,6 +4339,24 @@ function applyBall(inning, event) {
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
     legalBall = event.legal !== false;
+    // A run out is the one dismissal that can happen on an otherwise-normal delivery OR on a
+    // wide/no-ball — event.extraKind carries which, so the associated penalty run(s) still land
+    // exactly like the standalone wide/noball branches above. Without this, a run out marked as
+    // occurring on a wide/no-ball dropped that run entirely instead of crediting it.
+    if (event.extraKind === "wide") {
+      const extraRuns = cur.wideRuns || 1;
+      runsThisBall = extraRuns;
+      cur.runs += extraRuns;
+      bowler.runs += extraRuns;
+      cur.extras.wide += extraRuns;
+    } else if (event.extraKind === "noball") {
+      const extraRuns = cur.noballRuns || 1;
+      runsThisBall = extraRuns;
+      cur.runs += extraRuns;
+      bowler.runs += extraRuns;
+      cur.extras.noball += extraRuns;
+      if (cur.freeHitEnabled) cur.freeHitActive = true;
+    }
     dismissedName = cur.strikerName;
     const wt = event.wicketType || "out";
     creditsBowler = !["Run out"].includes(wt);
@@ -4379,7 +4397,7 @@ function applyBall(inning, event) {
       over: oversLabel(cur.legalBalls + (legalBall ? 1 : 0), cur.ballsPerOver),
       batsman: dismissedName
     }];
-    display = "W";
+    display = event.extraKind === "wide" ? "Wd+W" : event.extraKind === "noball" ? "Nb+W" : "W";
     cur.strikerName = event.newBatsman || "";
   }
   cur.bowlers[cur.bowlerName] = bowler;
@@ -19166,6 +19184,9 @@ function MatchScreen({
       // editable via the PlayerPicker below for the (common enough) catch taken elsewhere. Run
       // outs don't have an equivalent default fielder, so that field starts blank for them.
       setFielderDraftName(wicketType === "Caught" ? keeperFor(match, inning.bowlingTeam) : "");
+      // Run out is the one dismissal that can land on a fair ball, a wide, or a no-ball — default
+      // to fair (by far the most common case), correctable on the fielder step below.
+      if (wicketType === "Run out") setRunOutExtraKind(null);
       return;
     }
     pushHistory();
@@ -19190,10 +19211,13 @@ function MatchScreen({
   const [pendingWicket, setPendingWicket] = useState(null);
   const [catchDraft, setCatchDraft] = useState(null); // {wicketType, legal, isLast} — waiting on fielder name
   const [fielderDraftName, setFielderDraftName] = useState("");
+  // Only meaningful while catchDraft.wicketType === "Run out": null = fair ball (the default and
+  // by far the common case), "wide"/"noball" = the ball is ALSO an extra, credited alongside the
+  // dismissal in applyBall (see event.extraKind there) rather than needing a separate action.
+  const [runOutExtraKind, setRunOutExtraKind] = useState(null);
   function confirmFielder(nameOverride) {
     const {
       wicketType,
-      legal,
       isLast
     } = catchDraft;
     const name = (nameOverride !== undefined ? nameOverride : fielderDraftName).trim();
@@ -19201,12 +19225,18 @@ function MatchScreen({
     // can genuinely be unclear in the moment (direct hit, relay throw) — that one's skippable, so
     // this only blocks Confirm for Caught, matching the disabled state on the button above.
     if (wicketType === "Caught" && !name) return;
+    // A run out's legality now follows the explicit fair/wide/no-ball pick instead of always
+    // being false — legal only when it landed on a wide/no-ball (those never count as a ball
+    // faced); a run out off a normal delivery is a normal legal ball like any other dismissal.
+    const legal = wicketType === "Run out" ? runOutExtraKind == null : catchDraft.legal;
+    const extraKind = wicketType === "Run out" ? runOutExtraKind || undefined : undefined;
     if (isLast) {
       pushHistory();
       commit(applyBall(inning, {
         kind: "wicket",
         wicketType,
         legal,
+        extraKind,
         newBatsman: "",
         fielderName: name
       }));
@@ -19215,12 +19245,14 @@ function MatchScreen({
       setPendingWicket({
         wicketType,
         legal,
+        extraKind,
         fielderName: name
       });
       celebrateWicket();
     }
     setCatchDraft(null);
     setFielderDraftName("");
+    setRunOutExtraKind(null);
   }
   function confirmNewBatsman() {
     if (!newBatsmanName.trim()) return;
@@ -19230,6 +19262,7 @@ function MatchScreen({
         kind: "wicket",
         wicketType: pendingWicket.wicketType,
         legal: pendingWicket.legal,
+        extraKind: pendingWicket.extraKind,
         newBatsman: newBatsmanName.trim(),
         fielderName: pendingWicket.fielderName
       }));
@@ -19258,6 +19291,7 @@ function MatchScreen({
         kind: "wicket",
         wicketType: pendingWicket.wicketType,
         legal: pendingWicket.legal,
+        extraKind: pendingWicket.extraKind,
         newBatsman: "",
         fielderName: pendingWicket.fielderName
       }), undefined, true);
@@ -20130,11 +20164,12 @@ function MatchScreen({
   }, wicketTypes.map(w => /*#__PURE__*/React.createElement(Btn, {
     key: w,
     variant: "danger",
-    onClick: () => handleWicket(w, w !== "Run out")
+    onClick: () => handleWicket(w)
   }, w)))), catchDraft && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => {
       setCatchDraft(null);
       setFielderDraftName("");
+      setRunOutExtraKind(null);
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20151,7 +20186,51 @@ function MatchScreen({
       marginBottom: 12,
       lineHeight: 1.5
     }
-  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "This ball was"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, [{
+    value: null,
+    label: "Fair ball"
+  }, {
+    value: "wide",
+    label: "Wide"
+  }, {
+    value: "noball",
+    label: "No ball"
+  }].map(opt => /*#__PURE__*/React.createElement("button", {
+    key: opt.label,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setRunOutExtraKind(opt.value),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: runOutExtraKind === opt.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: runOutExtraKind === opt.value ? "#fff" : COLORS.ink,
+      boxShadow: runOutExtraKind === opt.value ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, opt.label)))), /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: fielderDraftName,
     onChange: setFielderDraftName,
@@ -20185,7 +20264,33 @@ function MatchScreen({
       padding: "10px 4px 0",
       textDecoration: "underline"
     }
-  }, "Fielder unknown \u2014 skip")), customRunsFor && /*#__PURE__*/React.createElement(Modal, {
+  }, "Fielder unknown \u2014 skip"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setCatchDraft(null);
+      setFielderDraftName("");
+      setRunOutExtraKind(null);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "10px 4px 0"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 13
+  }), "Cancel this wicket")), customRunsFor && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setCustomRunsFor(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
