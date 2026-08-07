@@ -3387,6 +3387,16 @@ function inPowerplay(inning) {
   if (!inning.powerplayOvers || inning.complete) return false;
   return inning.legalBalls < inning.powerplayOvers * (inning.ballsPerOver || 6);
 }
+// A soft flag, not a stop, on purpose — real innings routinely run past a target time (a slow over,
+// a longer changeover, a chatty drinks break), and the app has no business ending an innings on a
+// clock when it doesn't even know why the clock ran long. This exists so someone glancing at the
+// scoring screen can SEE it's overrunning and make their own call, not to enforce anything —
+// there's no auto-stop, no confirmation prompt, nothing blocked. Same "informational, not
+// enforced" stance as powerplay.
+function isOverTimeCap(inning) {
+  if (!inning.timeCapMinutes || !inning.startedAt || inning.complete) return false;
+  return Date.now() - inning.startedAt > inning.timeCapMinutes * 60000;
+}
 function numberFor(match, teamName, playerName) {
   const map = teamName === match.teamA ? match.teamANumbers : match.teamBNumbers;
   return map && map[playerName] ? map[playerName] : "";
@@ -3407,7 +3417,8 @@ const DEFAULT_RULES = {
   freeHit: false,
   superOver: false,
   maxOversPerBowler: null,
-  powerplayOvers: null
+  powerplayOvers: null,
+  timeCapMinutes: null
 };
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
@@ -3426,6 +3437,7 @@ function nonStandardRulesText(rules) {
   if (rules.freeHit) bits.push("Free Hit enabled");
   if (rules.superOver) bits.push("Super Over on a tie");
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
+  if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   return bits.length ? bits.join(" · ") : null;
 }
 function tossText(toss) {
@@ -3694,7 +3706,8 @@ function newInning(battingTeam, bowlingTeam, rules) {
     freeHitEnabled: r.freeHit,
     freeHitActive: false,
     maxOversPerBowler: r.maxOversPerBowler || null,
-    powerplayOvers: r.powerplayOvers || null
+    powerplayOvers: r.powerplayOvers || null,
+    timeCapMinutes: r.timeCapMinutes || null
   };
 }
 function ensureBatsman(inning, name) {
@@ -4081,7 +4094,8 @@ function ballLabelsForOver(overIndex, balls) {
 // a low-frequency interval, not every render) since second-level precision adds nothing useful
 // for an innings that runs for an hour or more.
 function InningsTimer({
-  startedAt
+  startedAt,
+  overCap
 }) {
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -4099,7 +4113,9 @@ function InningsTimer({
     style: {
       display: "inline-flex",
       alignItems: "center",
-      gap: 4
+      gap: 4,
+      color: overCap ? COLORS.gold : "inherit",
+      fontWeight: overCap ? 700 : "inherit"
     }
   }, /*#__PURE__*/React.createElement(CalendarClock, {
     size: 12
@@ -6179,6 +6195,9 @@ const HELP_SECTIONS = [{
   entries: [{
     q: "What does the powerplay badge actually do?",
     a: "It marks the window (however many overs you set at the start of an innings) — nothing more. There's no fielder-position tracking in the app, so it can't enforce a fielding restriction; it just shows a badge while you're in it."
+  }, {
+    q: "What happens when an innings goes over its time cap?",
+    a: "Nothing gets stopped. Set a target in Match Rules and an \u201cOVER TIME\u201d badge shows up once an innings runs past it \u2014 it's a heads-up for whoever's scoring, not an enforced limit, since real innings overrun for all kinds of legitimate reasons the app has no way to judge."
   }, {
     q: "How does Free Hit work here?",
     a: "Turn it on in Match Rules. After a no-ball, only a run out counts as a dismissal until the next legal delivery — the app handles this automatically once it's on."
@@ -10654,7 +10673,7 @@ function SetupScreen({
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
   const hasSquads = teamASquad.length > 0 || teamBSquad.length > 0;
   // A phone screen can only show one of these at a time anyway (it's all scroll either way) — the
@@ -11204,7 +11223,87 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "None")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Time cap per innings"), matchRules.timeCapMinutes === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      const n = parseInt(overs || "20", 10);
+      setMatchRules(r => ({
+        ...r,
+        timeCapMinutes: Math.max(10, Math.round(n * 4.5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.timeCapMinutes),
+    onChange: v => {
+      const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+      setMatchRules(r => ({
+        ...r,
+        timeCapMinutes: isNaN(n) ? 1 : Math.max(1, n)
+      }));
+    },
+    style: {
+      textAlign: "center"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "minutes \u2014 a flag once you're past it, not a stop. The innings keeps going; an \u201cOVER TIME\u201d badge just shows up so whoever's scoring can decide what to do about it."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      timeCapMinutes: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None")))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -18429,8 +18528,20 @@ function MatchScreen({
       fontWeight: 500
     }
   }, /*#__PURE__*/React.createElement("span", null, "CRR ", crr(inning.runs, inning.legalBalls, inning.ballsPerOver)), isChasing && /*#__PURE__*/React.createElement("span", null, "RRR ", reqRate), /*#__PURE__*/React.createElement(InningsTimer, {
-    startedAt: inning.startedAt
-  }), inPowerplay(inning) && /*#__PURE__*/React.createElement("span", {
+    startedAt: inning.startedAt,
+    overCap: isOverTimeCap(inning)
+  }), isOverTimeCap(inning) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: "rgba(244,185,66,0.22)",
+      border: "1px solid rgba(244,185,66,0.55)",
+      color: COLORS.gold,
+      fontWeight: 700,
+      padding: "2px 9px",
+      borderRadius: 20,
+      letterSpacing: 0.5,
+      fontSize: 11.5
+    }
+  }, "OVER TIME"), inPowerplay(inning) && /*#__PURE__*/React.createElement("span", {
     style: {
       background: "rgba(242,236,217,0.16)",
       border: "1px solid rgba(242,236,217,0.4)",
