@@ -3056,9 +3056,10 @@ function computeStandings(tournament, allMatches) {
     // NRR convention: a side bowled out (or that simply completes its full quota) is credited with
     // the full overs ALLOTTED for the run-rate calculation, not just the balls it happened to face
     // — otherwise being bowled out cheaply would perversely IMPROVE a team's run rate.
-    const wicketsLimit = m.isSuperOver ? 2 : 10;
-    const oversA = i1.wickets >= wicketsLimit ? m.oversLimit : i1.legalBalls / (i1.ballsPerOver || 6);
-    const oversB = i2.wickets >= wicketsLimit ? m.oversLimit : i2.legalBalls / (i2.ballsPerOver || 6);
+    const wicketsLimitA = maxWicketsFor(m, i1);
+    const wicketsLimitB = maxWicketsFor(m, i2);
+    const oversA = i1.wickets >= wicketsLimitA ? m.oversLimit : i1.legalBalls / (i1.ballsPerOver || 6);
+    const oversB = i2.wickets >= wicketsLimitB ? m.oversLimit : i2.legalBalls / (i2.ballsPerOver || 6);
     rowA.runsFor += i1.runs;
     rowA.oversFor += oversA;
     rowA.runsAgainst += i2.runs;
@@ -3834,6 +3835,23 @@ const DEFAULT_RULES = {
   timeCapMinutes: null,
   playersPerSide: 11
 };
+// The number of batsmen a given team actually has for this match — NOT always 11. Uses the
+// playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to
+// playersPerSide when the squad was picked via the squad picker), falling back to the match's
+// playersPerSide rule when no roster was recorded at all (teams entered as free-form names with no
+// squad picker, effectively uncapped until the scorer manually ends the innings).
+function battingTeamXISize(match, teamName) {
+  const roster = teamName === match.teamA ? match.teamARoster : teamName === match.teamB ? match.teamBRoster : null;
+  if (roster && roster.length > 0) return roster.length;
+  return match.rules && match.rules.playersPerSide || DEFAULT_RULES.playersPerSide;
+}
+// A side is all out one wicket before it runs out of batsmen, i.e. XI size minus 1 — a 9-a-side
+// team is all out on the 8th wicket, not the 10th. A Super Over is the one fixed exception (Law-set
+// at 2, regardless of squad size), so that check comes first and short-circuits the roster lookup.
+function maxWicketsFor(match, inning) {
+  if (match.isSuperOver) return 2;
+  return battingTeamXISize(match, inning.battingTeam) - 1;
+}
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
   teams: "Teams & Format",
@@ -3863,7 +3881,8 @@ function matchResultText(match) {
   if (match.status !== "complete") return null;
   if (!i2) return null;
   if (i2.runs >= i1.runs + 1) {
-    return `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;
+    const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
+    return `${i2.battingTeam} won by ${wicketsInHand} wicket${wicketsInHand === 1 ? "" : "s"}`;
   } else if (i2.runs === i1.runs) {
     return "Match tied";
   }
@@ -4450,13 +4469,30 @@ function applyBall(inning, event) {
       score: milestoneScore
     });
   }
-  // Duck: batsman dismissed for 0. Uses the same dismissedName tracked for fallOfWickets above.
-  // Called "golden duck" for any dismissal at 0 here (per house preference), not the stricter
-  // first-ball-only definition some scorers use.
+  // Duck (3 tiers), for the batsman dismissed on this ball (dismissedName, tracked above for
+  // fallOfWickets). All three require runs === 0 at dismissal; they differ on how many balls the
+  // batsman had faced going in:
+  //  - regular duck: faced 1+ balls before this one, never scored
+  //  - golden duck: out on the very first (legal) ball they face
+  //  - diamond duck: out without ever facing a LEGAL delivery — run out on a wide/no-ball before
+  //    facing a fair ball. NOTE: this app only ever dismisses the on-strike batsman (no
+  //    non-striker-run-out concept in the data model), so the classic diamond duck — a non-striker
+  //    run out having never faced a ball at all — can't be represented exactly; this is the closest
+  //    honest proxy within that constraint.
   if (dismissedName && cur.batsmen[dismissedName] && cur.batsmen[dismissedName].runs === 0) {
+    const facedBefore = inning.batsmen[dismissedName] && inning.batsmen[dismissedName].balls || 0;
+    let duckType = "duck";
+    let duckText = `${dismissedName} out for a duck`;
+    if (facedBefore === 0 && !legalBall && event.wicketType === "Run out") {
+      duckType = "diamondDuck";
+      duckText = `${dismissedName} out for a diamond duck`;
+    } else if (facedBefore === 0) {
+      duckType = "goldenDuck";
+      duckText = `${dismissedName} out for a golden duck`;
+    }
     cur.toastMilestones.push({
-      type: "duck",
-      text: `${dismissedName} out for a golden duck`,
+      type: duckType,
+      text: duckText,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -4777,6 +4813,8 @@ const MILESTONE_ICONS = {
   teamTotal: "\u{1F4C8}",
   maiden: "\u{1F6E1}\u{FE0F}",
   duck: "\u{1F986}",
+  goldenDuck: "\u{1F425}",
+  diamondDuck: "\u{1F48E}",
   threeFor: "\u{1F94A}",
   doubleWicket: "\u{1F4A5}"
 };
@@ -17203,7 +17241,10 @@ function PrintReport({
   let resultText = null;
   if (match.status === "complete" && match.innings.length > 1) {
     const [i1, i2] = match.innings;
-    if (i2.runs >= i1.runs + 1) resultText = `${i2.battingTeam} won by ${10 - i2.wickets} wicket${10 - i2.wickets === 1 ? "" : "s"}`;else if (i2.runs === i1.runs) resultText = "Match tied";else resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
+    if (i2.runs >= i1.runs + 1) {
+      const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
+      resultText = `${i2.battingTeam} won by ${wicketsInHand} wicket${wicketsInHand === 1 ? "" : "s"}`;
+    } else if (i2.runs === i1.runs) resultText = "Match tied";else resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "print-only",
@@ -18752,7 +18793,9 @@ function MatchScreen({
     registerLiveMatch(match.id, setMatch);
     return () => unregisterLiveMatch(match.id);
   }, [match.id, setMatch]);
-  const needsNewBatsman = inning && !inning.strikerName && inning.wickets < 10 && !inning.complete;
+  // Same fix as checkInningEnd's allOut: was hardcoded to `< 10`, which is what actually let a
+  // 9-a-side match keep prompting for an 11th/10th batsman that doesn't exist in the roster.
+  const needsNewBatsman = inning && !inning.strikerName && inning.wickets < maxWicketsFor(match, inning) && !inning.complete;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   const target = inningIdx === 1 ? match.innings[0].runs + 1 : null;
   const isChasing = inningIdx === 1;
@@ -18901,9 +18944,10 @@ function MatchScreen({
   function checkInningEnd(updated, force) {
     const inn = updated.innings[updated.currentInningIndex];
     const oversDone = inn.legalBalls >= updated.oversLimit * (inn.ballsPerOver || 6);
-    // A Super Over ends early on 2 wickets lost, not 10 — that's the actual Law, not a house rule,
-    // so it's tied to isSuperOver rather than being a toggle anyone would configure per match.
-    const allOut = inn.wickets >= (updated.isSuperOver ? 2 : 10);
+    // Was hardcoded to a fixed 10 (2 for Super Over) — now uses the batting team's actual XI size,
+    // so a 9-a-side match correctly goes all out on the 8th wicket instead of letting the innings
+    // (and needsNewBatsman below) run all the way to a 10th wicket nobody's roster has.
+    const allOut = inn.wickets >= maxWicketsFor(updated, inn);
     const chaseWon = updated.currentInningIndex === 1 && inn.runs >= updated.innings[0].runs + 1;
     if (force || oversDone || allOut || chaseWon) {
       inn.complete = true;
