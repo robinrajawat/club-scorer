@@ -3333,24 +3333,37 @@ async function saveDummyDataMeta(meta) {
 // (as of the "Delete this federation" feature) technically deletable — it's meant to be reused
 // next time Generate runs rather than recreated from scratch. Delete it yourself from Clubs &
 // Federations if you'd rather not keep it around between runs.
+// Deletes every dummy club tracked in meta, but only forgets the ones that actually succeeded —
+// a deleteClub failure (permission hiccup, network blip, etc.) leaves that club's id in meta so
+// the NEXT wipe or generate retries it, instead of silently losing track of an orphaned club.
 async function wipeDummyData() {
   const meta = await loadDummyDataMeta();
   const clubIds = meta.clubIds || [];
-  await Promise.all(clubIds.map(id => deleteClub(id)));
+  const results = await Promise.all(clubIds.map(async id => ({
+    id,
+    result: await deleteClub(id)
+  })));
+  const stillThere = results.filter(r => !r.result.ok).map(r => r.id);
   await saveDummyDataMeta({
-    clubIds: []
+    clubIds: stillThere
   });
+  return {
+    ok: stillThere.length === 0,
+    failedCount: stillThere.length
+  };
 }
 // Builds (or reuses) one shared "ICC" federation and one club per country — named after that
 // country's board, e.g. BCCI for India — each affiliated with ICC and holding a senior XI plus a
 // "B" side. Idempotent: always wipes any previous run's clubs first, so repeat clicks rebuild
-// cleanly instead of piling up duplicates.
+// cleanly instead of piling up duplicates. Saves meta.clubIds progressively (after each club, not
+// just at the end) so a failure partway through still leaves every already-created club
+// discoverable by a future wipe, rather than silently orphaning it.
 async function generateDummyData() {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
   };
-  await wipeDummyData();
+  const wipeResult = await wipeDummyData();
   let federationId = (await loadDummyDataMeta()).federationId || null;
   if (federationId) {
     const fedDoc = await db.collection("federations").doc(federationId).get();
@@ -3363,30 +3376,46 @@ async function generateDummyData() {
     await db.collection("federations").doc(federationId).update({
       dummy: true
     });
+    await saveDummyDataMeta({
+      federationId,
+      clubIds: []
+    });
   }
   const clubIds = [];
   for (const country of DUMMY_INTL_DATA) {
     const clubResult = await createClub(country.board);
-    if (!clubResult.ok) return clubResult;
+    if (!clubResult.ok) {
+      await saveDummyDataMeta({
+        federationId,
+        clubIds
+      });
+      return {
+        ...clubResult,
+        clubIds,
+        federationId
+      };
+    }
     const clubId = clubResult.club.id;
     clubIds.push(clubId);
+    await saveDummyDataMeta({
+      federationId,
+      clubIds
+    });
     await db.collection("clubs").doc(clubId).update({
       dummy: true,
       federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
     });
     await syncFederationAffiliation(federationId, clubId, true);
     for (const def of country.teams) {
-      await saveClubTeam(clubId, buildDummyTeam(def));
+      const teamResult = await saveClubTeam(clubId, buildDummyTeam(def));
+      if (!teamResult.ok) console.error("dummy team save failed", country.board, def.name, teamResult.error);
     }
   }
-  await saveDummyDataMeta({
-    federationId,
-    clubIds
-  });
   return {
     ok: true,
     clubIds,
-    federationId
+    federationId,
+    partialWipeFailures: wipeResult.failedCount
   };
 }
 // Restores what exportUserData() produces: profile, teams, and personal matches, written back to
@@ -5498,15 +5527,20 @@ function AccountScreen({
     setDummyStatus("");
     const result = await onGenerateDummyData();
     setDummyBusy(false);
-    setDummyStatus(result && result.ok ? `Dummy data generated — ${result.clubIds.length} boards, each with a senior XI and a "B" side, affiliated with ICC.` : (result && result.error) || "Couldn't generate dummy data.");
+    if (result && result.ok) {
+      const warning = result.partialWipeFailures ? ` (${result.partialWipeFailures} club${result.partialWipeFailures === 1 ? "" : "s"} from a previous run couldn't be cleared \u2014 try Wipe again.)` : "";
+      setDummyStatus(`Dummy data generated \u2014 ${result.clubIds.length} boards, each with a senior XI and a "B" side, affiliated with ICC.${warning}`);
+    } else {
+      setDummyStatus((result && result.error) || "Couldn't generate dummy data.");
+    }
   }
   async function handleWipeDummy() {
     setShowWipeConfirm(false);
     setDummyBusy(true);
     setDummyStatus("");
-    await onWipeDummyData();
+    const result = await onWipeDummyData();
     setDummyBusy(false);
-    setDummyStatus("Dummy data removed.");
+    setDummyStatus(result && !result.ok ? `Removed what it could, but ${result.failedCount} club${result.failedCount === 1 ? "" : "s"} wouldn't delete \u2014 try again.` : "Dummy data removed.");
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20975,12 +21009,13 @@ function CricketScorer() {
   // clubTeamsById/federationsById after either call, since both add or remove clubs and teams.
   async function handleGenerateDummyData() {
     const result = await generateDummyData();
-    if (result.ok) await refreshClubs();
+    await refreshClubs(); // even a partial/failed run may have created clubs worth showing
     return result;
   }
   async function handleWipeDummyData() {
-    await wipeDummyData();
+    const result = await wipeDummyData();
     await refreshClubs();
+    return result;
   }
   function mirrorPendingInvite(setClubsOrFeds, id, code, entry) {
     setClubsOrFeds(prev => prev.map ? prev.map(c => c.id === id ? {
