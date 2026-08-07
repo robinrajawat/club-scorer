@@ -11629,6 +11629,11 @@ function TournamentsScreen({
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   const totalTeamOptions = teamOptions.length + federationTeamOptions.length;
+  // federationTeamOptions holds {clubName, teamName, teamId, clubId} objects (needed as objects
+  // for the chip picker below, which shows each team alongside its club name). The series-create
+  // Team A/B <select> dropdowns only need the name string, same as teamOptions -- mixing the raw
+  // objects into that string list crashed React (error #31: object passed as <option> children).
+  const federationTeamNames = federationTeamOptions.map(t => t.teamName);
   function toggleTeam(n) {
     setSelectedTeams(s => s.includes(n) ? s.filter(x => x !== n) : [...s, n]);
   }
@@ -11866,7 +11871,7 @@ function TournamentsScreen({
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "Choose a team\u2026"), [...teamOptions, ...federationTeamOptions].filter((v, i, arr) => arr.indexOf(v) === i).map(n => /*#__PURE__*/React.createElement("option", {
+  }, "Choose a team\u2026"), [...teamOptions, ...federationTeamNames].filter((v, i, arr) => arr.indexOf(v) === i).map(n => /*#__PURE__*/React.createElement("option", {
     key: n,
     value: n
   }, n)))), /*#__PURE__*/React.createElement(Field, {
@@ -11886,7 +11891,7 @@ function TournamentsScreen({
     }
   }, /*#__PURE__*/React.createElement("option", {
     value: ""
-  }, "Choose a team\u2026"), [...teamOptions, ...federationTeamOptions].filter((v, i, arr) => arr.indexOf(v) === i).map(n => /*#__PURE__*/React.createElement("option", {
+  }, "Choose a team\u2026"), [...teamOptions, ...federationTeamNames].filter((v, i, arr) => arr.indexOf(v) === i).map(n => /*#__PURE__*/React.createElement("option", {
     key: n,
     value: n
   }, n)))), /*#__PURE__*/React.createElement(Field, {
