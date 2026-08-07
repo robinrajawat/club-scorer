@@ -4344,7 +4344,7 @@ function applyBall(inning, event) {
     creditsBowler = !["Run out"].includes(wt);
     let howText;
     if (wt === "Run out") {
-      howText = "run out";
+      howText = event.fielderName ? `run out (${event.fielderName})` : "run out";
     } else if (wt === "Caught") {
       const fielder = event.fielderName || cur.bowlerName;
       howText = fielder === cur.bowlerName ? `c & b ${cur.bowlerName}` : `c ${fielder} b ${cur.bowlerName}`;
@@ -19155,7 +19155,7 @@ function MatchScreen({
     // fell through to the "who's the new batsman?" prompt below instead of ending the innings
     // immediately, since 9 >= 10 is false. maxWicketsFor reads the actual roster-based threshold.
     const isLast = inning.wickets + 1 >= maxWicketsFor(match, inning);
-    if (wicketType === "Caught") {
+    if (wicketType === "Caught" || wicketType === "Run out") {
       setShowWicket(false);
       setCatchDraft({
         wicketType,
@@ -19163,8 +19163,9 @@ function MatchScreen({
         isLast
       });
       // Most catches are taken by the keeper — pre-fill it as a starting point, still fully
-      // editable via the PlayerPicker below for the (common enough) catch taken elsewhere.
-      setFielderDraftName(keeperFor(match, inning.bowlingTeam));
+      // editable via the PlayerPicker below for the (common enough) catch taken elsewhere. Run
+      // outs don't have an equivalent default fielder, so that field starts blank for them.
+      setFielderDraftName(wicketType === "Caught" ? keeperFor(match, inning.bowlingTeam) : "");
       return;
     }
     pushHistory();
@@ -19189,13 +19190,17 @@ function MatchScreen({
   const [pendingWicket, setPendingWicket] = useState(null);
   const [catchDraft, setCatchDraft] = useState(null); // {wicketType, legal, isLast} — waiting on fielder name
   const [fielderDraftName, setFielderDraftName] = useState("");
-  function confirmFielder() {
-    if (!fielderDraftName.trim()) return;
+  function confirmFielder(nameOverride) {
     const {
       wicketType,
       legal,
       isLast
     } = catchDraft;
+    const name = (nameOverride !== undefined ? nameOverride : fielderDraftName).trim();
+    // A catch always has exactly one known taker, so the name is required. A run out's fielder
+    // can genuinely be unclear in the moment (direct hit, relay throw) — that one's skippable, so
+    // this only blocks Confirm for Caught, matching the disabled state on the button above.
+    if (wicketType === "Caught" && !name) return;
     if (isLast) {
       pushHistory();
       commit(applyBall(inning, {
@@ -19203,14 +19208,14 @@ function MatchScreen({
         wicketType,
         legal,
         newBatsman: "",
-        fielderName: fielderDraftName.trim()
+        fielderName: name
       }));
       celebrateWicket();
     } else {
       setPendingWicket({
         wicketType,
         legal,
-        fielderName: fielderDraftName.trim()
+        fielderName: name
       });
       celebrateWicket();
     }
@@ -19892,7 +19897,41 @@ function MatchScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm"), /*#__PURE__*/React.createElement("button", {
+  }, "Confirm"), (pendingWicket || history.length > 0) && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    // Nothing's actually been committed yet if there's a pendingWicket (the wicket only lands via
+    // confirmNewBatsman/endInningEarly, below) — so backing out here is a plain in-memory
+    // discard, no history pop needed. If pendingWicket is null but we're still here, the striker
+    // slot went empty via an already-committed action (a retired batsman) — that one needs a real
+    // undo() to put them back.
+    onClick: () => {
+      if (pendingWicket) {
+        setPendingWicket(null);
+      } else {
+        undo();
+      }
+      setNewBatsmanName("");
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "10px 4px 0"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 13
+  }), pendingWicket ? "Cancel this wicket" : "Undo"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setConfirmEndInning(true),
     className: "cs-btn",
@@ -20104,7 +20143,15 @@ function MatchScreen({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Who took the catch?"), /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, catchDraft.wicketType === "Caught" ? "Who took the catch?" : "Who ran them out?"), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: fielderDraftName,
     onChange: setFielderDraftName,
@@ -20114,13 +20161,31 @@ function MatchScreen({
     numbers: numbersFor(match, inning.bowlingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !fielderDraftName.trim(),
-    onClick: confirmFielder,
+    disabled: catchDraft.wicketType === "Caught" && !fielderDraftName.trim(),
+    onClick: () => confirmFielder(),
     style: {
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm")), customRunsFor && /*#__PURE__*/React.createElement(Modal, {
+  }, "Confirm"), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => confirmFielder(""),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "10px 4px 0",
+      textDecoration: "underline"
+    }
+  }, "Fielder unknown \u2014 skip")), customRunsFor && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setCustomRunsFor(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
