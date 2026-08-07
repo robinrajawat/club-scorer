@@ -3418,7 +3418,8 @@ const DEFAULT_RULES = {
   superOver: false,
   maxOversPerBowler: null,
   powerplayOvers: null,
-  timeCapMinutes: null
+  timeCapMinutes: null,
+  playersPerSide: 11
 };
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
@@ -10523,7 +10524,7 @@ function SetupScreen({
     } : p);
   }
   function defaultXI(players) {
-    return players.map(p => p.name).slice(0, Math.min(11, players.length));
+    return players.map(p => p.name).slice(0, Math.min(matchRules.playersPerSide, players.length));
   }
   function seedMatchNumbers(players) {
     return Object.fromEntries(players.filter(p => p.number).map(p => [p.name, p.number]));
@@ -10591,7 +10592,7 @@ function SetupScreen({
   function toggleAXI(name) {
     setTeamAPlayingXI(xi => {
       if (xi.includes(name)) return xi.filter(n => n !== name);
-      if (xi.length >= Math.min(11, teamASquad.length)) return xi;
+      if (xi.length >= Math.min(matchRules.playersPerSide, teamASquad.length)) return xi;
       return [...xi, name];
     });
     // A player dropped from the XI can't stay captain/keeper for this match.
@@ -10603,7 +10604,7 @@ function SetupScreen({
   function toggleBXI(name) {
     setTeamBPlayingXI(xi => {
       if (xi.includes(name)) return xi.filter(n => n !== name);
-      if (xi.length >= Math.min(11, teamBSquad.length)) return xi;
+      if (xi.length >= Math.min(matchRules.playersPerSide, teamBSquad.length)) return xi;
       return [...xi, name];
     });
     setTeamBCaptain(c => c === name ? "" : c);
@@ -10666,8 +10667,8 @@ function SetupScreen({
     setNonStrikerA("");
     setBowlerB("");
   }, [teamAIsBattingFirst]);
-  const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(11, teamASquad.length);
-  const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(11, teamBSquad.length);
+  const aXIReady = teamASquad.length === 0 || teamAPlayingXI.length === Math.min(matchRules.playersPerSide, teamASquad.length);
+  const bXIReady = teamBSquad.length === 0 || teamBPlayingXI.length === Math.min(matchRules.playersPerSide, teamBSquad.length);
   // Shown collapsed instead of the full rule editor. Unlike nonStandardRulesText (used in the
   // match summary/PDF, which stays silent about anything at its default value), this always shows
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
@@ -10811,7 +10812,30 @@ function SetupScreen({
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
     placeholder: "20"
-  })), /*#__PURE__*/React.createElement(Field, {
+  })), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Players per side",
+    value: matchRules.playersPerSide,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      playersPerSide: v
+    })),
+    options: [{
+      value: 6,
+      label: "6"
+    }, {
+      value: 7,
+      label: "7"
+    }, {
+      value: 8,
+      label: "8"
+    }, {
+      value: 9,
+      label: "9"
+    }, {
+      value: 11,
+      label: "11 (standard)"
+    }]
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Venue (optional)"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: venue,
@@ -11319,7 +11343,7 @@ function SetupScreen({
     onToggle: toggleAXI,
     onSetCaptain: setTeamACaptain,
     onSetKeeper: setTeamAKeeper,
-    required: Math.min(11, teamASquad.length),
+    required: Math.min(matchRules.playersPerSide, teamASquad.length),
     numbers: teamAMatchNumbers,
     onNumberChange: updateTeamANumber
   }), teamBSquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
@@ -11331,7 +11355,7 @@ function SetupScreen({
     onToggle: toggleBXI,
     onSetCaptain: setTeamBCaptain,
     onSetKeeper: setTeamBKeeper,
-    required: Math.min(11, teamBSquad.length),
+    required: Math.min(matchRules.playersPerSide, teamBSquad.length),
     numbers: teamBMatchNumbers,
     onNumberChange: updateTeamBNumber
   })), currentPage === "openers" && /*#__PURE__*/React.createElement("div", {
@@ -11387,7 +11411,7 @@ function SetupScreen({
       color: COLORS.ink,
       lineHeight: 1.9
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
     wonBy: tossWonBy,
     decision: tossDecision || null
   }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, rulesSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
