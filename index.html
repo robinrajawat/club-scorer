@@ -4109,9 +4109,14 @@ function newInning(battingTeam, bowlingTeam, rules) {
     // Consecutive legal-ball wickets per bowler (resets on any non-wicket legal ball; wides/
     // no-balls neither extend nor break it) — how hat-tricks are detected in applyBall.
     bowlerWicketStreak: {},
-    // Milestones crossed during this innings (50s, golden ducks, 5-wicket hauls, hat-tricks,
-    // maiden overs, 50+ partnerships) — appended to live, in applyBall, as they happen.
+    // Milestones crossed during this innings (individual 50s/100s, 5-wicket hauls, hat-tricks,
+    // 50+ partnerships) — appended live, in applyBall, as they happen. Shown in the permanent
+    // scorecard/commentary (see InningScorecard).
     milestones: [],
+    // Same idea, but for the toast-only moments (team totals, maiden overs, ducks) that are worth
+    // a celebration pop-up but not worth permanently logging on the scorecard — see applyBall's
+    // milestone-detection section and MatchScreen's commit().
+    toastMilestones: [],
     // house rules baked in at innings start, so a mid-match account-settings change never
     // affects an innings already in progress
     ballsPerOver: r.ballsPerOver,
@@ -4218,6 +4223,7 @@ function applyBall(inning, event) {
   ensureBowler(cur, cur.bowlerName);
   cur.bowlerWicketStreak = { ...(inning.bowlerWicketStreak || {}) };
   cur.milestones = [...(inning.milestones || [])];
+  cur.toastMilestones = [...(inning.toastMilestones || [])];
   const ballBowlerName = cur.bowlerName; // stable even if this ball completes the over below,
   // which clears cur.bowlerName
   const bowler = {
@@ -4229,6 +4235,7 @@ function applyBall(inning, event) {
   let strikeChanges = false;
   let dismissedName = null;
   let creditsBowler = false;
+  let justBowledMaiden = null; // bowler name, set below when a completed over concedes 0 runs
   if (event.kind === "run") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
@@ -4347,6 +4354,7 @@ function applyBall(inning, event) {
           ...cur.bowlers[cur.bowlerName],
           maidens: (cur.bowlers[cur.bowlerName].maidens || 0) + 1
         };
+        justBowledMaiden = cur.bowlerName; // captured before cur.bowlerName is cleared below
       }
       cur.overs = [...cur.overs, []];
       cur.overBowlers = [...cur.overBowlers, cur.bowlerName];
@@ -4363,16 +4371,12 @@ function applyBall(inning, event) {
   // ---- Milestone detection --------------------------------------------------------------
   // Derived from the SAME before(`inning`)/after(`cur`) state everything above just produced,
   // rather than a separate reconstruction pass — so it can never drift out of sync with the
-  // scoring logic itself. Every milestone is appended to cur.milestones (shown in the
-  // scorecard/commentary) and returned alongside the ball event so MatchScreen can also pop a
-  // toast for whichever ones are new on THIS ball.
+  // scoring logic itself. Every milestone here is appended to cur.milestones (shown permanently
+  // on the scorecard/commentary — see InningScorecard) and returned alongside the ball event so
+  // MatchScreen can also pop a toast for whichever ones are new on THIS ball.
   const milestoneOver = oversLabel(cur.legalBalls, cur.ballsPerOver);
   const milestoneScore = `${cur.runs}-${cur.wickets}`;
   // Batting: 50, 100, 150... — any batsman whose total just crossed a 50-run line this ball.
-  // (Team totals crossing 50/100 aren't celebrated here — that's just the scoreboard doing its
-  // job, not really a moment worth a toast. Same reasoning excludes a golden duck, which is a
-  // low point for whoever's out, not something to pop a celebration over, and a maiden over,
-  // which barely registers as an event worth interrupting the score for.)
   Object.keys(cur.batsmen).forEach(name => {
     const before = (inning.batsmen[name] && inning.batsmen[name].runs) || 0;
     const after = cur.batsmen[name].runs;
@@ -4416,6 +4420,40 @@ function applyBall(inning, event) {
     cur.milestones.push({
       type: "partnership",
       text: `${cur.strikerName} & ${cur.nonStrikerName} put on ${Math.floor(afterPartnership / 50) * 50}`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // ---- Toast-only milestones -------------------------------------------------------------
+  // Same detection idea as above, but pushed to cur.toastMilestones instead of cur.milestones —
+  // worth a celebration pop-up, not worth permanently cluttering the scorecard (see
+  // toastMilestones' definition in newInning and MatchScreen's commit()).
+  // Team total: 50, 100, 150... crossed this ball.
+  const beforeTeamRuns = inning.runs || 0;
+  const afterTeamRuns = cur.runs;
+  if (afterTeamRuns >= 50 && Math.floor(afterTeamRuns / 50) > Math.floor(beforeTeamRuns / 50)) {
+    cur.toastMilestones.push({
+      type: "teamTotal",
+      text: `${cur.battingTeam} brings up ${Math.floor(afterTeamRuns / 50) * 50}`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Maiden over: set above, right when the over closes with 0 runs conceded.
+  if (justBowledMaiden) {
+    cur.toastMilestones.push({
+      type: "maiden",
+      text: `${justBowledMaiden} bowls a maiden`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Duck: batsman dismissed for 0. Uses the same dismissedName tracked for fallOfWickets above,
+  // so it fires on any duck (not just a first-ball golden duck).
+  if (dismissedName && cur.batsmen[dismissedName] && cur.batsmen[dismissedName].runs === 0) {
+    cur.toastMilestones.push({
+      type: "duck",
+      text: `${dismissedName} out for a duck`,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -4700,16 +4738,18 @@ function BallCelebration({
   }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
 }
 // A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments —
-// individual/partnership 50s, 5-fors, hat-tricks. Slides in from the top instead of bursting
-// center-screen, and always logged to inning.milestones (see InningScorecard) even after the
-// toast itself disappears. Deliberately excludes team-total milestones (just the scoreboard doing
-// its job), golden ducks (not something to celebrate for whoever's out), and maiden overs (barely
-// registers as an event) — see applyBall's milestone-detection section.
+// individual/partnership 50s, 5-fors, hat-tricks — plus team-total milestones, maiden overs, and
+// ducks, which get the same toast treatment but are deliberately kept OUT of inning.milestones
+// (see applyBall's milestone-detection section and inning.toastMilestones) so the permanent
+// scorecard/commentary log doesn't get cluttered with things the scoreboard already shows.
 const MILESTONE_ICONS = {
   batting: "\u{1F3CF}",
   hatTrick: "\u{1F3A9}",
   fiveFor: "\u{1F3AF}",
-  partnership: "\u{1F91D}"
+  partnership: "\u{1F91D}",
+  teamTotal: "\u{1F4C8}",
+  maiden: "\u{1F6E1}\u{FE0F}",
+  duck: "\u{1F986}"
 };
 function MilestoneToast({
   toast
@@ -11421,6 +11461,10 @@ function SetupScreen({
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
   const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  // Coming from "Score this fixture" — the fixture already pins both teams, so the team
+  // pickers/chips (which list every saved team) shouldn't be shown at all; showing them makes it
+  // look like any team can still be picked when the fixture has already decided that.
+  const fromFixture = !!(presetTournament && presetTournament.fixtureTeamA);
   const sameLabel = teamAName.trim() && teamBName.trim() && teamAName.trim() === teamBName.trim();
   const hasSquads = teamASquad.length > 0 || teamBSquad.length > 0;
   // A phone screen can only show one of these at a time anyway (it's all scroll either way) — the
@@ -11520,7 +11564,18 @@ function SetupScreen({
     style: sectionLabel
   }, "Teams & Format"), /*#__PURE__*/React.createElement(Field, {
     label: "Batting team"
-  }, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
+  }, fromFixture ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 15,
+      fontWeight: 600,
+      color: COLORS.ink,
+      padding: "12px 14px",
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.surface
+    }
+  }, teamAName) : /*#__PURE__*/React.createElement(React.Fragment, null, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
     teams: teams,
     selectedId: teamAId,
     onSelect: selectTeamA
@@ -11531,9 +11586,20 @@ function SetupScreen({
     style: teams.length > 0 ? {
       marginTop: 8
     } : {}
-  })), /*#__PURE__*/React.createElement(Field, {
+  }))), /*#__PURE__*/React.createElement(Field, {
     label: "Bowling team"
-  }, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
+  }, fromFixture ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 15,
+      fontWeight: 600,
+      color: COLORS.ink,
+      padding: "12px 14px",
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.surface
+    }
+  }, teamBName) : /*#__PURE__*/React.createElement(React.Fragment, null, teams.length > 0 && /*#__PURE__*/React.createElement(TeamChips, {
     teams: teams,
     selectedId: teamBId,
     onSelect: selectTeamB
@@ -11544,7 +11610,7 @@ function SetupScreen({
     style: teams.length > 0 ? {
       marginTop: 8
     } : {}
-  })), sameLabel && /*#__PURE__*/React.createElement("div", {
+  }))), sameLabel && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -18752,10 +18818,13 @@ function MatchScreen({
     queueSave(updated);
     // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
     // above for why this doesn't just set milestoneToast directly (a single ball can produce more
-    // than one, and only showing the last one silently dropped the rest from the toast).
+    // than one, and only showing the last one silently dropped the rest from the toast). Includes
+    // both the permanent (scorecard-logged) milestones and the toast-only ones (team totals,
+    // maiden overs, ducks) — same toast treatment, they just don't get written to the scorecard.
     const newMilestones = newInningState.milestones.slice((inning.milestones || []).length);
-    if (newMilestones.length > 0) {
-      setMilestoneQueue(q => [...q, ...newMilestones]);
+    const newToastMilestones = (newInningState.toastMilestones || []).slice((inning.toastMilestones || []).length);
+    if (newMilestones.length > 0 || newToastMilestones.length > 0) {
+      setMilestoneQueue(q => [...q, ...newMilestones, ...newToastMilestones]);
     }
   }
   async function handleGetCode() {
@@ -18815,7 +18884,12 @@ function MatchScreen({
           ballsPerOver: inn.ballsPerOver,
           wideRuns: inn.wideRuns,
           noballRuns: inn.noballRuns,
-          freeHit: inn.freeHitEnabled
+          freeHit: inn.freeHitEnabled,
+          // Carry the rest of the house rules over too — these used to get silently dropped for
+          // the 2nd innings (e.g. a configured time cap would vanish the moment the break hit).
+          maxOversPerBowler: inn.maxOversPerBowler,
+          powerplayOvers: inn.powerplayOvers,
+          timeCapMinutes: inn.timeCapMinutes
         });
         updated.awaitingSecondInningsSetup = true;
       } else {
@@ -20118,6 +20192,8 @@ function SecondInningsSetup({
   const [striker, setStriker] = useState("");
   const [nonStriker, setNonStriker] = useState("");
   const [bowler, setBowler] = useState("");
+  const [showScorecard, setShowScorecard] = useState(false);
+  const [confirmGoBack, setConfirmGoBack] = useState(false);
   const inn = match.innings[1];
   const target = match.innings[0].runs + 1;
   const canStart = striker.trim() && nonStriker.trim() && striker.trim() !== nonStriker.trim() && bowler.trim();
@@ -20139,6 +20215,24 @@ function SecondInningsSetup({
     setMatch(updatedMatch);
     saveTransition(updatedMatch, setMatch);
   }
+  // Reopens the just-finished 1st innings for corrections. The 2nd innings placeholder created at
+  // the break hasn't been started yet (no openers picked), so dropping it back off the innings
+  // array loses nothing — the scorer lands back on the normal live-scoring screen for innings 1,
+  // where Undo and every other correction tool already works.
+  function goBackToFirstInnings() {
+    const revertedFirst = {
+      ...match.innings[0],
+      complete: false
+    };
+    const updatedMatch = {
+      ...match,
+      innings: [revertedFirst],
+      currentInningIndex: 0,
+      awaitingSecondInningsSetup: false
+    };
+    setMatch(updatedMatch);
+    saveTransition(updatedMatch, setMatch);
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -20148,12 +20242,66 @@ function SecondInningsSetup({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 26,
-      color: COLORS.pitch,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
       marginBottom: 6
     }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch
+    }
   }, "Innings Break"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowScorecard(true),
+    className: "cs-btn cs-shine",
+    title: "Scorecard",
+    "aria-label": "Scorecard",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 38,
+      height: 38,
+      borderRadius: "50%",
+      border: "none",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.08)",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Table2, {
+    size: 17
+  })), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setConfirmGoBack(true),
+    className: "cs-btn cs-shine",
+    title: "Back to 1st innings",
+    "aria-label": "Back to 1st innings",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 38,
+      height: 38,
+      borderRadius: "50%",
+      border: "none",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.08)",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 17
+  })))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 14,
@@ -20212,7 +20360,24 @@ function SecondInningsSetup({
     style: {
       width: "100%"
     }
-  }, "Start 2nd Innings"));
+  }, "Start 2nd Innings"), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
+    match: {
+      ...match,
+      innings: [match.innings[0]]
+    },
+    onClose: () => setShowScorecard(false)
+  }), confirmGoBack && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Back to 1st innings?",
+    message: `This reopens ${match.innings[0].battingTeam}'s completed innings so you can fix a mistake — the 2nd innings hasn't started yet, so nothing from it is lost. You'll pick openers again when you're ready to move on.`,
+    confirmLabel: "Go back",
+    cancelLabel: "Cancel",
+    variant: "default",
+    onConfirm: () => {
+      setConfirmGoBack(false);
+      goBackToFirstInnings();
+    },
+    onCancel: () => setConfirmGoBack(false)
+  }));
 }
 function PlayerOfMatchCard({
   match,
