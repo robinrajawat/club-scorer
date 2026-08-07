@@ -294,6 +294,19 @@ const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   x2: "12.01",
   y2: "8"
 }));
+const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "9",
+  x2: "12",
+  y2: "13"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "17",
+  x2: "12.01",
+  y2: "17"
+}));
 
 // ---------- Design tokens ----------
 // Pitch green header, scorecard-cream body, willow tan accents, ball-red for wickets.
@@ -4339,23 +4352,49 @@ function applyBall(inning, event) {
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
     legalBall = event.legal !== false;
-    // A run out is the one dismissal that can happen on an otherwise-normal delivery OR on a
-    // wide/no-ball — event.extraKind carries which, so the associated penalty run(s) still land
-    // exactly like the standalone wide/noball branches above. Without this, a run out marked as
-    // occurring on a wide/no-ball dropped that run entirely instead of crediting it.
+    // A run out or a stumping is the only dismissals that can happen on an otherwise-normal
+    // delivery OR on a wide (a run out can also happen on a no-ball) — event.extraKind carries
+    // which. Mirrors the standalone wide/noball branches above exactly: a wide's entire run total
+    // (the fixed penalty AND any further running) is extras, never personal runs; a no-ball's
+    // fixed penalty is extras but anything actually run/hit is credited to the batsman.
+    const runsBeforeWicket = Math.max(0, event.runsBeforeWicket || 0);
     if (event.extraKind === "wide") {
-      const extraRuns = cur.wideRuns || 1;
-      runsThisBall = extraRuns;
-      cur.runs += extraRuns;
-      bowler.runs += extraRuns;
-      cur.extras.wide += extraRuns;
+      const wideTotal = (cur.wideRuns || 1) + runsBeforeWicket;
+      runsThisBall = wideTotal;
+      cur.runs += wideTotal;
+      bowler.runs += wideTotal;
+      cur.extras.wide += wideTotal;
     } else if (event.extraKind === "noball") {
-      const extraRuns = cur.noballRuns || 1;
-      runsThisBall = extraRuns;
-      cur.runs += extraRuns;
-      bowler.runs += extraRuns;
-      cur.extras.noball += extraRuns;
+      const noballPenalty = cur.noballRuns || 1;
+      runsThisBall = noballPenalty + runsBeforeWicket;
+      cur.runs += runsThisBall;
+      bowler.runs += runsThisBall;
+      cur.extras.noball += noballPenalty;
       if (cur.freeHitEnabled) cur.freeHitActive = true;
+      if (runsBeforeWicket > 0) {
+        cur.batsmen[cur.strikerName] = {
+          ...cur.batsmen[cur.strikerName],
+          runs: cur.batsmen[cur.strikerName].runs + runsBeforeWicket,
+          fours: cur.batsmen[cur.strikerName].fours + (runsBeforeWicket === 4 ? 1 : 0),
+          sixes: cur.batsmen[cur.strikerName].sixes + (runsBeforeWicket === 6 ? 1 : 0)
+        };
+      }
+    } else if (runsBeforeWicket > 0) {
+      // Fair ball: runs actually completed by running before the dismissal — most relevant for a
+      // run out (the pair was mid-run when one was caught short) but available for every wicket
+      // type rather than assuming it's always exactly 0, since the scorer is in the best position
+      // to know what actually happened. Credited to the team total, the bowler's runs conceded,
+      // and the striker's own tally — the run genuinely happened, only the batsman ends up out
+      // instead of home safe.
+      cur.runs += runsBeforeWicket;
+      bowler.runs += runsBeforeWicket;
+      runsThisBall = runsBeforeWicket;
+      cur.batsmen[cur.strikerName] = {
+        ...cur.batsmen[cur.strikerName],
+        runs: cur.batsmen[cur.strikerName].runs + runsBeforeWicket,
+        fours: cur.batsmen[cur.strikerName].fours + (runsBeforeWicket === 4 ? 1 : 0),
+        sixes: cur.batsmen[cur.strikerName].sixes + (runsBeforeWicket === 6 ? 1 : 0)
+      };
     }
     dismissedName = cur.strikerName;
     const wt = event.wicketType || "out";
@@ -4397,7 +4436,8 @@ function applyBall(inning, event) {
       over: oversLabel(cur.legalBalls + (legalBall ? 1 : 0), cur.ballsPerOver),
       batsman: dismissedName
     }];
-    display = event.extraKind === "wide" ? "Wd+W" : event.extraKind === "noball" ? "Nb+W" : "W";
+    const extraPrefix = event.extraKind === "wide" ? "Wd+" : event.extraKind === "noball" ? "Nb+" : "";
+    display = runsBeforeWicket > 0 ? `${extraPrefix}${runsBeforeWicket}+W` : `${extraPrefix}W`;
     cur.strikerName = event.newBatsman || "";
   }
   cur.bowlers[cur.bowlerName] = bowler;
@@ -19167,104 +19207,91 @@ function MatchScreen({
       setCelebration(c => c && c.key === key ? null : c);
     }, 1000);
   }
-  function handleWicket(wicketType, legal = true) {
+  function handleWicket(wicketType) {
     // Same bug class as checkInningEnd's allOut / needsNewBatsman / applyBall's over-completion
     // check — was hardcoded to `+ 1 >= 10`, so a 9-a-side match's real last wicket (the 8th) still
     // fell through to the "who's the new batsman?" prompt below instead of ending the innings
     // immediately, since 9 >= 10 is false. maxWicketsFor reads the actual roster-based threshold.
     const isLast = inning.wickets + 1 >= maxWicketsFor(match, inning);
-    if (wicketType === "Caught" || wicketType === "Run out") {
-      setShowWicket(false);
-      setCatchDraft({
-        wicketType,
-        legal,
-        isLast
-      });
-      // Most catches are taken by the keeper — pre-fill it as a starting point, still fully
-      // editable via the PlayerPicker below for the (common enough) catch taken elsewhere. Run
-      // outs don't have an equivalent default fielder, so that field starts blank for them.
-      setFielderDraftName(wicketType === "Caught" ? keeperFor(match, inning.bowlingTeam) : "");
-      // Run out is the one dismissal that can land on a fair ball, a wide, or a no-ball — default
-      // to fair (by far the most common case), correctable on the fielder step below.
-      if (wicketType === "Run out") setRunOutExtraKind(null);
-      return;
-    }
-    pushHistory();
-    if (isLast) {
-      commit(applyBall(inning, {
-        kind: "wicket",
-        wicketType,
-        legal,
-        newBatsman: ""
-      }));
-      celebrateWicket();
-      setShowWicket(false);
-    } else {
-      setShowWicket(false);
-      setPendingWicket({
-        wicketType,
-        legal
-      });
-      celebrateWicket();
-    }
+    // Every wicket type now goes through the same details step (runs completed, ball type where
+    // relevant, fielder where relevant) instead of Caught/Run out alone — one path for every
+    // dismissal is less surface area for the "this type forgot to handle X" class of bug than six
+    // near-duplicate branches would be.
+    setShowWicket(false);
+    setWicketDraft({
+      wicketType,
+      isLast
+    });
+    setRunsDraft(0);
+    // Most catches are taken by the keeper — pre-fill it as a starting point, still fully editable
+    // via the PlayerPicker below for the (common enough) catch taken elsewhere. Other types don't
+    // have an equivalent default fielder, so that field starts blank for them.
+    setFielderDraftName(wicketType === "Caught" ? keeperFor(match, inning.bowlingTeam) : "");
+    // Ball type only ever matters for Run out (fair/wide/no-ball) and Stumped (fair/wide — the
+    // Laws don't allow a stumping off a no-ball) — starts at fair either way, the common case.
+    setWicketExtraKind(null);
   }
   const [pendingWicket, setPendingWicket] = useState(null);
-  const [catchDraft, setCatchDraft] = useState(null); // {wicketType, legal, isLast} — waiting on fielder name
+  const [wicketDraft, setWicketDraft] = useState(null); // {wicketType, isLast} — waiting on details
   const [fielderDraftName, setFielderDraftName] = useState("");
-  // Only meaningful while catchDraft.wicketType === "Run out": null = fair ball (the default and
-  // by far the common case), "wide"/"noball" = the ball is ALSO an extra, credited alongside the
-  // dismissal in applyBall (see event.extraKind there) rather than needing a separate action.
-  const [runOutExtraKind, setRunOutExtraKind] = useState(null);
-  function confirmFielder(nameOverride) {
+  // Runs actually completed by running before the wicket fell — 0 the overwhelming majority of the
+  // time (only a run out, and rarely a stumping gone wrong, can have any), but available for every
+  // dismissal type rather than assuming it's always exactly 0.
+  const [runsDraft, setRunsDraft] = useState(0);
+  // Only meaningful for Run out/Stumped: null = fair ball (the default and by far the common
+  // case), "wide"/"noball" = the ball is ALSO an extra, credited alongside the dismissal in
+  // applyBall (see event.extraKind there) rather than needing a separate action.
+  const [wicketExtraKind, setWicketExtraKind] = useState(null);
+  function confirmWicketDetails(nameOverride) {
     const {
       wicketType,
       isLast
-    } = catchDraft;
+    } = wicketDraft;
     const name = (nameOverride !== undefined ? nameOverride : fielderDraftName).trim();
     // A catch always has exactly one known taker, so the name is required. A run out's fielder
     // can genuinely be unclear in the moment (direct hit, relay throw) — that one's skippable, so
     // this only blocks Confirm for Caught, matching the disabled state on the button above.
     if (wicketType === "Caught" && !name) return;
-    // A run out's legality now follows the explicit fair/wide/no-ball pick instead of always
-    // being false — legal only when it landed on a wide/no-ball (those never count as a ball
-    // faced); a run out off a normal delivery is a normal legal ball like any other dismissal.
-    const legal = wicketType === "Run out" ? runOutExtraKind == null : catchDraft.legal;
-    const extraKind = wicketType === "Run out" ? runOutExtraKind || undefined : undefined;
+    const canBeExtra = wicketType === "Run out" || wicketType === "Stumped";
+    // No-ball nullifies every dismissal except Run out per the Laws — the UI already only offers
+    // that option for Run out, but guard here too so a stale draft can never produce an invalid
+    // "st ... (no ball)" record if this ever gets called from somewhere that skips the picker.
+    const extraKind = canBeExtra ? wicketType === "Stumped" && wicketExtraKind === "noball" ? "wide" : wicketExtraKind || undefined : undefined;
+    const payload = {
+      kind: "wicket",
+      wicketType,
+      legal: extraKind == null,
+      extraKind,
+      runsBeforeWicket: Math.max(0, runsDraft || 0),
+      fielderName: name || undefined
+    };
     if (isLast) {
       pushHistory();
       commit(applyBall(inning, {
-        kind: "wicket",
-        wicketType,
-        legal,
-        extraKind,
-        newBatsman: "",
-        fielderName: name
+        ...payload,
+        newBatsman: ""
       }));
       celebrateWicket();
     } else {
-      setPendingWicket({
-        wicketType,
-        legal,
-        extraKind,
-        fielderName: name
-      });
+      setPendingWicket(payload);
       celebrateWicket();
     }
-    setCatchDraft(null);
+    setWicketDraft(null);
     setFielderDraftName("");
-    setRunOutExtraKind(null);
+    setRunsDraft(0);
+    setWicketExtraKind(null);
   }
   function confirmNewBatsman() {
     if (!newBatsmanName.trim()) return;
     if (pendingWicket) {
       pushHistory();
+      // Spread pendingWicket wholesale instead of naming each field individually — the field list
+      // has grown twice already (fielderName, then extraKind/runsBeforeWicket) and each time meant
+      // finding and updating both this call site and endInningEarly's matching one. Spreading means
+      // any future field pendingWicket gains just flows through automatically.
       commit(applyBall(inning, {
-        kind: "wicket",
-        wicketType: pendingWicket.wicketType,
-        legal: pendingWicket.legal,
-        extraKind: pendingWicket.extraKind,
-        newBatsman: newBatsmanName.trim(),
-        fielderName: pendingWicket.fielderName
+        ...pendingWicket,
+        newBatsman: newBatsmanName.trim()
       }));
       setPendingWicket(null);
     } else {
@@ -19288,12 +19315,8 @@ function MatchScreen({
     pushHistory();
     if (pendingWicket) {
       commit(applyBall(inning, {
-        kind: "wicket",
-        wicketType: pendingWicket.wicketType,
-        legal: pendingWicket.legal,
-        extraKind: pendingWicket.extraKind,
-        newBatsman: "",
-        fielderName: pendingWicket.fielderName
+        ...pendingWicket,
+        newBatsman: ""
       }), undefined, true);
       setPendingWicket(null);
     } else {
@@ -20165,11 +20188,12 @@ function MatchScreen({
     key: w,
     variant: "danger",
     onClick: () => handleWicket(w)
-  }, w)))), catchDraft && /*#__PURE__*/React.createElement(Modal, {
+  }, w)))), wicketDraft && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => {
-      setCatchDraft(null);
+      setWicketDraft(null);
       setFielderDraftName("");
-      setRunOutExtraKind(null);
+      setRunsDraft(0);
+      setWicketExtraKind(null);
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20178,7 +20202,7 @@ function MatchScreen({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, catchDraft.wicketType === "Caught" ? "Who took the catch?" : "Who ran them out?"), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
+  }, wicketDraft.wicketType === "Caught" ? "Who took the catch?" : wicketDraft.wicketType === "Run out" ? "Who ran them out?" : `${wicketDraft.wicketType} \u2014 details`), wicketDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -20186,7 +20210,65 @@ function MatchScreen({
       marginBottom: 12,
       lineHeight: 1.5
     }
-  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("div", {
+  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, cancel out of this and tap Swap Strike first."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Runs completed before the wicket"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, [0, 1, 2, 3].map(n => /*#__PURE__*/React.createElement("button", {
+    key: n,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setRunsDraft(n),
+    style: {
+      minWidth: 44,
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: runsDraft === n ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: runsDraft === n ? "#fff" : COLORS.ink,
+      boxShadow: runsDraft === n ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      textAlign: "center"
+    }
+  }, n))), runsDraft % 2 === 1 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 6,
+      marginTop: 10,
+      padding: "8px 10px",
+      background: "rgba(184,137,43,0.14)",
+      border: "1px solid rgba(184,137,43,0.35)",
+      borderRadius: 10,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.gold,
+      lineHeight: 1.4
+    }
+  }, /*#__PURE__*/React.createElement(AlertTriangle, {
+    size: 14,
+    style: {
+      flexShrink: 0,
+      marginTop: 1
+    }
+  }), "Odd number of runs \u2014 strike would normally have crossed. Double-check the batting pair (Swap Strike) once the new batsman is in, if that's not already reflected here.")), (wicketDraft.wicketType === "Run out" || wicketDraft.wicketType === "Stumped") && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -20210,27 +20292,27 @@ function MatchScreen({
   }, {
     value: "wide",
     label: "Wide"
-  }, {
+  }, ...wicketDraft.wicketType === "Run out" ? [{
     value: "noball",
     label: "No ball"
-  }].map(opt => /*#__PURE__*/React.createElement("button", {
+  }] : []].map(opt => /*#__PURE__*/React.createElement("button", {
     key: opt.label,
     type: "button",
     className: "cs-btn cs-shine",
-    onClick: () => setRunOutExtraKind(opt.value),
+    onClick: () => setWicketExtraKind(opt.value),
     style: {
       padding: "8px 14px",
       borderRadius: 20,
       border: "none",
       cursor: "pointer",
-      background: runOutExtraKind === opt.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: runOutExtraKind === opt.value ? "#fff" : COLORS.ink,
-      boxShadow: runOutExtraKind === opt.value ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      background: wicketExtraKind === opt.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: wicketExtraKind === opt.value ? "#fff" : COLORS.ink,
+      boxShadow: wicketExtraKind === opt.value ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13
     }
-  }, opt.label)))), /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, opt.label)))), (wicketDraft.wicketType === "Caught" || wicketDraft.wicketType === "Run out") && /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: fielderDraftName,
     onChange: setFielderDraftName,
@@ -20240,15 +20322,15 @@ function MatchScreen({
     numbers: numbersFor(match, inning.bowlingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: catchDraft.wicketType === "Caught" && !fielderDraftName.trim(),
-    onClick: () => confirmFielder(),
+    disabled: wicketDraft.wicketType === "Caught" && !fielderDraftName.trim(),
+    onClick: () => confirmWicketDetails(),
     style: {
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm"), catchDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("button", {
+  }, "Confirm"), wicketDraft.wicketType === "Run out" && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => confirmFielder(""),
+    onClick: () => confirmWicketDetails(""),
     className: "cs-btn",
     style: {
       display: "block",
@@ -20267,9 +20349,10 @@ function MatchScreen({
   }, "Fielder unknown \u2014 skip"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
-      setCatchDraft(null);
+      setWicketDraft(null);
       setFielderDraftName("");
-      setRunOutExtraKind(null);
+      setRunsDraft(0);
+      setWicketExtraKind(null);
     },
     className: "cs-btn",
     style: {
