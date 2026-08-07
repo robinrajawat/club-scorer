@@ -5511,7 +5511,7 @@ function AuthBar({
       height: 18,
       padding: "0 4px",
       borderRadius: 9,
-      background: COLORS.ball,
+      background: COLORS.ballFixed,
       color: "#fff",
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -6405,7 +6405,7 @@ function AccountScreen({
       height: 18,
       padding: "0 4px",
       borderRadius: 9,
-      background: COLORS.ball,
+      background: COLORS.ballFixed,
       color: "#fff",
       fontSize: 11,
       fontWeight: 700
@@ -7585,7 +7585,7 @@ function ClubSourceSelector({
     fontSize: 12.5,
     cursor: "pointer",
     border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitch : COLORS.surface,
+    background: active ? COLORS.pitchFixed : COLORS.surface,
     color: active ? "#fff" : COLORS.inkSoft,
     whiteSpace: "nowrap"
   });
@@ -7837,7 +7837,7 @@ function ClubPanel({
     fontSize: 12.5,
     cursor: "pointer",
     border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitch : COLORS.surface,
+    background: active ? COLORS.pitchFixed : COLORS.surface,
     color: active ? "#fff" : COLORS.inkSoft,
     whiteSpace: "nowrap"
   });
@@ -7897,7 +7897,7 @@ function ClubPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      background: mode === "create" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      background: mode === "create" ? COLORS.pitchFixed : "rgba(0,0,0,0.06)",
       color: mode === "create" ? "#fff" : COLORS.inkSoft
     }
   }, "Create a club"), /*#__PURE__*/React.createElement("button", {
@@ -7915,7 +7915,7 @@ function ClubPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      background: mode === "join" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      background: mode === "join" ? COLORS.pitchFixed : "rgba(0,0,0,0.06)",
       color: mode === "join" ? "#fff" : COLORS.inkSoft
     }
   }, "Join with code")), /*#__PURE__*/React.createElement("div", {
@@ -9003,7 +9003,7 @@ function FederationsPanel({
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
-      background: manageOpenId === f.id ? COLORS.pitch : "rgba(255,255,255,0.7)",
+      background: manageOpenId === f.id ? COLORS.pitchFixed : "rgba(255,255,255,0.7)",
       border: "none",
       borderRadius: 10,
       color: manageOpenId === f.id ? "#fff" : COLORS.pitch,
@@ -9480,7 +9480,7 @@ function FederationsPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      background: mode === "create" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      background: mode === "create" ? COLORS.pitchFixed : "rgba(0,0,0,0.06)",
       color: mode === "create" ? "#fff" : COLORS.inkSoft
     }
   }, "New federation"), /*#__PURE__*/React.createElement("button", {
@@ -9498,7 +9498,7 @@ function FederationsPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      background: mode === "find" ? COLORS.pitch : "rgba(0,0,0,0.06)",
+      background: mode === "find" ? COLORS.pitchFixed : "rgba(0,0,0,0.06)",
       color: mode === "find" ? "#fff" : COLORS.inkSoft
     }
   }, "Find a federation")), mode === "find" && clubs.length > 1 && /*#__PURE__*/React.createElement("select", {
@@ -10383,7 +10383,7 @@ function ShareMenu({
     disabled: busy,
     style: {
       flex: 1,
-      background: COLORS.turf,
+      background: COLORS.turfFixed,
       border: "none",
       borderRadius: 8,
       color: "#fff",
@@ -10982,7 +10982,7 @@ function HomeScreen({
       height: 8,
       borderRadius: "50%",
       flexShrink: 0,
-      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turf,
+      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turfFixed,
       boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
     }
   }), /*#__PURE__*/React.createElement("div", null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
@@ -12698,7 +12698,7 @@ function TournamentsScreen({
       fontSize: 12.5,
       cursor: "pointer",
       border: !activeClubId ? "none" : `1px solid ${COLORS.willow}`,
-      background: !activeClubId ? COLORS.pitch : COLORS.surface,
+      background: !activeClubId ? COLORS.pitchFixed : COLORS.surface,
       color: !activeClubId ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -12713,7 +12713,7 @@ function TournamentsScreen({
       fontSize: 12.5,
       cursor: "pointer",
       border: activeClubId === c.id ? "none" : `1px solid ${COLORS.willow}`,
-      background: activeClubId === c.id ? COLORS.pitch : COLORS.surface,
+      background: activeClubId === c.id ? COLORS.pitchFixed : COLORS.surface,
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -12745,7 +12745,7 @@ function TournamentsScreen({
       fontSize: 11.5,
       cursor: "pointer",
       border: statusFilter === key ? "none" : `1px solid ${COLORS.willow}`,
-      background: statusFilter === key ? COLORS.pitch : COLORS.surface,
+      background: statusFilter === key ? COLORS.pitchFixed : COLORS.surface,
       color: statusFilter === key ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
@@ -15989,7 +15989,7 @@ function TeamEditScreen({
       borderRadius: "50%",
       flexShrink: 0,
       border: expandedKey === p._key ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: expandedKey === p._key ? COLORS.pitch : p.public ? "rgba(184,137,43,0.16)" : COLORS.surface,
+      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : COLORS.surface,
       color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
       cursor: "pointer",
       display: "flex",
@@ -22573,7 +22573,7 @@ class ErrorBoundary extends React.Component {
       }, this.state.reportStatus === "pending" ? "Reporting this automatically\u2026" : this.state.reportStatus === "sent" ? "This has been reported automatically." : "Couldn't report this automatically \u2014 your connection may be down."), /*#__PURE__*/React.createElement("button", {
         onClick: () => window.location.reload(),
         style: {
-          background: COLORS.pitch,
+          background: COLORS.pitchFixed,
           color: "#fff",
           border: "none",
           borderRadius: 10,
