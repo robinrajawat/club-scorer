@@ -3050,7 +3050,18 @@ function computeStandings(tournament, allMatches) {
     runsAgainst: 0,
     oversAgainst: 0
   }]));
-  const tournamentMatches = allMatches.filter(m => m.tournamentId === tournament.id && m.status === "complete");
+  // A knockout-stage fixture's match (Quarterfinal/Semifinal/Final — anything with f.stage set)
+  // must never count toward the league table: those points/NRR are already locked in by the time
+  // a knockout is even played. The comment above computeGroupStandings shows this was ALREADY a
+  // known concern, but only half-solved it — restricting a group's own table to its own teams
+  // does stop a CROSS-group knockout match from polluting either group's table (one team won't be
+  // in that group's list), but it does nothing for a knockout match between two teams that
+  // started in the SAME group (a real possibility as soon as the bracket reaches the Final), and
+  // nothing at all for a single-pool (no groups) tournament, where a knockout match always has
+  // both teams in the one shared table. Excluding by fixture stage instead — a direct, complete
+  // fix that doesn't depend on which teams happen to be paired.
+  const knockoutMatchIds = new Set((tournament.fixtures || []).filter(f => f.stage && f.matchId).map(f => f.matchId));
+  const tournamentMatches = allMatches.filter(m => m.tournamentId === tournament.id && m.status === "complete" && !knockoutMatchIds.has(m.id));
   for (const m of tournamentMatches) {
     const [i1, i2] = m.innings;
     if (!table.has(i1.battingTeam) || !table.has(i2.battingTeam)) continue; // team not in this tournament's roster — skip rather than guess
@@ -3105,10 +3116,12 @@ function computeStandings(tournament, allMatches) {
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself
 // rather than re-deriving the points/NRR math, by handing it a "tournament" scoped to just that
-// group's teams (same real tournament id, so match-tagging still resolves correctly; a restricted
-// teams array so cross-group results — which only exist once the knockout stage starts — don't
-// pollute a group's own table). Returns null when the tournament has no groups, so callers can use
-// `computeGroupStandings(t, matches) || [{label: null, standings: computeStandings(t, matches)}]`
+// group's teams (same real tournament id, so match-tagging still resolves correctly). Any
+// knockout-stage result is excluded at the source now (see computeStandings' knockoutMatchIds),
+// so the teams restriction here is just about scoping the table to the right group's roster, not
+// about keeping knockout results out — that's handled once, centrally, regardless of which teams
+// a knockout match happens to pair. Returns null when the tournament has no groups, so callers
+// can use `computeGroupStandings(t, matches) || [{label: null, standings: computeStandings(t, matches)}]`
 // as a uniform shape if they want to render single-pool and grouped tournaments the same way.
 function computeGroupStandings(tournament, allMatches) {
   if (!tournament.groups || !tournament.groups.length) return null;
