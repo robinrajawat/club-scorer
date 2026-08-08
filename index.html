@@ -4166,6 +4166,11 @@ function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
     complete: false,
     partnershipRuns: 0,
     partnershipBalls: 0,
+    // Legal balls since the batting side's last boundary actually hit off the bat (fours/sixes
+    // credited to a batsman — see boundaryHitByBat in applyBall). Deliberately NOT any ball that
+    // merely results in 4/6 runs some other way (a wide running away to the fence, a bye) — those
+    // aren't a batting boundary and shouldn't reset a drought that's fundamentally about timing.
+    ballsSinceBoundary: 0,
     // Consecutive legal-ball wickets per bowler (resets on any non-wicket legal ball; wides/
     // no-balls neither extend nor break it) — how hat-tricks are detected in applyBall.
     bowlerWicketStreak: {},
@@ -4312,9 +4317,16 @@ function applyBall(inning, event) {
   let dismissedName = null;
   let creditsBowler = false;
   let justBowledMaiden = null; // bowler name, set below when a completed over concedes 0 runs
+  let justBowledWicketMaiden = null; // same, but that over also took a wicket
+  // Whether a batsman was PERSONALLY credited a four or six this ball — set at each of the four
+  // spots below that actually touch a batsman's fours/sixes tally. Deliberately not derived from
+  // runsThisBall (which also includes wide/bye boundary-equivalents that were never hit off the
+  // bat) — see ballsSinceBoundary's own comment in newInning for why that distinction matters.
+  let boundaryHitByBat = false;
   if (event.kind === "run") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
+    if (event.runs === 4 || event.runs === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + event.runs,
@@ -4346,6 +4358,7 @@ function applyBall(inning, event) {
     // (batting total + extras < inning.runs). Any runs off the bat still go to the batsman below,
     // same as before — only the penalty portion belongs in extras.
     cur.extras.noball += cur.noballRuns || 1;
+    if (event.runs === 4 || event.runs === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
@@ -4397,6 +4410,7 @@ function applyBall(inning, event) {
       cur.extras.noball += noballPenalty;
       if (cur.freeHitEnabled) cur.freeHitActive = true;
       if (runsBeforeWicket > 0) {
+        if (runsBeforeWicket === 4 || runsBeforeWicket === 6) boundaryHitByBat = true;
         cur.batsmen[creditTo] = {
           ...cur.batsmen[creditTo],
           runs: cur.batsmen[creditTo].runs + runsBeforeWicket,
@@ -4414,6 +4428,7 @@ function applyBall(inning, event) {
       cur.runs += runsBeforeWicket;
       bowler.runs += runsBeforeWicket;
       runsThisBall = runsBeforeWicket;
+      if (runsBeforeWicket === 4 || runsBeforeWicket === 6) boundaryHitByBat = true;
       cur.batsmen[creditTo] = {
         ...cur.batsmen[creditTo],
         runs: cur.batsmen[creditTo].runs + runsBeforeWicket,
@@ -4503,7 +4518,20 @@ function applyBall(inning, event) {
   // whatever comes next.
   const partnershipRunsPeak = (cur.partnershipRuns || 0) + runsThisBall;
   cur.partnershipRuns = partnershipRunsPeak;
-  if (legalBall) cur.partnershipBalls = (cur.partnershipBalls || 0) + 1;
+  // Same reasoning as partnershipRunsPeak just above — captured before the wicket-ball reset so
+  // "how long had this stand lasted" is still available for the Breakthrough toast below, on the
+  // very ball it ends.
+  const partnershipBallsPeak = (cur.partnershipBalls || 0) + (legalBall ? 1 : 0);
+  if (legalBall) cur.partnershipBalls = partnershipBallsPeak;
+  // Legal balls since the batting side's last genuine boundary — see ballsSinceBoundary's comment
+  // in newInning. A boundary resets it regardless of whether THIS specific ball was legal (a
+  // no-ball hit for four still counts); absent that, it only advances on a legal ball, matching
+  // partnershipBalls' own convention just above.
+  if (boundaryHitByBat) {
+    cur.ballsSinceBoundary = 0;
+  } else if (legalBall) {
+    cur.ballsSinceBoundary = (cur.ballsSinceBoundary || 0) + 1;
+  }
   if (event.kind === "wicket") {
     cur.partnershipRuns = 0;
     cur.partnershipBalls = 0;
@@ -4529,6 +4557,9 @@ function applyBall(inning, event) {
           maidens: (cur.bowlers[cur.bowlerName].maidens || 0) + 1
         };
         justBowledMaiden = cur.bowlerName; // captured before cur.bowlerName is cleared below
+        if (finishedOver.some(b => b.kind === "wicket")) {
+          justBowledWicketMaiden = cur.bowlerName;
+        }
       }
       cur.overs = [...cur.overs, []];
       cur.overBowlers = [...cur.overBowlers, cur.bowlerName];
@@ -4618,8 +4649,30 @@ function applyBall(inning, event) {
       score: milestoneScore
     });
   }
-  // Maiden over: set above, right when the over closes with 0 runs conceded.
-  if (justBowledMaiden) {
+  // Boundary drought broken: the first boundary in a while. inning.ballsSinceBoundary (before this
+  // ball) is the drought length being broken — deliberately not cur.ballsSinceBoundary, which this
+  // same ball has already reset to 0 by the time this check runs. Only fires for a genuine batting
+  // boundary (boundaryHitByBat) — a wide or bye running away to the fence doesn't end a drought
+  // that's fundamentally about the batting side's timing, since the bat was never involved.
+  const BOUNDARY_DROUGHT_BALLS = 18;
+  if (boundaryHitByBat && (inning.ballsSinceBoundary || 0) >= BOUNDARY_DROUGHT_BALLS) {
+    cur.toastMilestones.push({
+      type: "boundaryDrought",
+      text: `First boundary in ${inning.ballsSinceBoundary} balls`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Maiden over: set above, right when the over closes with 0 runs conceded. A wicket maiden gets
+  // its own, more specific toast instead of both firing back to back for the same over.
+  if (justBowledWicketMaiden) {
+    cur.toastMilestones.push({
+      type: "wicketMaiden",
+      text: `${justBowledWicketMaiden} bowls a wicket maiden`,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  } else if (justBowledMaiden) {
     cur.toastMilestones.push({
       type: "maiden",
       text: `${justBowledMaiden} bowls a maiden`,
@@ -4654,6 +4707,19 @@ function applyBall(inning, event) {
     cur.toastMilestones.push({
       type: duckType,
       text: duckText,
+      over: milestoneOver,
+      score: milestoneScore
+    });
+  }
+  // Breakthrough: a wicket that ends a stand which had lasted a while — partnershipBallsPeak
+  // (captured above, before the wicket-ball reset) is how long the JUST-ENDED partnership had run,
+  // in legal balls, at the moment this wicket fell. 24 balls (4 overs) is the starting threshold —
+  // long enough that ending it is genuinely a moment, not so long it rarely fires.
+  const BREAKTHROUGH_BALLS = 24;
+  if (event.kind === "wicket" && partnershipBallsPeak >= BREAKTHROUGH_BALLS) {
+    cur.toastMilestones.push({
+      type: "breakthrough",
+      text: `Breakthrough! ${partnershipRunsPeak}-run stand broken after ${partnershipBallsPeak} balls`,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -4973,11 +5039,14 @@ const MILESTONE_ICONS = {
   partnership: "\u{1F91D}",
   teamTotal: "\u{1F4C8}",
   maiden: "\u{1F6E1}\u{FE0F}",
+  wicketMaiden: "\u{1F5E1}\u{FE0F}",
   duck: "\u{1F986}",
   goldenDuck: "\u{1F425}",
   diamondDuck: "\u{1F48E}",
   threeFor: "\u{1F94A}",
-  doubleWicket: "\u{1F4A5}"
+  doubleWicket: "\u{1F4A5}",
+  breakthrough: "\u{26A1}",
+  boundaryDrought: "\u{1F387}"
 };
 function MilestoneToast({
   toast
