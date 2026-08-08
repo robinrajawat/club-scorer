@@ -2896,10 +2896,14 @@ async function loadFederationTeams(federationId) {
 // ---------- Tournaments ----------
 // A tournament is a name plus a list of participating team names — deliberately just names, not
 // full roster objects, since a match already stores its own teamA/teamB as plain strings and
-// standings only ever need to know who's competing, not their player list. Storage mirrors teams
-// exactly: personal tournaments live in one doc (list field), club tournaments are a subcollection
-// gated the same way club teams are. A match opts into a tournament via match.tournamentId (and
-// match.tournamentClubId when it's a club tournament, so the right collection can be queried).
+// standings only ever need to know who's competing, not their player list. Storage mirrors teams:
+// personal tournaments live in one doc (list field), club tournaments are a subcollection gated
+// the same way club teams are, federation-hosted tournaments the same again under federations/{id}
+// (see saveFederationTournament). A match opts into a tournament via match.tournamentId alone —
+// a flat, globally-unique id, not scoped to where the tournament document itself lives — since
+// loadTournamentMatches finds every match tagged with it via a dedicated pointer collection
+// (tournamentMatches/{tournamentId}/entries), never by walking club/federation ownership. There's
+// no equivalent "which collection" field on a match at all; nothing has ever needed one.
 async function loadTournaments() {
   if (auth.currentUser) {
     try {
