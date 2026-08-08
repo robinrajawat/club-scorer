@@ -4375,6 +4375,14 @@ function applyBall(inning, event) {
     // (the fixed penalty AND any further running) is extras, never personal runs; a no-ball's
     // fixed penalty is extras but anything actually run/hit is credited to the batsman.
     const runsBeforeWicket = Math.max(0, event.runsBeforeWicket || 0);
+    // Whoever actually faced this ball — event.runsCreditTo, snapshotted in handleWicket before
+    // the wicket-details popup could touch strikerName at all — not cur.strikerName, which by
+    // commit time may only reflect who ends up recorded as out (see dismissedName below) after a
+    // Swap Strike used in that same popup for a non-striker run out. In the far more common case
+    // (no swap happened) these are the same name, so this changes nothing there. Falls back to
+    // cur.strikerName for safety if a caller ever omits it — there isn't one today, every path
+    // through confirmWicketDetails sets it.
+    const creditTo = event.runsCreditTo || cur.strikerName;
     if (event.extraKind === "wide") {
       const wideTotal = (cur.wideRuns || 1) + runsBeforeWicket;
       runsThisBall = wideTotal;
@@ -4389,11 +4397,11 @@ function applyBall(inning, event) {
       cur.extras.noball += noballPenalty;
       if (cur.freeHitEnabled) cur.freeHitActive = true;
       if (runsBeforeWicket > 0) {
-        cur.batsmen[cur.strikerName] = {
-          ...cur.batsmen[cur.strikerName],
-          runs: cur.batsmen[cur.strikerName].runs + runsBeforeWicket,
-          fours: cur.batsmen[cur.strikerName].fours + (runsBeforeWicket === 4 ? 1 : 0),
-          sixes: cur.batsmen[cur.strikerName].sixes + (runsBeforeWicket === 6 ? 1 : 0)
+        cur.batsmen[creditTo] = {
+          ...cur.batsmen[creditTo],
+          runs: cur.batsmen[creditTo].runs + runsBeforeWicket,
+          fours: cur.batsmen[creditTo].fours + (runsBeforeWicket === 4 ? 1 : 0),
+          sixes: cur.batsmen[creditTo].sixes + (runsBeforeWicket === 6 ? 1 : 0)
         };
       }
     } else if (runsBeforeWicket > 0) {
@@ -4401,16 +4409,16 @@ function applyBall(inning, event) {
       // sends a nonzero value for Run out (the one dismissal where the ball stays live and the
       // pair can genuinely be mid-run when the wicket falls; every other type is a dead ball the
       // instant it happens, so there's nothing to complete). Credited to the team total, the
-      // bowler's runs conceded, and the striker's own tally — the run genuinely happened, only the
-      // batsman ends up out instead of home safe.
+      // bowler's runs conceded, and the batsman who actually ran for them — the run genuinely
+      // happened, only someone ends up out instead of everyone home safe.
       cur.runs += runsBeforeWicket;
       bowler.runs += runsBeforeWicket;
       runsThisBall = runsBeforeWicket;
-      cur.batsmen[cur.strikerName] = {
-        ...cur.batsmen[cur.strikerName],
-        runs: cur.batsmen[cur.strikerName].runs + runsBeforeWicket,
-        fours: cur.batsmen[cur.strikerName].fours + (runsBeforeWicket === 4 ? 1 : 0),
-        sixes: cur.batsmen[cur.strikerName].sixes + (runsBeforeWicket === 6 ? 1 : 0)
+      cur.batsmen[creditTo] = {
+        ...cur.batsmen[creditTo],
+        runs: cur.batsmen[creditTo].runs + runsBeforeWicket,
+        fours: cur.batsmen[creditTo].fours + (runsBeforeWicket === 4 ? 1 : 0),
+        sixes: cur.batsmen[creditTo].sixes + (runsBeforeWicket === 6 ? 1 : 0)
       };
     }
     dismissedName = cur.strikerName;
@@ -4432,12 +4440,30 @@ function applyBall(inning, event) {
       howText = `${prefix} ${cur.bowlerName}`;
     }
     if (legalBall) {
-      cur.batsmen[cur.strikerName] = {
-        ...cur.batsmen[cur.strikerName],
-        balls: cur.batsmen[cur.strikerName].balls + 1,
-        out: true,
-        how: howText
-      };
+      // Balls faced goes to whoever actually faced this delivery (creditTo — see above), which is
+      // usually the same person being marked out here, but not always: after a Swap Strike for a
+      // non-striker run out, creditTo is still the original striker while cur.strikerName is now
+      // whoever's actually out. Two separate updates when they differ, so neither clobbers the
+      // other; one merged update when they're the same name, same as before this distinction
+      // existed.
+      if (creditTo === cur.strikerName) {
+        cur.batsmen[cur.strikerName] = {
+          ...cur.batsmen[cur.strikerName],
+          balls: cur.batsmen[cur.strikerName].balls + 1,
+          out: true,
+          how: howText
+        };
+      } else {
+        cur.batsmen[creditTo] = {
+          ...cur.batsmen[creditTo],
+          balls: cur.batsmen[creditTo].balls + 1
+        };
+        cur.batsmen[cur.strikerName] = {
+          ...cur.batsmen[cur.strikerName],
+          out: true,
+          how: howText
+        };
+      }
       bowler.ballsBowled += 1;
       if (creditsBowler) bowler.wickets += 1;
     } else {
@@ -19277,7 +19303,16 @@ function MatchScreen({
       setShowWicket(false);
       setWicketDraft({
         wicketType,
-        isLast
+        isLast,
+        // Whoever's actually facing this ball, snapshotted now, before the popup can touch
+        // strikerName at all. Needed because Swap Strike (available below, for the non-striker-
+        // run-out case) commits immediately and for real — by the time Confirm is tapped,
+        // inning.strikerName may no longer be the batsman who hit the ball, only whoever ends up
+        // recorded as out. Runs completed before a run out (see runsDraft/confirmWicketDetails)
+        // need to stay with the batsman who actually ran for them regardless of which end the
+        // wicket falls at, so this is what applyBall's runsCreditTo credits them against instead
+        // of just trusting cur.strikerName at commit time.
+        strikerAtBallStart: inning.strikerName
       });
       setRunsDraft(0);
       // Most catches are taken by the keeper — pre-fill it as a starting point, still fully
@@ -19327,7 +19362,8 @@ function MatchScreen({
   function confirmWicketDetails(nameOverride) {
     const {
       wicketType,
-      isLast
+      isLast,
+      strikerAtBallStart
     } = wicketDraft;
     const name = (nameOverride !== undefined ? nameOverride : fielderDraftName).trim();
     // A catch always has exactly one known taker, so the name is required. A run out's fielder
@@ -19351,6 +19387,10 @@ function MatchScreen({
       legal: extraKind == null,
       extraKind,
       runsBeforeWicket,
+      // Stays with whoever actually faced the ball even if Swap Strike was used in this same
+      // popup to correctly mark the OTHER end as the one run out — see the comment on
+      // strikerAtBallStart in handleWicket above.
+      runsCreditTo: strikerAtBallStart,
       fielderName: name || undefined
     };
     if (isLast) {
@@ -20367,7 +20407,7 @@ function MatchScreen({
       lineHeight: 1.5,
       marginBottom: 8
     }
-  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, swap strike below first."), /*#__PURE__*/React.createElement("button", {
+  }, "This will record ", /*#__PURE__*/React.createElement("strong", null, inning.strikerName), " as out. If it was actually ", inning.nonStrikerName || "the non-striker", " who was run out, swap strike below first — any runs completed below still go to whoever actually faced the ball, whichever end ends up out."), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: swapStrike,
     className: "cs-btn cs-shine",
