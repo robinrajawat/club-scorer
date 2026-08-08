@@ -6387,7 +6387,7 @@ function AccountScreen({
       fontSize: 11.5,
       color: COLORS.inkSoft
     }
-  }, "Managed by ", (clubs.find(c => c.id === myPlayer.homeClubId) || {}).name || "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Public, so other clubs can borrow you into their own rosters." : " Not public, so only your home club can add you to a roster.")) : /*#__PURE__*/React.createElement("div", {
+  }, "Managed by ", (clubs.find(c => c.id === myPlayer.homeClubId) || {}).name || "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Your profile is kept public, so other clubs can borrow you into their own rosters." : " Your profile isn't public, so only they can add you to a roster.")) : /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
