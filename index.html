@@ -4494,7 +4494,15 @@ function applyBall(inning, event) {
     }
   }
   cur.bowlers[cur.bowlerName] = bowler;
-  cur.partnershipRuns = (cur.partnershipRuns || 0) + runsThisBall;
+  // Captured before the wicket-ball reset just below, specifically so the partnership milestone
+  // check further down (afterPartnership) can still see a partnership that reached 50/100 in the
+  // SAME ball it ended on — a run out with runs completed before the wicket (runsThisBall > 0 on
+  // a wicket ball) can genuinely push a partnership across a line and end it in one motion ("out
+  // going for the milestone run"), and that's a real moment worth the toast, not a reason to
+  // silently skip it just because the running partnership tally itself needs to reset to 0 for
+  // whatever comes next.
+  const partnershipRunsPeak = (cur.partnershipRuns || 0) + runsThisBall;
+  cur.partnershipRuns = partnershipRunsPeak;
   if (legalBall) cur.partnershipBalls = (cur.partnershipBalls || 0) + 1;
   if (event.kind === "wicket") {
     cur.partnershipRuns = 0;
@@ -4577,15 +4585,18 @@ function applyBall(inning, event) {
       score: milestoneScore
     });
   }
-  // Partnership: 50, 100, 150... for the current batting pair. A wicket ball resets
-  // partnershipRuns to 0 as part of the same transition being compared here, so it can never
-  // spuriously fire off its own reset.
+  // Partnership: 50, 100, 150... for the pair batting together this ball. Checked against
+  // partnershipRunsPeak (captured above, before any wicket-ball reset) rather than
+  // cur.partnershipRuns, and named from inning.strikerName/nonStrikerName (the pair as they stood
+  // for this ball) rather than cur.strikerName/nonStrikerName — both matter specifically for a
+  // wicket ball: cur.partnershipRuns is already back to 0 by here, and cur.strikerName has already
+  // become the incoming new batsman, neither of which is who actually built this partnership.
   const beforePartnership = inning.partnershipRuns || 0;
-  const afterPartnership = cur.partnershipRuns || 0;
+  const afterPartnership = partnershipRunsPeak;
   if (afterPartnership >= 50 && Math.floor(afterPartnership / 50) > Math.floor(beforePartnership / 50)) {
     cur.milestones.push({
       type: "partnership",
-      text: `${cur.strikerName} & ${cur.nonStrikerName} put on ${Math.floor(afterPartnership / 50) * 50}`,
+      text: `${inning.strikerName} & ${inning.nonStrikerName} put on ${Math.floor(afterPartnership / 50) * 50}`,
       over: milestoneOver,
       score: milestoneScore
     });
@@ -4617,20 +4628,23 @@ function applyBall(inning, event) {
     });
   }
   // Duck (3 tiers), for the batsman dismissed on this ball (dismissedName, tracked above for
-  // fallOfWickets). All three require runs === 0 at dismissal; they differ on how many balls the
-  // batsman had faced going in:
+  // fallOfWickets). All three require runs === 0 at dismissal; they differ on how they got there:
   //  - regular duck: faced 1+ balls before this one, never scored
-  //  - golden duck: out on the very first (legal) ball they face
-  //  - diamond duck: out without ever facing a LEGAL delivery — run out on a wide/no-ball before
-  //    facing a fair ball. NOTE: this app only ever dismisses the on-strike batsman (no
-  //    non-striker-run-out concept in the data model), so the classic diamond duck — a non-striker
-  //    run out having never faced a ball at all — can't be represented exactly; this is the closest
-  //    honest proxy within that constraint.
+  //  - golden duck: out on the very first ball THEY faced — including being run out attempting a
+  //    run themselves on their first ball, since they did face that delivery
+  //  - diamond duck: out having never faced a single ball at all. Two ways there: the classic case
+  //    is a non-striker run out (dismissedName isn't who this ball's runs are credited to — see
+  //    event.runsCreditTo/isDismissedTheBallFacer — meaning they weren't the one facing it), now
+  //    correctly detectable since Swap Strike lets a non-striker be the one actually marked out.
+  //    The other is a striker run out on a wide/no-ball before ever getting to face a fair ball —
+  //    still a diamond duck even though they nominally "faced" the illegal delivery, since it
+  //    never counted as a ball faced in the first place.
   if (dismissedName && cur.batsmen[dismissedName] && cur.batsmen[dismissedName].runs === 0) {
     const facedBefore = inning.batsmen[dismissedName] && inning.batsmen[dismissedName].balls || 0;
+    const isDismissedTheBallFacer = dismissedName === (event.runsCreditTo || cur.strikerName);
     let duckType = "duck";
     let duckText = `${dismissedName} out for a duck`;
-    if (facedBefore === 0 && !legalBall && event.wicketType === "Run out") {
+    if (facedBefore === 0 && event.wicketType === "Run out" && (!legalBall || !isDismissedTheBallFacer)) {
       duckType = "diamondDuck";
       duckText = `${dismissedName} out for a diamond duck`;
     } else if (facedBefore === 0) {
@@ -20485,7 +20499,7 @@ function MatchScreen({
       flexShrink: 0,
       marginTop: 1
     }
-  }), "Odd number of runs \u2014 strike would normally have crossed. Double-check the batting pair (Swap Strike) once the new batsman is in, if that's not already reflected here.")), (wicketDraft.wicketType === "Run out" || wicketDraft.wicketType === "Stumped") && /*#__PURE__*/React.createElement("div", {
+  }), "Odd number of runs \u2014 strike would normally have crossed. Once the new batsman is confirmed, double-check who's actually on strike \u2014 this is separate from (and comes after) any Swap Strike you used above just to mark the right end out. Swap Strike on the main scoring screen fixes it if the pairing's wrong.")), (wicketDraft.wicketType === "Run out" || wicketDraft.wicketType === "Stumped") && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
