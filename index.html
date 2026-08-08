@@ -2098,17 +2098,25 @@ async function removeClubCoOwner(clubId, uid) {
     };
   }
 }
-// Owner-only. Cleans up the teams and tournaments subcollections and any federation directory
-// entries first — Firestore never cascade-deletes subcollections on its own, and once the club
-// doc is gone no rule would ever again grant access to those orphaned docs anyway (the
-// federation-teams delete rule needs to read the club's own memberUids, which requires the club
-// doc to still exist), so this has to happen before, not after, the club doc itself is removed.
+// Owner-only. Cleans up the teams and tournaments subcollections, any federation directory
+// entries, and any player profiles this club administers as home club, first — Firestore never
+// cascade-deletes subcollections on its own, and once the club doc is gone no rule would ever
+// again grant access to those orphaned docs anyway (the federation-teams delete rule needs to
+// read the club's own memberUids, and the players delete/update rules need to read the home
+// club's ownerUid, both of which require the club doc to still exist), so this has to happen
+// before, not after, the club doc itself is removed. The players/{email} cleanup specifically
+// matters: without it, a player this club published would be left with a homeClubId pointing at
+// nothing, and since editing OR deleting that doc both require isClubOwner on a club doc that no
+// longer exists, the record becomes permanently stuck -- unrecoverable by anyone, including the
+// person it describes, forever. Deleting it here (rather than trying to reassign homeClubId to
+// some other valid owner, which doesn't really exist) at least leaves the email free to be
+// published fresh by some other club later.
 async function deleteClub(clubId) {
   try {
     const clubDoc = await db.collection("clubs").doc(clubId).get();
     const federationIds = clubDoc.exists ? clubDoc.data().federationIds || [] : [];
-    const [teamSnap, tournamentSnap] = await Promise.all([db.collection("clubs").doc(clubId).collection("teams").get(), db.collection("clubs").doc(clubId).collection("tournaments").get()]);
-    await Promise.all([...teamSnap.docs.map(d => d.ref.delete()), ...tournamentSnap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
+    const [teamSnap, tournamentSnap, playerSnap] = await Promise.all([db.collection("clubs").doc(clubId).collection("teams").get(), db.collection("clubs").doc(clubId).collection("tournaments").get(), db.collection("players").where("homeClubId", "==", clubId).get()]);
+    await Promise.all([...teamSnap.docs.map(d => d.ref.delete()), ...tournamentSnap.docs.map(d => d.ref.delete()), ...playerSnap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
       const fedTeamSnap = await db.collection("federations").doc(fedId).collection("teams").where("clubId", "==", clubId).get();
       await Promise.all(fedTeamSnap.docs.map(d => d.ref.delete()));
       // Must happen before the club doc is deleted below — the rule authorizing this write
@@ -8997,7 +9005,7 @@ function ClubPanel({
     onCancel: () => setConfirmRemoveMember(null)
   }), confirmDeleteClub && activeClub && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Delete this club?",
-    message: `Delete "${activeClub.name}" for everyone? This can't be undone.`,
+    message: `Delete "${activeClub.name}" for everyone? This can't be undone \u2014 including any player profiles this club administers (their name, age, role, and batting/bowling hand), not just this club's own teams and tournaments.`,
     confirmLabel: "Delete",
     onConfirm: () => {
       setConfirmDeleteClub(false);
