@@ -14233,9 +14233,14 @@ function FixturesSection({
     return fx.length > 0 && fx.every(f => f.matchId && matchWinner(matchById.get(f.matchId), matchById));
   }
   // Group stage is "done" (and thus the first knockout round can be proposed) once every group
-  // fixture has a complete match — or trivially, if there was no group stage at all (some club
-  // tournaments go straight to a knockout bracket).
-  const groupStageDone = groupFixtures.length === 0 || groupFixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
+  // fixture has a complete match. Deliberately requires at least one fixture to actually exist —
+  // this used to also treat ZERO fixtures as trivially "done" (for a tournament that skips the
+  // group stage entirely and goes straight to a bracket), but that's indistinguishable from "just
+  // created, fixtures never generated yet," which is the far more common way to hit zero — and
+  // either way, a knockout seeded off computeStandings when nothing's been played yet isn't a real
+  // seed at all: every team is tied 0-0-0, so it silently fell back to whatever order they were
+  // selected in at creation, not anything resembling qualification.
+  const groupStageDone = groupFixtures.length > 0 && groupFixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
   const nextStageIndex = stages.findIndex(s => fixturesForStage(s.label).length === 0);
   const nextStageReady = nextStageIndex === -1 ? false : nextStageIndex === 0 ? groupStageDone : stageDecided(stages[nextStageIndex - 1].label);
   async function generateStage(index) {
@@ -14386,7 +14391,7 @@ function FixturesSection({
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, nextStageIndex === 0 ? "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
+  }, nextStageIndex === 0 ? groupFixtures.length === 0 ? "Generate or add group fixtures first, then complete them to unlock this." : "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
   const fixtureToConfirmDelete = confirmDeleteId ? fixtures.find(f => f.id === confirmDeleteId) : null;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
