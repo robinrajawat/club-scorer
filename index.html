@@ -19631,7 +19631,15 @@ function MatchScreen({
         over: oversLabel(inning.legalBalls, inning.ballsPerOver),
         batsman: name
       }] : inning.fallOfWickets,
-      strikerName: ""
+      strikerName: "",
+      // A retirement ends the current partnership exactly like a wicket does -- whoever comes in
+      // next starts a brand new one with the survivor. Without this, applyBall's wicket branch is
+      // the ONLY place partnershipRuns/partnershipBalls ever reset (retiring bypasses applyBall
+      // entirely, same as swapStrike), so the next pairing would silently inherit the ended
+      // partnership's tally on top of its own -- contaminating the 50/100 partnership milestone
+      // and the Breakthrough toast with runs/balls that belonged to the batsman who just left.
+      partnershipRuns: 0,
+      partnershipBalls: 0
     };
     setShowRetireModal(false);
     commit(updated);
