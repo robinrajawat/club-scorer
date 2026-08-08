@@ -1699,6 +1699,25 @@ async function linkPlayerIfMatch(uid, email, photoURL) {
     console.error("auto-link player failed", e.code, e.message);
   }
 }
+// This account's own player profile, if any club has ever published one at this exact email —
+// a direct doc lookup by id (the player's own email, normalized), not a query, since the players
+// rule allows `get` for any signed-in user regardless of `public` (see firestore.rules). Called
+// right after linkPlayerIfMatch so a JUST-completed auto-link is already reflected in what comes
+// back, rather than racing it and showing linkedUid as still null for one load.
+async function loadMyPlayerProfile(email) {
+  const id = normalizeEmail(email);
+  if (!id) return null;
+  try {
+    const doc = await db.collection("players").doc(id).get();
+    return doc.exists ? {
+      id: doc.id,
+      ...doc.data()
+    } : null;
+  } catch (e) {
+    console.error("my player profile load failed", e.code, e.message);
+    return null;
+  }
+}
 
 // ---------- Team roster storage ----------
 async function loadTeams() {
@@ -5910,6 +5929,7 @@ function RuleChoice({
 function AccountScreen({
   user,
   profile,
+  myPlayer,
   isBetaTester = false,
   onGenerateDummyData,
   onWipeDummyData,
@@ -6327,6 +6347,55 @@ function AccountScreen({
       marginTop: 6
     }
   }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      marginBottom: 8
+    }
+  }, "Your player profile"), myPlayer ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink,
+      marginBottom: 3
+    }
+  }, myPlayer.name || myPlayer.email), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, [myPlayer.age && `${myPlayer.age} yrs`, (PLAYER_ROLES.find(r => r.value === myPlayer.role) || {}).label, myPlayer.battingHand && `${(PLAYER_HANDS.find(h => h.value === myPlayer.battingHand) || {}).label}-hand bat`, myPlayer.bowlingHand && (myPlayer.role === "bowler" || myPlayer.role === "allrounder") && `${(PLAYER_HANDS.find(h => h.value === myPlayer.bowlingHand) || {}).label}-arm bowler`].filter(Boolean).join(" \u00b7 ") || "No further details added yet"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, "Managed by ", (clubs.find(c => c.id === myPlayer.homeClubId) || {}).name || "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Public, so other clubs can borrow you into their own rosters." : " Not public, so only your home club can add you to a roster.")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12,
+      lineHeight: 1.5
+    }
+  }, "No club has added you as a player yet. Once a club adds you to their roster using this exact email address, your profile shows up here automatically."), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.creamDark,
@@ -7281,6 +7350,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "How do I borrow a player from another club?",
     a: "On the Teams screen, search the public player directory (players another club has chosen to publish) and add them to your roster. Their name, email, age, role, and batting/bowling hand stay locked to their home club \u2014 only their jersey number is yours to set."
+  }, {
+    q: "Where can I see my own player profile?",
+    a: "The Account screen, under \u201cYour player profile\u201d \u2014 it shows up automatically the moment any club adds you to a roster using the exact email you're signed in with, no separate setup needed. It's view-only there: whichever club added you first is the one that can edit your name, age, role, or batting/bowling hand, the same as for any borrowed player."
   }]
 }, {
   title: "Tournaments & series",
@@ -22003,6 +22075,14 @@ function CricketScorer() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [profile, setProfile] = useState(null);
+  // This account's own published player profile, if any club has ever published one at this
+  // exact email (see publishPlayer/linkPlayerIfMatch) -- fetched by a direct doc lookup on the
+  // signed-in person's own email (the doc id itself), not a query, so it works whether or not the
+  // player is marked public. Surfaced on the Account screen; view-only there, since editing name/
+  // age/role/hand is deliberately the home club's alone (see the players/{email} update rule) --
+  // this account being the PERSON the profile describes doesn't grant edit rights to it, only
+  // linkedUid (set once, automatically, on first sign-in after a matching email is published).
+  const [myPlayer, setMyPlayer] = useState(null);
   const [isBetaTester, setIsBetaTester] = useState(false);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
@@ -22261,8 +22341,14 @@ function CricketScorer() {
       // way, so it looked like clubs/federations just took an unpredictable while to show up.
       refreshClubs();
       // Courtesy auto-link, not something worth blocking or surfacing errors for — see
-      // linkPlayerIfMatch's own comment for exactly what it will and won't touch.
-      if (u && u.email) linkPlayerIfMatch(u.uid, u.email, u.photoURL);
+      // linkPlayerIfMatch's own comment for exactly what it will and won't touch. Chained (not
+      // fired in parallel) so loadMyPlayerProfile picks up a just-completed auto-link instead of
+      // racing it.
+      if (u && u.email) {
+        linkPlayerIfMatch(u.uid, u.email, u.photoURL).catch(() => {}).then(() => loadMyPlayerProfile(u.email)).then(setMyPlayer);
+      } else {
+        setMyPlayer(null);
+      }
     });
     Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
       setMatches(idx);
@@ -23502,6 +23588,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(AccountScreen, {
     user: user,
     profile: profile,
+    myPlayer: myPlayer,
     isBetaTester: isBetaTester,
     onGenerateDummyData: handleGenerateDummyData,
     onWipeDummyData: handleWipeDummyData,
