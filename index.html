@@ -2935,6 +2935,49 @@ async function deleteClubTournament(clubId, tournamentId) {
     };
   }
 }
+// A federation-hosted tournament — same shape as a club-hosted one (loadClubTournaments/
+// saveClubTournament/deleteClubTournament just above), just under federations/{id}/tournaments
+// instead of clubs/{id}/tournaments. Read is open to any signed-in user per the security rules
+// (same trust tier as the federation doc/team directory), write is federation owner/co-owner only
+// — the error messages below reflect that write boundary specifically, not club ownership.
+async function loadFederationTournaments(federationId) {
+  try {
+    const snap = await db.collection("federations").doc(federationId).collection("tournaments").get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("federation tournaments load failed", e);
+    return [];
+  }
+}
+async function saveFederationTournament(federationId, tournament) {
+  try {
+    await db.collection("federations").doc(federationId).collection("tournaments").doc(tournament.id).set(tournament);
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the federation owner can edit its tournaments." : e.message || "Couldn't save the tournament."
+    };
+  }
+}
+async function deleteFederationTournament(federationId, tournamentId) {
+  try {
+    await db.collection("federations").doc(federationId).collection("tournaments").doc(tournamentId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || "Couldn't delete the tournament."
+    };
+  }
+}
 // Standard cricket points-table math: 2 for a win, 1 each for a tie or no-result, 0 for a loss.
 // If a tied match has a linked Super Over (match.superOverMatchId), points follow the Super Over's
 // winner instead — the real convention is that the Super Over decides the match, but NRR still
@@ -7220,6 +7263,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "The auto-generated knockout bracket doesn't match my tournament's playoff format \u2014 what do I do?",
     a: "The built-in bracket is a standard Quarterfinal/Semifinal/Final elimination \u2014 it won't build something like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final shape, where the top two teams get a second chance. Add those fixtures by hand instead (\u201cAdd a fixture\u201d on the tournament's schedule) and give each one a Stage label when you do \u2014 that keeps it out of the points table and NRR, exactly like the auto-generated bracket already is, and it shows up in its own \u201cPlayoffs\u201d section on the schedule."
+  }, {
+    q: "Can a federation host its own tournament, not just lend teams to a club's?",
+    a: "Yes \u2014 pick the federation as the source when you create a tournament (the same chip row you'd use to switch to a specific club), and its team picker draws from every affiliated club's roster directly. Only the federation's owner/co-owner can create or manage it; anyone signed in can view it, same as the federation's own name and team directory already work."
   }]
 }, {
   title: "Appearance",
@@ -12801,6 +12847,9 @@ function TournamentsScreen({
   clubs,
   activeClubId,
   onSelectSource,
+  myFederations = [],
+  activeFederationId,
+  onSelectFederationSource,
   teamOptions,
   federationTeamOptions = [],
   onCreateTournament,
@@ -12857,7 +12906,12 @@ function TournamentsScreen({
   const visibleTournaments = tournaments.filter(t => (statusFilter === "all" || tournamentStatus(t) === statusFilter) && (!searchTerm.trim() || t.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
-  const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
+  // myFederations is already scoped to federations this user owns/co-owns (see myOwnedFederationIds
+  // upstream), so finding activeFederationId in it is really just a defensive existence check —
+  // the chip row below can only ever select an id that's already in that list.
+  const activeFederation = activeFederationId ? myFederations.find(f => f.id === activeFederationId) || null : null;
+  const activeFederationName = activeFederation && activeFederation.name;
+  const canManage = activeFederationId ? !!activeFederation : !activeClubId || isClubOwner(activeClub, currentUid);
   const totalTeamOptions = teamOptions.length + federationTeamOptions.length;
   // federationTeamOptions holds {clubName, teamName, teamId, clubId} objects (needed as objects
   // for the chip picker below, which shows each team alongside its club name). The series-create
@@ -12977,9 +13031,9 @@ function TournamentsScreen({
       fontWeight: 600,
       fontSize: 12.5,
       cursor: "pointer",
-      border: !activeClubId ? "none" : `1px solid ${COLORS.willow}`,
-      background: !activeClubId ? COLORS.pitchFixed : COLORS.surface,
-      color: !activeClubId ? "#fff" : COLORS.inkSoft,
+      border: !activeClubId && !activeFederationId ? "none" : `1px solid ${COLORS.willow}`,
+      background: !activeClubId && !activeFederationId ? COLORS.pitchFixed : COLORS.surface,
+      color: !activeClubId && !activeFederationId ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
   }, "My Tournaments"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
@@ -12997,7 +13051,22 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, c.name)), myFederations.map(f => /*#__PURE__*/React.createElement("button", {
+    key: f.id,
+    onClick: () => onSelectFederationSource(f.id),
+    style: {
+      padding: "7px 13px",
+      borderRadius: 20,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      border: activeFederationId === f.id ? "none" : `1px dashed ${COLORS.gold}`,
+      background: activeFederationId === f.id ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
+      color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
+      whiteSpace: "nowrap"
+    }
+  }, f.name))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -13043,7 +13112,7 @@ function TournamentsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !creating && canManage && totalTeamOptions >= 2 && /*#__PURE__*/React.createElement("button", {
+  }), activeFederationName ? ` New Tournament in ${activeFederationName}` : activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !creating && canManage && totalTeamOptions >= 2 && /*#__PURE__*/React.createElement("button", {
     onClick: openCreateSeries,
     className: "cs-btn",
     style: {
@@ -13162,7 +13231,7 @@ function TournamentsScreen({
       marginTop: -8,
       marginBottom: 16
     }
-  }, activeClubName ? `${activeClubName} needs at least 2 saved (or federation-visible) teams first.` : "Save at least 2 teams first (Teams screen)."), creating && /*#__PURE__*/React.createElement("div", {
+  }, activeFederationName ? `${activeFederationName}'s member clubs need at least 2 teams between them first.` : activeClubName ? `${activeClubName} needs at least 2 saved (or federation-visible) teams first.` : "Save at least 2 teams first (Teams screen)."), creating && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -13532,7 +13601,7 @@ function TournamentsScreen({
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${t.teams.length} teams`, tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`, !activeClubId && t._clubId && ` · ${(clubs.find(c => c.id === t._clubId) || {}).name || "a club"}`)), /*#__PURE__*/React.createElement(ChevronRight, {
+  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${t.teams.length} teams`, tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`, !activeClubId && t._clubId && ` · ${(clubs.find(c => c.id === t._clubId) || {}).name || "a club"}`, !activeFederationId && t._federationId && ` · ${(myFederations.find(f => f.id === t._federationId) || {}).name || "a federation"}`)), /*#__PURE__*/React.createElement(ChevronRight, {
     size: 18,
     style: {
       color: COLORS.inkSoft,
@@ -21863,10 +21932,19 @@ function CricketScorer() {
   const [tournaments, setTournaments] = useState([]);
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
   const [activeTournamentClubId, setActiveTournamentClubId] = useState(null); // Tournaments screen's own source selector
+  // Federation-hosted tournaments, keyed the same way as clubTournamentsById -- only for
+  // federations this user owns/co-owns (myOwnedFederationIds, below), since that's the same set
+  // that can actually create/manage a tournament under one. Read access is technically open to
+  // any signed-in user (see the security rules), but the in-app navigation only surfaces
+  // federations you run, same as how a club chip here means "you're at least a member," not
+  // "anyone with the id could theoretically read this."
+  const [federationTournamentsById, setFederationTournamentsById] = useState({}); // federationId -> tournament[]
+  const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
   const [viewingTournament, setViewingTournament] = useState(null);
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
+  const [viewingTournamentFederationId, setViewingTournamentFederationId] = useState(null); // federation variant of the above -- at most one of this and viewingTournamentClubId is ever non-null
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
@@ -22009,11 +22087,40 @@ function CricketScorer() {
     }
     return false;
   });
+  // Loads tournaments for every federation this user owns/co-owns -- same trigger condition as
+  // the federationRequests effect just above (the ownership set changing). Only fetches ids not
+  // already in federationTournamentsById, so re-renders and screen switches don't refetch
+  // everything that's already loaded.
+  useEffect(() => {
+    const missing = myOwnedFederationIds.filter(id => !(id in federationTournamentsById));
+    if (missing.length === 0) return;
+    Promise.all(missing.map(async id => [id, await loadFederationTournaments(id)])).then(entries => {
+      setFederationTournamentsById(prev => ({
+        ...prev,
+        ...Object.fromEntries(entries)
+      }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myOwnedFederationIds.join(",")]);
   // Whenever the Tournaments screen's active club (or that club's federation affiliations)
   // changes, refresh the read-only cross-club team directory it can offer alongside the club's
   // own roster. Excludes the active club's own entries since those already come from teamOptions.
+  // A federation-scoped tournament is different -- a federation owns no teams of its own, so
+  // there's no "own roster" to exclude; this just loads that one federation's whole directory
+  // directly, unfiltered, since every entry in it is a legitimate pick for a federation-hosted
+  // tournament (see teamOptions/federationTeamOptions on the TournamentsScreen prop below, which
+  // is why teamOptions is empty and federationTeamOptions carries everything in that case).
   useEffect(() => {
     let cancelled = false;
+    if (activeTournamentFederationId) {
+      loadFederationTeams(activeTournamentFederationId).then(list => {
+        if (cancelled) return;
+        setFederationTeamOptions(list);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
     const club = clubs.find(c => c.id === activeTournamentClubId);
     const fedIds = club ? club.federationIds || [] : [];
     if (fedIds.length === 0) {
@@ -22035,7 +22142,7 @@ function CricketScorer() {
     return () => {
       cancelled = true;
     };
-  }, [activeTournamentClubId, clubs]);
+  }, [activeTournamentClubId, activeTournamentFederationId, clubs]);
   useEffect(() => {
     if (!fontLoaded.current) {
       const link = document.createElement("link");
@@ -22839,14 +22946,22 @@ function CricketScorer() {
     }
     return result;
   }
-  // "My Tournaments" (no specific club chip selected) shows a merged view — personal tournaments
-  // plus every club's, each tagged with which club it's from (see the club name caption in
-  // TournamentsScreen) — rather than requiring a separate click per club to find one. Picking a
-  // specific club chip still narrows down to just that club's list.
-  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : [...tournaments.map(t => ({ ...t,
-    _clubId: null
+  // "My Tournaments" (no specific club/federation chip selected) shows a merged view — personal
+  // tournaments plus every club's and every owned federation's, each tagged with its source (see
+  // the club/federation name caption in TournamentsScreen) — rather than requiring a separate
+  // click per source to find one. Picking a specific chip still narrows down to just that one
+  // source's list. Only one of activeTournamentClubId/activeTournamentFederationId is ever
+  // non-null at a time (the source-selector UI enforces that), so these two branches can never
+  // both apply.
+  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : [...tournaments.map(t => ({ ...t,
+    _clubId: null,
+    _federationId: null
   })), ...Object.entries(clubTournamentsById).flatMap(([cid, list]) => list.map(t => ({ ...t,
-    _clubId: cid
+    _clubId: cid,
+    _federationId: null
+  }))), ...Object.entries(federationTournamentsById).flatMap(([fid, list]) => list.map(t => ({ ...t,
+    _clubId: null,
+    _federationId: fid
   })))];
   async function handleCreateTournament(name, teamNames, groups, advancePerGroup) {
     const t = {
@@ -22857,6 +22972,19 @@ function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       createdAt: Date.now()
     };
+    if (activeTournamentFederationId) {
+      const result = await saveFederationTournament(activeTournamentFederationId, t);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [activeTournamentFederationId]: [...(prev[activeTournamentFederationId] || []), t]
+        }));
+      }
+      return {
+        ...result,
+        tournament: t
+      };
+    }
     if (activeTournamentClubId) {
       const result = await saveClubTournament(activeTournamentClubId, t);
       if (result.ok) {
@@ -22904,6 +23032,19 @@ function CricketScorer() {
       })),
       createdAt: Date.now()
     };
+    if (activeTournamentFederationId) {
+      const result = await saveFederationTournament(activeTournamentFederationId, t);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [activeTournamentFederationId]: [...(prev[activeTournamentFederationId] || []), t]
+        }));
+      }
+      return {
+        ...result,
+        tournament: t
+      };
+    }
     if (activeTournamentClubId) {
       const result = await saveClubTournament(activeTournamentClubId, t);
       if (result.ok) {
@@ -22927,7 +23068,14 @@ function CricketScorer() {
   }
   async function handleDeleteTournament(t) {
     const clubId = viewingTournamentClubId;
-    if (clubId) {
+    const federationId = viewingTournamentFederationId;
+    if (federationId) {
+      await deleteFederationTournament(federationId, t.id);
+      setFederationTournamentsById(prev => ({
+        ...prev,
+        [federationId]: (prev[federationId] || []).filter(x => x.id !== t.id)
+      }));
+    } else if (clubId) {
       await deleteClubTournament(clubId, t.id);
       setClubTournamentsById(prev => ({
         ...prev,
@@ -22940,14 +23088,27 @@ function CricketScorer() {
     }
     setViewingTournament(null);
     setViewingTournamentClubId(null);
+    setViewingTournamentFederationId(null);
     setScreen("tournaments");
   }
   // Persists any change to the currently-viewed tournament (fixtures generated/added/edited/
   // deleted, teams, name, ...) — single choke point so every fixture action doesn't need its own
-  // save-plus-state-sync logic, and so it's automatically correct about which source (personal or
-  // a specific club) the tournament actually lives in.
+  // save-plus-state-sync logic, and so it's automatically correct about which source (personal, a
+  // specific club, or a specific federation) the tournament actually lives in.
   async function handleUpdateTournament(updated) {
     const clubId = viewingTournamentClubId;
+    const federationId = viewingTournamentFederationId;
+    if (federationId) {
+      const result = await saveFederationTournament(federationId, updated);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [federationId]: (prev[federationId] || []).map(t => t.id === updated.id ? updated : t)
+        }));
+        setViewingTournament(updated);
+      }
+      return result;
+    }
     if (clubId) {
       const result = await saveClubTournament(clubId, updated);
       if (result.ok) {
@@ -23020,6 +23181,9 @@ function CricketScorer() {
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
+    for (const t of list) tournamentNameById[t.id] = t.name;
+  }
+  for (const list of Object.values(federationTournamentsById)) {
     for (const t of list) tournamentNameById[t.id] = t.name;
   }
   const wrapStyle = {
@@ -23136,14 +23300,24 @@ function CricketScorer() {
     tournaments: activeTournaments,
     clubs: clubs,
     activeClubId: activeTournamentClubId,
-    onSelectSource: setActiveTournamentClubId,
-    teamOptions: (activeTournamentClubId ? clubTeamsById[activeTournamentClubId] || [] : teams).map(t => t.name),
-    federationTeamOptions: activeTournamentClubId ? federationTeamOptions : [],
+    onSelectSource: clubId => {
+      setActiveTournamentClubId(clubId);
+      setActiveTournamentFederationId(null);
+    },
+    myFederations: myOwnedFederationIds.map(id => federationsById[id]).filter(Boolean),
+    activeFederationId: activeTournamentFederationId,
+    onSelectFederationSource: fedId => {
+      setActiveTournamentFederationId(fedId);
+      setActiveTournamentClubId(null);
+    },
+    teamOptions: activeTournamentFederationId ? [] : (activeTournamentClubId ? clubTeamsById[activeTournamentClubId] || [] : teams).map(t => t.name),
+    federationTeamOptions: activeTournamentClubId || activeTournamentFederationId ? federationTeamOptions : [],
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
     onOpenTournament: t => {
       setViewingTournament(t);
       setViewingTournamentClubId(activeTournamentClubId || t._clubId || null);
+      setViewingTournamentFederationId(activeTournamentFederationId || t._federationId || null);
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
     onBack: () => setScreen("home"),
@@ -23160,7 +23334,7 @@ function CricketScorer() {
       openMatch(id);
     },
     onDeleteSeries: handleDeleteTournament,
-    canManage: !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
+    canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
   })), screen === "tournament-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournament-detail",
     direction: navDirection
@@ -23174,7 +23348,7 @@ function CricketScorer() {
       openMatch(id);
     },
     onDeleteTournament: handleDeleteTournament,
-    canManage: !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
+    canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
     direction: navDirection

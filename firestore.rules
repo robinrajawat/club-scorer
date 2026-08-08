@@ -447,6 +447,24 @@ service cloud.firestore {
         && resource.data.get('affiliatedClubIds', []).size() == 0;
     }
 
+    // A federation-hosted tournament — read is open to any signed-in user, the SAME trust tier as
+    // the federation document itself and its team directory just above (federations/{federationId},
+    // federations/{federationId}/teams/{entryId}): a federation was already designed as a
+    // semi-public directory rather than a private space like a club, so this doesn't introduce any
+    // new exposure, it just extends the same openness to cover the one thing a federation would
+    // naturally want to host. The alternative — gating reads to "member of any affiliated club" —
+    // would mean looping every affiliated club's membership inside the rule itself, bounded by
+    // Firestore's per-request lookup limit; a federation with a lot of affiliated clubs could start
+    // failing unpredictably purely from having grown. Write stays locked to the owner tier, same as
+    // every other federation-level action (creating/editing fixtures, deleting the tournament, etc.
+    // are all the same "owner or co-owner" check as clubs/{clubId}/tournaments/{tournamentId}
+    // above uses for club-hosted tournaments).
+    match /federations/{federationId}/tournaments/{tournamentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data);
+    }
+
     // A club-affiliation invite, addressed to one email. Only that signed-in email may even read
     // the code (so a stranger can't discover which federation it points to); redeeming it is a
     // write to the CLUB's own federationIds, enforced by the clubs/{clubId} update rule's general
