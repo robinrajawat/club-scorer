@@ -5479,7 +5479,8 @@ function PlayerPicker({
   placeholder,
   captain,
   keeper,
-  numbers
+  numbers,
+  noteFor
 }) {
   const excluded = new Set([exclude, ...(excludeList || [])].filter(Boolean));
   const pool = roster && roster.length ? roster.filter(n => !excluded.has(n)) : null;
@@ -5493,6 +5494,7 @@ function PlayerPicker({
     }, pool.map(name => {
       const active = value === name;
       const num = numbers && numbers[name];
+      const note = noteFor && noteFor(name);
       return /*#__PURE__*/React.createElement("button", {
         key: name,
         type: "button",
@@ -5513,7 +5515,21 @@ function PlayerPicker({
       }, num ? `#${num} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
         isCaptain: name === captain,
         isKeeper: name === keeper
-      }));
+      }), note && /*#__PURE__*/React.createElement("span", {
+        style: {
+          display: "inline-block",
+          marginLeft: 5,
+          padding: "1px 5px",
+          borderRadius: 5,
+          background: active ? "rgba(255,255,255,0.22)" : "rgba(184,137,43,0.16)",
+          color: active ? "#fff" : COLORS.gold,
+          fontSize: 9.5,
+          fontWeight: 800,
+          letterSpacing: 0.3,
+          verticalAlign: "middle",
+          fontFamily: "'Inter'"
+        }
+      }, note));
     }));
   }
   return /*#__PURE__*/React.createElement(TextField, {
@@ -20043,6 +20059,10 @@ function MatchScreen({
     // justRetiredName): resuming has to wait for a wicket to actually fall in the meantime, not be
     // an immediate self-swap on the very prompt their own retirement opened.
     excludeList: Object.keys(inning.batsmen).filter(n => n === justRetiredName || !(inning.batsmen[n].retiredHurt && !inning.batsmen[n].out)),
+    // Flags a returning retired-hurt batsman in the picker so they're not indistinguishable from
+    // someone who simply hasn't batted yet — easy to conflate otherwise, especially with a near-
+    // full roster where most names are legitimately still available.
+    noteFor: n => inning.batsmen[n] && inning.batsmen[n].retiredHurt ? "RETURNING" : null,
     placeholder: "Batsman name",
     captain: captainFor(match, inning.battingTeam),
     keeper: keeperFor(match, inning.battingTeam),
