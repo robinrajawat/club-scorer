@@ -4262,20 +4262,35 @@ function applyBall(inning, event) {
   // separately from the rest of the ball pipeline below. Still logged to inning.penalties so it's
   // a traceable event on the scorecard (see InningScorecard) rather than just moving the total.
   if (event.kind === "penalty") {
-    return {
+    const beforeTeamRuns = inning.runs || 0;
+    const afterTeamRuns = beforeTeamRuns + event.runs;
+    const updated = {
       ...inning,
-      runs: inning.runs + event.runs,
+      runs: afterTeamRuns,
       extras: {
         ...inning.extras,
         penalty: (inning.extras.penalty || 0) + event.runs
       },
       penalties: [...(inning.penalties || []), {
         runs: event.runs,
-        score: inning.runs + event.runs,
+        score: afterTeamRuns,
         wickets: inning.wickets,
         over: oversLabel(inning.legalBalls, inning.ballsPerOver)
       }]
     };
+    // A penalty bypasses the rest of the ball pipeline entirely (no delivery, nothing else to
+    // update), but the team-total toast further down never runs for it either as a result — a
+    // penalty landing right on top of a 50/100 line would otherwise silently never announce it.
+    // Self-contained here rather than not bothering to check at all.
+    if (afterTeamRuns >= 50 && Math.floor(afterTeamRuns / 50) > Math.floor(beforeTeamRuns / 50)) {
+      updated.toastMilestones = [...(inning.toastMilestones || []), {
+        type: "teamTotal",
+        text: `${updated.battingTeam} reach ${Math.floor(afterTeamRuns / 50) * 50}`,
+        over: oversLabel(inning.legalBalls, inning.ballsPerOver),
+        score: `${afterTeamRuns}-${inning.wickets}`
+      }];
+    }
+    return updated;
   }
   // Free hit: a non-run-out dismissal can't stand on a free-hit ball. Reroute it to a dot ball
   // rather than crediting the wicket — the UI also hides the disallowed wicket types while a
