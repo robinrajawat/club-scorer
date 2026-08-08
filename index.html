@@ -8029,11 +8029,11 @@ function JoinCodeBar({
 }
 // Chip row for switching between "My Teams" (private) and any club the user belongs to, plus
 // create/join a club and — once a club is selected — invite/leave/delete controls for it.
-// A slim, read-only-ish source picker for the Teams screen — chips to switch which roster
-// you're viewing/editing (personal, or one of your clubs), plus a link out to the full
-// create/join/rename/member/federation management, which lives under Account now (see
-// ClubFederationScreen). Teams stays fast and uncluttered for the common case: picking a
-// roster and scoring, not administering a club.
+// A slim, read-only-ish source picker for the Teams screen — chips to switch which roster you're
+// viewing/editing (personal, or one of your clubs), plus a link (onManage) that jumps to the
+// Clubs tab for full create/join/rename/member/federation management, rather than navigating away
+// to a separate screen (see TeamsScreen's tab state). Keeps this picker itself fast and
+// uncluttered for the common case: picking a roster and scoring, not administering a club.
 function ClubSourceSelector({
   clubs,
   activeClubId,
@@ -10311,268 +10311,6 @@ function RequestsScreen({
       textDecoration: "underline"
     }
   }, busyId === r.id ? "\u2026" : "Cancel request")))));
-}
-function ClubFederationScreen({
-  onBack,
-  backLabel = "Account",
-  clubs,
-  activeClubId,
-  onSelect,
-  onCreate,
-  onJoin,
-  onInvite,
-  onInviteClubCoOwner,
-  onLeave,
-  onDelete,
-  onRename,
-  federationsById,
-  onCreateFederation,
-  onSearchPublicFederations,
-  onSearchPublicClubs,
-  onRequestFederationAffiliation,
-  onSetClubVisibility,
-  onSetFederationVisibility,
-  onLeaveFederation,
-  onRemoveMember,
-  onRemoveClubCoOwner,
-  onRefreshMyMemberName,
-  onRenameFederation,
-  onKickClubFromFederation,
-  onDeleteFederation,
-  onLoadFederationTeams,
-  onInviteFederationCoOwnerByEmail,
-  onRemoveFederationCoOwner,
-  onRedeemFederationCoOwnerInvite,
-  onUpdateClubDescription,
-  onUpdateFederationDescription,
-  onRevokeClubInvite,
-  onRevokeFederationInvite,
-  clubsLoading,
-  currentUid
-}) {
-  const [redeemCode, setRedeemCode] = useState("");
-  const [redeemBusy, setRedeemBusy] = useState(false);
-  const [redeemError, setRedeemError] = useState("");
-  const [redeemSuccess, setRedeemSuccess] = useState(null); // federation name, once redeemed
-  // Clubs and federations used to be one long scroll -- the full Clubs admin panel (potentially
-  // substantial: an active club's whole roster/invite/tournament management UI) sitting directly
-  // above Federations, forcing a scroll past all of it just to reach a federation you actually
-  // came here for. Tabs instead of a merged single list deliberately: clubs and federations are
-  // different enough in their actions (a club has team rosters and members; a federation has
-  // affiliated clubs and no roster at all) that force-fitting them into one shared list/card shape
-  // would either confuse the two or need a lowest-common-denominator card that fits neither well.
-  // Doesn't touch ClubPanel or FederationsPanel's own internals at all -- purely which one mounts.
-  const [tab, setTab] = useState("clubs");
-  async function submitRedeem() {
-    if (!redeemCode.trim() || redeemBusy) return;
-    setRedeemBusy(true);
-    setRedeemError("");
-    setRedeemSuccess(null);
-    const result = await onRedeemFederationCoOwnerInvite(redeemCode.trim());
-    setRedeemBusy(false);
-    if (!result.ok) {
-      setRedeemError(result.error || "Couldn't redeem that invite.");
-      return;
-    }
-    setRedeemSuccess(result.federation.name);
-    setRedeemCode("");
-  }
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "20px 16px 60px",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " " + backLabel), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 26,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Clubs & Federations"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      marginBottom: 16
-    }
-  }, "Two separate things: a ", /*#__PURE__*/React.createElement("strong", null, "club"), " is your own team roster, shared with whoever's in it. A ", /*#__PURE__*/React.createElement("strong", null, "federation"), " is an independent umbrella that clubs opt into so their teams can play each other in tournaments \u2014 it isn't owned by any one club."), clubsLoading && clubs.length === 0 && /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading your clubs and federations\u2026",
-    size: 22,
-    style: {
-      background: COLORS.surface,
-      borderRadius: 12,
-      padding: "10px 14px",
-      marginBottom: 16,
-      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      marginBottom: 18
-    }
-  }, [{
-    key: "clubs",
-    label: "Clubs"
-  }, {
-    key: "federations",
-    label: "Federations"
-  }].map(t => /*#__PURE__*/React.createElement("button", {
-    key: t.key,
-    type: "button",
-    onClick: () => setTab(t.key),
-    className: "cs-btn",
-    style: {
-      flex: 1,
-      padding: "9px 12px",
-      borderRadius: 12,
-      border: "none",
-      cursor: "pointer",
-      background: tab === t.key ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: tab === t.key ? "#fff" : COLORS.inkSoft,
-      boxShadow: tab === t.key ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5
-    }
-  }, t.label))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Clubs"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 12
-    }
-  }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
-    clubs: clubs,
-    activeClubId: activeClubId,
-    onSelect: onSelect,
-    onCreate: onCreate,
-    onJoin: onJoin,
-    onInvite: onInvite,
-    onInviteCoOwner: onInviteClubCoOwner,
-    onLeave: onLeave,
-    onDelete: onDelete,
-    onRename: onRename,
-    onUpdateDescription: onUpdateClubDescription,
-    federationsById: federationsById,
-    onLeaveFederation: onLeaveFederation,
-    onRemoveMember: onRemoveMember,
-    onRemoveCoOwner: onRemoveClubCoOwner,
-    onRevokeInvite: onRevokeClubInvite,
-    onRefreshMyMemberName: onRefreshMyMemberName,
-    onSetVisibility: onSetClubVisibility,
-    onSearchPublicFederations: onSearchPublicFederations,
-    onRequestFederationAffiliation: onRequestFederationAffiliation,
-    currentUid: currentUid
-  })), tab === "federations" && /*#__PURE__*/React.createElement(FederationsPanel, {
-    federationsById: federationsById,
-    clubs: clubs,
-    currentUid: currentUid,
-    onCreateFederation: onCreateFederation,
-    onSearchPublicFederations: onSearchPublicFederations,
-    onSearchPublicClubs: onSearchPublicClubs,
-    onRequestFederationAffiliation: onRequestFederationAffiliation,
-    onSetFederationVisibility: onSetFederationVisibility,
-    onLeaveFederation: onLeaveFederation,
-    onLoadFederationTeams: onLoadFederationTeams,
-    onRenameFederation: onRenameFederation,
-    onUpdateFederationDescription: onUpdateFederationDescription,
-    onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
-    onRemoveFederationCoOwner: onRemoveFederationCoOwner,
-    onKickClubFromFederation: onKickClubFromFederation,
-    onDeleteFederation: onDeleteFederation,
-    onRevokeInvite: onRevokeFederationInvite
-  }), tab === "federations" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 20,
-      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
-      borderRadius: 16,
-      padding: 16,
-      border: `1px dashed ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 8
-    }
-  }, "Have a federation co-owner invite?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 10
-    }
-  }, "If a federation owner invited you by email to be a co-owner, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: redeemCode,
-    onChange: v => setRedeemCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-    placeholder: "Invite code, e.g. 7GQK4RTP",
-    autoCapitalize: "characters",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitRedeem,
-    disabled: redeemBusy || !redeemCode.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 16px",
-      minHeight: 44
-    }
-  }, redeemBusy ? "\u2026" : "Redeem")), redeemError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 12,
-      fontFamily: "'Inter'",
-      marginTop: 8
-    }
-  }, redeemError), redeemSuccess && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.turf,
-      fontSize: 12.5,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      marginTop: 8
-    }
-  }, "You're now a co-owner of \"", redeemSuccess, "\".")));
 }
 
 // Small "move to..." dropdown for a single team row — lets an existing personal team be moved
@@ -15936,9 +15674,44 @@ function TeamsScreen({
   clubs,
   activeClubId,
   onSelectSource,
-  onManageClubs,
   onMoveTeam,
-  currentUid
+  currentUid,
+  tab,
+  onTabChange,
+  // Clubs tab
+  activeClubAdminId,
+  onSelectClubAdmin,
+  onCreateClub,
+  onJoinClub,
+  onInviteClubMember,
+  onInviteClubCoOwner,
+  onRevokeClubInvite,
+  onLeaveClub,
+  onDeleteClub,
+  onRenameClub,
+  onUpdateClubDescription,
+  onSetClubVisibility,
+  onRemoveClubMember,
+  onRemoveClubCoOwner,
+  onRefreshMyMemberName,
+  // Federations tab
+  federationsById,
+  onCreateFederation,
+  onSearchPublicFederations,
+  onSearchPublicClubs,
+  onRequestFederationAffiliation,
+  onSetFederationVisibility,
+  onLeaveFederation,
+  onRenameFederation,
+  onUpdateFederationDescription,
+  onKickClubFromFederation,
+  onDeleteFederation,
+  onLoadFederationTeams,
+  onInviteFederationCoOwnerByEmail,
+  onRevokeFederationInvite,
+  onRemoveFederationCoOwner,
+  onRedeemFederationCoOwnerInvite,
+  clubsLoading
 }) {
   function matchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
@@ -15946,6 +15719,26 @@ function TeamsScreen({
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
+  // Federation co-owner invite redemption -- moved here from the old standalone Clubs &
+  // Federations screen along with the rest of the Federations tab content below.
+  const [redeemCode, setRedeemCode] = useState("");
+  const [redeemBusy, setRedeemBusy] = useState(false);
+  const [redeemError, setRedeemError] = useState("");
+  const [redeemSuccess, setRedeemSuccess] = useState(null); // federation name, once redeemed
+  async function submitRedeem() {
+    if (!redeemCode.trim() || redeemBusy) return;
+    setRedeemBusy(true);
+    setRedeemError("");
+    setRedeemSuccess(null);
+    const result = await onRedeemFederationCoOwnerInvite(redeemCode.trim());
+    setRedeemBusy(false);
+    if (!result.ok) {
+      setRedeemError(result.error || "Couldn't redeem that invite.");
+      return;
+    }
+    setRedeemSuccess(result.federation.name);
+    setRedeemCode("");
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 40px",
@@ -15978,7 +15771,40 @@ function TeamsScreen({
       color: COLORS.pitch,
       marginBottom: 4
     }
-  }, "Teams"), /*#__PURE__*/React.createElement("div", {
+  }, tab === "clubs" ? "Clubs" : tab === "federations" ? "Federations" : "Teams"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 18
+    }
+  }, [{
+    key: "teams",
+    label: "Teams"
+  }, {
+    key: "clubs",
+    label: "Clubs"
+  }, {
+    key: "federations",
+    label: "Federations"
+  }].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.key,
+    type: "button",
+    onClick: () => onTabChange(t.key),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "9px 8px",
+      borderRadius: 12,
+      border: "none",
+      cursor: "pointer",
+      background: tab === t.key ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: tab === t.key ? "#fff" : COLORS.inkSoft,
+      boxShadow: tab === t.key ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, t.label))), tab === "teams" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
@@ -15989,7 +15815,7 @@ function TeamsScreen({
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelectSource,
-    onManage: onManageClubs,
+    onManage: () => onTabChange("clubs"),
     currentUid: currentUid
   }), canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
@@ -16102,7 +15928,116 @@ function TeamsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches.")));
+  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches."))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12
+    }
+  }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
+    clubs: clubs,
+    activeClubId: activeClubAdminId,
+    onSelect: onSelectClubAdmin,
+    onCreate: onCreateClub,
+    onJoin: onJoinClub,
+    onInvite: onInviteClubMember,
+    onInviteCoOwner: onInviteClubCoOwner,
+    onLeave: onLeaveClub,
+    onDelete: onDeleteClub,
+    onRename: onRenameClub,
+    onUpdateDescription: onUpdateClubDescription,
+    federationsById: federationsById,
+    onLeaveFederation: onLeaveFederation,
+    onRemoveMember: onRemoveClubMember,
+    onRemoveCoOwner: onRemoveClubCoOwner,
+    onRevokeInvite: onRevokeClubInvite,
+    onRefreshMyMemberName: onRefreshMyMemberName,
+    onSetVisibility: onSetClubVisibility,
+    onSearchPublicFederations: onSearchPublicFederations,
+    onRequestFederationAffiliation: onRequestFederationAffiliation,
+    currentUid: currentUid
+  })), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
+    federationsById: federationsById,
+    clubs: clubs,
+    currentUid: currentUid,
+    onCreateFederation: onCreateFederation,
+    onSearchPublicFederations: onSearchPublicFederations,
+    onSearchPublicClubs: onSearchPublicClubs,
+    onRequestFederationAffiliation: onRequestFederationAffiliation,
+    onSetFederationVisibility: onSetFederationVisibility,
+    onLeaveFederation: onLeaveFederation,
+    onLoadFederationTeams: onLoadFederationTeams,
+    onRenameFederation: onRenameFederation,
+    onUpdateFederationDescription: onUpdateFederationDescription,
+    onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
+    onRemoveFederationCoOwner: onRemoveFederationCoOwner,
+    onKickClubFromFederation: onKickClubFromFederation,
+    onDeleteFederation: onDeleteFederation,
+    onRevokeInvite: onRevokeFederationInvite
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 20,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      borderRadius: 16,
+      padding: 16,
+      border: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 8
+    }
+  }, "Have a federation co-owner invite?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 10
+    }
+  }, "If a federation owner invited you by email to be a co-owner, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: redeemCode,
+    onChange: v => setRedeemCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
+    placeholder: "Invite code, e.g. 7GQK4RTP",
+    autoCapitalize: "characters",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitRedeem,
+    disabled: redeemBusy || !redeemCode.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
+    }
+  }, redeemBusy ? "\u2026" : "Redeem")), redeemError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12,
+      fontFamily: "'Inter'",
+      marginTop: 8
+    }
+  }, redeemError), redeemSuccess && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.turf,
+      fontSize: 12.5,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      marginTop: 8
+    }
+  }, "You're now a co-owner of \"", redeemSuccess, "\"."))));
 }
 function TeamEditScreen({
   team,
@@ -22101,7 +22036,6 @@ const SCREEN_DEPTH = {
   "team-edit": 2,
   "shared-links": 2,
   "requests": 2,
-  "club-admin": 2,
   "tournament-detail": 2
 };
 function CricketScorer() {
@@ -22120,11 +22054,14 @@ function CricketScorer() {
   const [teams, setTeams] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
-  // Clubs & Federations administration (ClubFederationScreen) gets its own independent club
-  // selection and return destination — it must not inherit whichever club is active in Teams,
-  // and must return wherever it was opened from (Account or Teams), not always Account.
+  // Clubs & Federations administration used to be its own screen with its own independent club
+  // selection — now folded into Teams as two more tabs alongside "Teams" itself, so activeClubId
+  // (Teams' own roster-source selector) and activeClubAdminId (which club's admin panel is
+  // expanded, within the Clubs tab) stay two genuinely separate selections, same as before, just
+  // no longer needing a separate return-destination to track (teamsTab controls which tab Teams
+  // opens on, so Account can deep-link straight to the Clubs tab without a whole separate screen).
   const [activeClubAdminId, setActiveClubAdminId] = useState(null);
-  const [clubAdminReturnScreen, setClubAdminReturnScreen] = useState("account");
+  const [teamsTab, setTeamsTab] = useState("teams"); // teams | clubs | federations
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
@@ -22768,8 +22705,6 @@ function CricketScorer() {
           return () => setScreen("tournaments");
         case "shared-links":
           return () => setScreen("account");
-        case "club-admin":
-          return () => setScreen(clubAdminReturnScreen);
         case "follow":
           return exitFollow;
         case "follow-tournament":
@@ -23596,12 +23531,42 @@ function CricketScorer() {
     clubs: clubs,
     activeClubId: activeClubId,
     onSelectSource: setActiveClubId,
-    onManageClubs: () => {
-      setClubAdminReturnScreen("teams");
-      setScreen("club-admin");
-    },
     onMoveTeam: handleMoveTeam,
-    currentUid: user && user.uid
+    currentUid: user && user.uid,
+    tab: teamsTab,
+    onTabChange: setTeamsTab,
+    activeClubAdminId: activeClubAdminId,
+    onSelectClubAdmin: setActiveClubAdminId,
+    onCreateClub: handleCreateClub,
+    onJoinClub: handleJoinClub,
+    onInviteClubMember: handleInviteClubMember,
+    onInviteClubCoOwner: handleInviteClubCoOwner,
+    onRevokeClubInvite: handleRevokeClubInvite,
+    onLeaveClub: handleLeaveClub,
+    onDeleteClub: handleDeleteClub,
+    onRenameClub: handleRenameClub,
+    onUpdateClubDescription: handleUpdateClubDescription,
+    onSetClubVisibility: handleSetClubVisibility,
+    onRemoveClubMember: handleRemoveMember,
+    onRemoveClubCoOwner: handleRemoveClubCoOwner,
+    onRefreshMyMemberName: handleRefreshMyMemberName,
+    federationsById: federationsById,
+    onCreateFederation: handleCreateFederation,
+    onSearchPublicFederations: searchPublicFederations,
+    onSearchPublicClubs: searchPublicClubs,
+    onRequestFederationAffiliation: handleRequestFederationAffiliation,
+    onSetFederationVisibility: handleSetFederationVisibility,
+    onLeaveFederation: handleLeaveFederation,
+    onRenameFederation: handleRenameFederation,
+    onUpdateFederationDescription: handleUpdateFederationDescription,
+    onKickClubFromFederation: handleKickClubFromFederation,
+    onDeleteFederation: handleDeleteFederation,
+    onLoadFederationTeams: loadFederationTeams,
+    onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
+    onRevokeFederationInvite: handleRevokeFederationInvite,
+    onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
+    onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
+    clubsLoading: clubsLoading
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -23688,8 +23653,8 @@ function CricketScorer() {
     onOpenFeedback: () => setScreen("feedback"),
     requestBadgeCount: federationRequestsNeedingAction.length,
     onOpenClubAdmin: () => {
-      setClubAdminReturnScreen("account");
-      setScreen("club-admin");
+      setTeamsTab("clubs");
+      setScreen("teams");
     },
     onBack: () => setScreen("home"),
     redirectError: authError,
@@ -23740,46 +23705,6 @@ function CricketScorer() {
     onDeletePlayer: deletePlayer,
     currentUid: user && user.uid,
     clubs: clubs
-  })), screen === "club-admin" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "club-admin",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(ClubFederationScreen, {
-    onBack: () => setScreen(clubAdminReturnScreen),
-    backLabel: clubAdminReturnScreen === "teams" ? "Teams" : "Account",
-    clubs: clubs,
-    activeClubId: activeClubAdminId,
-    onSelect: setActiveClubAdminId,
-    onCreate: handleCreateClub,
-    onJoin: handleJoinClub,
-    onInvite: handleInviteClubMember,
-    onInviteClubCoOwner: handleInviteClubCoOwner,
-    onRevokeClubInvite: handleRevokeClubInvite,
-    onLeave: handleLeaveClub,
-    onDelete: handleDeleteClub,
-    onRename: handleRenameClub,
-    onUpdateClubDescription: handleUpdateClubDescription,
-    federationsById: federationsById,
-    onCreateFederation: handleCreateFederation,
-    onSearchPublicFederations: searchPublicFederations,
-    onSearchPublicClubs: searchPublicClubs,
-    onRequestFederationAffiliation: handleRequestFederationAffiliation,
-    onSetClubVisibility: handleSetClubVisibility,
-    onSetFederationVisibility: handleSetFederationVisibility,
-    onLeaveFederation: handleLeaveFederation,
-    onRemoveMember: handleRemoveMember,
-    onRemoveClubCoOwner: handleRemoveClubCoOwner,
-    onRefreshMyMemberName: handleRefreshMyMemberName,
-    onRenameFederation: handleRenameFederation,
-    onUpdateFederationDescription: handleUpdateFederationDescription,
-    onKickClubFromFederation: handleKickClubFromFederation,
-    onDeleteFederation: handleDeleteFederation,
-    onLoadFederationTeams: loadFederationTeams,
-    onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
-    onRevokeFederationInvite: handleRevokeFederationInvite,
-    onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
-    onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
-    clubsLoading: clubsLoading,
-    currentUid: user && user.uid
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow",
     direction: navDirection
