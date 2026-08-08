@@ -8027,19 +8027,16 @@ function JoinCodeBar({
     }
   }, error));
 }
-// Chip row for switching between "My Teams" (private) and any club the user belongs to, plus
-// create/join a club and — once a club is selected — invite/leave/delete controls for it.
-// A slim, read-only-ish source picker for the Teams screen — chips to switch which roster you're
-// viewing/editing (personal, or one of your clubs), plus a link (onManage) that jumps to the
-// Clubs tab for full create/join/rename/member/federation management, rather than navigating away
-// to a separate screen (see TeamsScreen's tab state). Keeps this picker itself fast and
-// uncluttered for the common case: picking a roster and scoring, not administering a club.
+// Chip row for switching between "My Teams" (private) and any club the user belongs to.
+// A slim, read-only-ish source picker for the Teams screen's Teams tab — chips to switch which
+// roster you're viewing/editing (personal, or one of your clubs). Used to also carry a "Manage
+// clubs & federations" link out to full admin — removed once Clubs became a top-level tab
+// sitting right above this (same screen, one tap away), since the link was then just a second,
+// smaller, redundant way to do the exact same thing the tab bar already does more prominently.
 function ClubSourceSelector({
   clubs,
   activeClubId,
-  onSelect,
-  onManage,
-  currentUid
+  onSelect
 }) {
   const chipStyle = active => ({
     padding: "7px 13px",
@@ -8070,27 +8067,9 @@ function ClubSourceSelector({
     style: chipStyle(!activeClubId)
   }, "My Teams"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
-    onClick: () => {
-      console.log("[cs-club] chip clicked:", c.id, c.name);
-      onSelect(c.id);
-    },
+    onClick: () => onSelect(c.id),
     style: chipStyle(activeClubId === c.id)
-  }, c.name))), currentUid && /*#__PURE__*/React.createElement("button", {
-    onClick: onManage,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      marginTop: 8,
-      padding: 4,
-      textDecoration: "underline"
-    }
-  }, "Manage clubs & federations \u2192"));
+  }, c.name))));
 }
 function ClubPanel({
   clubs,
@@ -15814,9 +15793,7 @@ function TeamsScreen({
   }, "Save squads once, then pick players from a list during scoring."), /*#__PURE__*/React.createElement(ClubSourceSelector, {
     clubs: clubs,
     activeClubId: activeClubId,
-    onSelect: onSelectSource,
-    onManage: () => onTabChange("clubs"),
-    currentUid: currentUid
+    onSelect: onSelectSource
   }), canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
