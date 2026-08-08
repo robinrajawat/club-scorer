@@ -10354,6 +10354,15 @@ function ClubFederationScreen({
   const [redeemBusy, setRedeemBusy] = useState(false);
   const [redeemError, setRedeemError] = useState("");
   const [redeemSuccess, setRedeemSuccess] = useState(null); // federation name, once redeemed
+  // Clubs and federations used to be one long scroll -- the full Clubs admin panel (potentially
+  // substantial: an active club's whole roster/invite/tournament management UI) sitting directly
+  // above Federations, forcing a scroll past all of it just to reach a federation you actually
+  // came here for. Tabs instead of a merged single list deliberately: clubs and federations are
+  // different enough in their actions (a club has team rosters and members; a federation has
+  // affiliated clubs and no roster at all) that force-fitting them into one shared list/card shape
+  // would either confuse the two or need a lowest-common-denominator card that fits neither well.
+  // Doesn't touch ClubPanel or FederationsPanel's own internals at all -- purely which one mounts.
+  const [tab, setTab] = useState("clubs");
   async function submitRedeem() {
     if (!redeemCode.trim() || redeemBusy) return;
     setRedeemBusy(true);
@@ -10419,6 +10428,36 @@ function ClubFederationScreen({
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 18
+    }
+  }, [{
+    key: "clubs",
+    label: "Clubs"
+  }, {
+    key: "federations",
+    label: "Federations"
+  }].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.key,
+    type: "button",
+    onClick: () => setTab(t.key),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "9px 12px",
+      borderRadius: 12,
+      border: "none",
+      cursor: "pointer",
+      background: tab === t.key ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: tab === t.key ? "#fff" : COLORS.inkSoft,
+      boxShadow: tab === t.key ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5
+    }
+  }, t.label))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 20,
       color: COLORS.pitch,
@@ -10453,7 +10492,7 @@ function ClubFederationScreen({
     onSearchPublicFederations: onSearchPublicFederations,
     onRequestFederationAffiliation: onRequestFederationAffiliation,
     currentUid: currentUid
-  }), /*#__PURE__*/React.createElement(FederationsPanel, {
+  })), tab === "federations" && /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
     clubs: clubs,
     currentUid: currentUid,
@@ -10471,7 +10510,7 @@ function ClubFederationScreen({
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
     onRevokeInvite: onRevokeFederationInvite
-  }), /*#__PURE__*/React.createElement("div", {
+  }), tab === "federations" && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 20,
       background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
