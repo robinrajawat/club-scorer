@@ -15959,6 +15959,7 @@ function TeamsScreen({
 function TeamEditScreen({
   team,
   clubId,
+  clubs = [],
   onPublishPlayer,
   onUnpublishPlayer,
   onUpdatePlayerInfo,
@@ -16047,6 +16048,16 @@ function TeamEditScreen({
   // they do for their own club), so it's deliberately excluded from this check.
   function isBorrowed(p) {
     return !!(p.homeClubId && clubId && p.homeClubId !== clubId);
+  }
+  // Resolves a borrowed player's home club id into a readable name for the badge below. Was
+  // previously only ever surfaced via a `title` tooltip on the badge -- invisible on a touch
+  // device, since a tooltip needs hover, which a phone doesn't have. The dedicated Players screen
+  // already shows "Home club: X" as plain, always-visible text (see the homeClub lookup there);
+  // this roster view had the same information available (p.homeClubId) but no way to actually
+  // show it, since it never received a `clubs` list to resolve the id against at all.
+  function homeClubName(p) {
+    const c = clubs.find(x => x.id === p.homeClubId);
+    return c ? c.name : "another club";
   }
   function addPlayer() {
     const n = newPlayer.trim();
@@ -16466,7 +16477,7 @@ function TeamEditScreen({
       borderRadius: 8,
       whiteSpace: "nowrap"
     }
-  }, "Borrowed")), /*#__PURE__*/React.createElement("button", {
+  }, "Borrowed \u00b7 ", homeClubName(p))), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
@@ -16760,7 +16771,7 @@ function TeamEditScreen({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, p.email)), /*#__PURE__*/React.createElement(Globe, {
+  }, p.email, p.homeClubId && ` \u00b7 ${homeClubName(p)}`)), /*#__PURE__*/React.createElement(Globe, {
     size: 15,
     style: {
       color: COLORS.gold,
@@ -23620,6 +23631,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
     clubId: activeClubId,
+    clubs: clubs,
     onPublishPlayer: publishPlayer,
     onUnpublishPlayer: unpublishPlayer,
     onUpdatePlayerInfo: updatePlayerInfo,
