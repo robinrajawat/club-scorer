@@ -17579,14 +17579,11 @@ function PrintReport({
   match
 }) {
   if (!match) return null;
-  let resultText = null;
-  if (match.status === "complete" && match.innings.length > 1) {
-    const [i1, i2] = match.innings;
-    if (i2.runs >= i1.runs + 1) {
-      const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
-      resultText = `${i2.battingTeam} won by ${wicketsInHand} wicket${wicketsInHand === 1 ? "" : "s"}`;
-    } else if (i2.runs === i1.runs) resultText = "Match tied";else resultText = `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
-  }
+  // Was its own duplicated copy of this exact logic (matchResultText's inline predecessor) --
+  // easy to end up silently out of sync with the live result screen the moment either one changes
+  // and the other doesn't (e.g. a future "no result"/abandoned designation). Call the one shared
+  // function everyone else already uses instead of maintaining a second copy of it here.
+  const resultText = matchResultText(match);
   return /*#__PURE__*/React.createElement("div", {
     className: "print-only",
     style: {
