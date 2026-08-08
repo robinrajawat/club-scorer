@@ -19468,6 +19468,19 @@ function MatchScreen({
   // case), "wide"/"noball" = the ball is ALSO an extra, credited alongside the dismissal in
   // applyBall (see event.extraKind there) rather than needing a separate action.
   const [wicketExtraKind, setWicketExtraKind] = useState(null);
+  // Whether the pairing for the NEXT ball will come out backwards once this wicket is confirmed —
+  // traced through the actual crease positions for all four combinations of even/odd runs
+  // completed × whether Swap Strike was used (to mark the non-striker as the one actually out)
+  // rather than the striker themselves being out:
+  //   - even runs + no swap (the default case, striker themselves given out) -> BACKWARDS
+  //   - odd runs + no swap -> correct as-is
+  //   - even runs + swap used -> correct as-is
+  //   - odd runs + swap used (the non-striker-run-out case) -> BACKWARDS
+  // An earlier version of this warning only checked "odd runs" — which caught the swap case but
+  // completely missed the even-runs, no-swap case, actually the MORE common one (most run outs
+  // involve the striker themselves, with 0 or 2 runs already completed).
+  const wasSwapped = wicketDraft && wicketDraft.strikerAtBallStart !== inning.strikerName;
+  const riskOfWrongPairing = wicketDraft && (runsDraft % 2 === 0) !== wasSwapped;
   function confirmWicketDetails(nameOverride) {
     const {
       wicketType,
@@ -20581,7 +20594,7 @@ function MatchScreen({
       fontSize: 13,
       textAlign: "center"
     }
-  }, n))), runsDraft % 2 === 1 && /*#__PURE__*/React.createElement("div", {
+  }, n))), riskOfWrongPairing && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "flex-start",
@@ -20602,7 +20615,7 @@ function MatchScreen({
       flexShrink: 0,
       marginTop: 1
     }
-  }), "Odd number of runs \u2014 strike would normally have crossed. Once the new batsman is confirmed, double-check who's actually on strike \u2014 this is separate from (and comes after) any Swap Strike you used above just to mark the right end out. Swap Strike on the main scoring screen fixes it if the pairing's wrong.")), (wicketDraft.wicketType === "Run out" || wicketDraft.wicketType === "Stumped") && /*#__PURE__*/React.createElement("div", {
+  }), "Strike would normally have crossed. Once the new batsman is confirmed, double-check who's actually on strike \u2014 this is separate from (and comes after) any Swap Strike you used above just to mark the right end out. Swap Strike on the main scoring screen fixes it if the pairing's wrong.")), (wicketDraft.wicketType === "Run out" || wicketDraft.wicketType === "Stumped") && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
