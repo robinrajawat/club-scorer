@@ -3304,6 +3304,15 @@ function applicableKnockoutStages(teamCount) {
   const start = KNOCKOUT_STAGES.findIndex(s => teamCount >= s.size);
   return start === -1 ? [] : KNOCKOUT_STAGES.slice(start);
 }
+// Plain-language preview of what applicableKnockoutStages(n) resolves to, for the tournament
+// creation form — so picking a team count / group split shows what shape of tournament actually
+// results before committing to it, rather than the person having to already know the
+// Quarterfinal/Semifinal/Final cutoffs by heart.
+function knockoutStagesPreview(teamCount) {
+  const stages = applicableKnockoutStages(teamCount);
+  if (stages.length === 0) return null;
+  return stages.map(s => s.label).join(", ");
+}
 // Seeding pairs for the FIRST knockout stage, keeping seed #1 and #2 apart until the final —
 // index pairs into a standings-ranked array of length `size`, e.g. for 8: 1v8, 4v5, 2v7, 3v6.
 // Later stages don't need this: their teams are already in bracket order (the winners of
@@ -7208,6 +7217,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "What does the qualification calculator do?",
     a: "Pick your team and a rival inside a tournament, and it works out the run target or rate you'd need in an upcoming fixture to get past them on net run rate \u2014 handy when NRR is close in the run-up to a knockout stage."
+  }, {
+    q: "The auto-generated knockout bracket doesn't match my tournament's playoff format \u2014 what do I do?",
+    a: "The built-in bracket is a standard Quarterfinal/Semifinal/Final elimination \u2014 it won't build something like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final shape, where the top two teams get a second chance. Add those fixtures by hand instead (\u201cAdd a fixture\u201d on the tournament's schedule) and give each one a Stage label when you do \u2014 that keeps it out of the points table and NRR, exactly like the auto-generated bracket already is, and it shows up in its own \u201cPlayoffs\u201d section on the schedule."
   }]
 }, {
   title: "Appearance",
@@ -13228,7 +13240,15 @@ function TournamentsScreen({
       opacity: 0.65,
       fontWeight: 500
     }
-  }, "\u00b7 ", t.clubName)))), selectedTeams.length >= 4 && /*#__PURE__*/React.createElement("div", {
+  }, "\u00b7 ", t.clubName)))), selectedTeams.length >= 2 && !useGroups && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, `${selectedTeams.length} teams, one round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), selectedTeams.length >= 4 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 4,
       marginBottom: 14
@@ -13339,6 +13359,14 @@ function TournamentsScreen({
       fontSize: 13
     }
   }, n))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 12
+    }
+  }, `${numGroups} groups, top ${advancePerGroup} from each advance \u2192 ${numGroups * advancePerGroup} qualifiers \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -13957,6 +13985,15 @@ function FixturesSection({
   const [adding, setAdding] = useState(false);
   const [newA, setNewA] = useState("");
   const [newB, setNewB] = useState("");
+  // Blank means a regular fixture (counts toward the round-robin table, same as always). A label
+  // here reuses the exact same `stage` field the auto-generated knockout bracket already tags its
+  // own fixtures with — so a manually-added "Qualifier 1"/"Eliminator" fixture is excluded from
+  // the league table by computeStandings automatically, with no separate mechanism needed. Lets
+  // someone build a playoff structure the app doesn't auto-generate (the IPL's Qualifier 1 /
+  // Eliminator / Qualifier 2 / Final shape, rather than a straight elimination bracket) without
+  // those matches silently inflating the league standings the way an auto-generated knockout
+  // fixture used to before that had a name at all.
+  const [newStage, setNewStage] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const fixtures = tournament.fixtures || [];
@@ -14023,13 +14060,15 @@ function FixturesSection({
         teamA: newA,
         teamB: newB,
         date: "",
-        matchId: null
+        matchId: null,
+        stage: newStage.trim() || undefined
       }]
     });
     setBusy(false);
     setAdding(false);
     setNewA("");
     setNewB("");
+    setNewStage("");
   }
   // ---- Knockout stages (Quarterfinal / Semifinal / Final), proposed once applicable ----
   const standings = computeStandings(tournament, matches || []);
@@ -14043,6 +14082,16 @@ function FixturesSection({
   const groupFixtures = fixtures.filter(f => !f.stage);
   const upcomingGroupFixtures = groupFixtures.filter(f => !isFixturePlayed(f));
   const playedGroupCount = groupFixtures.length - upcomingGroupFixtures.length;
+  // Manually-added fixtures with a custom stage label (see addFixture's newStage) — a playoff
+  // shape the app doesn't auto-generate, like the IPL's Qualifier 1/Eliminator/Qualifier 2/Final,
+  // as opposed to the standard Quarterfinal/Semifinal/Final bracket the app DOES build itself.
+  // Kept a separate bucket from groupFixtures (so a custom playoff fixture never gates
+  // groupStageDone/the auto-bracket's readiness below) and rendered in its own section further
+  // down — being excluded from groupFixtures is what already keeps these off the league table
+  // too (see computeStandings), but that's not the same as being visible in the schedule, and a
+  // fixture that's correctly excluded from the table but invisible everywhere else isn't useful.
+  const standardStageLabels = new Set(KNOCKOUT_STAGES.map(s => s.label));
+  const customStageFixtures = fixtures.filter(f => f.stage && !standardStageLabels.has(f.stage));
   function fixturesForStage(label) {
     return fixtures.filter(f => f.stage === label);
   }
@@ -14094,6 +14143,51 @@ function FixturesSection({
   const finalStage = stages.length ? stages[stages.length - 1] : null;
   const championFixture = finalStage && stageDecided(finalStage.label) ? fixturesForStage(finalStage.label)[0] : null;
   const champion = championFixture ? matchWinner(matchById.get(championFixture.matchId), matchById) : null;
+  // A simple, ungrouped list rather than knockoutSection's bracket-progression machinery — the
+  // app has no idea how a freeform label like "Qualifier 1" or "Eliminator" is meant to connect
+  // to the next one (unlike the standard bracket, where "winner of Semifinal 1 plays winner of
+  // Semifinal 2" is a known, fixed rule), so this just shows what's been added by hand, in
+  // whatever order, each labeled with its own stage.
+  const customStageSection = customStageFixtures.length === 0 ? null : /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Playoffs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 10
+    }
+  }, "Added by hand \u2014 kept out of the points table and NRR, same as the knockout bracket below."), customStageFixtures.map(f => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: f.id
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.pitch,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 4
+    }
+  }, f.stage), /*#__PURE__*/React.createElement(FixtureRow, {
+    fixture: f,
+    match: f.matchId ? matchById.get(f.matchId) : null,
+    onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
+    onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
+  }))));
   const knockoutSection = stages.length === 0 ? null : /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 24
@@ -14302,6 +14396,44 @@ function FixturesSection({
     value: n
   }, n)))), /*#__PURE__*/React.createElement("div", {
     style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Stage (optional) \u2014 leave blank for a regular fixture that counts toward the table. Label it and it's kept out of the points table/NRR, same as the auto-generated knockout bracket \u2014 use this for a playoff shape the app doesn't build automatically, like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 8
+    }
+  }, ["Qualifier 1", "Eliminator", "Qualifier 2"].map(label => /*#__PURE__*/React.createElement("button", {
+    key: label,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setNewStage(newStage === label ? "" : label),
+    style: {
+      padding: "6px 12px",
+      borderRadius: 16,
+      border: "none",
+      cursor: "pointer",
+      background: newStage === label ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: newStage === label ? "#fff" : COLORS.ink,
+      boxShadow: newStage === label ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12
+    }
+  }, label))), /*#__PURE__*/React.createElement(TextField, {
+    value: newStage,
+    onChange: setNewStage,
+    placeholder: "Or type a custom stage name\u2026",
+    style: {
+      marginBottom: 10
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
       gap: 8
     }
@@ -14321,6 +14453,7 @@ function FixturesSection({
     onClick: () => {
       setNewA("");
       setNewB("");
+      setNewStage("");
       setAdding(true);
     },
     className: "cs-btn",
@@ -14340,7 +14473,7 @@ function FixturesSection({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14
-  }), " Add a fixture")), knockoutSection, fixtureToConfirmDelete && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }), " Add a fixture")), customStageSection, knockoutSection, fixtureToConfirmDelete && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Remove this fixture?",
     message: `${fixtureToConfirmDelete.teamA} vs ${fixtureToConfirmDelete.teamB} will be removed from the schedule. This can\u2019t be undone.`,
     confirmLabel: "Remove",
