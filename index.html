@@ -7250,7 +7250,7 @@ const HELP_SECTIONS = [{
     a: "Yes \u2014 the run-out/stumped popup asks whether the ball was fair, a wide, or (run out only) a no-ball, and credits the extra run alongside the dismissal. It also asks how many runs the pair had completed before the wicket fell, since that's common on a run out and easy to lose track of otherwise."
   }, {
     q: "I found a scoring mistake after the match already ended \u2014 can I fix it?",
-    a: "\u201cFix a mistake\u201d on the result screen reopens the match's last innings \u2014 Undo and every other correction tool work again from there, same as live scoring. It only works on the most recent innings: an earlier one can't be reopened once a later one has real balls in it, since the target, the result, and (in a tournament) NRR all depend on that total by then."
+    a: "\u201cFix a mistake\u201d on the result screen reopens the match's last innings \u2014 Undo and every other correction tool work again from there, same as live scoring. It only works on the most recent innings: an earlier one can't be reopened once a later one has real balls in it, since the target, the result, and (in a tournament) NRR all depend on that total by then. One more thing worth knowing if it's a knockout-bracket match: fixing a mistake that changes the winner doesn't automatically update a later round that's already been set up from the old result \u2014 you'd need to fix that fixture by hand too."
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
@@ -21879,7 +21879,7 @@ function ResultScreen({
     size: 13
   }), "Fix a mistake"), confirmReopen && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Reopen this match?",
-    message: `This reopens ${match.innings[match.innings.length - 1].battingTeam}'s completed innings so you can fix a mistake -- Undo and everything else work again from there, same as during live scoring. Only the last innings can be reopened this way; if the mistake was actually in an earlier innings, this can't fix it without also affecting what came after.`,
+    message: `This reopens ${match.innings[match.innings.length - 1].battingTeam}'s completed innings so you can fix a mistake -- Undo and everything else work again from there, same as during live scoring. Only the last innings can be reopened this way; if the mistake was actually in an earlier innings, this can't fix it without also affecting what came after.${match.tournamentId ? " This match is tagged to a tournament -- if it's a knockout-bracket fixture and a later round has already been set up from its result, changing the winner here won't update that fixture automatically; you'll need to fix that one by hand too if the winner ends up different." : ""}`,
     confirmLabel: "Reopen",
     cancelLabel: "Cancel",
     variant: "default",
