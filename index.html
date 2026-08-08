@@ -4206,6 +4206,17 @@ function ensureBatsman(inning, name) {
       sixes: 0
     };
     inning.battingOrder = [...inning.battingOrder, name];
+  } else if (inning.batsmen[name].retiredHurt) {
+    // Anyone actually being confirmed as the active striker/non-striker can't simultaneously be
+    // "currently retired, sitting out" — clears the moment they resume. Every call site here means
+    // "this name is now an active batsman" (a new one, an opener, or someone coming back in), so
+    // this is the one place that needs to know about resuming rather than duplicating it at each
+    // call site. See retireBatsman/confirmNewBatsman below for where retiredHurt gets set, and the
+    // Next batsman picker's excludeList for what makes a retired player selectable again at all.
+    inning.batsmen[name] = {
+      ...inning.batsmen[name],
+      retiredHurt: false
+    };
   }
 }
 function ensureBowler(inning, name) {
@@ -4445,6 +4456,16 @@ function applyBall(inning, event) {
     const extraPrefix = event.extraKind === "wide" ? "Wd+" : event.extraKind === "noball" ? "Nb+" : "";
     display = runsBeforeWicket > 0 ? `${extraPrefix}${runsBeforeWicket}+W` : `${extraPrefix}W`;
     cur.strikerName = event.newBatsman || "";
+    // A wicket-triggered replacement can be a returning retired-hurt batsman, not just a brand-new
+    // one — ensureBatsman's own retiredHurt-clear (see there) only fires for the CURRENT striker at
+    // the top of the ball that dismisses them, which is the outgoing player, not this incoming one.
+    // Clear it here too so it's correct immediately rather than waiting for their first ball.
+    if (event.newBatsman && cur.batsmen[event.newBatsman] && cur.batsmen[event.newBatsman].retiredHurt) {
+      cur.batsmen[event.newBatsman] = {
+        ...cur.batsmen[event.newBatsman],
+        retiredHurt: false
+      };
+    }
   }
   cur.bowlers[cur.bowlerName] = bowler;
   cur.partnershipRuns = (cur.partnershipRuns || 0) + runsThisBall;
@@ -6965,7 +6986,10 @@ const HELP_SECTIONS = [{
     a: "Turn it on in Match Rules. After a no-ball, only a run out counts as a dismissal until the next legal delivery — the app handles this automatically once it's on."
   }, {
     q: "What's the difference between retired hurt and retired out?",
-    a: "Retired hurt doesn't count as a wicket and credits no bowler — use it for an injury or anything that pulls someone away mid-innings. Retired out counts exactly like a normal dismissal. Both are on the \u201cRetire\u201d button and only apply to whoever's currently on strike \u2014 there's a Swap Strike button right in that popup if it's actually the other end who needs to leave."
+    a: "Retired hurt doesn't count as a wicket and credits no bowler — use it for an injury or anything that pulls someone away mid-innings. Retired out counts exactly like a normal dismissal. Both are on the \u201cRetire\u201d button and only apply to whoever's currently on strike \u2014 there's a Swap Strike button right in that popup if it's actually the other end who needs to leave. A retired-hurt batsman can come back in later the same innings \u2014 they show up as a normal option on the next batsman picker again once someone else is out, same as the Laws allow."
+  }, {
+    q: "Can I end an innings before the overs or wickets run out?",
+    a: "Yes \u2014 \u201cEnd innings\u201d on the main scoring screen closes the current innings out right there, behind a confirmation. Use it for bad weather, running out of time, a forfeit, or a hopeless mismatch. Whoever's currently batting stays not out; everything scored so far stands."
   }, {
     q: "How do I record a non-striker run out?",
     a: "Every dismissal is recorded against whoever's currently on strike \u2014 there's no separate \u201cwhich end\u201d concept. If it was actually the non-striker who was run out, tap Swap Strike (it's right there in the run-out popup, no need to back out first) so the correct batsman is in the striker slot before you confirm."
@@ -17186,7 +17210,7 @@ function InningScorecard({
         color: COLORS.inkSoft,
         fontStyle: b.out ? "normal" : "italic"
       }
-    }, b.out ? b.how : b.retiredHurt ? "retired hurt" : "not out"), /*#__PURE__*/React.createElement("span", {
+    }, b.out ? b.how : b.retiredHurt && !isBatting ? "retired hurt" : "not out"), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace"
@@ -19268,6 +19292,13 @@ function MatchScreen({
     }
   }
   const [pendingWicket, setPendingWicket] = useState(null);
+  // The player who retired hurt to open the "Next batsman" slot currently waiting to be filled —
+  // cleared the moment any batsman is confirmed into that slot. Its only job is stopping that same
+  // player from selecting themselves straight back in on the very prompt their own retirement just
+  // opened, since the Laws only let a retired-hurt batsman resume once the side has lost another
+  // wicket in the meantime — not blocking them from EVER coming back (see the picker's excludeList
+  // near the Next batsman modal, and retireBatsman below).
+  const [justRetiredName, setJustRetiredName] = useState(null);
   const [wicketDraft, setWicketDraft] = useState(null); // {wicketType, isLast} — waiting on details
   const [fielderDraftName, setFielderDraftName] = useState("");
   // Runs actually completed by running before the wicket fell — only ever nonzero for Run out (see
@@ -19343,15 +19374,21 @@ function MatchScreen({
       ensureBatsman(updated, updated.strikerName);
       commit(updated);
     }
+    setJustRetiredName(null);
     setNewBatsmanName("");
   }
-  const [confirmEndInning, setConfirmEndInning] = useState(false);
+  // null | "stuck" (no batsman available to fill the slot) | "voluntary" (chosen to close the
+  // innings out early with play still otherwise able to continue — weather, time, a forfeit, a
+  // hopeless mismatch). Both funnel into the same endInningEarly below; this only decides which
+  // confirmation wording is shown, since "stuck" implies you have no other option and "voluntary"
+  // implies you do.
+  const [endInningTrigger, setEndInningTrigger] = useState(null);
   const [showRetireModal, setShowRetireModal] = useState(false);
-  // Escape hatch for when there's genuinely no next batsman to pick — an injury, a forfeit, or a
-  // squad smaller than what was recorded at match start, whatever the reason. isLast/needsNewBatsman
-  // (see handleWicket/maxWicketsFor above) now correctly auto-detect all-out for any known roster
-  // size, so this is for the residual cases that aren't a plain "ran out of batsmen at the expected
-  // count" — not reversible the way a single ball is via Undo, hence the confirmation gate.
+  // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
+  // param — see there). Reachable two ways: the "stuck, no batsman available" fallback inside the
+  // Next batsman modal (an injury, a forfeit, a squad smaller than recorded at match start), or
+  // voluntarily at any point during normal play from the main scoring screen. Not reversible the
+  // way a single ball is via Undo, hence the confirmation gate either way.
   function endInningEarly() {
     pushHistory();
     if (pendingWicket) {
@@ -19363,8 +19400,9 @@ function MatchScreen({
     } else {
       commit(inning, undefined, true);
     }
+    setJustRetiredName(null);
     setNewBatsmanName("");
-    setConfirmEndInning(false);
+    setEndInningTrigger(null);
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
@@ -19416,10 +19454,13 @@ function MatchScreen({
   // swap strike first if it's actually the non-striker who needs to leave.
   // "Retired hurt" is genuinely not out — wickets doesn't increment, no fall-of-wickets entry —
   // and reuses the same needsNewBatsman prompt as a real dismissal to get the next batsman in,
-  // since one player did just leave the crease either way. There's deliberately no "return from
-  // retired hurt" flow yet: once retired, a batsman doesn't reappear in the picker for this
-  // innings. That's a real, known gap (the Laws do allow a fit-again batsman to resume), not an
-  // oversight — flagging it here rather than pretending this is the complete rule.
+  // since one player did just leave the crease either way. They can come back later in the same
+  // innings (the Laws allow a fit-again batsman to resume) — see the Next batsman picker's
+  // excludeList, which is what makes them selectable again, and ensureBatsman/applyBall's wicket
+  // branch, which clear retiredHurt the moment they're actually back at the crease. The one thing
+  // deliberately still blocked: coming straight back on the very prompt their own retirement just
+  // opened (see justRetiredName) — the Laws only allow resuming once the side's lost another
+  // wicket in the meantime, not an immediate self-swap.
   // "Retired out" is treated exactly like any other dismissal (wickets increments, a
   // fall-of-wickets entry is recorded, "retired out" shows wherever a normal "how" would) except
   // no bowler is credited, since nobody dismissed them.
@@ -19428,6 +19469,7 @@ function MatchScreen({
     pushHistory();
     const name = inning.strikerName;
     const isOut = kind === "out";
+    if (!isOut) setJustRetiredName(name);
     const updatedBatsman = isOut ? {
       ...inning.batsmen[name],
       out: true,
@@ -19743,7 +19785,20 @@ function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 12
-  }), " Swap Strike")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
+  }), " Swap Strike"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setEndInningTrigger("voluntary"),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: "2px 2px"
+    }
+  }, "End innings")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
     const b = inning.batsmen[name] || {
       runs: 0,
       balls: 0
@@ -19982,7 +20037,12 @@ function MatchScreen({
     roster: rosterFor(match, inning.battingTeam),
     value: newBatsmanName,
     onChange: setNewBatsmanName,
-    excludeList: Object.keys(inning.batsmen),
+    // Anyone who's out (including retired out) is gone for good, same as anyone currently at the
+    // crease already. A retired-hurt batsman IS allowed back in — the Laws let them resume once
+    // the side's lost another wicket — except the one who just vacated THIS exact slot (see
+    // justRetiredName): resuming has to wait for a wicket to actually fall in the meantime, not be
+    // an immediate self-swap on the very prompt their own retirement opened.
+    excludeList: Object.keys(inning.batsmen).filter(n => n === justRetiredName || !(inning.batsmen[n].retiredHurt && !inning.batsmen[n].out)),
     placeholder: "Batsman name",
     captain: captainFor(match, inning.battingTeam),
     keeper: keeperFor(match, inning.battingTeam),
@@ -20031,7 +20091,7 @@ function MatchScreen({
     size: 13
   }), pendingWicket ? "Cancel this wicket" : "Undo"), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => setConfirmEndInning(true),
+    onClick: () => setEndInningTrigger("stuck"),
     className: "cs-btn",
     style: {
       display: "block",
@@ -20047,12 +20107,12 @@ function MatchScreen({
       padding: "10px 4px 0",
       textDecoration: "underline"
     }
-  }, "No more batsmen \u2014 end the innings here")), confirmEndInning && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "No more batsmen \u2014 end the innings here")), endInningTrigger && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "End the innings here?",
-    message: "No more batsmen available \u2014 short squad, injury, forfeit, whatever the reason. This ends the innings right now, same as if the side were all out.",
+    message: endInningTrigger === "stuck" ? "No more batsmen available \u2014 short squad, injury, forfeit, whatever the reason. This ends the innings right now, same as if the side were all out." : "Ends the innings right now, whatever overs or wickets are left \u2014 whoever's currently batting stays not out. Use it for bad weather, running out of time, a forfeit, or any other reason to close it out early.",
     confirmLabel: "End innings",
     onConfirm: endInningEarly,
-    onCancel: () => setConfirmEndInning(false)
+    onCancel: () => setEndInningTrigger(null)
   }), showRetireModal && inning.strikerName && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowRetireModal(false)
   }, /*#__PURE__*/React.createElement("div", {
