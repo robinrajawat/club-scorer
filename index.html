@@ -22458,9 +22458,88 @@ function CricketScorer() {
       setMatchLoading(false);
     }
   }
+  // If a deleted match was linked to a tournament fixture, clear that fixture's matchId back to
+  // null so it correctly reverts to "upcoming" instead of pointing at a match that no longer
+  // exists. Without this, the fixture kept LOOKING unplayed (isFixturePlayed reads the match
+  // through matchById, which correctly no longer finds a deleted one) but still tried to OPEN the
+  // dead match id first when tapped (FixtureRow's onScore checks f.matchId truthy, not whether a
+  // match actually exists behind it) — so the button visually read "Score" while silently failing
+  // to do anything. Independent of viewingTournament*Id (which reflects whatever's CURRENTLY open,
+  // not necessarily the tournament this specific match belongs to — deleting from the Home/Matches
+  // list has no "currently viewed tournament" context at all), so this searches all three storage
+  // locations by tournamentId directly rather than assuming which one is active.
+  async function clearFixtureForDeletedMatch(tournamentId, matchId) {
+    const personalIdx = tournaments.findIndex(t => t.id === tournamentId);
+    if (personalIdx !== -1) {
+      const t = tournaments[personalIdx];
+      const fx = t.fixtures || [];
+      if (!fx.some(f => f.matchId === matchId)) return;
+      const updated = tournaments.map((x, i) => i === personalIdx ? {
+        ...t,
+        fixtures: fx.map(f => f.matchId === matchId ? {
+          ...f,
+          matchId: null
+        } : f)
+      } : x);
+      setTournaments(updated);
+      await saveTournaments(updated);
+      return;
+    }
+    for (const [clubId, list] of Object.entries(clubTournamentsById)) {
+      const t = (list || []).find(x => x.id === tournamentId);
+      if (!t) continue;
+      const fx = t.fixtures || [];
+      if (!fx.some(f => f.matchId === matchId)) return;
+      const updatedT = {
+        ...t,
+        fixtures: fx.map(f => f.matchId === matchId ? {
+          ...f,
+          matchId: null
+        } : f)
+      };
+      const result = await saveClubTournament(clubId, updatedT);
+      if (result.ok) {
+        setClubTournamentsById(prev => ({
+          ...prev,
+          [clubId]: (prev[clubId] || []).map(x => x.id === tournamentId ? updatedT : x)
+        }));
+      }
+      return;
+    }
+    for (const [fedId, list] of Object.entries(federationTournamentsById)) {
+      const t = (list || []).find(x => x.id === tournamentId);
+      if (!t) continue;
+      const fx = t.fixtures || [];
+      if (!fx.some(f => f.matchId === matchId)) return;
+      const updatedT = {
+        ...t,
+        fixtures: fx.map(f => f.matchId === matchId ? {
+          ...f,
+          matchId: null
+        } : f)
+      };
+      const result = await saveFederationTournament(fedId, updatedT);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [fedId]: (prev[fedId] || []).map(x => x.id === tournamentId ? updatedT : x)
+        }));
+      }
+      return;
+    }
+  }
   async function handleDelete(id) {
+    // Captured before deleteMatch runs — the local index entry for this match (which is where
+    // tournamentId actually lives, same as deleteMatch's own cleanup reads it from) is gone once
+    // the delete completes.
+    const pointer = lsGetIndex().find(m => m.id === id);
     await deleteMatch(id);
     refreshIndex();
+    if (pointer && pointer.tournamentId) {
+      // Best-effort, not awaited — a failure here shouldn't block or error out the delete itself,
+      // same reasoning as the tournament-pointer cleanup inside deleteMatch.
+      clearFixtureForDeletedMatch(pointer.tournamentId, id).catch(e => console.error("fixture cleanup after match delete failed", e));
+    }
   }
   function exitToHome() {
     // If this match belongs to the tournament the person was just looking at, go back there
