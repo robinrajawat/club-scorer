@@ -2079,19 +2079,19 @@ async function removeClubCoOwner(clubId, uid) {
     };
   }
 }
-// Owner-only. Cleans up the teams subcollection and any federation directory entries first —
-// Firestore never cascade-deletes subcollections on its own, and once the club doc is gone no
-// rule would ever again grant access to those orphaned docs anyway (the federation-teams delete
-// rule needs to read the club's own memberUids, which requires the club doc to still exist), so
-// this has to happen before, not after, the club doc itself is removed.
+// Owner-only. Cleans up the teams and tournaments subcollections and any federation directory
+// entries first — Firestore never cascade-deletes subcollections on its own, and once the club
+// doc is gone no rule would ever again grant access to those orphaned docs anyway (the
+// federation-teams delete rule needs to read the club's own memberUids, which requires the club
+// doc to still exist), so this has to happen before, not after, the club doc itself is removed.
 async function deleteClub(clubId) {
   try {
     const clubDoc = await db.collection("clubs").doc(clubId).get();
     const federationIds = clubDoc.exists ? clubDoc.data().federationIds || [] : [];
-    const snap = await db.collection("clubs").doc(clubId).collection("teams").get();
-    await Promise.all([...snap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
-      const teamSnap = await db.collection("federations").doc(fedId).collection("teams").where("clubId", "==", clubId).get();
-      await Promise.all(teamSnap.docs.map(d => d.ref.delete()));
+    const [teamSnap, tournamentSnap] = await Promise.all([db.collection("clubs").doc(clubId).collection("teams").get(), db.collection("clubs").doc(clubId).collection("tournaments").get()]);
+    await Promise.all([...teamSnap.docs.map(d => d.ref.delete()), ...tournamentSnap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
+      const fedTeamSnap = await db.collection("federations").doc(fedId).collection("teams").where("clubId", "==", clubId).get();
+      await Promise.all(fedTeamSnap.docs.map(d => d.ref.delete()));
       // Must happen before the club doc is deleted below — the rule authorizing this write
       // checks club ownership via a live get() on that doc (see canSyncFederationClubLeave in
       // firestore.rules).
@@ -2206,11 +2206,18 @@ async function createFederation(name) {
     };
   }
 }
-// Owner-only, and only once EMPTY (firestore.rules enforces both — see the comment there). A
-// federation with any club still affiliated will hit permission-denied here, since there's
-// deliberately no way to force-remove someone else's club affiliation from this side.
+// Owner-only, and only once EMPTY of affiliated clubs (firestore.rules enforces both — see the
+// comment there). A federation with any club still affiliated will hit permission-denied here,
+// since there's deliberately no way to force-remove someone else's club affiliation from this
+// side. That gate is about affiliatedClubIds specifically, though -- it says nothing about
+// whether the federation has hosted its own tournaments (see saveFederationTournament), which
+// aren't tied to club affiliation at all once created. Clean those up first, same reasoning as
+// deleteClub cleaning up its teams subcollection: Firestore never cascade-deletes subcollections,
+// and once the federation doc is gone, no rule would ever grant access to reach them again anyway.
 async function deleteFederation(federationId) {
   try {
+    const tournamentSnap = await db.collection("federations").doc(federationId).collection("tournaments").get();
+    await Promise.all(tournamentSnap.docs.map(d => d.ref.delete()));
     await db.collection("federations").doc(federationId).delete();
     return {
       ok: true
@@ -2248,6 +2255,31 @@ async function loadFederationsByIds(ids) {
     }));
   } catch (e) {
     console.error("federations load failed", e);
+    return [];
+  }
+}
+// Direct query for federations this user owns/co-owns, independent of whether any of their OWN
+// clubs happen to be affiliated with it. loadFederationsByIds (just above) only ever sees a
+// federation by walking through the user's clubs' federationIds -- an owner who creates a
+// federation without ever affiliating one of their own clubs (a real, realistic case now that a
+// federation can host its own tournament directly, not just lend teams to a club's) would
+// otherwise lose visibility of it entirely on every fresh load, even though they're still its
+// rightful owner. Two separate queries, not one, since Firestore can't OR across two different
+// fields (createdBy vs. an array-contains on coOwnerUids) in a single query.
+async function loadMyOwnedFederations(uid) {
+  if (!uid) return [];
+  try {
+    const [createdSnap, coOwnedSnap] = await Promise.all([db.collection("federations").where("createdBy", "==", uid).get(), db.collection("federations").where("coOwnerUids", "array-contains", uid).get()]);
+    const byId = new Map();
+    for (const d of [...createdSnap.docs, ...coOwnedSnap.docs]) {
+      byId.set(d.id, {
+        id: d.id,
+        ...d.data()
+      });
+    }
+    return [...byId.values()];
+  } catch (e) {
+    console.error("owned federations load failed", e);
     return [];
   }
 }
@@ -22044,6 +22076,22 @@ function CricketScorer() {
     // round-trip of latency to "why does the federation list take a while to show up".
     if (fedIds.length > 0) {
       loadFederationsByIds(fedIds).then(feds => {
+        setFederationsById(prev => ({
+          ...prev,
+          ...Object.fromEntries(feds.map(f => [f.id, f]))
+        }));
+      });
+    }
+    // Also pick up any federation this user owns/co-owns directly (see loadMyOwnedFederations) --
+    // independent of the club-affiliation walk just above, so an owner who never affiliated one of
+    // their own clubs still sees (and can host a tournament under) a federation they run. Uses
+    // auth.currentUser rather than the component's `user` state deliberately: refreshClubs runs
+    // synchronously right after setUser(u) in the SAME auth-state-change callback (see below), and
+    // React state updates don't apply until the next render -- reading `user` here would see
+    // whatever it was BEFORE this callback, stale exactly on the one call that matters most (right
+    // after sign-in). auth.currentUser is the SDK's own, not React's, so it's already current.
+    if (auth.currentUser) {
+      loadMyOwnedFederations(auth.currentUser.uid).then(feds => {
         setFederationsById(prev => ({
           ...prev,
           ...Object.fromEntries(feds.map(f => [f.id, f]))
