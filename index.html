@@ -12819,6 +12819,13 @@ function TournamentsScreen({
   const [useGroups, setUseGroups] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
   const [advancePerGroup, setAdvancePerGroup] = useState(2);
+  // The advance-per-group picker offers 1/2/3 unconditionally, with no upper bound tied to how
+  // many teams actually end up in the smallest group -- so it's entirely possible to pick a
+  // combination that's mathematically impossible (e.g. 4 teams split into 4 groups of 1, with
+  // "advance 3" selected). Computed here so the group-shape hint below can catch it and say so
+  // plainly instead of confidently stating a qualifier count that can't really happen.
+  const smallestGroupSize = numGroups > 0 ? Math.floor(selectedTeams.length / numGroups) : 0;
+  const advanceExceedsGroupSize = advancePerGroup > smallestGroupSize;
   const [groupOverrides, setGroupOverrides] = useState({}); // team name -> group index, only for teams manually re-assigned off the auto-split
   const GROUP_LABELS = ["Group A", "Group B", "Group C", "Group D"];
   // Auto-split (round-robin through the group count, in selection order) unless the person
@@ -13358,7 +13365,28 @@ function TournamentsScreen({
       fontWeight: 700,
       fontSize: 13
     }
-  }, n))))), /*#__PURE__*/React.createElement("div", {
+  }, n))))), advanceExceedsGroupSize ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 6,
+      padding: "8px 10px",
+      marginBottom: 12,
+      background: "rgba(184,137,43,0.14)",
+      border: "1px solid rgba(184,137,43,0.35)",
+      borderRadius: 10,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.gold,
+      lineHeight: 1.4
+    }
+  }, /*#__PURE__*/React.createElement(AlertTriangle, {
+    size: 14,
+    style: {
+      flexShrink: 0,
+      marginTop: 1
+    }
+  }), `${numGroups} groups from ${selectedTeams.length} teams means the smallest group only has ${smallestGroupSize} \u2014 not enough to advance ${advancePerGroup}. Lower "Advance per group" or add more teams.`) : /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
