@@ -2260,16 +2260,75 @@ async function deleteFederation(federationId) {
 // loses an entry (join/leave/kick/club-delete) — mirrors that change into
 // federations/{federationId}.affiliatedClubIds, the denormalized "is anything still relying on
 // this federation?" signal that firestore.rules checks before allowing a federation delete (see
-// deleteFederation). Deliberately swallow-and-log rather than surface an error: if this write is
-// ever a no-op or a race (e.g. already synced), the primary action (the join/leave itself)
-// already succeeded and that's what the user is waiting on.
-async function syncFederationAffiliation(federationId, clubId, joining) {
+// deleteFederation). Deliberately a SEPARATE write from the club's own federationIds update, not
+// a batch/transaction with it -- the security rule authorizing this specific write
+// (canSyncFederationClubJoin in firestore.rules) does a live get() on the club doc to confirm the
+// join genuinely already happened, which means the club's own write must already be COMMITTED by
+// the time this one is evaluated. A batch's rule checks see the pre-batch state for every write
+// in it, not earlier writes in the same batch, so batching these together would make this write
+// fail the rule every time, not fix anything.
+// That means silent drift here is a real, standing risk, not just a theoretical one: if this
+// write fails (network blip, anything transient) after the club's own write already succeeded,
+// the club genuinely IS affiliated (their own federationIds says so) but affiliatedClubIds won't
+// reflect it -- which, left alone, would let deleteFederation's "empty" check pass while a real
+// club still depends on this federation, silently orphaning their federationIds entry and any
+// federations/{id}/teams rows they've mirrored in. Two mitigations instead of one, since the
+// rule-ordering constraint above rules out the clean atomic fix:
+// 1. A few retries with backoff here, since most real-world failures at this exact moment are
+//    transient (the network drop that's likely right after a slower prior write), not permanent.
+// 2. reconcileFederationAffiliation (below) opportunistically re-attempts this exact write
+//    whenever the app has both sides of the picture in hand already (a club's federationIds and
+//    the federation's current affiliatedClubIds, both loaded together in refreshClubs) -- so a
+//    failure that slips past the retries here still self-heals the next time either side reloads.
+async function syncFederationAffiliation(federationId, clubId, joining, attempt = 0) {
   try {
     await db.collection("federations").doc(federationId).update({
       affiliatedClubIds: joining ? firebase.firestore.FieldValue.arrayUnion(clubId) : firebase.firestore.FieldValue.arrayRemove(clubId)
     });
   } catch (e) {
-    console.error("affiliatedClubIds sync failed", e);
+    if (attempt < 2) {
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      return syncFederationAffiliation(federationId, clubId, joining, attempt + 1);
+    }
+    console.error("affiliatedClubIds sync failed after retries", e);
+  }
+}
+// Opportunistic self-heal for exactly the drift syncFederationAffiliation's own comment describes
+// -- called from refreshClubs, where both sides of the comparison are already being loaded for
+// other reasons anyway, so this costs nothing extra to fetch, only the (rare) extra write when it
+// actually finds a mismatch. Scoped to federationsById's own keys (federations already visible to
+// this user, per refreshClubs' own loading rules) crossed with this user's own clubs -- it can't
+// check or fix drift for a club or federation it has no read access to a current copy of.
+// Both directions are safe to heal here: canSyncFederationClubJoin (firestore.rules) requires the
+// club's own federationIds write to already be committed before ADDING to affiliatedClubIds is
+// allowed, which is exactly the state this function only ever finds AFTER the fact (never before)
+// -- so adding a missing entry here can only ever be correcting real drift, never inventing a
+// join that didn't happen. canSyncFederationClubLeave carries no equivalent ordering requirement,
+// so removing a stale entry is unconditionally safe to correct too.
+// The two directions aren't equally COMPLETE, though, worth being honest about: the caller only
+// ever loads federations still referenced by some club's OWN federationIds (see refreshClubs'
+// fedIds), so a club that left a federation entirely (nothing of theirs references it anymore)
+// won't have that federation loaded here at all, and any stale leftover entry for them can't be
+// found or fixed by this call -- only opportunistically, if that federation happens to still be
+// loaded for some OTHER reason (another of this user's clubs is still in it, or they own it).
+// The direction that actually matters for safety is fully covered, though: a federation a club is
+// CURRENTLY affiliated with is always in the set checked here, which is exactly what closes the
+// dangerous gap (a federation wrongly deletable while a club still depends on it). A stale leave-
+// side entry, left unfixed, only ever blocks a legitimate deletion -- annoying, not dangerous.
+async function reconcileFederationAffiliation(clubList, federationsById) {
+  for (const club of clubList) {
+    const ownFederationIds = new Set(club.federationIds || []);
+    for (const federationId of Object.keys(federationsById)) {
+      const federation = federationsById[federationId];
+      if (!federation) continue;
+      const listedAsAffiliated = (federation.affiliatedClubIds || []).includes(club.id);
+      const shouldBeAffiliated = ownFederationIds.has(federationId);
+      if (shouldBeAffiliated && !listedAsAffiliated) {
+        await syncFederationAffiliation(federationId, club.id, true);
+      } else if (!shouldBeAffiliated && listedAsAffiliated) {
+        await syncFederationAffiliation(federationId, club.id, false);
+      }
+    }
   }
 }
 async function loadFederationsByIds(ids) {
@@ -22166,10 +22225,16 @@ function CricketScorer() {
     // round-trip of latency to "why does the federation list take a while to show up".
     if (fedIds.length > 0) {
       loadFederationsByIds(fedIds).then(feds => {
+        const freshFederationsById = Object.fromEntries(feds.map(f => [f.id, f]));
         setFederationsById(prev => ({
           ...prev,
-          ...Object.fromEntries(feds.map(f => [f.id, f]))
+          ...freshFederationsById
         }));
+        // Self-heal any affiliatedClubIds drift now that both sides (clubList, just loaded above,
+        // and these federations' current affiliatedClubIds, just loaded here) are in hand — see
+        // reconcileFederationAffiliation's own comment for why this can't just be made atomic at
+        // the source instead. Fire-and-forget, matching the rest of this best-effort correction.
+        reconcileFederationAffiliation(clubList, freshFederationsById);
       });
     }
     // Also pick up any federation this user owns/co-owns directly (see loadMyOwnedFederations) --
