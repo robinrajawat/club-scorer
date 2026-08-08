@@ -5938,6 +5938,7 @@ function AccountScreen({
   user,
   profile,
   myPlayer,
+  onOpenClub,
   isBetaTester = false,
   onGenerateDummyData,
   onWipeDummyData,
@@ -6004,6 +6005,14 @@ function AccountScreen({
   // Surfaced before deletion so the person can invite a co-owner first if they want a way out.
   const soleOwnerClubs = user ? clubs.filter(c => c.ownerUid === user.uid && (c.coOwnerUids || []).length === 0) : [];
   const soleOwnerFederations = user ? Object.values(federationsById).filter(f => f.createdBy === user.uid && (f.coOwnerUids || []).length === 0) : [];
+  // A player's homeClubId doesn't imply club MEMBERSHIP -- it's set by whichever club first added
+  // them to a team roster (see publishPlayer), entirely independent of the club invite/membership
+  // flow, so it's a normal, common case for someone to have a home club they were never actually
+  // invited into. `clubs` here is already scoped to clubs this account is a MEMBER of (see
+  // loadClubs), so finding a match here specifically means "you can navigate there" — the app has
+  // no way to view a club's internals without being a member, so a "jump to" link only makes sense
+  // when this resolves to something, not just whenever a home club name happens to be known.
+  const myPlayerHomeClub = myPlayer ? clubs.find(c => c.id === myPlayer.homeClubId) : null;
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -6395,7 +6404,27 @@ function AccountScreen({
       fontSize: 11.5,
       color: COLORS.inkSoft
     }
-  }, "Managed by ", (clubs.find(c => c.id === myPlayer.homeClubId) || {}).name || "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Your profile is kept public, so other clubs can borrow you into their own rosters." : " Your profile isn't public, so only they can add you to a roster.")) : /*#__PURE__*/React.createElement("div", {
+  }, "Managed by ", myPlayerHomeClub ? myPlayerHomeClub.name : "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Your profile is kept public, so other clubs can borrow you into their own rosters." : " Your profile isn't public, so only they can add you to a roster."), myPlayerHomeClub && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onOpenClub(myPlayerHomeClub.id),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 8,
+      padding: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      color: COLORS.pitch
+    }
+  }, "View ", myPlayerHomeClub.name, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 14
+  }))) : /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -23597,6 +23626,10 @@ function CricketScorer() {
     user: user,
     profile: profile,
     myPlayer: myPlayer,
+    onOpenClub: clubId => {
+      setActiveClubId(clubId);
+      setScreen("teams");
+    },
     isBetaTester: isBetaTester,
     onGenerateDummyData: handleGenerateDummyData,
     onWipeDummyData: handleWipeDummyData,
