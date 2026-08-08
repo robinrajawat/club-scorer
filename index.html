@@ -4326,13 +4326,21 @@ function applyBall(inning, event) {
   if (event.kind === "run") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
-    if (event.runs === 4 || event.runs === 6) boundaryHitByBat = true;
+    // A boundary means the BAT sent it to the rope — only the completed portion of a composite
+    // total counts, never the overthrow bonus on top. Without this, "2 run + a 2-run overthrow"
+    // (any total that happens to land on 4 or 6) got wrongly counted as a genuine four/six, since
+    // this used to check event.runs (the total) rather than what was actually struck. Matters for
+    // the batsman's own fours/sixes tally and now also for boundaryHitByBat (the drought toast) —
+    // an overthrow has nothing to do with the batsman's own timing, same reasoning as why a wide
+    // reaching the boundary was already excluded there.
+    const battedRuns = event.runs - (event.overthrow || 0);
+    if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + event.runs,
       balls: cur.batsmen[cur.strikerName].balls + 1,
-      fours: cur.batsmen[cur.strikerName].fours + (event.runs === 4 ? 1 : 0),
-      sixes: cur.batsmen[cur.strikerName].sixes + (event.runs === 6 ? 1 : 0)
+      fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
+      sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };
     bowler.runs += event.runs;
     bowler.ballsBowled += 1;
@@ -4358,12 +4366,15 @@ function applyBall(inning, event) {
     // (batting total + extras < inning.runs). Any runs off the bat still go to the batsman below,
     // same as before — only the penalty portion belongs in extras.
     cur.extras.noball += cur.noballRuns || 1;
-    if (event.runs === 4 || event.runs === 6) boundaryHitByBat = true;
+    // Same reasoning as the "run" branch above — only the batted portion (excluding any overthrow
+    // bonus) counts as a genuine boundary.
+    const battedRuns = (event.runs || 0) - (event.overthrow || 0);
+    if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
-      fours: cur.batsmen[cur.strikerName].fours + (event.runs === 4 ? 1 : 0),
-      sixes: cur.batsmen[cur.strikerName].sixes + (event.runs === 6 ? 1 : 0)
+      fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
+      sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };
     display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow)}` : "Nb";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
