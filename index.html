@@ -19620,6 +19620,10 @@ function MatchScreen({
     }
   }, [needsNewBowler]);
   const atMaxOvers = needsNewBowler ? bowlersAtMaxOvers(inning) : [];
+  // The over that just finished, for the next-bowler prompt below -- by the time needsNewBowler is
+  // true, applyBall has already pushed a fresh empty over onto the end of inning.overs (see the
+  // over-completion branch there), so the just-finished over sits one slot back, not at the end.
+  const justCompletedOverRuns = needsNewBowler ? (inning.overs[inning.overs.length - 2] || []).reduce((s, b) => s + (b.runs || 0), 0) : 0;
   const bowlingRosterNames = rosterFor(match, inning.bowlingTeam);
   const eligibleAfterMaxOvers = bowlingRosterNames.filter(n => n !== inning.lastBowlerName && !atMaxOvers.includes(n));
   // if excluding maxed-out bowlers would leave nobody to pick, don't exclude them — show everyone
@@ -20177,6 +20181,11 @@ function MatchScreen({
     });
   }
   const currentOverBalls = inning.overs[inning.overs.length - 1] || [];
+  // Every ball's own runs (batted, byes/legbyes, and the full wide/no-ball total including any
+  // penalty) all count toward what a team actually scored off the over -- unlike bowlerRunsThisOver
+  // (applyBall's maiden check), which deliberately excludes byes/legbyes since those aren't charged
+  // against the bowler's own figures. "Runs this over" is a team/spectator number, not a bowling one.
+  const thisOverRuns = currentOverBalls.reduce((s, b) => s + (b.runs || 0), 0);
   const allWicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
   const wicketTypes = inning.freeHitActive ? ["Run out"] : allWicketTypes;
   return /*#__PURE__*/React.createElement("div", {
@@ -20320,7 +20329,14 @@ function MatchScreen({
       fontSize: 18,
       opacity: 0.75
     }
-  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), isChasing && /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), currentOverBalls.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.75,
+      marginTop: 2
+    }
+  }, "This over: ", thisOverRuns), isChasing && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "inline-flex",
       alignItems: "baseline",
@@ -20859,7 +20875,14 @@ function MatchScreen({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Over complete — next bowler"), /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, "Over complete — next bowler"), inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12
+    }
+  }, inning.lastBowlerName, ": ", justCompletedOverRuns, justCompletedOverRuns === 1 ? " run" : " runs", " that over"), /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: newBowlerName,
     onChange: setNewBowlerName,
