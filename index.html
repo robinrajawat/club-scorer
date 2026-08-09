@@ -72,6 +72,9 @@ const ChevronRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*
 const ChevronDown = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "6 9 12 15 18 9"
 }));
+const Check = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "20 6 9 17 4 12"
+}));
 const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "3",
   y: "3",
@@ -4461,10 +4464,16 @@ function crr(runs, legalBalls, ballsPerOver) {
 // event: { kind: 'run'|'wide'|'noball'|'bye'|'legbye'|'wicket', runs, wicketType, newBatsman }
 // A ball's "display" string for the over strip / ball-by-ball log embeds the completed/overthrow
 // split when event.overthrow is present — "2+1" for 2 run plus a 1-run overthrow bonus — instead
-// of collapsing it into a bare total that gives no hint anything unusual happened.
-function runsDisplay(total, overthrow) {
-  if (!overthrow) return String(total);
-  return `${total - overthrow}+${overthrow}`;
+// of collapsing it into a bare total that gives no hint anything unusual happened. Same reasoning
+// for shortRun — "2 SR" instead of a bare "2" that gives no hint a run was called short (the
+// batsmen attempted more, but one didn't make their ground in time, so it doesn't count). Doesn't
+// need its own arithmetic anywhere else: unlike overthrow, a short run has nothing to do with
+// whether the ball reached the boundary, so it never interacts with the fours/sixes detection in
+// applyBall — the total passed in here is already the final, correct, post-deduction number by
+// the time it gets this far (see confirmCustomRuns).
+function runsDisplay(total, overthrow, shortRun) {
+  const base = overthrow ? `${total - overthrow}+${overthrow}` : String(total);
+  return shortRun ? `${base} SR` : base;
 }
 function applyBall(inning, event) {
   // Penalty runs (always exactly 5, per the Laws) aren't tied to any delivery — no ball bowled,
@@ -4569,7 +4578,7 @@ function applyBall(inning, event) {
     };
     bowler.runs += event.runs;
     bowler.ballsBowled += 1;
-    display = runsDisplay(event.runs, event.overthrow);
+    display = runsDisplay(event.runs, event.overthrow, event.shortRun);
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
     legalBall = false;
@@ -4577,7 +4586,7 @@ function applyBall(inning, event) {
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
     cur.extras.wide += runsThisBall;
-    display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow)}` : "Wd";
+    display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Wd";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
     legalBall = false;
@@ -4601,7 +4610,7 @@ function applyBall(inning, event) {
       fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };
-    display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow)}` : "Nb";
+    display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Nb";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
     if (cur.freeHitEnabled) cur.freeHitActive = true;
   } else if (event.kind === "bye" || event.kind === "legbye") {
@@ -4613,7 +4622,7 @@ function applyBall(inning, event) {
       balls: cur.batsmen[cur.strikerName].balls + 1
     };
     bowler.ballsBowled += 1;
-    display = `${event.kind === "bye" ? "B" : "Lb"}${runsDisplay(event.runs, event.overthrow)}`;
+    display = `${event.kind === "bye" ? "B" : "Lb"}${runsDisplay(event.runs, event.overthrow, event.shortRun)}`;
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
@@ -19531,6 +19540,7 @@ function MatchScreen({
   const [customRunsFor, setCustomRunsFor] = useState(null); // null | 'run' | 'wide' | 'noball' | 'bye' | 'legbye'
   const [customRunsCompleted, setCustomRunsCompleted] = useState("");
   const [customOverthrow, setCustomOverthrow] = useState("");
+  const [customShortRun, setCustomShortRun] = useState(false);
   const [newBatsmanName, setNewBatsmanName] = useState("");
   const [newBowlerPrompt, setNewBowlerPrompt] = useState(false);
   const [newBowlerName, setNewBowlerName] = useState("");
@@ -19787,12 +19797,13 @@ function MatchScreen({
       }
     }
   }
-  function handleRun(n, overthrow) {
+  function handleRun(n, overthrow, shortRun) {
     pushHistory();
     commit(applyBall(inning, {
       kind: "run",
       runs: n,
-      overthrow: overthrow || undefined
+      overthrow: overthrow || undefined,
+      shortRun: shortRun || undefined
     }));
     setShowRuns(false);
     if (n === 4 || n === 6) {
@@ -19812,27 +19823,36 @@ function MatchScreen({
   // escape hatch for those: still commits through the exact same handleRun/handleExtra path as the
   // preset buttons, just built from two typed-in numbers (what the batsmen actually ran, and the
   // overthrow bonus on top) instead of one flat total — so the ball-by-ball log can show "2+1"
-  // rather than a bare "3" that gives no hint an overthrow happened.
+  // rather than a bare "3" that gives no hint an overthrow happened. A short run (the batsmen
+  // attempted more, but one of them didn't make their ground before turning) is a variant of the
+  // exact same problem — the quick-pick buttons have no way to say "they ran for 3 but only 2
+  // count" either — so it lives in this same modal rather than a separate one: deducted from the
+  // completed/running portion specifically, never the overthrow bonus (a short run only happens
+  // during active running between the wickets, an overthrow is what happens to the ball
+  // afterwards, so the two are independent even on the rare ball that somehow has both).
   function confirmCustomRuns() {
     const completed = parseInt(customRunsCompleted, 10) || 0;
     const overthrow = parseInt(customOverthrow, 10) || 0;
-    const total = completed + overthrow;
+    const rawTotal = completed + overthrow;
+    const total = customShortRun ? Math.max(0, rawTotal - 1) : rawTotal;
     if (total < 0 || total > 24 || overthrow < 0) return;
     if (customRunsFor === "run") {
-      handleRun(total, overthrow);
+      handleRun(total, overthrow, customShortRun);
     } else {
-      handleExtra(customRunsFor, total, overthrow);
+      handleExtra(customRunsFor, total, overthrow, customShortRun);
     }
     setCustomRunsFor(null);
     setCustomRunsCompleted("");
     setCustomOverthrow("");
+    setCustomShortRun(false);
   }
-  function handleExtra(kind, n, overthrow) {
+  function handleExtra(kind, n, overthrow, shortRun) {
     pushHistory();
     commit(applyBall(inning, {
       kind,
       runs: n,
-      overthrow: overthrow || undefined
+      overthrow: overthrow || undefined,
+      shortRun: shortRun || undefined
     }));
     setShowExtra(null);
     if (kind === "noball" && (n === 4 || n === 6)) {
@@ -21247,7 +21267,7 @@ function MatchScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "For an overthrow or any total the quick buttons don\u2019t cover. Split it into what was actually run and any overthrow bonus, so the ball history shows \u201c2+1\u201d rather than a bare \u201c3\u201d that hides what happened."), /*#__PURE__*/React.createElement("div", {
+  }, "For an overthrow, a short run, or any total the quick buttons don\u2019t cover. Split it into what was actually run and any overthrow bonus, so the ball history shows \u201c2+1\u201d rather than a bare \u201c3\u201d that hides what happened."), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -21269,7 +21289,52 @@ function MatchScreen({
       fontFamily: "'IBM Plex Mono', monospace",
       marginBottom: 14
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setCustomShortRun(v => !v),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      width: "100%",
+      padding: "10px 12px",
+      marginBottom: 14,
+      borderRadius: 10,
+      cursor: "pointer",
+      textAlign: "left",
+      border: customShortRun ? "none" : `1px solid ${COLORS.willow}`,
+      background: customShortRun ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: customShortRun ? "#fff" : COLORS.ink
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 18,
+      height: 18,
+      borderRadius: 5,
+      flexShrink: 0,
+      border: customShortRun ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: customShortRun ? "rgba(255,255,255,0.25)" : "transparent",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, customShortRun && /*#__PURE__*/React.createElement(Check, {
+    size: 13,
+    strokeWidth: 3
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13
+    }
+  }, "Short run \u2014 deduct 1"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      opacity: 0.85
+    }
+  }, "A batsman didn\u2019t make their ground on one of the runs above"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -21315,7 +21380,7 @@ function MatchScreen({
     style: {
       color: COLORS.ink
     }
-  }, (parseInt(customRunsCompleted, 10) || 0) + (parseInt(customOverthrow, 10) || 0)), " runs on this ball"), /*#__PURE__*/React.createElement(Btn, {
+  }, Math.max(0, (parseInt(customRunsCompleted, 10) || 0) + (parseInt(customOverthrow, 10) || 0) - (customShortRun ? 1 : 0))), " runs on this ball", customShortRun && " (1 deducted for the short run)"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: customRunsCompleted === "" && customOverthrow === "",
     onClick: confirmCustomRuns,
