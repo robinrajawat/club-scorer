@@ -3230,6 +3230,7 @@ function computeStandings(tournament, allMatches) {
     won: 0,
     lost: 0,
     tied: 0,
+    noResult: 0,
     points: 0,
     runsFor: 0,
     oversFor: 0,
@@ -3250,8 +3251,35 @@ function computeStandings(tournament, allMatches) {
   const tournamentMatches = allMatches.filter(m => m.tournamentId === tournament.id && m.status === "complete" && !knockoutMatchIds.has(m.id));
   for (const m of tournamentMatches) {
     const [i1, i2] = m.innings;
-    if (!table.has(i1.battingTeam) || !table.has(i2.battingTeam)) continue; // team not in this tournament's roster — skip rather than guess
-    let winner = null; // team name, or null for a tie/no-result
+    // teamB read from i1.bowlingTeam rather than i2.battingTeam deliberately — a match abandoned
+    // via declareNoResult partway through the FIRST innings never gets a second one created at
+    // all, so i2 can be undefined here. i1 always carries both team names (newInning sets
+    // battingTeam/bowlingTeam together), so this works whether or not a second innings ever
+    // existed, instead of crashing the whole standings computation on i2.battingTeam.
+    const teamA = i1.battingTeam;
+    const teamB = i1.bowlingTeam;
+    if (!table.has(teamA) || !table.has(teamB)) continue; // team not in this tournament's roster — skip rather than guess
+    const rowA = table.get(teamA);
+    const rowB = table.get(teamB);
+    if (m.noResult) {
+      // Genuinely different from a tie -- a tie is a completed, valid, decisive-enough-to-compare
+      // match that just happened to end level, and correctly still counts toward NRR. A no-result
+      // is the opposite: play was stopped too early or too unevenly for the runs/overs on either
+      // side to mean anything as a fair comparison, so this deliberately skips the
+      // runsFor/oversFor/runsAgainst/oversAgainst accumulation entirely below, unlike every other
+      // branch here. 1 point each, same convention as a tie, tracked in its own noResult column
+      // rather than folded into tied (a real points table distinguishes NR from T, and conflating
+      // them would make the tied count lie about how many matches were actually drawn contests).
+      rowA.played++;
+      rowB.played++;
+      rowA.noResult++;
+      rowB.noResult++;
+      rowA.points += 1;
+      rowB.points += 1;
+      continue;
+    }
+    if (!i2) continue; // still mid-match somehow (shouldn't happen for status "complete" outside noResult) — skip rather than guess
+    let winner = null; // team name, or null for a tie
     if (i2.runs > i1.runs) winner = i2.battingTeam;else if (i1.runs > i2.runs) winner = i1.battingTeam;
     // A tie with a completed, decisive Super Over: follow the chain for points only.
     if (!winner && m.superOverMatchId) {
@@ -3261,8 +3289,6 @@ function computeStandings(tournament, allMatches) {
         if (s2.runs > s1.runs) winner = s2.battingTeam;else if (s1.runs > s2.runs) winner = s1.battingTeam;
       }
     }
-    const rowA = table.get(i1.battingTeam);
-    const rowB = table.get(i2.battingTeam);
     rowA.played++;
     rowB.played++;
     // NRR convention: a side bowled out (or that simply completes its full quota) is credited with
@@ -4111,6 +4137,11 @@ function umpiresText(match) {
 function matchResultText(match) {
   const [i1, i2] = match.innings;
   if (match.status !== "complete") return null;
+  // Checked before the !i2 guard below deliberately -- "Abandon match" (declareNoResult) can be
+  // used mid-way through the FIRST innings, before a second one has even been created, so a match
+  // this happened to would otherwise hit `!i2` and return null, silently showing nothing at all
+  // rather than "No result".
+  if (match.noResult) return "No result";
   if (!i2) return null;
   if (i2.runs >= i1.runs + 1) {
     const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
@@ -7460,6 +7491,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "I found a scoring mistake after the match already ended \u2014 can I fix it?",
     a: "\u201cFix a mistake\u201d on the result screen reopens the match's last innings \u2014 Undo and every other correction tool work again from there, same as live scoring. It only works on the most recent innings: an earlier one can't be reopened once a later one has real balls in it, since the target, the result, and (in a tournament) NRR all depend on that total by then. One more thing worth knowing if it's a knockout-bracket match: fixing a mistake that changes the winner doesn't automatically update a later round that's already been set up from the old result \u2014 you'd need to fix that fixture by hand too."
+  }, {
+    q: "Play got stopped and there's no fair way to decide a winner \u2014 what do I do?",
+    a: "\u201cAbandon match\u201d on the main scoring screen (next to \u201cEnd innings\u201d) ends the whole match immediately, in either innings, with no winner \u2014 rain, bad light, running out of time, whatever the reason. It shows as \u201cNo result\u201d rather than a win for anyone. In a tournament, both teams get 1 point (the same as a tie), tracked in its own NR column so it's not confused with a genuine drawn contest \u2014 and unlike a tie, the runs and overs from that match don't count toward either team's NRR, since play was stopped too early for them to mean anything as a fair comparison. There's no automatic check for whether it's actually too early for a result; that judgment call is entirely yours. \u201cFix a mistake\u201d still works on it afterward if you change your mind."
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
@@ -14652,7 +14686,7 @@ function StandingsTable({
       textTransform: "uppercase",
       letterSpacing: 0.5
     }
-  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map((h, i) => /*#__PURE__*/React.createElement("th", {
+  }, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map((h, i) => /*#__PURE__*/React.createElement("th", {
     key: h,
     style: {
       textAlign: i === 0 ? "left" : "center",
@@ -14693,6 +14727,11 @@ function StandingsTable({
       padding: "8px"
     }
   }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.noResult), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: "center",
       padding: "8px",
@@ -18189,7 +18228,7 @@ function TournamentPrintReport({
       fontSize: 12,
       marginBottom: 20
     }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
     key: h,
     style: {
       textAlign: h === "Team" ? "left" : "center",
@@ -18229,6 +18268,12 @@ function TournamentPrintReport({
       borderBottom: "1px solid #ccc"
     }
   }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.noResult), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: "center",
       padding: "4px 6px",
@@ -19439,7 +19484,7 @@ function FollowTournamentScreen({
       textTransform: "uppercase",
       letterSpacing: 0.5
     }
-  }, ["Team", "P", "W", "L", "T", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
+  }, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
     key: h,
     style: {
       textAlign: h === "Team" ? "left" : "center",
@@ -19479,6 +19524,11 @@ function FollowTournamentScreen({
       padding: "8px"
     }
   }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "8px"
+    }
+  }, r.noResult), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: "center",
       padding: "8px",
@@ -20069,6 +20119,7 @@ function MatchScreen({
   // confirmation wording is shown, since "stuck" implies you have no other option and "voluntary"
   // implies you do.
   const [endInningTrigger, setEndInningTrigger] = useState(null);
+  const [confirmNoResult, setConfirmNoResult] = useState(false);
   const [showRetireModal, setShowRetireModal] = useState(false);
   // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
   // param — see there). Reachable two ways: the "stuck, no batsman available" fallback inside the
@@ -20089,6 +20140,27 @@ function MatchScreen({
     setJustRetiredName(null);
     setNewBatsmanName("");
     setEndInningTrigger(null);
+  }
+  // Ends the WHOLE match immediately, in either innings, with no winner at all -- rain or bad light
+  // permanently stopping play too early for a fair result, distinct from endInningEarly (which
+  // ends the current innings but the match still continues to a normal result, whether that's
+  // moving to innings 2 or computing who won). Deliberately bypasses checkInningEnd entirely rather
+  // than reusing it with some new flag -- checkInningEnd's whole job is deciding what happens NEXT
+  // (innings 2 setup, or a winner), and a no-result has no "next", just an immediate, direct
+  // status: "complete". No automatic detection of when this is appropriate (a genuine minimum-overs
+  // threshold varies by competition and isn't something this app models) -- this is entirely the
+  // scorer's own judgment call, same reasoning as endInningEarly already being a judgment call
+  // rather than something the app tries to infer on its own.
+  function declareNoResult() {
+    pushHistory();
+    const updated = {
+      ...match,
+      status: "complete",
+      noResult: true
+    };
+    setMatch(updated);
+    queueSave(updated);
+    setConfirmNoResult(false);
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
@@ -20511,7 +20583,20 @@ function MatchScreen({
       fontSize: 11.5,
       padding: "2px 2px"
     }
-  }, "End innings")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
+  }, "End innings"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmNoResult(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: "2px 2px"
+    }
+  }, "Abandon match")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
     const b = inning.batsmen[name] || {
       runs: 0,
       balls: 0
@@ -20830,6 +20915,12 @@ function MatchScreen({
     confirmLabel: "End innings",
     onConfirm: endInningEarly,
     onCancel: () => setEndInningTrigger(null)
+  }), confirmNoResult && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Abandon this match?",
+    message: "Ends the WHOLE match right now, in either innings, with no winner \u2014 not just this innings (that's \u201cEnd innings\u201d, further up). Use this specifically when play is stopped too early or too unevenly for a fair result: bad weather, running out of time, whatever the reason. There's no automatic check for whether it's actually too early for a result \u2014 that judgment call is entirely yours. This can't be undone the way a single ball can with Undo.",
+    confirmLabel: "Abandon \u2014 No Result",
+    onConfirm: declareNoResult,
+    onCancel: () => setConfirmNoResult(false)
   }), showRetireModal && inning.strikerName && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowRetireModal(false)
   }, /*#__PURE__*/React.createElement("div", {
@@ -21924,7 +22015,13 @@ function ResultScreen({
         ...inn,
         complete: false
       } : inn),
-      status: "in-progress"
+      status: "in-progress",
+      // Also clears noResult -- a match declared No Result (declareNoResult, on the main scoring
+      // screen) never actually completed its current innings normally, so this same reopen path
+      // handles undoing that too, not just a genuine finished result. Without clearing this, a
+      // reopened-then-properly-finished match would still show "No result" afterward, since
+      // nothing else ever unsets it once it's true.
+      noResult: false
     };
     setMatch(updatedMatch);
     saveTransition(updatedMatch, setMatch);
@@ -22203,7 +22300,7 @@ function ResultScreen({
     size: 13
   }), "Fix a mistake"), confirmReopen && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Reopen this match?",
-    message: `This reopens ${match.innings[match.innings.length - 1].battingTeam}'s completed innings so you can fix a mistake -- Undo and everything else work again from there, same as during live scoring. Only the last innings can be reopened this way; if the mistake was actually in an earlier innings, this can't fix it without also affecting what came after.${match.tournamentId ? " This match is tagged to a tournament -- if it's a knockout-bracket fixture and a later round has already been set up from its result, changing the winner here won't update that fixture automatically; you'll need to fix that one by hand too if the winner ends up different." : ""}`,
+    message: `${match.noResult ? `This resumes play in ${match.innings[match.innings.length - 1].battingTeam}'s innings, right where it was abandoned` : `This reopens ${match.innings[match.innings.length - 1].battingTeam}'s completed innings so you can fix a mistake`} -- Undo and everything else work again from there, same as during live scoring. Only the last innings can be reopened this way; if the mistake was actually in an earlier innings, this can't fix it without also affecting what came after.${match.tournamentId ? " This match is tagged to a tournament -- if it's a knockout-bracket fixture and a later round has already been set up from its result, changing the winner here won't update that fixture automatically; you'll need to fix that one by hand too if the winner ends up different." : ""}`,
     confirmLabel: "Reopen",
     cancelLabel: "Cancel",
     variant: "default",
@@ -22224,7 +22321,7 @@ function ResultScreen({
   }, "Player of the Match will be picked once the Super Over settles it.") : /*#__PURE__*/React.createElement(PlayerOfMatchCard, {
     match: match,
     setMatch: setMatch
-  }), [i1, i2].map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+  }), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       background: COLORS.surface,
