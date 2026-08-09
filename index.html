@@ -19623,7 +19623,9 @@ function MatchScreen({
   // The over that just finished, for the next-bowler prompt below -- by the time needsNewBowler is
   // true, applyBall has already pushed a fresh empty over onto the end of inning.overs (see the
   // over-completion branch there), so the just-finished over sits one slot back, not at the end.
-  const justCompletedOverRuns = needsNewBowler ? (inning.overs[inning.overs.length - 2] || []).reduce((s, b) => s + (b.runs || 0), 0) : 0;
+  const justCompletedOver = needsNewBowler ? inning.overs[inning.overs.length - 2] || [] : [];
+  const justCompletedOverRuns = justCompletedOver.reduce((s, b) => s + (b.runs || 0), 0);
+  const justCompletedOverWickets = justCompletedOver.filter(b => b.kind === "wicket").length;
   const bowlingRosterNames = rosterFor(match, inning.bowlingTeam);
   const eligibleAfterMaxOvers = bowlingRosterNames.filter(n => n !== inning.lastBowlerName && !atMaxOvers.includes(n));
   // if excluding maxed-out bowlers would leave nobody to pick, don't exclude them — show everyone
@@ -20877,12 +20879,25 @@ function MatchScreen({
     }
   }, "Over complete — next bowler"), inning.lastBowlerName && /*#__PURE__*/React.createElement("div", {
     style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
-      marginBottom: 12
+      marginBottom: 6
     }
-  }, inning.lastBowlerName, ": ", justCompletedOverRuns, justCompletedOverRuns === 1 ? " run" : " runs", " that over"), /*#__PURE__*/React.createElement(PlayerPicker, {
+  }, inning.lastBowlerName, ": ", justCompletedOverRuns, justCompletedOverRuns === 1 ? " run" : " runs", justCompletedOverWickets > 0 && `, ${justCompletedOverWickets} wicket${justCompletedOverWickets === 1 ? "" : "s"}`, " that over"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, justCompletedOver.map((ev, i) => /*#__PURE__*/React.createElement(BallBadge, {
+    key: i,
+    ev: ev
+  })))), /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, inning.bowlingTeam),
     value: newBowlerName,
     onChange: setNewBowlerName,
