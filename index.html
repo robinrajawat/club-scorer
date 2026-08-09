@@ -2315,21 +2315,39 @@ async function syncFederationAffiliation(federationId, clubId, joining, attempt 
 // CURRENTLY affiliated with is always in the set checked here, which is exactly what closes the
 // dangerous gap (a federation wrongly deletable while a club still depends on it). A stale leave-
 // side entry, left unfixed, only ever blocks a legitimate deletion -- annoying, not dangerous.
+// Returns the corrected federation objects (id -> updated federation), not just fire-and-forget
+// writes -- the FIRST version of this function fixed the drift in Firestore but never told the
+// caller what changed, so refreshClubs kept displaying the stale affiliatedClubIds it had already
+// loaded a moment earlier for the rest of that session. The server-side delete rule was never
+// actually fooled by that (it reads the real, corrected document at delete time, not this stale
+// client copy) -- but the UI kept confidently saying "no clubs affiliated, safe to delete" right
+// up until someone actually clicked delete and got a confusing permission error instead, which is
+// its own real bug even though no data was ever at risk.
 async function reconcileFederationAffiliation(clubList, federationsById) {
+  const corrected = {};
   for (const club of clubList) {
     const ownFederationIds = new Set(club.federationIds || []);
     for (const federationId of Object.keys(federationsById)) {
-      const federation = federationsById[federationId];
+      const federation = corrected[federationId] || federationsById[federationId];
       if (!federation) continue;
       const listedAsAffiliated = (federation.affiliatedClubIds || []).includes(club.id);
       const shouldBeAffiliated = ownFederationIds.has(federationId);
       if (shouldBeAffiliated && !listedAsAffiliated) {
         await syncFederationAffiliation(federationId, club.id, true);
+        corrected[federationId] = {
+          ...federation,
+          affiliatedClubIds: [...(federation.affiliatedClubIds || []), club.id]
+        };
       } else if (!shouldBeAffiliated && listedAsAffiliated) {
         await syncFederationAffiliation(federationId, club.id, false);
+        corrected[federationId] = {
+          ...federation,
+          affiliatedClubIds: (federation.affiliatedClubIds || []).filter(id => id !== club.id)
+        };
       }
     }
   }
+  return corrected;
 }
 async function loadFederationsByIds(ids) {
   if (!ids || ids.length === 0) return [];
@@ -22233,8 +22251,21 @@ function CricketScorer() {
         // Self-heal any affiliatedClubIds drift now that both sides (clubList, just loaded above,
         // and these federations' current affiliatedClubIds, just loaded here) are in hand — see
         // reconcileFederationAffiliation's own comment for why this can't just be made atomic at
-        // the source instead. Fire-and-forget, matching the rest of this best-effort correction.
-        reconcileFederationAffiliation(clubList, freshFederationsById);
+        // the source instead. The write itself is best-effort/fire-and-forget same as before, but
+        // the correction still needs applying to state here once it's done — otherwise the fix
+        // lands in Firestore while the UI keeps showing the stale pre-fix copy for the rest of
+        // this session (the actual bug: not that a stale check could ever really delete something
+        // still in use — the server-side rule always reads the true current document — but that
+        // the button confidently offered "safe to delete" right up until a real click on it
+        // returned a confusing permission error instead).
+        reconcileFederationAffiliation(clubList, freshFederationsById).then(corrected => {
+          if (Object.keys(corrected).length > 0) {
+            setFederationsById(prev => ({
+              ...prev,
+              ...corrected
+            }));
+          }
+        });
       });
     }
     // Also pick up any federation this user owns/co-owns directly (see loadMyOwnedFederations) --
