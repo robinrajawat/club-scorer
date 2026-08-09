@@ -4683,13 +4683,25 @@ function applyBall(inning, event) {
     }
     dismissedName = cur.strikerName;
     const wt = event.wicketType || "out";
-    creditsBowler = !["Run out"].includes(wt);
+    // Run out, hit the ball twice, and obstructing the field are all dismissals that don't credit
+    // the bowler in the Laws -- a run out is a fielding-side dismissal, and the other two are the
+    // batsman doing something illegal that isn't really "the bowler getting them out" in any sense
+    // the wicket column is meant to track.
+    creditsBowler = !["Run out", "Hit the ball twice", "Obstructing the field"].includes(wt);
     let howText;
     if (wt === "Run out") {
       howText = event.fielderName ? `run out (${event.fielderName})` : "run out";
     } else if (wt === "Caught") {
       const fielder = event.fielderName || cur.bowlerName;
       howText = fielder === cur.bowlerName ? `c & b ${cur.bowlerName}` : `c ${fielder} b ${cur.bowlerName}`;
+    } else if (wt === "Hit the ball twice" || wt === "Obstructing the field") {
+      // Neither credits the bowler (see creditsBowler above) and neither has a "prefix + bowler
+      // name" scorecard convention the way Bowled/LBW/Stumped/Hit wicket do -- real scorecards just
+      // show these standalone, e.g. "obstructing the field", with no fielder or bowler attribution
+      // at all. Handled as its own branch rather than falling into the prefix map below, which
+      // would otherwise silently default to "b" (Bowled) for any wicketType it doesn't recognize --
+      // exactly the wrong, misleading text for a dismissal that has nothing to do with being bowled.
+      howText = wt.toLowerCase();
     } else {
       const prefix = {
         Bowled: "b",
@@ -20208,7 +20220,14 @@ function MatchScreen({
   // (applyBall's maiden check), which deliberately excludes byes/legbyes since those aren't charged
   // against the bowler's own figures. "Runs this over" is a team/spectator number, not a bowling one.
   const thisOverRuns = currentOverBalls.reduce((s, b) => s + (b.runs || 0), 0);
-  const allWicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out"];
+  // Doesn't include Timed out -- unlike every other dismissal here, it isn't tied to a delivery at
+  // all (the incoming batsman simply never arrives within the time limit), so it doesn't fit this
+  // list or the "tap Wicket during a live ball" flow the rest of this screen is built around. It
+  // would need its own entry point (something offered alongside picking the next batsman's name,
+  // not a wicket type chosen mid-delivery) to be represented properly rather than shoehorned in
+  // here -- and given it's arguably the rarest dismissal in the sport's history, not worth that
+  // dedicated flow for what this app is actually used for.
+  const allWicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out", "Hit the ball twice", "Obstructing the field"];
   const wicketTypes = inning.freeHitActive ? ["Run out"] : allWicketTypes;
   return /*#__PURE__*/React.createElement("div", {
     style: {
