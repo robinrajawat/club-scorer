@@ -4100,6 +4100,11 @@ function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
 }
+function umpiresText(match) {
+  const names = [match.umpire1, match.umpire2].filter(Boolean);
+  if (names.length === 0) return null;
+  return `Umpire${names.length === 1 ? "" : "s"}: ${names.join(", ")}`;
+}
 function matchResultText(match) {
   const [i1, i2] = match.innings;
   if (match.status !== "complete") return null;
@@ -11672,6 +11677,11 @@ function SetupScreen({
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState("20");
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
+  // Deliberately not inherited from presetTournament the way venue is -- a ground tends to stay
+  // the same across a tournament/series, but who's umpiring rarely does, so defaulting to the
+  // previous fixture's umpires here would be wrong more often than it'd save typing.
+  const [umpire1, setUmpire1] = useState("");
+  const [umpire2, setUmpire2] = useState("");
   const [strikerA, setStrikerA] = useState("");
   const [nonStrikerA, setNonStrikerA] = useState("");
   const [bowlerB, setBowlerB] = useState("");
@@ -12055,7 +12065,22 @@ function SetupScreen({
     value: venue,
     onChange: setVenue,
     placeholder: "e.g. Willow Park"
-  }))), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Umpires (optional)"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: umpire1,
+    onChange: setUmpire1,
+    placeholder: "Umpire 1"
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: umpire2,
+    onChange: setUmpire2,
+    placeholder: "Umpire 2"
+  })))), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.02s backwards"
@@ -12728,6 +12753,8 @@ function SetupScreen({
         teamBId,
         oversLimit: parseInt(overs || "0", 10),
         venue: venue.trim() || null,
+        umpire1: umpire1.trim() || null,
+        umpire2: umpire2.trim() || null,
         battingFirstTeam: teamAIsBattingFirst ? teamAName.trim() : teamBName.trim(),
         strikerA: strikerA.trim(),
         nonStrikerA: nonStrikerA.trim(),
@@ -18051,7 +18078,13 @@ function PrintReport({
       color: "#555",
       marginBottom: 4
     }
-  }, tossText(match.toss)), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("div", {
+  }, tossText(match.toss)), umpiresText(match) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, umpiresText(match)), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: "#555",
@@ -18872,7 +18905,8 @@ function MatchInfoFold({
   const [open, setOpen] = useState(false);
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
-  if (!toss && !houseRules) return null;
+  const umpires = umpiresText(match);
+  if (!toss && !houseRules && !umpires) return null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 16px 0",
@@ -18909,11 +18943,11 @@ function MatchInfoFold({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, toss, toss && houseRules && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
+  }, toss, toss && (houseRules || umpires) && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
     style: {
       fontStyle: "italic"
     }
-  }, "House rules: ", houseRules)));
+  }, "House rules: ", houseRules), houseRules && umpires && /*#__PURE__*/React.createElement("br", null), umpires));
 }
 
 
@@ -22577,6 +22611,8 @@ function CricketScorer() {
       teamBNumbers: setup.teamBNumbers || {},
       oversLimit: setup.oversLimit,
       venue: setup.venue || null,
+      umpire1: setup.umpire1 || null,
+      umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
       status: "in-progress",
       rules: setup.rules || DEFAULT_RULES,
