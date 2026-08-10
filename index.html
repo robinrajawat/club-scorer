@@ -5086,10 +5086,18 @@ function BallBadge({
     border = "none";
     shadow = "0 2px 6px rgba(74,124,46,0.35)";
   } else if (ev.runs === 6) {
-    bg = `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`;
+    // Distinct hue rather than just a darker shade of the same green fours use -- a six is the
+    // single biggest thing that can happen on a ball, arguably more dramatic than a wicket, but
+    // "just a darker green" gave it LESS visual pop than a wicket (red) or a wide (gold) got, not
+    // more. At a glance in a scrolled-past over strip (not compared side by side), telling a
+    // slightly-darker green from a slightly-lighter one apart is real friction that a genuinely
+    // different hue doesn't have. #7b3fa0 isn't a new color introduced just for this -- it's the
+    // existing Purple Cap (most wickets) award color elsewhere in the app, reused here rather than
+    // picking an unrelated new hex.
+    bg = "linear-gradient(160deg, #9d6bc7, #7b3fa0)";
     color = "#fff";
     border = "none";
-    shadow = "0 2px 6px rgba(45,80,22,0.4)";
+    shadow = "0 2px 6px rgba(123,63,160,0.4)";
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5331,8 +5339,8 @@ function BallCelebration({
       padding: "16px 38px",
       borderRadius: 22,
       letterSpacing: 1,
-      background: isWicket ? `linear-gradient(160deg, #b3392f, ${COLORS.ballFixed})` : isSix ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})` : `linear-gradient(160deg, #5c9436, ${COLORS.turfFixed})`,
-      boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(45,80,22,0.55)" : "0 16px 44px rgba(74,124,46,0.45)",
+      background: isWicket ? `linear-gradient(160deg, #b3392f, ${COLORS.ballFixed})` : isSix ? "linear-gradient(160deg, #9d6bc7, #7b3fa0)" : `linear-gradient(160deg, #5c9436, ${COLORS.turfFixed})`,
+      boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(123,63,160,0.5)" : "0 16px 44px rgba(74,124,46,0.45)",
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
   }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
@@ -5657,6 +5665,15 @@ function Btn({
       background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
       color: "#2e1c04",
       boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
+    },
+    // Same purple as BallBadge uses for a completed six (see there for why it's its own hue now,
+    // not just a darker shade of the green "4" uses) -- kept as its own variant rather than
+    // reusing "gold", which is a real, separately-meaningful color elsewhere (a public player
+    // badge, unrelated to sixes at all).
+    purple: {
+      background: "linear-gradient(160deg, #9d6bc7, #7b3fa0)",
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(123,63,160,0.4)"
     },
     ghost: {
       background: "rgba(242,236,217,0.1)",
@@ -20882,7 +20899,7 @@ function MatchScreen({
     }
   }, [0, 1, 2, 3, 4, 6].map(n => /*#__PURE__*/React.createElement(Btn, {
     key: n,
-    variant: n === 4 ? "primary" : n === 6 ? "gold" : "default",
+    variant: n === 4 ? "primary" : n === 6 ? "purple" : "default",
     onClick: () => handleRun(n),
     style: {
       minHeight: 40,
