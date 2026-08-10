@@ -5075,13 +5075,11 @@ function BallBadge({
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(139,30,30,0.4)";
-  } else if (ev.kind === "wide" || ev.kind === "noball") {
-    // Purple rather than gold -- freed up once six moved to gold below, and a clean swap between
-    // two colors already in the app's palette beats introducing a third new hue just for this.
-    // Still a fully saturated, high-contrast color, deliberately not dialed toward neutral: a wide
-    // or no-ball is something people actively want to spot at a glance (a bowling error, extra
-    // runs, sometimes a free hit), so it needs to stay as easy to pick out as it already was, just
-    // in a different hue than six now uses.
+  } else if (ev.kind === "wide") {
+    // Split from "noball" below deliberately -- a wide can never have a genuine batted boundary
+    // (the ball's unplayable by definition, that's what makes it a wide), so ev.runs reaching 4 or
+    // 6 here is only ever a coincidental total from a wide's own run value plus a big overthrow,
+    // never an actual four or six. Always purple, unconditionally.
     bg = "linear-gradient(160deg, #9d6bc7, #7b3fa0)";
     color = "#fff";
     border = "none";
@@ -5102,6 +5100,16 @@ function BallBadge({
     color = "#2e1c04";
     border = "none";
     shadow = "0 2px 6px rgba(184,137,43,0.35)";
+  } else if (ev.kind === "noball") {
+    // Checked AFTER runs===4/6 above, unlike "wide" -- unlike a wide, a no-ball CAN have a genuine
+    // batted boundary (event.runs here is just the batted portion, the "Nb+" text prefix is added
+    // separately -- see runsDisplay's caller), so a six hit off a no-ball needs to reach the gold
+    // branch above, not get short-circuited into purple before ev.runs is ever even checked. Only
+    // reaches here for a no-ball that WASN'T also a four or six.
+    bg = "linear-gradient(160deg, #9d6bc7, #7b3fa0)";
+    color = "#fff";
+    border = "none";
+    shadow = "0 2px 6px rgba(123,63,160,0.35)";
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
