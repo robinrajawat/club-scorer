@@ -25,6 +25,17 @@
 <link rel="manifest" href="./manifest.json" />
 <style>
   html, body { margin: 0; padding: 0; }
+  /* viewport-fit=cover (above) opts the whole page into extending under the notch/Dynamic Island/
+     status bar -- without this, that content would render right underneath it in PWA standalone
+     mode instead of being offset below it (Safari's own browser chrome absorbs this automatically
+     when the site is just an open tab, which is why the problem only shows up once installed).
+     #root specifically, not body -- the app's own top-level padding (28px on Home, etc.) still
+     applies on top of this, additively, for its own visual spacing; this is purely the safe-area
+     offset. Doesn't double up with the two places that already handle safe-area-inset individually
+     (MilestoneToast's top offset, the scoring screen's fixed bottom action bar) -- both are
+     position: fixed, which is positioned relative to the viewport and entirely unaffected by an
+     ancestor's padding, so there's no risk of adding this twice for those. */
+  #root { padding-top: env(safe-area-inset-top); }
   @page { margin: 14mm; }
 </style>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -7697,13 +7708,14 @@ function InstallHintBanner({
       color: COLORS.inkSoft,
       lineHeight: 1.5
     }
-  }, "Tap the ", /*#__PURE__*/React.createElement(Share, {
-    size: 12,
-    style: {
-      verticalAlign: "middle",
-      margin: "0 1px"
-    }
-  }), " Share icon below, then \u201cAdd to Home Screen\u201d \u2014 opens full-screen next time, no browser bar, and still works offline.")), /*#__PURE__*/React.createElement("button", {
+    // iOS 26 moved Share behind Safari's overflow menu -- it's no longer a single tap on a
+    // visible Share icon the way earlier iOS versions had it. Confirmed via search rather than
+    // assumed, since this is exactly the kind of current-OS-UI detail that goes stale fast: tap
+    // the \u22ef next to the address bar first, THEN Share, THEN "Add to Home Screen". Also new in
+    // iOS 26 -- an "Open as Web App" toggle in that dialog, on by default, which needs to stay on
+    // for the no-browser-bar experience this banner is actually promising; worth a mention since
+    // it's an easy thing to not notice and accidentally leave off.
+  }, "Tap the \u22ef next to the address bar, then Share, then \u201cAdd to Home Screen.\u201d Keep \u201cOpen as Web App\u201d on \u2014 opens full-screen next time, no browser bar, and still works offline.")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onDismiss,
     "aria-label": "Dismiss",
