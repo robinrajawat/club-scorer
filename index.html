@@ -4018,6 +4018,32 @@ function markTourSeen() {
   const result = lsSetItem(`${LS_PREFIX}tour-seen`, "1");
   if (!result.ok) console.error("save tour-seen failed", result.error);
 }
+// Same device-local reasoning as the tour above -- "have I dismissed this hint" is about this
+// device/browser, not something that should follow an account onto a different phone that hasn't
+// seen it. Scoped to iOS Safari specifically: Android Chrome already shows its own native install
+// nudge (the mini-infobar) automatically, so a custom banner there would just be a second,
+// redundant prompt on top of one the browser already gives for free -- iOS Safari has no
+// programmatic install prompt at all, which is the one place a custom banner is the only option.
+function isIOSSafari() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  return isIOS && isSafari;
+}
+function isStandalone() {
+  return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+function hasSeenInstallHint() {
+  try {
+    return localStorage.getItem(`${LS_PREFIX}install-hint-seen`) === "1";
+  } catch (e) {
+    return true;
+  }
+}
+function markInstallHintSeen() {
+  const result = lsSetItem(`${LS_PREFIX}install-hint-seen`, "1");
+  if (!result.ok) console.error("save install-hint-seen failed", result.error);
+}
 async function loadRules() {
   if (auth.currentUser) {
     const prof = await loadProfile();
@@ -7625,6 +7651,74 @@ const TOUR_SLIDES = [{
   title: "Tournaments or a simple series",
   body: "Build a full tournament \u2014 round-robin, self-seeding knockout, points table \u2014 or a head-to-head series between two teams with just a running score."
 }];
+// A dismissible strip, not a modal like FirstLaunchTour below -- this is a low-stakes tip, not
+// something that needs to interrupt/block the screen the way first-launch orientation does.
+// Renders only when the caller's already confirmed isIOSSafari() && !isStandalone() &&
+// !hasSeenInstallHint() -- this component itself doesn't re-check any of that, it just draws
+// whatever the caller decided to show.
+function InstallHintBanner({
+  onDismiss
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 16px 14px",
+      padding: "12px 14px",
+      borderRadius: 14,
+      background: COLORS.surface,
+      border: `1px solid ${COLORS.willow}`,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 18,
+    style: {
+      color: COLORS.pitch,
+      flexShrink: 0,
+      marginTop: 2
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      marginBottom: 3
+    }
+  }, "Add this to your home screen"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, "Tap the ", /*#__PURE__*/React.createElement(Share, {
+    size: 12,
+    style: {
+      verticalAlign: "middle",
+      margin: "0 1px"
+    }
+  }), " Share icon below, then \u201cAdd to Home Screen\u201d \u2014 opens full-screen next time, no browser bar, and still works offline.")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onDismiss,
+    "aria-label": "Dismiss",
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      lineHeight: 1,
+      fontSize: 20,
+      color: COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }, "\u00d7"));
+}
 function FirstLaunchTour({
   onDone
 }) {
@@ -11203,7 +11297,9 @@ function HomeScreen({
   onOpenPlayers,
   pendingCount,
   requestBadgeCount = 0,
-  tournamentNameById = {}
+  tournamentNameById = {},
+  showInstallHint = false,
+  onDismissInstallHint
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -11231,7 +11327,9 @@ function HomeScreen({
     }
   }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount
-  })), /*#__PURE__*/React.createElement("div", {
+  })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
+    onDismiss: onDismissInstallHint
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginBottom: 30
@@ -22535,6 +22633,11 @@ function CricketScorer() {
   const [viewingTournament, setViewingTournament] = useState(null);
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
+  // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
+  // (see isIOSSafari/isStandalone/hasSeenInstallHint) -- gated separately from showTour below (in
+  // the render condition, not here) so the two never show at once and compete for a first-time
+  // visitor's attention.
+  const [showInstallHint, setShowInstallHint] = useState(() => isIOSSafari() && !isStandalone() && !hasSeenInstallHint());
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [viewingTournamentFederationId, setViewingTournamentFederationId] = useState(null); // federation variant of the above -- at most one of this and viewingTournamentClubId is ever non-null
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
@@ -23963,7 +24066,12 @@ function CricketScorer() {
     onOpenPlayers: () => setScreen("players"),
     pendingCount: pendingCount,
     requestBadgeCount: federationRequestsNeedingAction.length,
-    tournamentNameById: tournamentNameById
+    tournamentNameById: tournamentNameById,
+    showInstallHint: showInstallHint && !showTour,
+    onDismissInstallHint: () => {
+      setShowInstallHint(false);
+      markInstallHintSeen();
+    }
   })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
   }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
