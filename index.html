@@ -20586,26 +20586,16 @@ function MatchScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      justifyContent: "flex-end",
-      gap: 14,
+      justifyContent: "space-between",
+      alignItems: "center",
       marginBottom: 2
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowRetireModal(true),
-    disabled: !inning.strikerName,
-    className: "cs-btn",
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: !inning.strikerName ? "not-allowed" : "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      padding: "2px 2px",
-      opacity: !inning.strikerName ? 0.4 : 1
+      display: "flex",
+      gap: 14
     }
-  }, "Retire"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: swapStrike,
     disabled: !inning.strikerName || !inning.nonStrikerName,
     className: "cs-btn",
@@ -20626,6 +20616,21 @@ function MatchScreen({
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 12
   }), " Swap Strike"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowRetireModal(true),
+    disabled: !inning.strikerName,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: !inning.strikerName ? "not-allowed" : "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: "2px 2px",
+      opacity: !inning.strikerName ? 0.4 : 1
+    }
+  }, "Retire")), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMatchMenu(true),
     className: "cs-btn",
     style: {
