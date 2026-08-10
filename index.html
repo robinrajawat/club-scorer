@@ -15975,6 +15975,7 @@ function SeriesDetailScreen({
 }
 function TeamsScreen({
   teams,
+  teamsLoading = false,
   matches,
   onNew,
   onEdit,
@@ -16145,7 +16146,17 @@ function TeamsScreen({
       textAlign: "center",
       marginBottom: 20
     }
-  }, `Only the owner of "${activeClubName}" can add or edit teams.`), teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, `Only the owner of "${activeClubName}" can add or edit teams.`), teamsLoading && teams.length === 0 && !activeClubId ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading your teams\u2026",
+    size: 26,
+    style: {
+      background: COLORS.surface,
+      borderRadius: 12,
+      padding: "10px 14px",
+      marginBottom: 16,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
+    }
+  }) : teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
@@ -22617,6 +22628,15 @@ function CricketScorer() {
   // to indicate the tap registered. See the loading overlay near the end of this component's render.
   const [matchLoading, setMatchLoading] = useState(false);
   const [teams, setTeams] = useState([]);
+  // True only until the FIRST loadTeams() resolves, at mount -- not re-set to true on every
+  // later reload (sign-in/out), since teams already falls back to local data immediately in that
+  // case (see the comment further down on the auth-state-change effect) and re-showing a spinner
+  // over already-visible data on every reload would be worse than the silent-swap it replaces.
+  // The gap this closes is specifically the FIRST load on a fresh device/session, where local
+  // cache is empty and there's nothing on screen at all while the real fetch is still in flight --
+  // exactly the same "no loading indicator either way" problem clubs already had and got the
+  // TIMING half of a fix for, without ever getting the visual half.
+  const [teamsLoading, setTeamsLoading] = useState(true);
   const [clubs, setClubs] = useState([]);
   const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
   // Clubs & Federations administration used to be its own screen with its own independent club
@@ -22960,6 +22980,7 @@ function CricketScorer() {
       setTournaments(tourneys);
       setIsBetaTester(beta);
       setLoading(false);
+      setTeamsLoading(false);
       initialLoadDone.current = true;
     });
     return unsubAuth;
@@ -24113,6 +24134,7 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
     teams: activeTeams,
+    teamsLoading: teamsLoading,
     matches: matches,
     onNew: () => {
       setEditingTeam(null);
