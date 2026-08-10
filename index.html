@@ -4222,6 +4222,28 @@ function matchResultText(match) {
   const margin = target - 1 - i2.runs;
   return `${i1.battingTeam} won by ${margin} run${margin === 1 ? "" : "s"}`;
 }
+// Shared between MatchScreen (the live scoring screen, which used to compute this inline) and
+// MatchStatsPanel (the read-only panel FollowScreen/ScorecardOverlay both use, which never had
+// this at all -- a spectator watching a match live had to do the "runs needed off how many balls"
+// math themselves, since nothing on screen showed it). Same effective-target/effective-overs
+// fallback as checkInningEnd -- see there for the full reasoning on why a revised target only
+// ever applies to innings 2, never innings 1. Returns null whenever there's nothing to show: no
+// second innings yet, or it's already finished.
+function chasingInfo(match) {
+  const inn = match.innings[1];
+  if (!inn || inn.complete) return null;
+  const target = match.revisedTarget != null ? match.revisedTarget : match.innings[0].runs + 1;
+  const effectiveOversLimit = match.revisedOvers != null ? match.revisedOvers : match.oversLimit;
+  const ballsLeft = effectiveOversLimit * (inn.ballsPerOver || 6) - inn.legalBalls;
+  const runsNeeded = target - inn.runs;
+  const reqRate = ballsLeft > 0 ? (runsNeeded / ballsLeft * (inn.ballsPerOver || 6)).toFixed(2) : null;
+  return {
+    target,
+    ballsLeft,
+    runsNeeded,
+    reqRate
+  };
+}
 function buildShareText(match) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
   const toss = tossText(match.toss);
@@ -19218,6 +19240,7 @@ function MatchStatsPanel({
   tab,
   setTab
 }) {
+  const chasing = chasingInfo(match);
   return /*#__PURE__*/React.createElement(React.Fragment, null, match.venue && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 16px 0",
@@ -19229,7 +19252,33 @@ function MatchStatsPanel({
     }
   }, "\uD83D\uDCCD ", match.venue), /*#__PURE__*/React.createElement(MatchInfoFold, {
     match: match
-  }), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }), chasing && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "10px 16px 0",
+      maxWidth: 560 - 32,
+      marginLeft: "auto",
+      marginRight: "auto",
+      padding: "10px 14px",
+      borderRadius: 12,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
+      color: "#fff",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 10,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      fontWeight: 700
+    }
+  }, "Need ", Math.max(chasing.runsNeeded, 0), " off ", Math.max(chasing.ballsLeft, 0), " ball", Math.max(chasing.ballsLeft, 0) === 1 ? "" : "s"), chasing.reqRate && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      opacity: 0.85
+    }
+  }, "RRR ", chasing.reqRate)), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -19871,13 +19920,19 @@ function MatchScreen({
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   // Same revised-values fallback as checkInningEnd -- see there for the full reasoning. Both need
   // to agree on what "the target" and "the overs limit" actually are right now, or the live
-  // display would show one number while the innings actually ends against a different one.
-  const target = inningIdx === 1 ? match.revisedTarget != null ? match.revisedTarget : match.innings[0].runs + 1 : null;
+  // display would show one number while the innings actually ends against a different one. Shared
+  // with MatchStatsPanel (the read-only panel FollowScreen/ScorecardOverlay both use) via
+  // chasingInfo rather than duplicating this calculation a second time.
   const isChasing = inningIdx === 1;
-  const effectiveOversLimit = inningIdx === 1 && match.revisedOvers != null ? match.revisedOvers : match.oversLimit;
-  const ballsLeft = effectiveOversLimit * (inning.ballsPerOver || 6) - inning.legalBalls;
-  const runsNeeded = target ? target - inning.runs : null;
-  const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * (inning.ballsPerOver || 6)).toFixed(2) : null;
+  const chasing = chasingInfo(match);
+  const target = chasing ? chasing.target : null;
+  const ballsLeft = chasing ? chasing.ballsLeft : null;
+  const runsNeeded = chasing ? chasing.runsNeeded : null;
+  const reqRate = chasing ? chasing.reqRate : null;
+  // Kept separate from chasingInfo's own internal calculation -- chasingInfo only ever returns
+  // data while innings 2 is active (isChasing), but the "(X.Y/Z)" overs count in the score header
+  // below needs the right limit during innings 1 too, where chasing is null.
+  const effectiveOversLimit = isChasing && match.revisedOvers != null ? match.revisedOvers : match.oversLimit;
   useEffect(() => {
     if (needsNewBowler && !newBowlerName) {
       const suggested = suggestedNextBowler(inning);
