@@ -3329,8 +3329,14 @@ function computeStandings(tournament, allMatches) {
     // — otherwise being bowled out cheaply would perversely IMPROVE a team's run rate.
     const wicketsLimitA = maxWicketsFor(m, i1);
     const wicketsLimitB = maxWicketsFor(m, i2);
+    // Team 2's "full overs" fallback uses the revised limit when one was set (declareRevisedTarget,
+    // a mid-chase rain adjustment) rather than always m.oversLimit -- crediting a team with more
+    // overs than they were ever actually chasing within would inflate their NRR unfairly. Team 1's
+    // own calculation never uses this, since a revision only ever adjusts what innings 2 is
+    // chasing, never innings 1's own already-played total.
+    const effectiveOversLimitB = m.revisedOvers != null ? m.revisedOvers : m.oversLimit;
     const oversA = i1.wickets >= wicketsLimitA ? m.oversLimit : i1.legalBalls / (i1.ballsPerOver || 6);
-    const oversB = i2.wickets >= wicketsLimitB ? m.oversLimit : i2.legalBalls / (i2.ballsPerOver || 6);
+    const oversB = i2.wickets >= wicketsLimitB ? effectiveOversLimitB : i2.legalBalls / (i2.ballsPerOver || 6);
     rowA.runsFor += i1.runs;
     rowA.oversFor += oversA;
     rowA.runsAgainst += i2.runs;
@@ -4202,13 +4208,19 @@ function matchResultText(match) {
   // rather than "No result".
   if (match.noResult) return "No result";
   if (!i2) return null;
-  if (i2.runs >= i1.runs + 1) {
+  // A revised target (declareRevisedTarget, mid-chase rain adjustment short of full DLS) changes
+  // what "won"/"tied"/the runs margin actually mean -- i1.runs is still team 1's real, played
+  // total, but it's no longer what team 2 was actually chasing, so every branch below needs to
+  // compare against the target that was actually in play, not always i1.runs + 1.
+  const target = match.revisedTarget != null ? match.revisedTarget : i1.runs + 1;
+  if (i2.runs >= target) {
     const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
     return `${i2.battingTeam} won by ${wicketsInHand} wicket${wicketsInHand === 1 ? "" : "s"}`;
-  } else if (i2.runs === i1.runs) {
+  } else if (i2.runs === target - 1) {
     return "Match tied";
   }
-  return `${i1.battingTeam} won by ${i1.runs - i2.runs} run${i1.runs - i2.runs === 1 ? "" : "s"}`;
+  const margin = target - 1 - i2.runs;
+  return `${i1.battingTeam} won by ${margin} run${margin === 1 ? "" : "s"}`;
 }
 function buildShareText(match) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
@@ -7578,6 +7590,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "Play got stopped and there's no fair way to decide a winner \u2014 what do I do?",
     a: "\u201cAbandon match\u201d on the main scoring screen (next to \u201cEnd innings\u201d) ends the whole match immediately, in either innings, with no winner \u2014 rain, bad light, running out of time, whatever the reason. It shows as \u201cNo result\u201d rather than a win for anyone. In a tournament, both teams get 1 point (the same as a tie), tracked in its own NR column so it's not confused with a genuine drawn contest \u2014 and unlike a tie, the runs and overs from that match don't count toward either team's NRR, since play was stopped too early for them to mean anything as a fair comparison. There's no automatic check for whether it's actually too early for a result; that judgment call is entirely yours. \u201cFix a mistake\u201d still works on it afterward if you change your mind."
+  }, {
+    q: "Rain interrupted the chase, but the match can still finish \u2014 can I adjust the target?",
+    a: "\u201cRevise target\u201d, in the same menu as \u201cEnd innings\u201d and \u201cAbandon match\u201d, only shown once the second innings is under way. Set a new target and a new overs limit \u2014 whatever both sides have actually agreed on, not a calculated par score; this app doesn't do full DLS math. Everything downstream follows the revised numbers instead of the original ones from that point on: the live target/required-rate display, when the innings actually ends, the final result text, and (in a tournament) NRR, which credits the chasing side with the revised overs rather than the original ones if they end up all out. Can be revised again later if play's interrupted a second time \u2014 the latest revision is always what counts."
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
@@ -19854,9 +19869,13 @@ function MatchScreen({
   // 9-a-side match keep prompting for an 11th/10th batsman that doesn't exist in the roster.
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < maxWicketsFor(match, inning) && !inning.complete;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
-  const target = inningIdx === 1 ? match.innings[0].runs + 1 : null;
+  // Same revised-values fallback as checkInningEnd -- see there for the full reasoning. Both need
+  // to agree on what "the target" and "the overs limit" actually are right now, or the live
+  // display would show one number while the innings actually ends against a different one.
+  const target = inningIdx === 1 ? match.revisedTarget != null ? match.revisedTarget : match.innings[0].runs + 1 : null;
   const isChasing = inningIdx === 1;
-  const ballsLeft = match.oversLimit * (inning.ballsPerOver || 6) - inning.legalBalls;
+  const effectiveOversLimit = inningIdx === 1 && match.revisedOvers != null ? match.revisedOvers : match.oversLimit;
+  const ballsLeft = effectiveOversLimit * (inning.ballsPerOver || 6) - inning.legalBalls;
   const runsNeeded = target ? target - inning.runs : null;
   const reqRate = target && ballsLeft > 0 ? (runsNeeded / ballsLeft * (inning.ballsPerOver || 6)).toFixed(2) : null;
   useEffect(() => {
@@ -20006,12 +20025,19 @@ function MatchScreen({
   }
   function checkInningEnd(updated, force) {
     const inn = updated.innings[updated.currentInningIndex];
-    const oversDone = inn.legalBalls >= updated.oversLimit * (inn.ballsPerOver || 6);
+    // Revised values (see declareRevisedTarget) only ever apply to innings 2 -- a rain
+    // interruption mid-chase doesn't retroactively change what innings 1 already scored or how
+    // many overs it played, only what innings 2 is now trying to reach. Falls back to the
+    // original oversLimit/target whenever no revision has been made, so this is a no-op for every
+    // match that never uses the feature at all.
+    const effectiveOversLimit = updated.currentInningIndex === 1 && updated.revisedOvers != null ? updated.revisedOvers : updated.oversLimit;
+    const oversDone = inn.legalBalls >= effectiveOversLimit * (inn.ballsPerOver || 6);
     // Was hardcoded to a fixed 10 (2 for Super Over) — now uses the batting team's actual XI size,
     // so a 9-a-side match correctly goes all out on the 8th wicket instead of letting the innings
     // (and needsNewBatsman below) run all the way to a 10th wicket nobody's roster has.
     const allOut = inn.wickets >= maxWicketsFor(updated, inn);
-    const chaseWon = updated.currentInningIndex === 1 && inn.runs >= updated.innings[0].runs + 1;
+    const effectiveTarget = updated.currentInningIndex === 1 && updated.revisedTarget != null ? updated.revisedTarget : updated.innings[0].runs + 1;
+    const chaseWon = updated.currentInningIndex === 1 && inn.runs >= effectiveTarget;
     if (force || oversDone || allOut || chaseWon) {
       inn.complete = true;
       if (updated.currentInningIndex === 0) {
@@ -20303,6 +20329,12 @@ function MatchScreen({
   // and both deserve more distance from a row a scorer is tapping mid-over than a same-row,
   // same-size button gave them.
   const [showMatchMenu, setShowMatchMenu] = useState(false);
+  // Only meaningful during innings 2 (isChasing) -- a revised target/overs (rain mid-chase, short
+  // of full DLS) adjusts what team 2 is trying to reach, not team 1's already-played innings.
+  const [showRevisedTargetModal, setShowRevisedTargetModal] = useState(false);
+  const [revisedTargetInput, setRevisedTargetInput] = useState("");
+  const [revisedOversInput, setRevisedOversInput] = useState("");
+  const [revisedTargetError, setRevisedTargetError] = useState("");
   const [showRetireModal, setShowRetireModal] = useState(false);
   // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
   // param — see there). Reachable two ways: the "stuck, no batsman available" fallback inside the
@@ -20344,6 +20376,48 @@ function MatchScreen({
     setMatch(updated);
     queueSave(updated);
     setConfirmNoResult(false);
+  }
+  // Sets match.revisedTarget/revisedOvers directly on the match, same "just overwrite it, this
+  // isn't tied to the ball-by-ball pipeline" shape as declareNoResult -- checkInningEnd, the live
+  // target/RRR display, matchResultText, and computeStandings' NRR calculation all already fall
+  // back to these two fields wherever they'd otherwise use i1.runs + 1 / match.oversLimit for
+  // innings 2 (see each of those for the full reasoning). Calling this again later in the same
+  // chase (a second rain interruption) just overwrites the previous revision -- there's no cap on
+  // how many times it can be adjusted, the same way real rain-affected matches sometimes need more
+  // than one revision. No attempt at real DLS math here, deliberately -- this is for whatever
+  // number the two captains/organizers have actually agreed on, not a calculated par score.
+  function declareRevisedTarget() {
+    const newTarget = parseInt(revisedTargetInput, 10);
+    const newOvers = parseFloat(revisedOversInput);
+    const oversAlreadyBowled = inning.legalBalls / (inning.ballsPerOver || 6);
+    if (!newTarget || newTarget < 1) {
+      setRevisedTargetError("Enter a target of at least 1 run.");
+      return;
+    }
+    if (!newOvers || newOvers <= 0) {
+      setRevisedTargetError("Enter the new overs limit.");
+      return;
+    }
+    if (newOvers < oversAlreadyBowled) {
+      setRevisedTargetError(`Can't be fewer than the ${oversLabel(inning.legalBalls, inning.ballsPerOver)} overs already bowled.`);
+      return;
+    }
+    if (newOvers > match.oversLimit) {
+      setRevisedTargetError(`Can't be more than the original ${match.oversLimit}-over limit.`);
+      return;
+    }
+    pushHistory();
+    const updated = {
+      ...match,
+      revisedTarget: newTarget,
+      revisedOvers: newOvers
+    };
+    setMatch(updated);
+    queueSave(updated);
+    setShowRevisedTargetModal(false);
+    setRevisedTargetInput("");
+    setRevisedOversInput("");
+    setRevisedTargetError("");
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
@@ -20625,7 +20699,7 @@ function MatchScreen({
       fontSize: 18,
       opacity: 0.75
     }
-  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", match.oversLimit, ")")), currentOverBalls.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", effectiveOversLimit, ")")), currentOverBalls.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -20788,7 +20862,44 @@ function MatchScreen({
       color: COLORS.inkSoft,
       marginBottom: 14
     }
-  }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), /*#__PURE__*/React.createElement("button", {
+  }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), isChasing && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowMatchMenu(false);
+      setRevisedTargetInput(String(target));
+      setRevisedOversInput(String(match.revisedOvers != null ? match.revisedOvers : match.oversLimit));
+      setRevisedTargetError("");
+      setShowRevisedTargetModal(true);
+    },
+    className: "cs-btn cs-row",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      padding: "12px 10px",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 14,
+      color: COLORS.ink
+    }
+  }, "Revise target"), isChasing && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      padding: "0 10px 10px"
+    }
+  }, "Rain mid-chase, short of full DLS \u2014 set a new target and overs limit that both sides have agreed on."), isChasing && /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "2px 0 6px"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       setShowMatchMenu(false);
@@ -20850,7 +20961,106 @@ function MatchScreen({
       color: COLORS.inkSoft,
       padding: "0 10px"
     }
-  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
+  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), showRevisedTargetModal && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowRevisedTargetModal(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Revise the target"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, "For whatever number both sides have actually agreed on \u2014 not a calculated par score. Can be revised again later if play's interrupted a second time."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "New target (runs to win)"), /*#__PURE__*/React.createElement(TextField, {
+    value: revisedTargetInput,
+    onChange: v => setRevisedTargetInput(v.replace(/[^0-9]/g, "").slice(0, 4)),
+    placeholder: "e.g. 120",
+    inputMode: "numeric",
+    style: {
+      textAlign: "center",
+      fontSize: 18,
+      fontWeight: 700,
+      fontFamily: "'IBM Plex Mono', monospace",
+      marginBottom: 14
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "New overs limit"), /*#__PURE__*/React.createElement(TextField, {
+    value: revisedOversInput,
+    onChange: v => setRevisedOversInput(v.replace(/[^0-9.]/g, "").slice(0, 5)),
+    placeholder: `e.g. 15 (currently ${match.revisedOvers != null ? match.revisedOvers : match.oversLimit})`,
+    inputMode: "decimal",
+    style: {
+      textAlign: "center",
+      fontSize: 18,
+      fontWeight: 700,
+      fontFamily: "'IBM Plex Mono', monospace",
+      marginBottom: revisedTargetError ? 8 : 14
+    }
+  }), revisedTargetError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 6,
+      marginBottom: 14,
+      padding: "8px 10px",
+      background: "rgba(184,137,43,0.14)",
+      border: `1px solid rgba(184,137,43,0.35)`,
+      borderRadius: 10,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.gold,
+      lineHeight: 1.4
+    }
+  }, /*#__PURE__*/React.createElement(AlertTriangle, {
+    size: 14,
+    style: {
+      flexShrink: 0,
+      marginTop: 1
+    }
+  }), revisedTargetError), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => setShowRevisedTargetModal(false),
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: declareRevisedTarget,
+    disabled: !revisedTargetInput.trim() || !revisedOversInput.trim(),
+    style: {
+      flex: 2
+    }
+  }, "Set new target"))), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
     const b = inning.batsmen[name] || {
       runs: 0,
       balls: 0
