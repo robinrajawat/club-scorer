@@ -75,6 +75,19 @@ const ChevronDown = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/
 const Check = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "20 6 9 17 4 12"
 }));
+const MoreVertical = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "1"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "5",
+  r: "1"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "19",
+  r: "1"
+}));
 const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "3",
   y: "3",
@@ -20136,6 +20149,15 @@ function MatchScreen({
   // implies you do.
   const [endInningTrigger, setEndInningTrigger] = useState(null);
   const [confirmNoResult, setConfirmNoResult] = useState(false);
+  // Separate from confirmNoResult's own confirmation modal deliberately -- this is a lighter,
+  // first tap of friction before reaching either End innings or Abandon match at all, not a
+  // replacement for the "are you sure" step each of them already has. Swap Strike and Retire stay
+  // as direct one-tap buttons right in this card, since both are routine, about the two batsmen
+  // shown right there, and safe to reach quickly -- End innings and Abandon match are neither: one
+  // ends the whole current innings regardless of who's batting, the other ends the entire match,
+  // and both deserve more distance from a row a scorer is tapping mid-over than a same-row,
+  // same-size button gave them.
+  const [showMatchMenu, setShowMatchMenu] = useState(false);
   const [showRetireModal, setShowRetireModal] = useState(false);
   // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
   // param — see there). Reachable two ways: the "stuck, no batsman available" fallback inside the
@@ -20587,32 +20609,98 @@ function MatchScreen({
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 12
   }), " Swap Strike"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setEndInningTrigger("voluntary"),
+    onClick: () => setShowMatchMenu(true),
     className: "cs-btn",
     style: {
       background: "none",
       border: "none",
       color: COLORS.inkSoft,
       cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      padding: "2px 2px"
+      padding: "2px 4px",
+      display: "flex",
+      alignItems: "center"
     }
-  }, "End innings"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setConfirmNoResult(true),
-    className: "cs-btn",
+  }, /*#__PURE__*/React.createElement(MoreVertical, {
+    size: 16
+  }))), showMatchMenu && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowMatchMenu(false)
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "This match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 14
+    }
+  }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowMatchMenu(false);
+      setEndInningTrigger("voluntary");
+    },
+    className: "cs-btn cs-row",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
       background: "none",
       border: "none",
-      color: COLORS.ball,
+      borderRadius: 10,
       cursor: "pointer",
+      padding: "12px 10px",
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      padding: "2px 2px"
+      fontSize: 14,
+      color: COLORS.ink
     }
-  }, "Abandon match")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
+  }, "End innings"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      padding: "0 10px 10px"
+    }
+  }, "Closes out the current innings early \u2014 bad weather, running out of time, a forfeit, or any other reason to stop here."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "2px 0 6px"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowMatchMenu(false);
+      setConfirmNoResult(true);
+    },
+    className: "cs-btn cs-row",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      padding: "12px 10px",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 14,
+      color: COLORS.ball
+    }
+  }, "Abandon match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      padding: "0 10px"
+    }
+  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), [inning.strikerName, inning.nonStrikerName].filter(Boolean).map(name => {
     const b = inning.batsmen[name] || {
       runs: 0,
       balls: 0
