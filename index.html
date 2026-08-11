@@ -1010,6 +1010,46 @@ function downloadTextFile(filename, mimeType, text) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// RFC 4180-ish CSV: quote a cell only when it actually needs it (contains a comma, a quote, or a
+// newline), doubling any internal quotes -- the common convention every spreadsheet app (Excel,
+// Sheets, Numbers) already expects, so "download as CSV" opens cleanly as a real table rather than
+// one mangled column.
+function csvCell(value) {
+  const s = value == null ? "" : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+// headers is a flat array of column names; rows is an array of arrays, same length/order as
+// headers. Leading \uFEFF (UTF-8 BOM) is deliberate: without it, Excel on Windows mis-reads
+// non-ASCII names (accented characters, etc.) as garbled text instead of guessing UTF-8.
+function toCSV(headers, rows) {
+  const lines = [headers.map(csvCell).join(","), ...rows.map(r => r.map(csvCell).join(","))];
+  return "\uFEFF" + lines.join("\r\n");
+}
+function downloadCSV(filename, headers, rows) {
+  downloadTextFile(filename.endsWith(".csv") ? filename : `${filename}.csv`, "text/csv;charset=utf-8", toCSV(headers, rows));
+}
+// Bundles several named tables into ONE csv, each preceded by a blank line and its own title row
+// -- used by the Record Book's "Export CSV" (11 tables at once) rather than making someone
+// download 11 separate tiny files. sections: [{ title, headers, rows }, ...].
+function multiSectionCSV(sections) {
+  const lines = [];
+  sections.forEach((sec, i) => {
+    if (i > 0) lines.push("");
+    lines.push(csvCell(sec.title));
+    lines.push(sec.headers.map(csvCell).join(","));
+    sec.rows.forEach(r => lines.push(r.map(csvCell).join(",")));
+  });
+  return "\uFEFF" + lines.join("\r\n");
+}
+function downloadMultiSectionCSV(filename, sections) {
+  downloadTextFile(filename.endsWith(".csv") ? filename : `${filename}.csv`, "text/csv;charset=utf-8", multiSectionCSV(sections));
+}
+// Filesystem/URL-unsafe-character stripping for a download filename built from a person-entered
+// name (a team, tournament, or club name) -- same idea as the .ics export just above already
+// applies inline, pulled out here since CSV export needs it in several different places.
+function safeFilenamePart(name) {
+  return String(name || "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "export";
+}
 function getFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("follow");
@@ -8295,6 +8335,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "What exactly goes into the Record Book, and how is All Time different from the current year?",
     a: "Every completed match that belongs to a tournament or series that club has run \u2014 or, for a federation, one the federation itself has hosted directly (not each affiliated club's own separate tournaments). Same matches the Tournament Stats tab already draws from, just combined across every tournament instead of one at a time. A match started outside any tournament, or one that's still in progress, is never counted. The current-year tab is the exact same data, just filtered to matches created on or after local midnight on January 1st; All Time has no such cutoff. A team filter and a player search on the same screen narrow any table down further. Every leaderboard and milestone list (centuries, five-wicket hauls, biggest partnerships, and the rest) is capped to the top 10. Biggest Partnerships only shows matches scored after that feature shipped \u2014 older matches never tracked individual stands, so there's genuinely nothing there to surface for them."
+  }, {
+    q: "Can I get the stats out of the app, into a spreadsheet?",
+    a: "Yes \u2014 the Tournament Stats tab (batting/bowling leaderboard) and the Record Book both have an \u201cExport CSV\u201d button. The Record Book's downloads every table as one file, one section per table, respecting whichever team filter is selected but not the player search box (that's just an on-screen narrowing, not something that should silently shrink your export). Opens straight in Excel, Google Sheets, or Numbers."
   }, {
     q: "The auto-generated knockout bracket doesn't match my tournament's playoff format \u2014 what do I do?",
     a: "The built-in bracket is a standard Quarterfinal/Semifinal/Final elimination \u2014 it won't build something like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final shape, where the top two teams get a second chance. Add those fixtures by hand instead (\u201cAdd a fixture\u201d on the tournament's schedule) and give each one a Stage label when you do \u2014 that keeps it out of the points table and NRR, exactly like the auto-generated bracket already is, and it shows up in its own \u201cPlayoffs\u201d section on the schedule."
@@ -16350,7 +16393,35 @@ function TournamentDetailScreen({
     cursor: "pointer",
     textTransform: "capitalize"
   }
-}, t))), /*#__PURE__*/React.createElement("div", {
+}, t))), /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => {
+    const rows = statsTab === "batting" ? tournamentBatters : tournamentBowlers;
+    const headers = statsTab === "batting" ? ["Player", "Runs", "Innings", "Average", "Strike Rate"] : ["Player", "Wickets", "Runs Conceded", "Average", "Economy"];
+    const csvRows = statsTab === "batting" ? rows.map(p => [p.name, p.runs, p.battingInnings, p.battingAvg === null ? "" : p.battingAvg.toFixed(1), p.strikeRate === null ? "" : p.strikeRate.toFixed(1)]) : rows.map(p => [p.name, p.wickets, p.runsConceded, p.bowlingAvg === null ? "" : p.bowlingAvg.toFixed(1), p.economy === null ? "" : p.economy.toFixed(2)]);
+    downloadCSV(`${safeFilenamePart(tournament.name)}-${statsTab}`, headers, csvRows);
+  },
+  className: "cs-btn",
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
+    padding: "8px 0",
+    marginBottom: 12,
+    borderRadius: 10,
+    border: `1px solid ${COLORS.willow}`,
+    background: COLORS.surface,
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 12.5,
+    cursor: "pointer"
+  }
+}, /*#__PURE__*/React.createElement(Download, {
+  size: 14
+}), "Export CSV"), /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
     borderRadius: 16,
@@ -16835,9 +16906,84 @@ function RecordsScreen({
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
-      marginBottom: 18
+      marginBottom: 10
     }
-  }, `Based on ${records.matchCount} completed match${records.matchCount === 1 ? "" : "es"}.`), /*#__PURE__*/React.createElement(RecordTable, {
+  }, `Based on ${records.matchCount} completed match${records.matchCount === 1 ? "" : "es"}.`), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => downloadMultiSectionCSV(`${safeFilenamePart(sourceName)}-record-book-${recordsTab === "currentYear" ? currentYear : "all-time"}`, [{
+      title: "Most Runs",
+      headers: ["Player", "Runs", "Innings", "Average", "SR"],
+      rows: records.mostRuns.map(p => [p.name, p.runs, p.battingInnings, p.battingAvg === null ? "" : p.battingAvg.toFixed(1), p.strikeRate === null ? "" : p.strikeRate.toFixed(0)])
+    }, {
+      title: "Highest Individual Scores",
+      headers: ["Player", "Best"],
+      rows: records.bestIndividualScores.map(p => [p.name, p.bestBattingLabel])
+    }, {
+      title: "Centuries",
+      headers: ["Player", "Score", "Team", "Date"],
+      rows: records.centuries.map(c => [c.name, `${c.runs}${c.out ? "" : "*"}`, c.team, dateLabel(c.date)])
+    }, {
+      title: "Biggest Partnerships",
+      headers: ["Batters", "Runs", "Balls", "Team", "Date"],
+      rows: records.biggestPartnerships.map(p => [`${p.batter1} & ${p.batter2}`, `${p.runs}${p.unbeaten ? "*" : ""}`, p.balls, p.team, dateLabel(p.date)])
+    }, {
+      title: "Most Wickets",
+      headers: ["Player", "Wickets", "Runs", "Average", "Economy"],
+      rows: records.mostWickets.map(p => [p.name, p.wickets, p.runsConceded, p.bowlingAvg === null ? "" : p.bowlingAvg.toFixed(1), p.economy === null ? "" : p.economy.toFixed(2)])
+    }, {
+      title: "Best Bowling Figures",
+      headers: ["Player", "Best"],
+      rows: records.bestBowlingFigures.map(p => [p.name, p.bestBowlingLabel])
+    }, {
+      title: "Five-Wicket Hauls",
+      headers: ["Player", "Figures", "Team", "Date"],
+      rows: records.fiveWicketHauls.map(f => [f.name, `${f.wickets}/${f.runs}`, f.team, dateLabel(f.date)])
+    }, {
+      title: "Most Catches",
+      headers: ["Player", "Catches"],
+      rows: records.mostCatches.map(p => [p.name, p.catches])
+    }, {
+      title: "Most Matches Umpired",
+      headers: ["Umpire", "Matches"],
+      rows: records.mostMatchesUmpired.map(u => [u.name, u.count])
+    }, {
+      title: "Highest Team Totals",
+      headers: ["Team", "Opponent", "Score", "Date"],
+      rows: records.highestTotals.map(t => [t.team, t.opponent, `${t.runs}/${t.wickets}`, dateLabel(t.date)])
+    }, {
+      title: "Lowest Totals (all out)",
+      headers: ["Team", "Opponent", "Score", "Date"],
+      rows: records.lowestAllOutTotals.map(t => [t.team, t.opponent, `${t.runs}/${t.wickets}`, dateLabel(t.date)])
+    }, {
+      title: "Biggest Wins by Runs",
+      headers: ["Winner", "Beat", "Margin", "Date"],
+      rows: records.winsByRuns.map(w => [w.winner, w.loser, `${w.margin} run${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)])
+    }, {
+      title: "Biggest Wins by Wickets",
+      headers: ["Winner", "Beat", "Margin", "Date"],
+      rows: records.winsByWickets.map(w => [w.winner, w.loser, `${w.margin} wkt${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)])
+    }]),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      width: "100%",
+      padding: "9px 0",
+      marginBottom: 18,
+      borderRadius: 10,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(Download, {
+    size: 14
+  }), "Export all as CSV"), /*#__PURE__*/React.createElement(RecordTable, {
     title: "Most Runs",
     columns: [{
       label: "Player",
