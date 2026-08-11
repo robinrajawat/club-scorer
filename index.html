@@ -16946,6 +16946,7 @@ function AvailabilityPollModal({
   const [copied, setCopied] = useState(false);
   const [confirmDeleteCode, setConfirmDeleteCode] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     let cancelled = false;
     loadTeamPolls(clubId, team.id).then(list => {
@@ -16989,8 +16990,14 @@ function AvailabilityPollModal({
   }
   async function confirmDelete() {
     setDeleting(true);
-    await deleteAvailabilityPoll(clubId, team.id, confirmDeleteCode);
+    setDeleteError("");
+    const result = await deleteAvailabilityPoll(clubId, team.id, confirmDeleteCode);
     setDeleting(false);
+    if (!result.ok) {
+      setDeleteError(result.error);
+      setConfirmDeleteCode(null); // close the confirm sheet so the error underneath is visible
+      return;
+    }
     setPolls(cur => (cur || []).filter(p => p.code !== confirmDeleteCode));
     setConfirmDeleteCode(null);
     setView("list");
@@ -17262,7 +17269,14 @@ function AvailabilityPollModal({
       flex: 1,
       color: COLORS.ball
     }
-  }, "Delete")), /*#__PURE__*/React.createElement("button", {
+  }, "Delete")), deleteError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginBottom: 8
+    }
+  }, deleteError), /*#__PURE__*/React.createElement("button", {
     onClick: () => setView("list"),
     className: "cs-btn",
     style: {
