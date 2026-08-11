@@ -22496,7 +22496,12 @@ function MatchScreen({
   // structured interruption log for (see declareDLSRevisedTarget's own comment).
   const [dlsMode, setDlsMode] = useState(false);
   const [dlsR1Override, setDlsR1Override] = useState("");
-  const [dlsG50Input, setDlsG50Input] = useState("200");
+  // G50 defaults to whatever was actually used for this match's last DLS revision, if there was
+  // one (match.dlsG50, set by declareDLSRevisedTarget) -- not a hardcoded "200" every time. A
+  // second rain interruption reopening this panel after the app was closed/reopened should use
+  // the SAME G50 as the first, not silently fall back to the generic default and produce an
+  // inconsistent target across two revisions of the same match.
+  const [dlsG50Input, setDlsG50Input] = useState(String(match.dlsG50 || 200));
   const [revisedTargetError, setRevisedTargetError] = useState("");
   const [showRetireModal, setShowRetireModal] = useState(false);
   // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
