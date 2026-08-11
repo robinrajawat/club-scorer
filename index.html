@@ -936,8 +936,36 @@ function genMatchCode() {
 const POLL_TTL_DAYS = 120;
 const LIVE_VIEW_TTL_DAYS = 180;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
+// clubJoinCodes (club member/co-owner email invites) already had a 7-day expiry — just as a plain
+// millis number, checked only in app code, never actually turning into deletion. Kept at the same
+// 7 days, now as a real Timestamp so a native TTL policy can auto-delete the doc once it's stale,
+// same as the three above.
+const CLUB_INVITE_TTL_DAYS = 7;
 function ttlTimestamp(days) {
   return firebase.firestore.Timestamp.fromMillis(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+// Accepts either a Firestore Timestamp (the current, correct shape) or a plain millis number (the
+// shape every expiresAt used before this file started using ttlTimestamp) and returns millis
+// either way. Needed only for clubJoinCodes/pendingInvites: a club invite already in Firestore
+// from before this change has a raw number here, and would otherwise throw when app code calls
+// .toMillis() on it expecting a Timestamp. Existing invites are short-lived (7 days) so this
+// window is brief, but crashing on someone's still-valid pending invite mid-transition would be
+// a worse failure than this one extra branch.
+function expiresAtMillis(expiresAt) {
+  if (!expiresAt) return null;
+  return typeof expiresAt === "number" ? expiresAt : expiresAt.toMillis();
+}
+// "Expires in Nd" / "Expires tomorrow" / "Expired" for a club invite's pending-invites row — the
+// one place in the UI that surfaces the 7-day window someone has to redeem it, so an owner isn't
+// left guessing why a code they sent last week stopped working. Not shown at all when there's
+// nothing to compute from (older data, or the field genuinely missing).
+function inviteExpiryLabel(expiresAt) {
+  const ms = expiresAtMillis(expiresAt);
+  if (ms == null) return null;
+  const daysLeft = Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000));
+  if (daysLeft <= 0) return "Expired";
+  if (daysLeft === 1) return "Expires tomorrow";
+  return `Expires in ${daysLeft}d`;
 }
 // Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
 // TEXT values, or some calendar apps (Outlook especially) mis-parse the field boundary.
@@ -1959,7 +1987,7 @@ async function inviteClubMemberByEmail(clubId, email) {
   try {
     const code = genMatchCode();
     const createdAt = Date.now();
-    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000; // 7 days
+    const expiresAt = ttlTimestamp(CLUB_INVITE_TTL_DAYS);
     await db.collection("clubJoinCodes").doc(code).set({
       clubId,
       email: cleaned,
@@ -2009,7 +2037,7 @@ async function inviteClubCoOwnerByEmail(clubId, email) {
   try {
     const code = genMatchCode();
     const createdAt = Date.now();
-    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
+    const expiresAt = ttlTimestamp(CLUB_INVITE_TTL_DAYS);
     await db.collection("clubJoinCodes").doc(code).set({
       clubId,
       email: cleaned,
@@ -2083,7 +2111,7 @@ async function joinClubWithCode(code) {
       expiresAt,
       email
     } = codeDoc.data();
-    if (expiresAt && expiresAt < Date.now()) return {
+    if (expiresAtMillis(expiresAt) && expiresAtMillis(expiresAt) < Date.now()) return {
       ok: false,
       error: "That invite has expired \u2014 ask for a new one."
     };
@@ -8059,6 +8087,9 @@ const HELP_SECTIONS = [{
   }, {
     q: "What does exporting/importing my data actually cover?",
     a: "Export (Account \u2192 Your data) gives you a JSON backup of your profile, teams, and matches saved to that account. Import restores it \u2014 into the same account, or a different one to migrate. It doesn't cover clubs (shared state, not personal data) or matches only ever shared via a score code."
+  }, {
+    q: "Do share links, poll links, or invite codes ever expire?",
+    a: "Club invite codes always expire 7 days after they're sent \u2014 that one's enforced no matter what, shown as a countdown next to each pending invite. View links (match and tournament) and availability poll links can *optionally* expire too, on servers that have turned that on: months of nobody using one before it quietly goes stale, refreshed automatically every time it's actually used (a ball scored, a tournament reshared, a poll response). None of this ever touches the underlying match, tournament, club, or poll data itself \u2014 only the link stops working, and a new one can always be generated. The one thing that's never set up to expire on its own is a match kept with no account at all (a guest match, reachable only by its score code) \u2014 that would mean losing the only copy of it, so it's excluded entirely."
   }]
 }, {
   title: "Clubs & federations",
@@ -8577,7 +8608,7 @@ function SharedLinksScreen({
       marginBottom: 18,
       lineHeight: 1.5
     }
-  }, "Scoring codes and live-follow links currently active for matches this device knows about. Revoking one takes effect immediately."), error && /*#__PURE__*/React.createElement("div", {
+  }, "Scoring codes and live-follow links currently active for matches this device knows about. Revoking one takes effect immediately. A view link left unused for a long stretch (many months of nobody following it) may also expire on its own, on servers with that turned on \u2014 the match itself is never affected either way, only the link."), error && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.08)",
       border: "1.5px solid rgba(139,30,30,0.25)",
@@ -9661,16 +9692,25 @@ function ClubPanel({
       gap: 8,
       padding: "4px 0"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontSize: 12,
       color: COLORS.ink,
       overflow: "hidden",
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, invite.email), /*#__PURE__*/React.createElement("span", {
+  }, invite.email), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10.5,
+      color: COLORS.inkSoft
+    }
+  }, inviteExpiryLabel(invite.expiresAt))), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       fontWeight: 700,
@@ -17115,7 +17155,7 @@ function AvailabilityPollModal({
       color: COLORS.inkSoft,
       marginBottom: 16
     }
-  }, `${team.name} \u2014 poll who's around, then share the link. No account needed to respond.`), view === "list" && /*#__PURE__*/React.createElement("div", null, polls === null ? /*#__PURE__*/React.createElement(LoadingNote, {
+  }, `${team.name} \u2014 poll who's around, then share the link. No account needed to respond. Polls expire on their own after a few months.`), view === "list" && /*#__PURE__*/React.createElement("div", null, polls === null ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading polls\u2026",
     size: 22
   }) : polls.length === 0 ? /*#__PURE__*/React.createElement("div", {
@@ -19296,7 +19336,7 @@ function TournamentShareModal({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It's a snapshot, not live: hit Refresh after new results come in."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It's a snapshot, not live: hit Refresh after new results come in. A link nobody's refreshed in a long while may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",

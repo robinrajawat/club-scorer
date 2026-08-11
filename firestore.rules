@@ -213,14 +213,16 @@ service cloud.firestore {
         // joinClubWithCode/inviteClubMemberByEmail/inviteClubCoOwnerByEmail in index.html. The
         // invite code names exactly this club, this exact email, and hasn't expired. Depending on
         // the code's own `role` field the redeemer lands in memberUids only, or in memberUids AND
-        // coOwnerUids — nothing else about the doc may change in the same write.
+        // coOwnerUids — nothing else about the doc may change in the same write. expiresAt is a
+        // real Timestamp (see ttlTimestamp in index.html), compared directly against request.time
+        // — also a Timestamp — rather than converting either side to millis.
         (
           !(request.auth.uid in resource.data.memberUids) &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
           request.resource.data.name == resource.data.name &&
           'joinCodeUsed' in request.resource.data &&
           get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.clubId == clubId &&
-          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.expiresAt > request.time.toMillis() &&
+          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.expiresAt > request.time &&
           get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.email == request.auth.token.email.lower() &&
           request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
           (
