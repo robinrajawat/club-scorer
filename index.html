@@ -918,6 +918,27 @@ function genMatchCode() {
   for (let i = 0; i < 8; i++) s += chars[bytes[i] % chars.length];
   return s;
 }
+// Firestore TTL windows for the collections that carry a native TTL policy on their `expiresAt`
+// field — see README's "Running your own copy" for the one-time Firebase Console step that
+// actually enables auto-deletion off this field; writing it here alone does nothing without that.
+// Chosen per collection by how stale the data has to get before it's genuinely useless:
+// - Availability polls: a fixture-availability question has no value once the fixture (and any
+//   follow-up conversation about it) is long past.
+// - Live-view mirrors: a read-only mirror of a match, re-written on every scored ball while a view
+//   code is active (see saveMatch) — the TTL only ever actually fires on one nobody's followed in
+//   months, since every live-scored ball pushes expiresAt back out.
+// - Tournament view snapshots: an explicit, regenerable snapshot (see shareTournament), same
+//   "refreshed each time it's used" reasoning as live-view mirrors.
+// Deliberately NOT applied to /sharedMatches: for a guest scoring with no account, that collection
+// is the ONLY copy of their match data (see saveMatch's own module comment above it) — an expiring
+// match history would silently destroy something nobody could ever get back. Revoking a share
+// code already deletes it immediately (revokeShareCode) for anyone who wants it gone sooner.
+const POLL_TTL_DAYS = 120;
+const LIVE_VIEW_TTL_DAYS = 180;
+const TOURNAMENT_VIEW_TTL_DAYS = 180;
+function ttlTimestamp(days) {
+  return firebase.firestore.Timestamp.fromMillis(Date.now() + days * 24 * 60 * 60 * 1000);
+}
 // Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
 // TEXT values, or some calendar apps (Outlook especially) mis-parse the field boundary.
 function icsEscape(text) {
@@ -1016,7 +1037,8 @@ async function shareTournament(tournament, standings) {
         points: r.points,
         nrr: r.nrr
       })),
-      sharedAt: Date.now()
+      sharedAt: Date.now(),
+      expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
     });
     return {
       ok: true,
@@ -1401,7 +1423,8 @@ async function saveMatch(match) {
     try {
       await db.collection("liveViews").doc(match.viewCode).set(packMatchForFirestore({
         ...match,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        expiresAt: ttlTimestamp(LIVE_VIEW_TTL_DAYS)
       }));
     } catch (e) {
       // Deliberately non-fatal: scoring must keep working even if the read-only mirror can't be
@@ -2282,18 +2305,22 @@ async function createAvailabilityPoll(clubId, clubName, teamId, teamName, roster
     fixtureDate: fixtureDate || null,
     createdByUid: auth.currentUser ? auth.currentUser.uid : null,
     createdAt: Date.now(),
-    responses: {}
+    responses: {},
+    expiresAt: ttlTimestamp(POLL_TTL_DAYS)
   };
   try {
     await db.collection("availabilityPolls").doc(code).set(poll);
     // Fire-and-forget, same "best-effort mirror, don't fail the primary write over it" spirit as
     // syncTeamAcrossFederations above — the pointer only powers a convenience list, not the poll
-    // itself, so a failure here shouldn't be reported as the create having failed.
+    // itself, so a failure here shouldn't be reported as the create having failed. Carries the
+    // same expiresAt as the real poll so the two expire together rather than leaving one an
+    // orphan of the other (see deleteTeamPolls' equivalent reasoning for explicit deletes).
     db.collection("clubs").doc(clubId).collection("teams").doc(teamId).collection("polls").doc(code).set({
       code,
       question: poll.question,
       fixtureDate: poll.fixtureDate,
-      createdAt: poll.createdAt
+      createdAt: poll.createdAt,
+      expiresAt: poll.expiresAt
     }).catch(e => console.error("poll pointer write failed", e));
     return {
       ok: true,
