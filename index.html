@@ -175,7 +175,7 @@ function Cap({
     d: "M4 14A8 8 0 0 1 20 14C21.5 14.3 23 15.3 23 16.8C22.5 18 17 17.8 13 16.3Q8 17 4 15.3Z"
   }));
 }
-// BookOpen: for the club Record Book entry point.
+// BookOpen: for the Record Book entry point (clubs and federations).
 const BookOpen = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M12 7v14"
 }), /*#__PURE__*/React.createElement("path", {
@@ -4383,12 +4383,14 @@ function computePlayerStats(matches) {
     bestBowlingLabel: p.bestBowlingWickets === null ? null : `${p.bestBowlingWickets}/${p.bestBowlingRuns}`
   }));
 }
-// Club Record Book — aggregates every completed match across ALL of a club's tournaments (not
-// just one) into individual, team, and milestone records. Reuses computePlayerStats for the
-// career leaderboards so the numbers here always agree with the per-tournament stats tables;
-// only the milestone lists (centuries, 5-wicket hauls) and team-total/win-margin records are
-// computed fresh here since those need per-innings context (team names, opponent, date) that the
-// flattened player-stats shape doesn't carry.
+// Record Book aggregation — aggregates every completed match across ALL of a club's or
+// federation's tournaments (not just one) into individual, team, and milestone records. Takes a
+// plain match list so the caller decides where those matches came from (loadClubTournaments vs
+// loadFederationTournaments); this function itself doesn't care which. Reuses computePlayerStats
+// for the career leaderboards so the numbers here always agree with the per-tournament stats
+// tables; only the milestone lists (centuries, 5-wicket hauls) and team-total/win-margin records
+// are computed fresh here since those need per-innings context (team names, opponent, date) that
+// the flattened player-stats shape doesn't carry.
 function computeClubRecords(matches) {
   const completed = (matches || []).filter(m => m && m.status === "complete" && m.innings && m.innings.length);
   const centuries = [];
@@ -13480,8 +13482,8 @@ function TournamentsScreen({
       color: statusFilter === key ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, label)))), activeClubId && !creating && onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords(activeClubId, activeClubName),
+  }, label)))), (activeClubId || activeFederationId) && !creating && onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords(activeFederationId ? "federation" : "club", activeFederationId || activeClubId, activeFederationName || activeClubName),
     className: "cs-btn",
     style: {
       display: "flex",
@@ -13502,7 +13504,7 @@ function TournamentsScreen({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 16
-  }), `${activeClubName} Record Book`), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }), `${activeFederationName || activeClubName} Record Book`), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -15876,7 +15878,7 @@ function TournamentDetailScreen({
     onCancel: () => setConfirmDeleteTournament(false)
   }));
 }
-// Generic leaderboard/records table shared by every section of ClubRecordsScreen below — takes
+// Generic leaderboard/records table shared by every section of RecordsScreen below — takes
 // plain string/number cells rather than raw player objects so the same renderer works for player
 // leaderboards, team totals, and win-margin/milestone lists alike.
 function RecordTable({
@@ -15963,27 +15965,31 @@ function RecordTable({
     }
   }, cell))))));
 }
-// Club Record Book — pulls together completed matches from every tournament the club has ever
-// run (not just one) and hands them to computeClubRecords. Deliberately its own screen rather
-// than folded into TournamentsScreen: the per-tournament Stats tab is already scoped to one
-// tournament's leaderboard, and records here are explicitly a club-wide, all-time view.
-function ClubRecordsScreen({
-  clubId,
-  clubName,
+// Record Book — pulls together completed matches from every tournament a club OR federation has
+// ever run (not just one) and hands them to computeClubRecords (the aggregation logic is
+// identical either way; only which tournament list gets loaded differs). Deliberately its own
+// screen rather than folded into TournamentsScreen: the per-tournament Stats tab is already
+// scoped to one tournament's leaderboard, and records here are explicitly an all-time view across
+// everything the club/federation has run.
+function RecordsScreen({
+  sourceType,
+  // "club" | "federation"
+  sourceId,
+  sourceName,
   onBack
 }) {
   const [matches, setMatches] = useState(null); // null = loading
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const tournaments = await loadClubTournaments(clubId);
+      const tournaments = sourceType === "federation" ? await loadFederationTournaments(sourceId) : await loadClubTournaments(sourceId);
       const lists = await Promise.all(tournaments.map(t => loadTournamentMatches(t.id)));
       if (!cancelled) setMatches(lists.flat());
     })();
     return () => {
       cancelled = true;
     };
-  }, [clubId]);
+  }, [sourceType, sourceId]);
   const records = matches ? computeClubRecords(matches) : null;
   const dateLabel = ts => ts ? relativeDayLabel(ts) || "\u2014" : "\u2014";
   return /*#__PURE__*/React.createElement("div", {
@@ -16026,7 +16032,7 @@ function ClubRecordsScreen({
       marginBottom: 20,
       lineHeight: 1.5
     }
-  }, `All-time records for ${clubName}, across every completed match in every tournament the club has run.`), !records ? /*#__PURE__*/React.createElement("div", {
+  }, `All-time records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run.`), !records ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -23440,7 +23446,7 @@ function CricketScorer() {
   const [federationTournamentsById, setFederationTournamentsById] = useState({}); // federationId -> tournament[]
   const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
   const [viewingTournament, setViewingTournament] = useState(null);
-  const [viewingRecordsClub, setViewingRecordsClub] = useState(null); // { id, name } | null
+  const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
@@ -24990,21 +24996,23 @@ function CricketScorer() {
       setViewingTournamentFederationId(activeTournamentFederationId || t._federationId || null);
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
-    onOpenRecords: (clubId, clubName) => {
-      setViewingRecordsClub({
-        id: clubId,
-        name: clubName
+    onOpenRecords: (sourceType, sourceId, sourceName) => {
+      setViewingRecordsSource({
+        type: sourceType,
+        id: sourceId,
+        name: sourceName
       });
       setScreen("club-records");
     },
     onBack: () => setScreen("home"),
     currentUid: user && user.uid
-  })), screen === "club-records" && viewingRecordsClub && /*#__PURE__*/React.createElement(NavWrap, {
+  })), screen === "club-records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "club-records",
     direction: navDirection
-  }, /*#__PURE__*/React.createElement(ClubRecordsScreen, {
-    clubId: viewingRecordsClub.id,
-    clubName: viewingRecordsClub.name,
+  }, /*#__PURE__*/React.createElement(RecordsScreen, {
+    sourceType: viewingRecordsSource.type,
+    sourceId: viewingRecordsSource.id,
+    sourceName: viewingRecordsSource.name,
     onBack: () => setScreen("tournaments")
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",
