@@ -2178,7 +2178,11 @@ async function deleteClub(clubId) {
     const clubDoc = await db.collection("clubs").doc(clubId).get();
     const federationIds = clubDoc.exists ? clubDoc.data().federationIds || [] : [];
     const [teamSnap, tournamentSnap, playerSnap] = await Promise.all([db.collection("clubs").doc(clubId).collection("teams").get(), db.collection("clubs").doc(clubId).collection("tournaments").get(), db.collection("players").where("homeClubId", "==", clubId).get()]);
-    await Promise.all([...teamSnap.docs.map(d => d.ref.delete()), ...tournamentSnap.docs.map(d => d.ref.delete()), ...playerSnap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
+    // Each team can have its own availability-poll pointer subcollection, and each tournament its
+    // own share-code pointer index/view snapshot (see deleteClubTeam/deleteClubTournament) --
+    // neither is cascade-deleted by Firestore just because the club itself is going away, so both
+    // get cleaned up per-doc here before the actual team/tournament docs are deleted.
+    await Promise.all([...teamSnap.docs.map(d => deleteTeamPolls(clubId, d.id).then(() => d.ref.delete())), ...tournamentSnap.docs.map(d => deleteTournamentShareData(d.id, d.data().shareCode || null).then(() => d.ref.delete())), ...playerSnap.docs.map(d => d.ref.delete()), ...federationIds.map(async fedId => {
       const fedTeamSnap = await db.collection("federations").doc(fedId).collection("teams").where("clubId", "==", clubId).get();
       await Promise.all(fedTeamSnap.docs.map(d => d.ref.delete()));
       // Must happen before the club doc is deleted below — the rule authorizing this write
@@ -2227,6 +2231,10 @@ async function saveClubTeam(clubId, team) {
 // Owner-only.
 async function deleteClubTeam(clubId, teamId) {
   try {
+    // Availability polls sent for this team (see createAvailabilityPoll) live in two places
+    // outside the team doc itself, neither of which Firestore cascade-deletes on its own -- clean
+    // both up first, same reasoning as deleteClub already applies to teams/tournaments/players.
+    await deleteTeamPolls(clubId, teamId);
     await db.collection("clubs").doc(clubId).collection("teams").doc(teamId).delete();
     syncTeamAcrossFederations(clubId, {
       id: teamId
@@ -2360,6 +2368,18 @@ async function deleteAvailabilityPoll(clubId, teamId, code) {
     };
   }
 }
+// Deletes every availability poll ever sent for one team — both the pointer index doc here and
+// the real poll (with all its responses) at /availabilityPolls/{code}, since Firestore never
+// cascade-deletes a subcollection just because its parent doc is about to be deleted. Shared by
+// deleteClubTeam (one team) and deleteClub (every team it's about to delete).
+async function deleteTeamPolls(clubId, teamId) {
+  try {
+    const pollsSnap = await db.collection("clubs").doc(clubId).collection("teams").doc(teamId).collection("polls").get();
+    await Promise.all(pollsSnap.docs.map(d => Promise.all([db.collection("availabilityPolls").doc(d.id).delete(), d.ref.delete()])));
+  } catch (e) {
+    console.error("team polls cleanup failed", e);
+  }
+}
 
 // ---------- Federations ----------
 // A federation (e.g. "DCF") is a light umbrella tag that clubs opt into via an email-locked
@@ -2425,7 +2445,7 @@ async function createFederation(name) {
 async function deleteFederation(federationId) {
   try {
     const tournamentSnap = await db.collection("federations").doc(federationId).collection("tournaments").get();
-    await Promise.all(tournamentSnap.docs.map(d => d.ref.delete()));
+    await Promise.all(tournamentSnap.docs.map(d => deleteTournamentShareData(d.id, d.data().shareCode || null).then(() => d.ref.delete())));
     await db.collection("federations").doc(federationId).delete();
     return {
       ok: true
@@ -3243,8 +3263,33 @@ async function saveClubTournament(clubId, tournament) {
     };
   }
 }
+// Cleans up the two pieces of share-related data a tournament can accumulate: its
+// tournamentMatches/{id}/entries pointer index (populated as guest-scored matches register
+// themselves against this tournament -- see loadTournamentMatches) and its tournamentViews/{code}
+// live-share snapshot, if one was ever created (see shareTournament). Neither is cascade-deleted
+// by Firestore on its own -- they're separate top-level collections, not true subcollections of
+// the tournament doc, same reasoning as deleteClub's team/tournament/player cleanup. Deliberately
+// does NOT touch the underlying shared matches themselves: those are real match data a person
+// scored, independent of whether the tournament that once referenced them still exists.
+async function deleteTournamentShareData(tournamentId, shareCode) {
+  try {
+    const entriesSnap = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").get();
+    await Promise.all(entriesSnap.docs.map(d => d.ref.delete()));
+  } catch (e) {
+    console.error("tournament entries cleanup failed", e);
+  }
+  if (shareCode) {
+    try {
+      await db.collection("tournamentViews").doc(shareCode).delete();
+    } catch (e) {
+      console.error("tournament view cleanup failed", e);
+    }
+  }
+}
 async function deleteClubTournament(clubId, tournamentId) {
   try {
+    const doc = await db.collection("clubs").doc(clubId).collection("tournaments").doc(tournamentId).get();
+    await deleteTournamentShareData(tournamentId, doc.exists ? doc.data().shareCode : null);
     await db.collection("clubs").doc(clubId).collection("tournaments").doc(tournamentId).delete();
     return {
       ok: true
@@ -3288,6 +3333,8 @@ async function saveFederationTournament(federationId, tournament) {
 }
 async function deleteFederationTournament(federationId, tournamentId) {
   try {
+    const doc = await db.collection("federations").doc(federationId).collection("tournaments").doc(tournamentId).get();
+    await deleteTournamentShareData(tournamentId, doc.exists ? doc.data().shareCode : null);
     await db.collection("federations").doc(federationId).collection("tournaments").doc(tournamentId).delete();
     return {
       ok: true
