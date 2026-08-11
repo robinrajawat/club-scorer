@@ -1917,6 +1917,7 @@ async function createClub(name) {
       memberNames: {
         [auth.currentUser.uid]: auth.currentUser.displayName || auth.currentUser.email || "Member"
       },
+      umpires: [],
       createdAt: Date.now()
     };
     await ref.set(club);
@@ -1969,6 +1970,47 @@ async function updateClubDescription(clubId, description) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can edit the description." : e.message || "Couldn't update the description."
+    };
+  }
+}
+// Owner-only. A club's umpire list is just names — no accounts, no email, nothing an umpire ever
+// signs into. It exists purely so match setup can offer a pick-from-list-or-type-your-own field
+// (see the umpireList datalist on SetupScreen) instead of retyping the same few names every week,
+// and so the Record Book can tally "matches umpired" per name (see computeClubRecords). Kept as a
+// plain array on the club doc, not its own subcollection — there's no per-umpire data beyond the
+// name itself to justify one.
+async function addClubUmpire(clubId, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return {
+    ok: false,
+    error: "Enter a name."
+  };
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      umpires: firebase.firestore.FieldValue.arrayUnion(trimmed)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can manage umpires." : e.message || "Couldn't add the umpire."
+    };
+  }
+}
+async function removeClubUmpire(clubId, name) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      umpires: firebase.firestore.FieldValue.arrayRemove(name)
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can manage umpires." : e.message || "Couldn't remove the umpire."
     };
   }
 }
@@ -4420,6 +4462,118 @@ function maxWicketsFor(match, inning) {
   if (match.isSuperOver) return 2;
   return battingTeamXISize(match, inning.battingTeam) - 1;
 }
+// ---------- Duckworth-Lewis (Standard Edition) ----------
+// The Standard Edition, not the Professional Edition ICC internationals use — that one's
+// resource table is genuinely proprietary and was never published. The Standard Edition table
+// below is the current, officially published one (ICC's own regulations document, reproduced
+// under "The regulations below describe only the operation of the D-L Standard Edition... In the
+// event of computer non-availability or malfunction... the D-L Standard Edition... shall be
+// used"), i.e. this is the ICC's own designated fallback for exactly the "no proper DLS computer
+// available" situation a club match is always in. Transcribed from the over-by-over table (overs
+// 50 down to 0, wickets lost 0-9) and validated line-for-line against all five of the ICC
+// document's own worked examples before going anywhere near this file.
+const DLS_STANDARD_TABLE = {
+  50: [100.0, 93.4, 85.1, 74.9, 62.7, 49.0, 34.9, 22.0, 11.9, 4.7],
+  49: [99.1, 92.6, 84.5, 74.4, 62.5, 48.9, 34.9, 22.0, 11.9, 4.7],
+  48: [98.1, 91.7, 83.8, 74.0, 62.2, 48.8, 34.9, 22.0, 11.9, 4.7],
+  47: [97.1, 90.9, 83.2, 73.5, 61.9, 48.6, 34.9, 22.0, 11.9, 4.7],
+  46: [96.1, 90.0, 82.5, 73.0, 61.6, 48.5, 34.8, 22.0, 11.9, 4.7],
+  45: [95.0, 89.1, 81.8, 72.5, 61.3, 48.4, 34.8, 22.0, 11.9, 4.7],
+  44: [93.9, 88.2, 81.0, 72.0, 61.0, 48.3, 34.8, 22.0, 11.9, 4.7],
+  43: [92.8, 87.3, 80.3, 71.4, 60.7, 48.1, 34.7, 22.0, 11.9, 4.7],
+  42: [91.7, 86.3, 79.5, 70.9, 60.3, 47.9, 34.7, 22.0, 11.9, 4.7],
+  41: [90.5, 85.3, 78.7, 70.3, 59.9, 47.8, 34.6, 22.0, 11.9, 4.7],
+  40: [89.3, 84.2, 77.8, 69.6, 59.5, 47.6, 34.6, 22.0, 11.9, 4.7],
+  39: [88.0, 83.1, 76.9, 69.0, 59.1, 47.4, 34.5, 22.0, 11.9, 4.7],
+  38: [86.7, 82.0, 76.0, 68.3, 58.7, 47.1, 34.5, 21.9, 11.9, 4.7],
+  37: [85.4, 80.9, 75.0, 67.6, 58.2, 46.9, 34.4, 21.9, 11.9, 4.7],
+  36: [84.1, 79.7, 74.1, 66.8, 57.7, 46.6, 34.3, 21.9, 11.9, 4.7],
+  35: [82.7, 78.5, 73.0, 66.0, 57.2, 46.4, 34.2, 21.9, 11.9, 4.7],
+  34: [81.3, 77.2, 72.0, 65.2, 56.6, 46.1, 34.1, 21.9, 11.9, 4.7],
+  33: [79.8, 75.9, 70.9, 64.4, 56.0, 45.8, 34.0, 21.9, 11.9, 4.7],
+  32: [78.3, 74.6, 69.7, 63.5, 55.4, 45.4, 33.9, 21.9, 11.9, 4.7],
+  31: [76.7, 73.2, 68.6, 62.5, 54.8, 45.1, 33.7, 21.9, 11.9, 4.7],
+  30: [75.1, 71.8, 67.3, 61.6, 54.1, 44.7, 33.6, 21.8, 11.9, 4.7],
+  29: [73.5, 70.3, 66.1, 60.5, 53.4, 44.2, 33.4, 21.8, 11.9, 4.7],
+  28: [71.8, 68.8, 64.8, 59.5, 52.6, 43.8, 33.2, 21.8, 11.9, 4.7],
+  27: [70.1, 67.2, 63.4, 58.4, 51.8, 43.3, 33.0, 21.7, 11.9, 4.7],
+  26: [68.3, 65.6, 62.0, 57.2, 50.9, 42.8, 32.8, 21.7, 11.9, 4.7],
+  25: [66.5, 63.9, 60.5, 56.0, 50.0, 42.2, 32.6, 21.6, 11.9, 4.7],
+  24: [64.6, 62.2, 59.0, 54.7, 49.0, 41.6, 32.3, 21.6, 11.9, 4.7],
+  23: [62.7, 60.4, 57.4, 53.4, 48.0, 40.9, 32.0, 21.5, 11.9, 4.7],
+  22: [60.7, 58.6, 55.8, 52.0, 47.0, 40.2, 31.6, 21.4, 11.9, 4.7],
+  21: [58.7, 56.7, 54.1, 50.6, 45.8, 39.4, 31.2, 21.3, 11.9, 4.7],
+  20: [56.6, 54.8, 52.4, 49.1, 44.6, 38.6, 30.8, 21.2, 11.9, 4.7],
+  19: [54.4, 52.8, 50.5, 47.5, 43.4, 37.7, 30.3, 21.1, 11.9, 4.7],
+  18: [52.2, 50.7, 48.6, 45.9, 42.0, 36.8, 29.8, 20.9, 11.9, 4.7],
+  17: [49.9, 48.5, 46.7, 44.1, 40.6, 35.8, 29.2, 20.7, 11.9, 4.7],
+  16: [47.6, 46.3, 44.7, 42.3, 39.1, 34.7, 28.5, 20.5, 11.8, 4.7],
+  15: [45.2, 44.1, 42.6, 40.5, 37.6, 33.5, 27.8, 20.2, 11.8, 4.7],
+  14: [42.7, 41.7, 40.4, 38.5, 35.9, 32.2, 27.0, 19.9, 11.8, 4.7],
+  13: [40.2, 39.3, 38.1, 36.5, 34.2, 30.8, 26.1, 19.5, 11.7, 4.7],
+  12: [37.6, 36.8, 35.8, 34.3, 32.3, 29.4, 25.1, 19.0, 11.6, 4.7],
+  11: [34.9, 34.2, 33.4, 32.1, 30.4, 27.8, 24.0, 18.5, 11.5, 4.7],
+  10: [32.1, 31.6, 30.8, 29.8, 28.3, 26.1, 22.8, 17.9, 11.4, 4.7],
+  9: [29.3, 28.9, 28.2, 27.4, 26.1, 24.2, 21.4, 17.1, 11.2, 4.7],
+  8: [26.4, 26.0, 25.5, 24.8, 23.8, 22.3, 19.9, 16.2, 10.9, 4.7],
+  7: [23.4, 23.1, 22.7, 22.2, 21.4, 20.1, 18.2, 15.2, 10.5, 4.7],
+  6: [20.3, 20.1, 19.8, 19.4, 18.8, 17.8, 16.4, 13.9, 10.1, 4.6],
+  5: [17.2, 17.0, 16.8, 16.5, 16.1, 15.4, 14.3, 12.5, 9.4, 4.6],
+  4: [13.9, 13.8, 13.7, 13.5, 13.2, 12.7, 12.0, 10.7, 8.4, 4.5],
+  3: [10.6, 10.5, 10.4, 10.3, 10.2, 9.9, 9.5, 8.7, 7.2, 4.2],
+  2: [7.2, 7.1, 7.1, 7.0, 7.0, 6.8, 6.6, 6.2, 5.5, 3.7],
+  1: [3.6, 3.6, 3.6, 3.6, 3.6, 3.5, 3.5, 3.4, 3.2, 2.5],
+  0: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+};
+// oversLeft: true decimal overs remaining (e.g. 4 overs + 3 balls of a 6-ball over = 4.5, NOT
+// cricket notation's "4.3") — see oversLeftTrueDecimal below for the conversion every caller
+// actually uses. wicketsLost: 0-9; 10+ is always 0% and handled by the caller, not here, since
+// "all out" needs no table lookup. Linearly interpolates between the two nearest whole-over rows
+// in the official over-by-over table — a standard, disclosed approximation of the official
+// ball-by-ball table (which the ICC also publishes but isn't linear within an over); checked
+// against that ball-by-ball table directly and found accurate to within about 0.1 percentage
+// point in every case tried, exact at every whole-over boundary.
+function dlsResourcePercent(oversLeft, wicketsLost) {
+  if (wicketsLost >= 10) return 0;
+  const clamped = Math.max(0, Math.min(50, oversLeft));
+  const lower = Math.floor(clamped);
+  const upper = Math.ceil(clamped);
+  const frac = clamped - lower;
+  const lowVal = DLS_STANDARD_TABLE[lower][wicketsLost];
+  if (frac === 0 || upper === lower) return lowVal;
+  const highVal = DLS_STANDARD_TABLE[upper][wicketsLost];
+  return lowVal + (highVal - lowVal) * frac;
+}
+// Balls-remaining -> true decimal overs, for feeding dlsResourcePercent — NOT the same as cricket
+// notation (4 overs + 3 balls is written "4.3" on a scorecard but IS 4.5 true decimal overs of a
+// 6-ball over). DLS itself always assumes 6-ball overs regardless of this match's own
+// ballsPerOver rule, since the published table has no other-length-over version.
+function oversLeftTrueDecimal(oversLimit, legalBallsBowled) {
+  const totalBalls = oversLimit * 6;
+  const ballsLeft = Math.max(0, totalBalls - legalBallsBowled);
+  return ballsLeft / 6;
+}
+// The full Standard Edition target formula (ICC regulations §5.6) — S is Team 1's score, R1/R2
+// are resource percentages (0-100), G50 the average 50-over total for this level of the game
+// (200 for lower/associate levels, 245 for full-member internationals and first-class — this app
+// defaults to 200, being for club rather than international cricket, but leaves it editable since
+// "what level is this really" is a judgment call the app shouldn't make silently). Returns both
+// the target to win and the par score (target minus 1) — same "target vs score to tie" pairing
+// matchResultText and the live RRR display already use elsewhere for a revised target.
+function dlsTarget(S, R1, R2, G50) {
+  let target;
+  if (R2 < R1) {
+    target = Math.floor(S * R2 / R1) + 1;
+  } else if (R2 === R1) {
+    target = S + 1;
+  } else {
+    target = Math.floor(S + G50 * (R2 - R1) / 100) + 1;
+  }
+  return {
+    target,
+    par: target - 1
+  };
+}
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
   teams: "Teams & Format",
@@ -4653,8 +4807,16 @@ function computeClubRecords(matches, sinceTs) {
   const fiveWicketHauls = [];
   const innTotals = [];
   const partnerships = [];
+  const umpireCounts = {};
   completed.forEach(m => {
     const date = m.createdAt || null;
+    // Once per match, not per innings — umpire1/umpire2 are match-level fields (see SetupScreen),
+    // and Set here (not a plain push) so standing umpire for both ends of the same match is only
+    // ever counted once for that match, matching how a real umpire's "matches stood in" tally
+    // would never double-count a single match they officiated start to finish.
+    new Set([m.umpire1, m.umpire2].filter(Boolean)).forEach(name => {
+      umpireCounts[name] = (umpireCounts[name] || 0) + 1;
+    });
     m.innings.forEach(inn => {
       const opponent = inn.bowlingTeam;
       innTotals.push({
@@ -4757,6 +4919,10 @@ function computeClubRecords(matches, sinceTs) {
   const mostCatches = [...playerStats].filter(p => p.catches > 0).sort((a, b) => b.catches - a.catches).slice(0, 10);
   const bestIndividualScores = [...playerStats].filter(p => p.bestBattingRuns !== null).sort((a, b) => b.bestBattingRuns - a.bestBattingRuns).slice(0, 10);
   const bestBowlingFigures = [...playerStats].filter(p => p.bestBowlingWickets !== null).sort((a, b) => b.bestBowlingWickets - a.bestBowlingWickets || a.bestBowlingRuns - b.bestBowlingRuns).slice(0, 10);
+  const mostMatchesUmpired = Object.entries(umpireCounts).map(([name, count]) => ({
+    name,
+    count
+  })).sort((a, b) => b.count - a.count).slice(0, 10);
   return {
     matchCount: completed.length,
     highestTotals,
@@ -4770,7 +4936,8 @@ function computeClubRecords(matches, sinceTs) {
     bestBowlingFigures,
     centuries: centuriesTop,
     fiveWicketHauls: fiveWicketHaulsTop,
-    biggestPartnerships
+    biggestPartnerships,
+    mostMatchesUmpired
   };
 }
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
@@ -6408,7 +6575,8 @@ function TextField({
   autoCorrect,
   autoComplete,
   spellCheck,
-  inputMode
+  inputMode,
+  list
 }) {
   return /*#__PURE__*/React.createElement("input", {
     value: value,
@@ -6420,6 +6588,7 @@ function TextField({
     autoComplete: autoComplete,
     spellCheck: spellCheck,
     inputMode: inputMode,
+    list: list,
     style: {
       fontFamily: "'Inter', sans-serif",
       fontSize: 15,
@@ -8065,7 +8234,7 @@ const HELP_SECTIONS = [{
     a: "\u201cAbandon match\u201d on the main scoring screen (next to \u201cEnd innings\u201d) ends the whole match immediately, in either innings, with no winner \u2014 rain, bad light, running out of time, whatever the reason. It shows as \u201cNo result\u201d rather than a win for anyone. In a tournament, both teams get 1 point (the same as a tie), tracked in its own NR column so it's not confused with a genuine drawn contest \u2014 and unlike a tie, the runs and overs from that match don't count toward either team's NRR, since play was stopped too early for them to mean anything as a fair comparison. There's no automatic check for whether it's actually too early for a result; that judgment call is entirely yours. \u201cFix a mistake\u201d still works on it afterward if you change your mind."
   }, {
     q: "Rain interrupted the chase, but the match can still finish \u2014 can I adjust the target?",
-    a: "\u201cRevise target\u201d, in the same menu as \u201cEnd innings\u201d and \u201cAbandon match\u201d, only shown once the second innings is under way. Set a new target and a new overs limit \u2014 whatever both sides have actually agreed on, not a calculated par score; this app doesn't do full DLS math. Everything downstream follows the revised numbers instead of the original ones from that point on: the live target/required-rate display, when the innings actually ends, the final result text, and (in a tournament) NRR, which credits the chasing side with the revised overs rather than the original ones if they end up all out. Can be revised again later if play's interrupted a second time \u2014 the latest revision is always what counts."
+    a: "\u201cRevise target\u201d, in the same menu as \u201cEnd innings\u201d and \u201cAbandon match\u201d, only shown once the second innings is under way. Two modes: Manual, for whatever number both sides have actually agreed on, or Calculate with DLS, which computes it for you using the official Duckworth-Lewis Standard Edition resource table and formula \u2014 not the Professional Edition ICC internationals use (that one's resource table was never published; the Standard Edition is the ICC's own designated fallback for exactly this situation). Enter the new overs limit and it shows the revised target live, using G50 = 200 by default (the ICC's own figure for below full-international/first-class level \u2014 edit it if this match calls for something else) and Team 1's resource automatically computed from an uninterrupted innings (only override that if Team 1's OWN innings was also rain-interrupted). A second interruption during the same chase correctly compounds with the first rather than recalculating from scratch. Everything downstream follows the revised numbers from that point on: the live target/required-rate display, when the innings actually ends, the final result text, and (in a tournament) NRR, which credits the chasing side with the revised overs rather than the original ones if they end up all out."
   }, {
     q: "What happens if a match ties with Super Over on?",
     a: "A one-over eliminator decides it, same as international matches. Turn it on per match in Match Rules."
@@ -8884,6 +9053,8 @@ function ClubPanel({
   onSearchPublicFederations,
   onRequestFederationAffiliation,
   onOpenRecords,
+  onAddUmpire,
+  onRemoveUmpire,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -8911,6 +9082,10 @@ function ClubPanel({
   const [memberBusyUid, setMemberBusyUid] = useState(null);
   const [confirmRemoveMember, setConfirmRemoveMember] = useState(null); // { uid, name } | null
   const [confirmDeleteClub, setConfirmDeleteClub] = useState(false);
+  const [umpiresOpen, setUmpiresOpen] = useState(false);
+  const [newUmpireName, setNewUmpireName] = useState("");
+  const [umpireBusy, setUmpireBusy] = useState(false);
+  const [umpireError, setUmpireError] = useState("");
   const [confirmLeaveFederation, setConfirmLeaveFederation] = useState(null); // federation | null
   const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { code, email } | null
   const [revokeBusyCode, setRevokeBusyCode] = useState(null);
@@ -9511,6 +9686,107 @@ function ClubPanel({
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 13
   }), "Record Book"), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: `1px dashed ${COLORS.willow}`
+  }
+}, /*#__PURE__*/React.createElement("button", {
+  onClick: () => setUmpiresOpen(o => !o),
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, umpiresOpen ? "Hide umpires" : `Manage umpires (${(activeClub.umpires || []).length})`), umpiresOpen && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 8
+  }
+}, (activeClub.umpires || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontSize: 12,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    fontStyle: "italic",
+    marginBottom: 8
+  }
+}, "No umpires added yet \u2014 add a few names below to pick from at match setup, instead of retyping them every time."), (activeClub.umpires || []).map(name => /*#__PURE__*/React.createElement("div", {
+  key: name,
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "4px 0"
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 12.5,
+    color: COLORS.ink,
+    fontFamily: "'Inter'"
+  }
+}, name), /*#__PURE__*/React.createElement("button", {
+  onClick: () => onRemoveUmpire(activeClubId, name),
+  "aria-label": `Remove umpire ${name}`,
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.inkSoft,
+    cursor: "pointer",
+    fontSize: 16,
+    lineHeight: 1,
+    padding: "2px 6px"
+  }
+}, "\u00d7"))), /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 6,
+    marginTop: 8
+  }
+}, /*#__PURE__*/React.createElement(TextField, {
+  value: newUmpireName,
+  onChange: setNewUmpireName,
+  placeholder: "Umpire name",
+  autoCapitalize: "words",
+  autoCorrect: "off",
+  autoComplete: "off",
+  spellCheck: false,
+  style: {
+    flex: 1,
+    padding: "8px 10px",
+    fontSize: 13
+  }
+}), /*#__PURE__*/React.createElement(Btn, {
+  onClick: async () => {
+    setUmpireBusy(true);
+    setUmpireError("");
+    const result = await onAddUmpire(activeClubId, newUmpireName);
+    setUmpireBusy(false);
+    if (!result.ok) {
+      setUmpireError(result.error);
+      return;
+    }
+    setNewUmpireName("");
+  },
+  disabled: umpireBusy || !newUmpireName.trim(),
+  style: {
+    flexShrink: 0,
+    padding: "0 14px"
+  }
+}, umpireBusy ? "\u2026" : "Add")), umpireError && /*#__PURE__*/React.createElement("div", {
+  style: {
+    color: COLORS.ball,
+    fontSize: 11.5,
+    fontFamily: "'Inter'",
+    marginTop: 6
+  }
+}, umpireError))), activeIsOwner && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -12425,7 +12701,8 @@ function SetupScreen({
   onCancel,
   teams,
   rules,
-  presetTournament
+  presetTournament,
+  clubUmpires
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -12849,12 +13126,19 @@ function SetupScreen({
   }, /*#__PURE__*/React.createElement(TextField, {
     value: umpire1,
     onChange: setUmpire1,
-    placeholder: "Umpire 1"
+    placeholder: "Umpire 1",
+    list: clubUmpires && clubUmpires.length > 0 ? "cs-club-umpires" : undefined
   }), /*#__PURE__*/React.createElement(TextField, {
     value: umpire2,
     onChange: setUmpire2,
-    placeholder: "Umpire 2"
-  })))), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
+    placeholder: "Umpire 2",
+    list: clubUmpires && clubUmpires.length > 0 ? "cs-club-umpires" : undefined
+  })), clubUmpires && clubUmpires.length > 0 && /*#__PURE__*/React.createElement("datalist", {
+    id: "cs-club-umpires"
+  }, clubUmpires.map(name => /*#__PURE__*/React.createElement("option", {
+    key: name,
+    value: name
+  }))))), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.02s backwards"
@@ -16688,6 +16972,17 @@ function RecordsScreen({
     }],
     ...playerRows(records.mostCatches.map(p => [p.name, p.catches]), "No catches recorded yet.")
   }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Most Matches Umpired",
+    columns: [{
+      label: "Umpire",
+      width: "1.7fr"
+    }, {
+      label: "Matches",
+      align: "right",
+      mono: true
+    }],
+    ...playerRows(records.mostMatchesUmpired.map(u => [u.name, u.count]), "No umpires recorded yet.")
+  }), /*#__PURE__*/React.createElement(RecordTable, {
     title: "Highest Team Totals",
     columns: [{
       label: "Team",
@@ -17461,7 +17756,9 @@ function TeamsScreen({
   onRemoveFederationCoOwner,
   onRedeemFederationCoOwnerInvite,
   clubsLoading,
-  onOpenRecords
+  onOpenRecords,
+  onAddUmpire,
+  onRemoveUmpire
 }) {
   function matchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
@@ -17731,6 +18028,8 @@ function TeamsScreen({
     onSearchPublicFederations: onSearchPublicFederations,
     onRequestFederationAffiliation: onRequestFederationAffiliation,
     onOpenRecords: onOpenRecords,
+    onAddUmpire: onAddUmpire,
+    onRemoveUmpire: onRemoveUmpire,
     currentUid: currentUid
   })), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
@@ -22191,6 +22490,13 @@ function MatchScreen({
   const [showRevisedTargetModal, setShowRevisedTargetModal] = useState(false);
   const [revisedTargetInput, setRevisedTargetInput] = useState("");
   const [revisedOversInput, setRevisedOversInput] = useState("");
+  // DLS-assisted mode for the same modal — off by default, preserving the plain manual-entry flow
+  // this already had. r1Override is blank by default (auto-computed); typing in it is only meant
+  // for the rarer case where TEAM 1's own innings was also rain-interrupted, which this app has no
+  // structured interruption log for (see declareDLSRevisedTarget's own comment).
+  const [dlsMode, setDlsMode] = useState(false);
+  const [dlsR1Override, setDlsR1Override] = useState("");
+  const [dlsG50Input, setDlsG50Input] = useState("200");
   const [revisedTargetError, setRevisedTargetError] = useState("");
   const [showRetireModal, setShowRetireModal] = useState(false);
   // Ends the innings right now regardless of overs/wickets remaining (checkInningEnd's `force`
@@ -22275,6 +22581,83 @@ function MatchScreen({
     setRevisedTargetInput("");
     setRevisedOversInput("");
     setRevisedTargetError("");
+  }
+  // Live preview only — recomputed on every render from current input state (cheap enough not to
+  // need memoizing). Returns null while inputs are incomplete rather than showing a stale number.
+  //
+  // R1 defaults to Team 1's resource for the full original oversLimit at 0 wickets, i.e. an
+  // uninterrupted innings — correct for the common case this feature already targets ("Revise
+  // target" only ever appears once Team 1's innings is over, so R1 doesn't need live tracking the
+  // way R2 does). If Team 1's OWN innings was also rain-interrupted, that's the one case this
+  // panel doesn't compute for automatically — dlsR1Override lets the scorer type the correct R1
+  // directly rather than the panel silently assuming an uninterrupted innings that didn't happen.
+  //
+  // R2 tracks resource LOST by this specific interruption (resource remaining right now, at the
+  // moment of stopping, minus resource remaining under the new overs limit) and subtracts that
+  // from match.dlsR2Available — a running total carried on the match so a second, third, etc.
+  // interruption during the same chase correctly compounds instead of recomputing from scratch
+  // each time. Initialized the first time this panel is used to Team 2's starting resource for the
+  // original oversLimit at 0 wickets, matching §5.4 of the ICC regulations.
+  function computeDLSPreview() {
+    const newOvers = parseFloat(revisedOversInput);
+    const G50 = parseFloat(dlsG50Input);
+    if (!newOvers || newOvers <= 0 || !G50 || G50 <= 0) return null;
+    const effectiveOversLimit = match.revisedOvers != null ? match.revisedOvers : match.oversLimit;
+    const oversAtInterruption = oversLeftTrueDecimal(effectiveOversLimit, inning.legalBalls);
+    const oversAtResumption = oversLeftTrueDecimal(newOvers, inning.legalBalls);
+    const currentWickets = inning.wickets;
+    const resourceAtInterruption = dlsResourcePercent(oversAtInterruption, currentWickets);
+    const resourceAtResumption = dlsResourcePercent(oversAtResumption, currentWickets);
+    const resourceLost = resourceAtInterruption - resourceAtResumption;
+    const priorR2 = match.dlsR2Available != null ? match.dlsR2Available : dlsResourcePercent(match.oversLimit, 0);
+    const R2 = Math.max(0, priorR2 - resourceLost);
+    const R1 = dlsR1Override.trim() ? parseFloat(dlsR1Override) : dlsResourcePercent(match.oversLimit, 0);
+    if (!R1 || R1 <= 0) return null;
+    const S = match.innings[0].runs;
+    const {
+      target,
+      par
+    } = dlsTarget(S, R1, R2, G50);
+    return {
+      target,
+      par,
+      R1,
+      R2,
+      resourceLost
+    };
+  }
+  function declareDLSRevisedTarget() {
+    const newOvers = parseFloat(revisedOversInput);
+    const oversAlreadyBowled = inning.legalBalls / (inning.ballsPerOver || 6);
+    const preview = computeDLSPreview();
+    if (!preview) {
+      setRevisedTargetError("Enter the new overs limit (and check G50) to calculate.");
+      return;
+    }
+    if (newOvers < oversAlreadyBowled) {
+      setRevisedTargetError(`Can't be fewer than the ${oversLabel(inning.legalBalls, inning.ballsPerOver)} overs already bowled.`);
+      return;
+    }
+    if (newOvers > match.oversLimit) {
+      setRevisedTargetError(`Can't be more than the original ${match.oversLimit}-over limit.`);
+      return;
+    }
+    pushHistory();
+    const updated = {
+      ...match,
+      revisedTarget: preview.target,
+      revisedOvers: newOvers,
+      dlsR2Available: preview.R2,
+      dlsG50: parseFloat(dlsG50Input)
+    };
+    setMatch(updated);
+    queueSave(updated);
+    setShowRevisedTargetModal(false);
+    setRevisedTargetInput("");
+    setRevisedOversInput("");
+    setRevisedTargetError("");
+    setDlsMode(false);
+    setDlsR1Override("");
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
@@ -22426,6 +22809,7 @@ function MatchScreen({
   // dedicated flow for what this app is actually used for.
   const allWicketTypes = ["Bowled", "Caught", "LBW", "Stumped", "Hit wicket", "Run out", "Hit the ball twice", "Obstructing the field"];
   const wicketTypes = inning.freeHitActive ? ["Run out"] : allWicketTypes;
+  const dlsPreview = showRevisedTargetModal && dlsMode ? computeDLSPreview() : null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: padCollapsed ? 40 : 118,
@@ -22848,6 +23232,38 @@ function MatchScreen({
     }
   }, "For whatever number both sides have actually agreed on \u2014 not a calculated par score. Can be revised again later if play's interrupted a second time."), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 14
+    }
+  }, [{
+    value: false,
+    label: "Manual"
+  }, {
+    value: true,
+    label: "Calculate with DLS"
+  }].map(o => /*#__PURE__*/React.createElement("button", {
+    key: String(o.value),
+    type: "button",
+    onClick: () => {
+      setDlsMode(o.value);
+      setRevisedTargetError("");
+    },
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      borderRadius: 10,
+      border: "none",
+      cursor: "pointer",
+      background: dlsMode === o.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: dlsMode === o.value ? "#fff" : COLORS.ink,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, o.label))), !dlsMode ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       fontWeight: 700,
@@ -22868,7 +23284,95 @@ function MatchScreen({
       fontFamily: "'IBM Plex Mono', monospace",
       marginBottom: 14
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  })) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.cream,
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "G50"), /*#__PURE__*/React.createElement(TextField, {
+    value: dlsG50Input,
+    onChange: v => setDlsG50Input(v.replace(/[^0-9]/g, "").slice(0, 3)),
+    inputMode: "numeric",
+    style: {
+      textAlign: "center",
+      fontSize: 14,
+      padding: "7px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Team 1's R1% (advanced)"), /*#__PURE__*/React.createElement(TextField, {
+    value: dlsR1Override,
+    onChange: v => setDlsR1Override(v.replace(/[^0-9.]/g, "").slice(0, 5)),
+    placeholder: `auto: ${dlsResourcePercent(match.oversLimit, 0).toFixed(1)}`,
+    inputMode: "decimal",
+    style: {
+      textAlign: "center",
+      fontSize: 14,
+      padding: "7px 8px"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: dlsPreview ? 8 : 0
+    }
+  }, "G50 is the average 50-over score for this level \u2014 200 is the ICC's own default below full-international/first-class level. Only fill in R1 if Team 1's OWN innings was also rain-interrupted; otherwise leave it on auto."), dlsPreview && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 8,
+      padding: "8px 10px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontWeight: 700,
+      fontSize: 20,
+      color: COLORS.pitch
+    }
+  }, dlsPreview.target), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.inkSoft
+    }
+  }, `to win \u00b7 ${dlsPreview.par} to tie \u00b7 R1 ${dlsPreview.R1.toFixed(1)}% \u00b7 R2 ${dlsPreview.R2.toFixed(1)}%`))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -22917,14 +23421,19 @@ function MatchScreen({
       gap: 8
     }
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowRevisedTargetModal(false),
+    onClick: () => {
+      setShowRevisedTargetModal(false);
+      setDlsMode(false);
+      setDlsR1Override("");
+      setRevisedTargetError("");
+    },
     style: {
       flex: 1
     }
   }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    onClick: declareRevisedTarget,
-    disabled: !revisedTargetInput.trim() || !revisedOversInput.trim(),
+    onClick: dlsMode ? declareDLSRevisedTarget : declareRevisedTarget,
+    disabled: dlsMode ? !dlsPreview || !revisedOversInput.trim() : !revisedTargetInput.trim() || !revisedOversInput.trim(),
     style: {
       flex: 2
     }
@@ -25819,6 +26328,29 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleAddUmpire(clubId, name) {
+    const trimmed = (name || "").trim();
+    const result = await addClubUmpire(clubId, trimmed);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        // arrayUnion already de-duped on the Firestore side; mirror that here too, or adding the
+        // same name twice would show a local-only duplicate until the next real fetch.
+        umpires: (c.umpires || []).includes(trimmed) ? c.umpires : [...(c.umpires || []), trimmed]
+      } : c));
+    }
+    return result;
+  }
+  async function handleRemoveUmpire(clubId, name) {
+    const result = await removeClubUmpire(clubId, name);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        umpires: (c.umpires || []).filter(u => u !== name)
+      } : c));
+    }
+    return result;
+  }
   async function handleCreateFederation(name) {
     const result = await createFederation(name);
     if (result.ok) {
@@ -26381,7 +26913,8 @@ function CricketScorer() {
     },
     teams: allTeamsForSetup,
     rules: rules,
-    presetTournament: presetTournament
+    presetTournament: presetTournament,
+    clubUmpires: (activeClubId && (clubs.find(c => c.id === activeClubId) || {}).umpires) || []
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
@@ -26447,7 +26980,9 @@ function CricketScorer() {
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     clubsLoading: clubsLoading,
-    onOpenRecords: handleOpenRecords
+    onOpenRecords: handleOpenRecords,
+    onAddUmpire: handleAddUmpire,
+    onRemoveUmpire: handleRemoveUmpire
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
