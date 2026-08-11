@@ -9501,22 +9501,7 @@ function ClubPanel({
       color: COLORS.gold,
       flexShrink: 0
     }
-  }, clubRoleLabel(activeClub)), onRename && activeIsOwner && /*#__PURE__*/React.createElement("button", {
-    onClick: startRename,
-    "aria-label": "Rename club",
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      display: "flex",
-      padding: 2,
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Pencil, {
-    size: 12
-  }))), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, clubRoleLabel(activeClub))), activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
@@ -9671,7 +9656,26 @@ function ClubPanel({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Manage club"), onSetVisibility && /*#__PURE__*/React.createElement("div", {
+  }, "Manage club"), onRename && !renaming && /*#__PURE__*/React.createElement("button", {
+    onClick: startRename,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 12,
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 12
+  }), "Rename club"), onSetVisibility && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12
     }
@@ -10449,9 +10453,6 @@ function FederationsPanel({
     setVisBusyId(null);
     if (!result.ok) setError(result.error || "Couldn't update visibility.");
   }
-  // Splits the "open" side of toggleManage out on its own so openCoOwnerInvite (and anything
-  // else that wants to jump straight into the manage panel) doesn't have to await the
-  // federation-teams fetch first — see openCoOwnerInvite below for why that mattered.
   function openManage(f) {
     setManageOpenId(f.id);
     setRenaming(false);
@@ -10515,17 +10516,6 @@ function FederationsPanel({
     setEmailInviteText("");
     setEmailInviteError("");
     setEmailInviteResult(null);
-  }
-  // A direct shortcut to "invite a co-owner" from right next to the Manage toggle itself — the
-  // form for it already existed inside the Manage panel, but only after opening Manage AND
-  // scrolling past the description and member-clubs list first, which made it easy to miss
-  // entirely. This opens Manage (if it wasn't already) and jumps straight to that form —
-  // synchronously, via openManage rather than toggleManage/await, so the invite form appears
-  // immediately instead of waiting on the federation-teams fetch to resolve first (that fetch
-  // only feeds the unrelated "member clubs" list further down the same panel).
-  function openCoOwnerInvite(f) {
-    if (manageOpenId !== f.id) openManage(f);
-    startEmailInvite("coOwner");
   }
   async function submitEmailInvite(federationId) {
     if (!emailInviteText.trim() || emailInviteBusy) return;
@@ -10735,25 +10725,7 @@ function FederationsPanel({
       letterSpacing: 0.4,
       color: COLORS.gold
     }
-  }, roleLabel(f)), isOwner(f) && manageOpenId !== f.id && /*#__PURE__*/React.createElement("button", {
-    onClick: () => startRename(f),
-    "aria-label": "Rename federation",
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      display: "flex",
-      padding: 2
-    }
-  }, /*#__PURE__*/React.createElement(Pencil, {
-    size: 12
-  }))), isOwner(f) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: f.visibility === "public",
-    busy: visBusyId === f.id,
-    onChange: isPublic => handleSetVisibility(f.id, isPublic)
-  }), /*#__PURE__*/React.createElement("button", {
+  }, roleLabel(f))), isOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -10767,21 +10739,7 @@ function FederationsPanel({
       fontWeight: 700,
       fontSize: 11
     }
-  }, manageOpenId === f.id ? "Close" : "Manage"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => openCoOwnerInvite(f),
-    className: "cs-btn",
-    style: {
-      background: "rgba(184,137,43,0.14)",
-      border: `1px solid ${COLORS.gold}`,
-      borderRadius: 10,
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: "4px 9px",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 11
-    }
-  }, "+ Co-owner"))), f.description && /*#__PURE__*/React.createElement("div", {
+  }, manageOpenId === f.id ? "Close" : "Manage")), f.description && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -10879,7 +10837,73 @@ function FederationsPanel({
     style: {
       marginTop: 4
     }
-  }, descEditing ? /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Manage federation"), renaming !== f.id && /*#__PURE__*/React.createElement("button", {
+    onClick: () => startRename(f),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 12,
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 12
+  }), "Rename federation"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: f.visibility === "public",
+    busy: visBusyId === f.id,
+    onChange: isPublic => handleSetVisibility(f.id, isPublic)
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => startEmailInvite("coOwner"),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 14,
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.gold}`,
+      background: "rgba(184,137,43,0.08)",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      width: "fit-content"
+    }
+  }, "+ Invite a co-owner"), descEditing ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -11114,23 +11138,8 @@ function FederationsPanel({
       color: COLORS.pitch,
       letterSpacing: 0.5
     }
-  }, emailInviteResult.code))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+  }, emailInviteResult.code))) : /*#__PURE__*/React.createElement("button", {
     onClick: () => setFindClubOpen(true),
-    className: "cs-btn",
-    style: {
-      padding: "5px 9px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      color: COLORS.pitch,
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      marginRight: 6
-    }
-  }, "+ Find a club to invite"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => startEmailInvite("coOwner"),
     className: "cs-btn",
     style: {
       padding: "5px 9px",
@@ -11143,7 +11152,7 @@ function FederationsPanel({
       fontWeight: 600,
       fontSize: 11.5
     }
-  }, "+ Invite a co-owner by email")))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "+ Find a club to invite"))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,
