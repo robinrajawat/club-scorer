@@ -25004,12 +25004,12 @@ function CricketScorer() {
         id: sourceId,
         name: sourceName
       });
-      setScreen("club-records");
+      setScreen("records");
     },
     onBack: () => setScreen("home"),
     currentUid: user && user.uid
-  })), screen === "club-records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "club-records",
+  })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "records",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(RecordsScreen, {
     sourceType: viewingRecordsSource.type,
