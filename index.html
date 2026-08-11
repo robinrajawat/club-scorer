@@ -4386,13 +4386,16 @@ function computePlayerStats(matches) {
 // Record Book aggregation — aggregates every completed match across ALL of a club's or
 // federation's tournaments (not just one) into individual, team, and milestone records. Takes a
 // plain match list so the caller decides where those matches came from (loadClubTournaments vs
-// loadFederationTournaments); this function itself doesn't care which. Reuses computePlayerStats
-// for the career leaderboards so the numbers here always agree with the per-tournament stats
-// tables; only the milestone lists (centuries, 5-wicket hauls) and team-total/win-margin records
-// are computed fresh here since those need per-innings context (team names, opponent, date) that
-// the flattened player-stats shape doesn't carry.
-function computeClubRecords(matches) {
-  const completed = (matches || []).filter(m => m && m.status === "complete" && m.innings && m.innings.length);
+// loadFederationTournaments); this function itself doesn't care which. An optional sinceTs
+// (epoch ms) restricts to matches created on/after that time — RecordsScreen uses this to compute
+// a "This Year" view alongside the unfiltered all-time one, without needing two separate
+// aggregation implementations. Reuses computePlayerStats for the career leaderboards so the
+// numbers here always agree with the per-tournament stats tables; only the milestone lists
+// (centuries, 5-wicket hauls) and team-total/win-margin records are computed fresh here since
+// those need per-innings context (team names, opponent, date) that the flattened player-stats
+// shape doesn't carry.
+function computeClubRecords(matches, sinceTs) {
+  const completed = (matches || []).filter(m => m && m.status === "complete" && m.innings && m.innings.length && (!sinceTs || (m.createdAt || 0) >= sinceTs));
   const centuries = [];
   const fiveWicketHauls = [];
   const innTotals = [];
@@ -8542,6 +8545,7 @@ function ClubPanel({
   onSetVisibility,
   onSearchPublicFederations,
   onRequestFederationAffiliation,
+  onOpenRecords,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -9147,7 +9151,28 @@ function ClubPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Leave club")), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  }, "Leave club")), onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      marginTop: 10,
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      width: "fit-content"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 13
+  }), "Record Book"), activeIsOwner && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -9516,7 +9541,8 @@ function FederationsPanel({
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onDeleteFederation,
-  onRevokeInvite
+  onRevokeInvite,
+  onOpenRecords
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const [mode, setMode] = useState(null); // null | 'create' | 'find'
@@ -9929,7 +9955,28 @@ function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, f.description), /*#__PURE__*/React.createElement("div", {
+  }, f.description), onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("federation", f.id, f.name),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      marginBottom: 10,
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.gold}`,
+      background: "rgba(184,137,43,0.08)",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      width: "fit-content"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 13
+  }), "Record Book"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -15981,6 +16028,7 @@ function RecordsScreen({
   onBack
 }) {
   const [matches, setMatches] = useState(null); // null = loading
+  const [recordsTab, setRecordsTab] = useState("allTime"); // "allTime" | "currentYear"
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -15992,7 +16040,12 @@ function RecordsScreen({
       cancelled = true;
     };
   }, [sourceType, sourceId]);
-  const records = matches ? computeClubRecords(matches) : null;
+  // Local midnight Jan 1 of the current year — matches.createdAt is a plain epoch-ms timestamp
+  // (see relativeDayLabel's own local-date handling elsewhere), so "current year" here means the
+  // person's own calendar year, not UTC's.
+  const currentYear = new Date().getFullYear();
+  const yearStartTs = new Date(currentYear, 0, 1).getTime();
+  const records = matches ? computeClubRecords(matches, recordsTab === "currentYear" ? yearStartTs : undefined) : null;
   const dateLabel = ts => ts ? relativeDayLabel(ts) || "\u2014" : "\u2014";
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -16031,10 +16084,39 @@ function RecordsScreen({
       fontFamily: "'Inter'",
       fontSize: 13,
       color: COLORS.inkSoft,
-      marginBottom: 20,
+      marginBottom: 16,
       lineHeight: 1.5
     }
-  }, `All-time records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run.`), !records ? /*#__PURE__*/React.createElement("div", {
+  }, recordsTab === "currentYear" ? `${currentYear} records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run this year.` : `All-time records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run.`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 20
+    }
+  }, [{
+    value: "allTime",
+    label: "All Time"
+  }, {
+    value: "currentYear",
+    label: String(currentYear)
+  }].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.value,
+    onClick: () => setRecordsTab(t.value),
+    className: "cs-btn cs-shine",
+    style: {
+      flex: 1,
+      padding: "9px 0",
+      borderRadius: 10,
+      border: "none",
+      background: recordsTab === t.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: recordsTab === t.value ? "#fff" : COLORS.ink,
+      boxShadow: recordsTab === t.value ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, t.label))), !records ? /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -16054,7 +16136,7 @@ function RecordsScreen({
       fontSize: 13,
       color: COLORS.inkSoft
     }
-  }, "No completed matches yet \u2014 records fill in once tournament matches are finished.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, recordsTab === "currentYear" ? `No completed matches in ${currentYear} yet.` : "No completed matches yet \u2014 records fill in once tournament matches are finished.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -16578,7 +16660,8 @@ function TeamsScreen({
   onRevokeFederationInvite,
   onRemoveFederationCoOwner,
   onRedeemFederationCoOwnerInvite,
-  clubsLoading
+  clubsLoading,
+  onOpenRecords
 }) {
   function matchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
@@ -16831,6 +16914,7 @@ function TeamsScreen({
     onSetVisibility: onSetClubVisibility,
     onSearchPublicFederations: onSearchPublicFederations,
     onRequestFederationAffiliation: onRequestFederationAffiliation,
+    onOpenRecords: onOpenRecords,
     currentUid: currentUid
   })), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
@@ -16849,7 +16933,8 @@ function TeamsScreen({
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
-    onRevokeInvite: onRevokeFederationInvite
+    onRevokeInvite: onRevokeFederationInvite,
+    onOpenRecords: onOpenRecords
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 20,
@@ -23449,6 +23534,17 @@ function CricketScorer() {
   const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
   const [viewingTournament, setViewingTournament] = useState(null);
   const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
+  // Shared by the Record Book entry points on both TournamentsScreen (club/federation source
+  // chips) and TeamsScreen (ClubPanel/FederationsPanel per-club, per-federation buttons) — same
+  // destination screen either way, just a different jumping-off point.
+  function handleOpenRecords(sourceType, sourceId, sourceName) {
+    setViewingRecordsSource({
+      type: sourceType,
+      id: sourceId,
+      name: sourceName
+    });
+    setScreen("records");
+  }
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
@@ -24970,7 +25066,8 @@ function CricketScorer() {
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
-    clubsLoading: clubsLoading
+    clubsLoading: clubsLoading,
+    onOpenRecords: handleOpenRecords
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -24998,14 +25095,7 @@ function CricketScorer() {
       setViewingTournamentFederationId(activeTournamentFederationId || t._federationId || null);
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
-    onOpenRecords: (sourceType, sourceId, sourceName) => {
-      setViewingRecordsSource({
-        type: sourceType,
-        id: sourceId,
-        name: sourceName
-      });
-      setScreen("records");
-    },
+    onOpenRecords: handleOpenRecords,
     onBack: () => setScreen("home"),
     currentUid: user && user.uid
   })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
