@@ -7588,18 +7588,15 @@ function AccountScreen({
       lineHeight: 1.5
     }
   }, "Not signed in — matches and teams are only saved on this device."), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
     onClick: handleSignIn,
     disabled: busy,
     style: {
-      width: "100%"
+      width: "100%",
+      border: `1px solid ${COLORS.willow}`,
+      boxShadow: "none"
     }
   }, /*#__PURE__*/React.createElement(GoogleGLogo, {
-    size: 16,
-    style: {
-      background: "#fff",
-      borderRadius: 2
-    }
+    size: 16
   }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -12172,20 +12169,17 @@ function WelcomeScreen({
       lineHeight: 1.5
     }
   }, error), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
     onClick: handleSignIn,
     disabled: busy,
     style: {
       width: "100%",
       padding: "15px",
-      fontSize: 15
+      fontSize: 15,
+      border: `1px solid ${COLORS.willow}`,
+      boxShadow: "none"
     }
   }, /*#__PURE__*/React.createElement(GoogleGLogo, {
-    size: 17,
-    style: {
-      background: "#fff",
-      borderRadius: 2
-    }
+    size: 17
   }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
