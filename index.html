@@ -10133,7 +10133,7 @@ function ClubPanel({
       fontSize: 11.5,
       color: COLORS.pitch
     }
-  }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, f.name, f.createdBy === currentUid ? " · Owner" : (f.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : "", activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("button", {
     onClick: () => setConfirmLeaveFederation(f),
     "aria-label": `Leave ${f.name}`,
     style: {
