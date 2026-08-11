@@ -4410,6 +4410,7 @@ function computeClubRecords(matches, sinceTs) {
   const centuries = [];
   const fiveWicketHauls = [];
   const innTotals = [];
+  const partnerships = [];
   completed.forEach(m => {
     const date = m.createdAt || null;
     m.innings.forEach(inn => {
@@ -4451,12 +4452,31 @@ function computeClubRecords(matches, sinceTs) {
           });
         }
       });
+      // Only present on matches scored after partnership tracking was added (see newInning) --
+      // older matches simply have nothing to contribute here, same as any other field added
+      // after the fact.
+      (inn.partnerships || []).forEach(p => {
+        partnerships.push({
+          batter1: p.batter1,
+          batter2: p.batter2,
+          runs: p.runs || 0,
+          balls: p.balls || 0,
+          wicket: p.wicket,
+          unbeaten: !!p.unbeaten,
+          team: inn.battingTeam,
+          opponent,
+          matchId: m.id,
+          date
+        });
+      });
     });
   });
   centuries.sort((a, b) => b.runs - a.runs || (b.date || 0) - (a.date || 0));
   fiveWicketHauls.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs || (b.date || 0) - (a.date || 0));
+  partnerships.sort((a, b) => b.runs - a.runs || (b.date || 0) - (a.date || 0));
   const centuriesTop = centuries.slice(0, 10);
   const fiveWicketHaulsTop = fiveWicketHauls.slice(0, 10);
+  const biggestPartnerships = partnerships.slice(0, 10);
   const highestTotals = [...innTotals].sort((a, b) => b.runs - a.runs).slice(0, 10);
   const lowestAllOutTotals = innTotals.filter(t => t.allOut).sort((a, b) => a.runs - b.runs).slice(0, 10);
   // Win margins — same result logic as matchResultText, but recording the numbers instead of
@@ -4507,7 +4527,8 @@ function computeClubRecords(matches, sinceTs) {
     bestIndividualScores,
     bestBowlingFigures,
     centuries: centuriesTop,
-    fiveWicketHauls: fiveWicketHaulsTop
+    fiveWicketHauls: fiveWicketHaulsTop,
+    biggestPartnerships
   };
 }
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
@@ -4661,6 +4682,14 @@ function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
     // name of the bowler of each completed over, in order — used to suggest the next bowler
     fallOfWickets: [],
     // {score, wicket, over, batsman}
+    partnerships: [],
+    // {batter1, batter2, runs, balls, wicket, unbeaten} — one entry per COMPLETED stand, pushed
+    // when it ends (a wicket, a retirement) or when the innings itself ends with the pair still
+    // together (unbeaten: true, see checkInningEnd). "wicket" is which fall-of-wicket number the
+    // stand corresponds to (the 1st-wicket stand, 2nd-wicket stand, etc.), not a count of
+    // dismissals within it. Powers the Record Book's Biggest Partnerships list — see
+    // computeClubRecords — but only for matches scored after this field existed; older matches
+    // simply have an empty array here, same as any other feature added after the fact.
     penalties: [],
     // {score, over, runs} — penalty runs aren't tied to any delivery, so they never appear in the
     // ball-by-ball log; this is what lets them show up anywhere at all instead of just silently
@@ -5079,6 +5108,21 @@ function applyBall(inning, event) {
     cur.ballsSinceBoundary = (cur.ballsSinceBoundary || 0) + 1;
   }
   if (event.kind === "wicket") {
+    // Captured before the reset just below — dismissedName (the outgoing batter, set earlier in
+    // this branch) and cur.nonStrikerName (the survivor, untouched by anything above) are exactly
+    // the two names that formed the stand this wicket just ended. Guarded on both being present
+    // since a genuine wicket always has both, but this runs on every wicket-kind ball including
+    // edge cases (e.g. a very first-ball dismissal) where being defensive costs nothing.
+    if (dismissedName && cur.nonStrikerName) {
+      cur.partnerships = [...(cur.partnerships || []), {
+        batter1: dismissedName,
+        batter2: cur.nonStrikerName,
+        runs: partnershipRunsPeak,
+        balls: partnershipBallsPeak,
+        wicket: cur.wickets,
+        unbeaten: false
+      }];
+    }
     cur.partnershipRuns = 0;
     cur.partnershipBalls = 0;
   }
@@ -7833,7 +7877,7 @@ const HELP_SECTIONS = [{
     a: "Pick your team and a rival inside a tournament, and it works out the run target or rate you'd need in an upcoming fixture to get past them on net run rate \u2014 handy when NRR is close in the run-up to a knockout stage."
   }, {
     q: "What exactly goes into the Record Book, and how is All Time different from the current year?",
-    a: "Every completed match that belongs to a tournament or series that club has run \u2014 or, for a federation, one the federation itself has hosted directly (not each affiliated club's own separate tournaments). Same matches the Tournament Stats tab already draws from, just combined across every tournament instead of one at a time. A match started outside any tournament, or one that's still in progress, is never counted. The current-year tab is the exact same data, just filtered to matches created on or after local midnight on January 1st; All Time has no such cutoff. Every leaderboard and milestone list (centuries, five-wicket hauls, and the rest) is capped to the top 10."
+    a: "Every completed match that belongs to a tournament or series that club has run \u2014 or, for a federation, one the federation itself has hosted directly (not each affiliated club's own separate tournaments). Same matches the Tournament Stats tab already draws from, just combined across every tournament instead of one at a time. A match started outside any tournament, or one that's still in progress, is never counted. The current-year tab is the exact same data, just filtered to matches created on or after local midnight on January 1st; All Time has no such cutoff. A team filter and a player search on the same screen narrow any table down further. Every leaderboard and milestone list (centuries, five-wicket hauls, biggest partnerships, and the rest) is capped to the top 10. Biggest Partnerships only shows matches scored after that feature shipped \u2014 older matches never tracked individual stands, so there's genuinely nothing there to surface for them."
   }, {
     q: "The auto-generated knockout bracket doesn't match my tournament's playoff format \u2014 what do I do?",
     a: "The built-in bracket is a standard Quarterfinal/Semifinal/Final elimination \u2014 it won't build something like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final shape, where the top two teams get a second chance. Add those fixtures by hand instead (\u201cAdd a fixture\u201d on the tournament's schedule) and give each one a Stage label when you do \u2014 that keeps it out of the points table and NRR, exactly like the auto-generated bracket already is, and it shows up in its own \u201cPlayoffs\u201d section on the schedule."
@@ -16304,6 +16348,27 @@ function RecordsScreen({
     }],
     ...playerRows(records.centuries.map(c => [c.name, `${c.runs}${c.out ? "" : "*"}`, c.team, dateLabel(c.date)]), "No centuries scored yet.")
   }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Biggest Partnerships",
+    columns: [{
+      label: "Batters",
+      width: "1.4fr"
+    }, {
+      label: "Runs",
+      align: "right",
+      mono: true
+    }, {
+      label: "Balls",
+      align: "right",
+      mono: true
+    }, {
+      label: "Team",
+      width: "0.9fr"
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    ...playerRows(records.biggestPartnerships.map(p => [`${p.batter1} & ${p.batter2}`, `${p.runs}${p.unbeaten ? "*" : ""}`, p.balls, p.team, dateLabel(p.date)]), "No partnerships recorded yet \u2014 only matches scored since this feature shipped count.")
+  }), /*#__PURE__*/React.createElement(RecordTable, {
     title: "Most Wickets",
     columns: [{
       label: "Player",
@@ -20807,6 +20872,23 @@ function MatchScreen({
     const chaseWon = updated.currentInningIndex === 1 && inn.runs >= effectiveTarget;
     if (force || oversDone || allOut || chaseWon) {
       inn.complete = true;
+      // The pair still at the crease when the innings ends (declared, overs ran out, or the
+      // chase was won) never goes through applyBall's wicket-triggered partnership push, since no
+      // wicket actually fell to end their stand -- it's still open, just cut short by the innings
+      // itself finishing. Recorded here as unbeaten so it can still show up in the Record Book;
+      // skipped when allOut, since the innings' last wicket already pushed that exact stand
+      // (unbeaten: false) moments ago in applyBall, and skipped entirely if nobody's actually at
+      // the crease together yet (e.g. force-ending before a second batsman ever arrived).
+      if (!allOut && inn.strikerName && inn.nonStrikerName && ((inn.partnershipRuns || 0) > 0 || (inn.partnershipBalls || 0) > 0)) {
+        inn.partnerships = [...(inn.partnerships || []), {
+          batter1: inn.strikerName,
+          batter2: inn.nonStrikerName,
+          runs: inn.partnershipRuns || 0,
+          balls: inn.partnershipBalls || 0,
+          wicket: inn.wickets + 1,
+          unbeaten: true
+        }];
+      }
       if (updated.currentInningIndex === 0) {
         updated.currentInningIndex = 1;
         updated.innings[1] = newInning(inn.bowlingTeam, inn.battingTeam, {
@@ -21281,6 +21363,17 @@ function MatchScreen({
       // entirely, same as swapStrike), so the next pairing would silently inherit the ended
       // partnership's tally on top of its own -- contaminating the 50/100 partnership milestone
       // and the Breakthrough toast with runs/balls that belonged to the batsman who just left.
+      // Same reasoning extends to the persisted partnerships list (see newInning) -- this stand
+      // is over the moment either partner leaves, retired hurt or not, so it's recorded here too,
+      // never as unbeaten (that's reserved for a pair still together when the INNINGS ends).
+      partnerships: inning.nonStrikerName ? [...(inning.partnerships || []), {
+        batter1: name,
+        batter2: inning.nonStrikerName,
+        runs: inning.partnershipRuns || 0,
+        balls: inning.partnershipBalls || 0,
+        wicket: inning.wickets + 1,
+        unbeaten: false
+      }] : inning.partnerships || [],
       partnershipRuns: 0,
       partnershipBalls: 0
     };
