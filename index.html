@@ -9309,30 +9309,44 @@ function ClubPanel({
     setRenameText(activeClub.name);
     setRenaming(true);
   }
-  async function submitRename() {
-    if (!renameText.trim() || renameBusy) return;
-    setRenameBusy(true);
-    const result = await onRename(activeClub.id, renameText.trim());
-    setRenameBusy(false);
-    if (!result.ok) {
-      setError(result.error || "Couldn't rename the club.");
-      return;
-    }
-    setRenaming(false);
-  }
   function startDescEdit() {
     setDescText(activeClub.description || "");
     setDescEditing(true);
   }
-  async function submitDescription() {
-    if (descBusy) return;
-    setDescBusy(true);
-    const result = await onUpdateDescription(activeClub.id, descText.trim());
+  // A single "Edit club details" entry point covering both the name and description —
+  // previously these were two separate pencil buttons in Manage, which made a simple identity
+  // edit feel like two different tasks. Reuses the existing rename/description state and submit
+  // logic rather than duplicating it, just drives both together.
+  function startEditDetails() {
+    startRename();
+    startDescEdit();
+  }
+  function cancelEditDetails() {
+    setRenaming(false);
+    setDescEditing(false);
+  }
+  async function submitEditDetails() {
+    if (!renameText.trim() || renameBusy || descBusy) return;
+    const nameChanged = renameText.trim() !== activeClub.name;
+    const descChanged = descText.trim() !== (activeClub.description || "");
+    setRenameBusy(nameChanged);
+    setDescBusy(descChanged);
+    const [renameResult, descResult] = await Promise.all([nameChanged ? onRename(activeClub.id, renameText.trim()) : Promise.resolve({
+      ok: true
+    }), descChanged ? onUpdateDescription(activeClub.id, descText.trim()) : Promise.resolve({
+      ok: true
+    })]);
+    setRenameBusy(false);
     setDescBusy(false);
-    if (!result.ok) {
-      setError(result.error || "Couldn't update the description.");
+    if (!renameResult.ok) {
+      setError(renameResult.error || "Couldn't rename the club.");
       return;
     }
+    if (!descResult.ok) {
+      setError(descResult.error || "Couldn't update the description.");
+      return;
+    }
+    setRenaming(false);
     setDescEditing(false);
   }
   const chipStyle = active => ({
@@ -9476,42 +9490,7 @@ function ClubPanel({
       fontFamily: "'Inter'",
       fontSize: 12
     }
-  }, onRename && renaming ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: renameText,
-    onChange: setRenameText,
-    placeholder: "Club name",
-    autoCapitalize: "words",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitRename,
-    disabled: renameBusy || !renameText.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 38,
-      fontSize: 12.5
-    }
-  }, renameBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setRenaming(false),
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      padding: "0 4px"
-    }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -9543,7 +9522,20 @@ function ClubPanel({
       color: COLORS.gold,
       flexShrink: 0
     }
-  }, clubRoleLabel(activeClub))), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, clubRoleLabel(activeClub))), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 0
+    }
+  }, onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: activeClub.visibility === "public",
+    busy: visBusy,
+    onChange: handleSetVisibility,
+    publicHint: "Public \u2014 federations can find and invite this club",
+    privateHint: "Private \u2014 not discoverable"
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
@@ -9558,7 +9550,7 @@ function ClubPanel({
       fontSize: 11,
       flexShrink: 0
     }
-  }, manageOpen ? "Done" : "Manage")), activeClub.description && /*#__PURE__*/React.createElement("div", {
+  }, manageOpen ? "Done" : "Manage"))), activeClub.description && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.inkSoft,
       fontSize: 12,
@@ -9570,7 +9562,7 @@ function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", ".", activeClub.visibility && /*#__PURE__*/React.createElement("span", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", ".", !activeIsOwner && activeClub.visibility && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: 8,
       fontSize: 10.5,
@@ -9636,50 +9628,48 @@ function ClubPanel({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Manage club"), onRename && !renaming && /*#__PURE__*/React.createElement("button", {
-    onClick: startRename,
-    className: "cs-btn",
+  }, "Manage club"), onRename && (renaming || descEditing) ? /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      marginBottom: 12,
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: 0,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5
-    }
-  }, /*#__PURE__*/React.createElement(Pencil, {
-    size: 12
-  }), "Rename club"), descEditing ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 12
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement(TextField, {
+    value: renameText,
+    onChange: setRenameText,
+    placeholder: "Club name",
+    autoCapitalize: "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    style: {
+      marginBottom: 6
+    }
+  }), /*#__PURE__*/React.createElement(TextField, {
     value: descText,
     onChange: setDescText,
     placeholder: "Club description (optional)",
     autoCapitalize: "sentences",
     autoCorrect: "off",
     autoComplete: "off",
-    spellCheck: true
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitDescription,
-    disabled: descBusy,
+    spellCheck: true,
+    style: {
+      marginBottom: 8
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: submitEditDetails,
+    disabled: renameBusy || descBusy || !renameText.trim(),
     style: {
       flexShrink: 0,
       padding: "0 14px",
       minHeight: 38,
       fontSize: 12.5
     }
-  }, descBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDescEditing(false),
+  }, renameBusy || descBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: cancelEditDetails,
     style: {
       background: "none",
       border: "none",
@@ -9690,14 +9680,14 @@ function ClubPanel({
       cursor: "pointer",
       padding: "0 4px"
     }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
-    onClick: startDescEdit,
+  }, "Cancel"))) : onRename && /*#__PURE__*/React.createElement("button", {
+    onClick: startEditDetails,
     className: "cs-btn",
     style: {
       display: "flex",
       alignItems: "center",
       gap: 5,
-      marginBottom: 12,
+      marginBottom: 14,
       background: "none",
       border: "none",
       color: COLORS.pitch,
@@ -9709,27 +9699,7 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }), activeClub.description ? "Edit description" : "+ Add a description"), onSetVisibility && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: activeClub.visibility === "public",
-    busy: visBusy,
-    onChange: handleSetVisibility,
-    publicHint: "Public \u2014 federations can find and invite this club",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
+  }), "Edit club name & description"), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 4
     }
@@ -10523,26 +10493,42 @@ function FederationsPanel({
     setRenaming(f.id);
     setRenameText(f.name);
   }
-  async function submitRename(federationId) {
-    if (!renameText.trim() || renameBusy) return;
-    setRenameBusy(true);
-    const result = await onRenameFederation(federationId, renameText.trim());
+  function startDescEdit(f) {
+    setDescText(f.description || "");
+    setDescEditing(true);
+  }
+  // Same merge as ClubPanel: one "Edit federation details" entry point covering name and
+  // description together, instead of two separate pencil buttons.
+  function startEditDetails(f) {
+    startRename(f);
+    startDescEdit(f);
+  }
+  function cancelEditDetails() {
+    setRenaming(false);
+    setDescEditing(false);
+  }
+  async function submitEditDetails(f) {
+    if (!renameText.trim() || renameBusy || descBusy) return;
+    const nameChanged = renameText.trim() !== f.name;
+    const descChanged = descText.trim() !== (f.description || "");
+    setRenameBusy(nameChanged);
+    setDescBusy(descChanged);
+    const [renameResult, descResult] = await Promise.all([nameChanged ? onRenameFederation(f.id, renameText.trim()) : Promise.resolve({
+      ok: true
+    }), descChanged ? onUpdateFederationDescription(f.id, descText.trim()) : Promise.resolve({
+      ok: true
+    })]);
     setRenameBusy(false);
-    if (!result.ok) {
-      setError(result.error || "Couldn't rename the federation.");
+    setDescBusy(false);
+    if (!renameResult.ok) {
+      setError(renameResult.error || "Couldn't rename the federation.");
+      return;
+    }
+    if (!descResult.ok) {
+      setError(descResult.error || "Couldn't update the description.");
       return;
     }
     setRenaming(false);
-  }
-  async function submitDescription(federationId) {
-    if (descBusy) return;
-    setDescBusy(true);
-    const result = await onUpdateFederationDescription(federationId, descText.trim());
-    setDescBusy(false);
-    if (!result.ok) {
-      setError(result.error || "Couldn't update the description.");
-      return;
-    }
     setDescEditing(false);
   }
   function startEmailInvite(kind) {
@@ -10704,42 +10690,7 @@ function FederationsPanel({
       justifyContent: "space-between",
       marginBottom: 4
     }
-  }, renaming === f.id ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: renameText,
-    onChange: setRenameText,
-    placeholder: "Federation name",
-    autoCapitalize: "words",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => submitRename(f.id),
-    disabled: renameBusy || !renameText.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 38,
-      fontSize: 12.5
-    }
-  }, renameBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setRenaming(false),
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      padding: "0 4px"
-    }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -10759,7 +10710,18 @@ function FederationsPanel({
       letterSpacing: 0.4,
       color: COLORS.gold
     }
-  }, roleLabel(f))), isOwner(f) && /*#__PURE__*/React.createElement("button", {
+  }, roleLabel(f))), isOwner(f) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: f.visibility === "public",
+    busy: visBusyId === f.id,
+    onChange: isPublic => handleSetVisibility(f.id, isPublic)
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -10773,7 +10735,7 @@ function FederationsPanel({
       fontWeight: 700,
       fontSize: 11
     }
-  }, manageOpenId === f.id ? "Close" : "Manage")), f.description && /*#__PURE__*/React.createElement("div", {
+  }, manageOpenId === f.id ? "Close" : "Manage"))), f.description && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -10787,7 +10749,7 @@ function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated", f.visibility && /*#__PURE__*/React.createElement("span", {
+  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated", !isOwner(f) && f.visibility && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: 8,
       fontSize: 10.5,
@@ -10881,14 +10843,66 @@ function FederationsPanel({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Manage federation"), renaming !== f.id && /*#__PURE__*/React.createElement("button", {
-    onClick: () => startRename(f),
+  }, "Manage federation"), (renaming === f.id || descEditing) ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: renameText,
+    onChange: setRenameText,
+    placeholder: "Federation name",
+    autoCapitalize: "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    style: {
+      marginBottom: 6
+    }
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: descText,
+    onChange: setDescText,
+    placeholder: "Federation description (optional)",
+    autoCapitalize: "sentences",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: true,
+    style: {
+      marginBottom: 8
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => submitEditDetails(f),
+    disabled: renameBusy || descBusy || !renameText.trim(),
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 38,
+      fontSize: 12.5
+    }
+  }, renameBusy || descBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: cancelEditDetails,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "0 4px"
+    }
+  }, "Cancel"))) : /*#__PURE__*/React.createElement("button", {
+    onClick: () => startEditDetails(f),
     className: "cs-btn",
     style: {
       display: "flex",
       alignItems: "center",
       gap: 5,
-      marginBottom: 12,
+      marginBottom: 14,
       background: "none",
       border: "none",
       color: COLORS.pitch,
@@ -10900,25 +10914,7 @@ function FederationsPanel({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }), "Rename federation"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: f.visibility === "public",
-    busy: visBusyId === f.id,
-    onChange: isPublic => handleSetVisibility(f.id, isPublic)
-  })), /*#__PURE__*/React.createElement("button", {
+  }), "Edit federation name & description"), /*#__PURE__*/React.createElement("button", {
     onClick: () => startEmailInvite("coOwner"),
     className: "cs-btn",
     style: {
@@ -10937,46 +10933,7 @@ function FederationsPanel({
       cursor: "pointer",
       width: "fit-content"
     }
-  }, "+ Invite a co-owner"), descEditing ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: descText,
-    onChange: setDescText,
-    placeholder: "Federation description (optional)",
-    autoCapitalize: "sentences",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: true
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => submitDescription(f.id),
-    disabled: descBusy,
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 38,
-      fontSize: 12.5
-    }
-  }, descBusy ? "\u2026" : "Save")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDescEditing(true),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      padding: 0,
-      textDecoration: "underline",
-      marginBottom: 12,
-      display: "block"
-    }
-  }, f.description ? "Edit description" : "+ Add a description"), /*#__PURE__*/React.createElement("div", {
+  }, "+ Invite a co-owner"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
