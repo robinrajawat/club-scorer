@@ -7789,6 +7789,9 @@ const HELP_SECTIONS = [{
     q: "What does the qualification calculator do?",
     a: "Pick your team and a rival inside a tournament, and it works out the run target or rate you'd need in an upcoming fixture to get past them on net run rate \u2014 handy when NRR is close in the run-up to a knockout stage."
   }, {
+    q: "What exactly goes into the Record Book, and how is All Time different from the current year?",
+    a: "Every completed match that belongs to a tournament or series that club has run \u2014 or, for a federation, one the federation itself has hosted directly (not each affiliated club's own separate tournaments). Same matches the Tournament Stats tab already draws from, just combined across every tournament instead of one at a time. A match started outside any tournament, or one that's still in progress, is never counted. The current-year tab is the exact same data, just filtered to matches created on or after local midnight on January 1st; All Time has no such cutoff. Every leaderboard and milestone list (centuries, five-wicket hauls, and the rest) is capped to the top 10."
+  }, {
     q: "The auto-generated knockout bracket doesn't match my tournament's playoff format \u2014 what do I do?",
     a: "The built-in bracket is a standard Quarterfinal/Semifinal/Final elimination \u2014 it won't build something like the IPL's Qualifier 1 / Eliminator / Qualifier 2 / Final shape, where the top two teams get a second chance. Add those fixtures by hand instead (\u201cAdd a fixture\u201d on the tournament's schedule) and give each one a Stage label when you do \u2014 that keeps it out of the points table and NRR, exactly like the auto-generated bracket already is, and it shows up in its own \u201cPlayoffs\u201d section on the schedule."
   }, {
@@ -16087,7 +16090,7 @@ function RecordsScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, recordsTab === "currentYear" ? `${currentYear} records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run this year.` : `All-time records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "any of its member clubs has" : "the club has"} run.`), /*#__PURE__*/React.createElement("div", {
+  }, recordsTab === "currentYear" ? `${currentYear} records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "the federation itself has" : "the club has"} run this year.` : `All-time records for ${sourceName}, across every completed match in every tournament ${sourceType === "federation" ? "the federation itself has" : "the club has"} run.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
