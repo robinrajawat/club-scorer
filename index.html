@@ -4441,6 +4441,8 @@ function computeClubRecords(matches) {
   });
   centuries.sort((a, b) => b.runs - a.runs || (b.date || 0) - (a.date || 0));
   fiveWicketHauls.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs || (b.date || 0) - (a.date || 0));
+  const centuriesTop = centuries.slice(0, 10);
+  const fiveWicketHaulsTop = fiveWicketHauls.slice(0, 10);
   const highestTotals = [...innTotals].sort((a, b) => b.runs - a.runs).slice(0, 10);
   const lowestAllOutTotals = innTotals.filter(t => t.allOut).sort((a, b) => a.runs - b.runs).slice(0, 10);
   // Win margins — same result logic as matchResultText, but recording the numbers instead of
@@ -4483,15 +4485,15 @@ function computeClubRecords(matches) {
     matchCount: completed.length,
     highestTotals,
     lowestAllOutTotals,
-    winsByRuns,
-    winsByWickets,
+    winsByRuns: winsByRuns.slice(0, 10),
+    winsByWickets: winsByWickets.slice(0, 10),
     mostRuns,
     mostWickets,
     mostCatches,
     bestIndividualScores,
     bestBowlingFigures,
-    centuries,
-    fiveWicketHauls
+    centuries: centuriesTop,
+    fiveWicketHauls: fiveWicketHaulsTop
   };
 }
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
@@ -16231,7 +16233,7 @@ function RecordsScreen({
       label: "Date",
       align: "right"
     }],
-    rows: records.winsByRuns.slice(0, 10).map(w => [w.winner, w.loser, `${w.margin} run${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
+    rows: records.winsByRuns.map(w => [w.winner, w.loser, `${w.margin} run${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
     emptyText: "No results decided by runs yet."
   }), /*#__PURE__*/React.createElement(RecordTable, {
     title: "Biggest Wins by Wickets",
@@ -16249,7 +16251,7 @@ function RecordsScreen({
       label: "Date",
       align: "right"
     }],
-    rows: records.winsByWickets.slice(0, 10).map(w => [w.winner, w.loser, `${w.margin} wkt${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
+    rows: records.winsByWickets.map(w => [w.winner, w.loser, `${w.margin} wkt${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
     emptyText: "No results decided by wickets yet."
   })));
 }
