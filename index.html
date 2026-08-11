@@ -175,6 +175,12 @@ function Cap({
     d: "M4 14A8 8 0 0 1 20 14C21.5 14.3 23 15.3 23 16.8C22.5 18 17 17.8 13 16.3Q8 17 4 15.3Z"
   }));
 }
+// BookOpen: for the club Record Book entry point.
+const BookOpen = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M12 7v14"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+}));
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",
@@ -4003,9 +4009,12 @@ function saveRulesLocal(rules) {
 function loadThemePref() {
   try {
     const v = localStorage.getItem(`${LS_PREFIX}theme`);
-    return v === "light" || v === "dark" ? v : "system";
+    // Default (no saved preference yet) is "light", not "system" -- we deliberately don't
+    // follow the OS/browser preference on first load. "system" remains a selectable option
+    // in the theme picker for anyone who wants live OS tracking; it's just no longer the default.
+    return v === "light" || v === "dark" || v === "system" ? v : "light";
   } catch (e) {
-    return "system";
+    return "light";
   }
 }
 function saveThemePref(pref) {
@@ -4373,6 +4382,115 @@ function computePlayerStats(matches) {
     bestBattingLabel: p.bestBattingRuns === null ? null : `${p.bestBattingRuns}${p.bestBattingOut ? "" : "*"}`,
     bestBowlingLabel: p.bestBowlingWickets === null ? null : `${p.bestBowlingWickets}/${p.bestBowlingRuns}`
   }));
+}
+// Club Record Book — aggregates every completed match across ALL of a club's tournaments (not
+// just one) into individual, team, and milestone records. Reuses computePlayerStats for the
+// career leaderboards so the numbers here always agree with the per-tournament stats tables;
+// only the milestone lists (centuries, 5-wicket hauls) and team-total/win-margin records are
+// computed fresh here since those need per-innings context (team names, opponent, date) that the
+// flattened player-stats shape doesn't carry.
+function computeClubRecords(matches) {
+  const completed = (matches || []).filter(m => m && m.status === "complete" && m.innings && m.innings.length);
+  const centuries = [];
+  const fiveWicketHauls = [];
+  const innTotals = [];
+  completed.forEach(m => {
+    const date = m.createdAt || null;
+    m.innings.forEach(inn => {
+      const opponent = inn.bowlingTeam;
+      innTotals.push({
+        team: inn.battingTeam,
+        opponent,
+        runs: inn.runs || 0,
+        wickets: inn.wickets || 0,
+        allOut: (inn.wickets || 0) >= maxWicketsFor(m, inn),
+        matchId: m.id,
+        date
+      });
+      Object.entries(inn.batsmen || {}).forEach(([name, b]) => {
+        const runs = b.runs || 0;
+        if (runs >= 100) {
+          centuries.push({
+            name,
+            runs,
+            out: !!b.out,
+            team: inn.battingTeam,
+            opponent,
+            matchId: m.id,
+            date
+          });
+        }
+      });
+      Object.entries(inn.bowlers || {}).forEach(([name, bw]) => {
+        const wickets = bw.wickets || 0;
+        if (wickets >= 5) {
+          fiveWicketHauls.push({
+            name,
+            wickets,
+            runs: bw.runs || 0,
+            team: inn.bowlingTeam,
+            opponent: inn.battingTeam,
+            matchId: m.id,
+            date
+          });
+        }
+      });
+    });
+  });
+  centuries.sort((a, b) => b.runs - a.runs || (b.date || 0) - (a.date || 0));
+  fiveWicketHauls.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs || (b.date || 0) - (a.date || 0));
+  const highestTotals = [...innTotals].sort((a, b) => b.runs - a.runs).slice(0, 10);
+  const lowestAllOutTotals = innTotals.filter(t => t.allOut).sort((a, b) => a.runs - b.runs).slice(0, 10);
+  // Win margins — same result logic as matchResultText, but recording the numbers instead of
+  // formatting a sentence, and skipping ties/no-results since neither has a "margin".
+  const winsByRuns = [];
+  const winsByWickets = [];
+  completed.forEach(m => {
+    const [i1, i2] = m.innings;
+    if (!i2 || m.noResult) return;
+    const target = m.revisedTarget != null ? m.revisedTarget : i1.runs + 1;
+    const date = m.createdAt || null;
+    if (i2.runs >= target) {
+      const wicketsInHand = maxWicketsFor(m, i2) - i2.wickets;
+      winsByWickets.push({
+        winner: i2.battingTeam,
+        loser: i1.battingTeam,
+        margin: wicketsInHand,
+        matchId: m.id,
+        date
+      });
+    } else if (i2.runs < target - 1) {
+      winsByRuns.push({
+        winner: i1.battingTeam,
+        loser: i2.battingTeam,
+        margin: target - 1 - i2.runs,
+        matchId: m.id,
+        date
+      });
+    }
+  });
+  winsByRuns.sort((a, b) => b.margin - a.margin);
+  winsByWickets.sort((a, b) => b.margin - a.margin);
+  const playerStats = computePlayerStats(completed);
+  const mostRuns = [...playerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 10);
+  const mostWickets = [...playerStats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 10);
+  const mostCatches = [...playerStats].filter(p => p.catches > 0).sort((a, b) => b.catches - a.catches).slice(0, 10);
+  const bestIndividualScores = [...playerStats].filter(p => p.bestBattingRuns !== null).sort((a, b) => b.bestBattingRuns - a.bestBattingRuns).slice(0, 10);
+  const bestBowlingFigures = [...playerStats].filter(p => p.bestBowlingWickets !== null).sort((a, b) => b.bestBowlingWickets - a.bestBowlingWickets || a.bestBowlingRuns - b.bestBowlingRuns).slice(0, 10);
+  return {
+    matchCount: completed.length,
+    highestTotals,
+    lowestAllOutTotals,
+    winsByRuns,
+    winsByWickets,
+    mostRuns,
+    mostWickets,
+    mostCatches,
+    bestIndividualScores,
+    bestBowlingFigures,
+    centuries,
+    fiveWicketHauls
+  };
 }
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
 // tournaments — matches are stored per-scorer's account and only mirrored to a queryable
@@ -13118,6 +13236,7 @@ function TournamentsScreen({
   onCreateTournament,
   onCreateSeries,
   onOpenTournament,
+  onOpenRecords,
   onBack,
   currentUid
 }) {
@@ -13361,7 +13480,29 @@ function TournamentsScreen({
       color: statusFilter === key ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, label)))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, label)))), activeClubId && !creating && onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords(activeClubId, activeClubName),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      width: "100%",
+      padding: "11px",
+      fontSize: 13,
+      fontWeight: 600,
+      fontFamily: "'Inter'",
+      borderRadius: 12,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
+      cursor: "pointer",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 16
+  }), `${activeClubName} Record Book`), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -15734,6 +15875,377 @@ function TournamentDetailScreen({
     onConfirm: confirmDelete,
     onCancel: () => setConfirmDeleteTournament(false)
   }));
+}
+// Generic leaderboard/records table shared by every section of ClubRecordsScreen below — takes
+// plain string/number cells rather than raw player objects so the same renderer works for player
+// leaderboards, team totals, and win-margin/milestone lists alike.
+function RecordTable({
+  title,
+  columns,
+  rows,
+  emptyText
+}) {
+  const headerCellStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: COLORS.inkSoft,
+    textTransform: "uppercase",
+    letterSpacing: 0.5
+  };
+  const gridCols = columns.map(c => c.width || "1fr").join(" ");
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, title), rows.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, emptyText) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: gridCols,
+      gap: 4,
+      padding: "0 2px 6px",
+      borderBottom: `1.5px solid ${COLORS.willow}`
+    }
+  }, columns.map((c, i) => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      ...headerCellStyle,
+      textAlign: c.align || "left"
+    }
+  }, c.label))), rows.map((r, ri) => /*#__PURE__*/React.createElement("div", {
+    key: ri,
+    style: {
+      display: "grid",
+      gridTemplateColumns: gridCols,
+      gap: 4,
+      padding: "7px 2px",
+      borderBottom: ri < rows.length - 1 ? `1px dashed ${COLORS.creamDark}` : "none",
+      fontFamily: "'Inter'"
+    }
+  }, r.map((cell, ci) => /*#__PURE__*/React.createElement("span", {
+    key: ci,
+    style: {
+      fontSize: ci === 0 ? 13 : 12.5,
+      fontWeight: ci === 0 ? 600 : 400,
+      color: COLORS.ink,
+      textAlign: columns[ci].align || "left",
+      fontFamily: columns[ci].mono ? "'IBM Plex Mono', monospace" : "'Inter'",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, cell))))));
+}
+// Club Record Book — pulls together completed matches from every tournament the club has ever
+// run (not just one) and hands them to computeClubRecords. Deliberately its own screen rather
+// than folded into TournamentsScreen: the per-tournament Stats tab is already scoped to one
+// tournament's leaderboard, and records here are explicitly a club-wide, all-time view.
+function ClubRecordsScreen({
+  clubId,
+  clubName,
+  onBack
+}) {
+  const [matches, setMatches] = useState(null); // null = loading
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const tournaments = await loadClubTournaments(clubId);
+      const lists = await Promise.all(tournaments.map(t => loadTournamentMatches(t.id)));
+      if (!cancelled) setMatches(lists.flat());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId]);
+  const records = matches ? computeClubRecords(matches) : null;
+  const dateLabel = ts => ts ? relativeDayLabel(ts) || "\u2014" : "\u2014";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Tournaments"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Record Book"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      marginBottom: 20,
+      lineHeight: 1.5
+    }
+  }, `All-time records for ${clubName}, across every completed match in every tournament the club has run.`), !records ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 20,
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft
+    }
+  }, "Loading records\u2026") : records.matchCount === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 20,
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft
+    }
+  }, "No completed matches yet \u2014 records fill in once tournament matches are finished.") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 18
+    }
+  }, `Based on ${records.matchCount} completed match${records.matchCount === 1 ? "" : "es"}.`), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Most Runs",
+    columns: [{
+      label: "Player",
+      width: "1.7fr"
+    }, {
+      label: "Runs",
+      align: "right",
+      mono: true
+    }, {
+      label: "Inn",
+      align: "right",
+      mono: true
+    }, {
+      label: "Avg",
+      align: "right",
+      mono: true
+    }, {
+      label: "SR",
+      align: "right",
+      mono: true
+    }],
+    rows: records.mostRuns.map(p => [p.name, p.runs, p.battingInnings, p.battingAvg === null ? "\u2014" : p.battingAvg.toFixed(1), p.strikeRate === null ? "\u2014" : p.strikeRate.toFixed(0)]),
+    emptyText: "No batting data yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Highest Individual Scores",
+    columns: [{
+      label: "Player",
+      width: "1.7fr"
+    }, {
+      label: "Best",
+      align: "right",
+      mono: true
+    }],
+    rows: records.bestIndividualScores.map(p => [p.name, p.bestBattingLabel]),
+    emptyText: "No batting data yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Centuries",
+    columns: [{
+      label: "Player",
+      width: "1.5fr"
+    }, {
+      label: "Score",
+      align: "right",
+      mono: true
+    }, {
+      label: "Team",
+      width: "1.2fr"
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.centuries.map(c => [c.name, `${c.runs}${c.out ? "" : "*"}`, c.team, dateLabel(c.date)]),
+    emptyText: "No centuries scored yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Most Wickets",
+    columns: [{
+      label: "Player",
+      width: "1.7fr"
+    }, {
+      label: "Wkts",
+      align: "right",
+      mono: true
+    }, {
+      label: "Runs",
+      align: "right",
+      mono: true
+    }, {
+      label: "Avg",
+      align: "right",
+      mono: true
+    }, {
+      label: "Econ",
+      align: "right",
+      mono: true
+    }],
+    rows: records.mostWickets.map(p => [p.name, p.wickets, p.runsConceded, p.bowlingAvg === null ? "\u2014" : p.bowlingAvg.toFixed(1), p.economy === null ? "\u2014" : p.economy.toFixed(2)]),
+    emptyText: "No bowling data yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Best Bowling Figures",
+    columns: [{
+      label: "Player",
+      width: "1.7fr"
+    }, {
+      label: "Best",
+      align: "right",
+      mono: true
+    }],
+    rows: records.bestBowlingFigures.map(p => [p.name, p.bestBowlingLabel]),
+    emptyText: "No bowling data yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Five-Wicket Hauls",
+    columns: [{
+      label: "Player",
+      width: "1.5fr"
+    }, {
+      label: "Figures",
+      align: "right",
+      mono: true
+    }, {
+      label: "Team",
+      width: "1.2fr"
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.fiveWicketHauls.map(f => [f.name, `${f.wickets}/${f.runs}`, f.team, dateLabel(f.date)]),
+    emptyText: "No five-wicket hauls yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Most Catches",
+    columns: [{
+      label: "Player",
+      width: "1.7fr"
+    }, {
+      label: "Catches",
+      align: "right",
+      mono: true
+    }],
+    rows: records.mostCatches.map(p => [p.name, p.catches]),
+    emptyText: "No catches recorded yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Highest Team Totals",
+    columns: [{
+      label: "Team",
+      width: "1.2fr"
+    }, {
+      label: "Opponent",
+      width: "1.2fr"
+    }, {
+      label: "Score",
+      align: "right",
+      mono: true
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.highestTotals.map(t => [t.team, t.opponent, `${t.runs}/${t.wickets}`, dateLabel(t.date)]),
+    emptyText: "No completed innings yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Lowest Totals (all out)",
+    columns: [{
+      label: "Team",
+      width: "1.2fr"
+    }, {
+      label: "Opponent",
+      width: "1.2fr"
+    }, {
+      label: "Score",
+      align: "right",
+      mono: true
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.lowestAllOutTotals.map(t => [t.team, t.opponent, `${t.runs}/${t.wickets}`, dateLabel(t.date)]),
+    emptyText: "No team has been bowled out yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Biggest Wins by Runs",
+    columns: [{
+      label: "Winner",
+      width: "1.2fr"
+    }, {
+      label: "Beat",
+      width: "1.2fr"
+    }, {
+      label: "Margin",
+      align: "right",
+      mono: true
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.winsByRuns.slice(0, 10).map(w => [w.winner, w.loser, `${w.margin} run${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
+    emptyText: "No results decided by runs yet."
+  }), /*#__PURE__*/React.createElement(RecordTable, {
+    title: "Biggest Wins by Wickets",
+    columns: [{
+      label: "Winner",
+      width: "1.2fr"
+    }, {
+      label: "Beat",
+      width: "1.2fr"
+    }, {
+      label: "Margin",
+      align: "right",
+      mono: true
+    }, {
+      label: "Date",
+      align: "right"
+    }],
+    rows: records.winsByWickets.slice(0, 10).map(w => [w.winner, w.loser, `${w.margin} wkt${w.margin === 1 ? "" : "s"}`, dateLabel(w.date)]),
+    emptyText: "No results decided by wickets yet."
+  })));
 }
 // A head-to-head series between exactly two teams — deliberately a much lighter screen than
 // TournamentDetailScreen (no points table, no NRR, no knockout bracket, no qualification
@@ -22928,6 +23440,7 @@ function CricketScorer() {
   const [federationTournamentsById, setFederationTournamentsById] = useState({}); // federationId -> tournament[]
   const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
   const [viewingTournament, setViewingTournament] = useState(null);
+  const [viewingRecordsClub, setViewingRecordsClub] = useState(null); // { id, name } | null
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
@@ -24477,8 +24990,22 @@ function CricketScorer() {
       setViewingTournamentFederationId(activeTournamentFederationId || t._federationId || null);
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
+    onOpenRecords: (clubId, clubName) => {
+      setViewingRecordsClub({
+        id: clubId,
+        name: clubName
+      });
+      setScreen("club-records");
+    },
     onBack: () => setScreen("home"),
     currentUid: user && user.uid
+  })), screen === "club-records" && viewingRecordsClub && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "club-records",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(ClubRecordsScreen, {
+    clubId: viewingRecordsClub.id,
+    clubName: viewingRecordsClub.name,
+    onBack: () => setScreen("tournaments")
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",
     direction: navDirection
