@@ -15124,8 +15124,8 @@ function TournamentDetailScreen({
   const tournamentMatches = matches ? matches.filter(m => m.tournamentId === tournament.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : [];
   const completedTournamentMatches = tournamentMatches.filter(m => m.status === "complete");
   const tournamentPlayerStats = computePlayerStats(completedTournamentMatches);
-  const tournamentBatters = [...tournamentPlayerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 25);
-  const tournamentBowlers = [...tournamentPlayerStats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 25);
+  const tournamentBatters = [...tournamentPlayerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 10);
+  const tournamentBowlers = [...tournamentPlayerStats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 10);
   // Orange/Purple Cap: the tournament's leading run-scorer/wicket-taker — literally just the top
   // row of the same batting/bowling leaderboards already computed above for the Tournament Stats
   // tables, surfaced as their own callout since "who's leading" is the thing people actually look
