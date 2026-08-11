@@ -21751,7 +21751,15 @@ function MatchScreen({
       // skipped when allOut, since the innings' last wicket already pushed that exact stand
       // (unbeaten: false) moments ago in applyBall, and skipped entirely if nobody's actually at
       // the crease together yet (e.g. force-ending before a second batsman ever arrived).
-      if (!allOut && inn.strikerName && inn.nonStrikerName && ((inn.partnershipRuns || 0) > 0 || (inn.partnershipBalls || 0) > 0)) {
+      //
+      // Also guarded against re-recording the SAME stand a second time: "Fix a mistake" can
+      // reopen an already-complete innings (inn.complete back to false, see reopenLastInnings),
+      // and if it's then force-ended again with no new ball actually scored in between -- nothing
+      // about strikerName/nonStrikerName/partnershipRuns/partnershipBalls would have changed, so
+      // without this check the exact same unbeaten partnership would land in the array twice.
+      const lastPartnership = inn.partnerships && inn.partnerships[inn.partnerships.length - 1];
+      const alreadyRecorded = lastPartnership && lastPartnership.unbeaten && lastPartnership.batter1 === inn.strikerName && lastPartnership.batter2 === inn.nonStrikerName && lastPartnership.wicket === inn.wickets + 1;
+      if (!allOut && !alreadyRecorded && inn.strikerName && inn.nonStrikerName && ((inn.partnershipRuns || 0) > 0 || (inn.partnershipBalls || 0) > 0)) {
         inn.partnerships = [...(inn.partnerships || []), {
           batter1: inn.strikerName,
           batter2: inn.nonStrikerName,
