@@ -9132,8 +9132,18 @@ function ClubPanel({
   const [confirmLeaveFederation, setConfirmLeaveFederation] = useState(null); // federation | null
   const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { code, email } | null
   const [revokeBusyCode, setRevokeBusyCode] = useState(null);
+  const [manageOpen, setManageOpen] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
+  // Same " · Owner" / " · Co-owner" / "" convention as FederationsPanel's roleLabel(f) just below
+  // in this same screen — matching it exactly rather than inventing a parallel one, including
+  // showing nothing at all for a plain member (the common case), not a "Member" badge.
+  function clubRoleLabel(club) {
+    if (!club || !currentUid) return "";
+    if (club.ownerUid === currentUid) return " \u00b7 Owner";
+    if ((club.coOwnerUids || []).includes(currentUid)) return " \u00b7 Co-owner";
+    return "";
+  }
   const activeClubFederations = activeClub ? (activeClub.federationIds || []).map(id => federationsById[id]).filter(Boolean) : [];
   // Self-heal a stale/missing memberNames entry the moment a club with one is opened — e.g. a
   // member who joined back when their Google account had no display name set, so it got stored
@@ -9144,6 +9154,7 @@ function ClubPanel({
     const stored = activeClub.memberNames && activeClub.memberNames[currentUid];
     if (!stored || stored === "Member") onRefreshMyMemberName(activeClub.id);
     setFindFedOpen(false);
+    setManageOpen(false);
   }, [activeClubId]);
   async function handleSetVisibility(isPublic) {
     if (!activeClub || !onSetVisibility) return;
@@ -9416,8 +9427,8 @@ function ClubPanel({
   }, "Cancel")), activeClub && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
-      padding: "10px 12px",
-      borderRadius: 12,
+      padding: 14,
+      borderRadius: 14,
       background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
       border: `1px solid ${COLORS.willow}`,
       fontFamily: "'Inter'",
@@ -9458,21 +9469,39 @@ function ClubPanel({
       cursor: "pointer",
       padding: "0 4px"
     }
-  }, "Cancel")) : onRename && activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  }, "Cancel")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 6,
-      marginBottom: 2
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13,
-      color: COLORS.ink
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
-  }, activeClub.name), /*#__PURE__*/React.createElement("button", {
+  }, activeClub.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.gold,
+      flexShrink: 0
+    }
+  }, clubRoleLabel(activeClub)), onRename && activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: startRename,
     "aria-label": "Rename club",
     className: "cs-btn",
@@ -9482,19 +9511,27 @@ function ClubPanel({
       color: COLORS.inkSoft,
       cursor: "pointer",
       display: "flex",
-      padding: 2
+      padding: 2,
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 12
-  }))), !renaming && !activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  }))), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setManageOpen(o => !o),
+    className: "cs-btn",
     style: {
+      background: manageOpen ? COLORS.pitchFixed : "rgba(255,255,255,0.7)",
+      border: "none",
+      borderRadius: 10,
+      color: manageOpen ? "#fff" : COLORS.pitch,
+      cursor: "pointer",
+      padding: "4px 9px",
       fontFamily: "'Inter'",
       fontWeight: 700,
-      fontSize: 13,
-      color: COLORS.ink,
-      marginBottom: 2
+      fontSize: 11,
+      flexShrink: 0
     }
-  }, activeClub.name), activeIsOwner && (descEditing ? /*#__PURE__*/React.createElement("div", {
+  }, manageOpen ? "Done" : "Manage")), activeIsOwner && (descEditing ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -9568,7 +9605,7 @@ function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement("div", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), activeIsOwner && manageOpen && onSetVisibility && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10
     }
@@ -9584,7 +9621,7 @@ function ClubPanel({
       gap: 8,
       flexWrap: "wrap"
     }
-  }, activeIsOwner && (inviteCode ? /*#__PURE__*/React.createElement("div", {
+  }, activeIsOwner && manageOpen && (inviteCode ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -9728,7 +9765,7 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 13
-  }), "Record Book"), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  }), "Record Book"), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -9829,7 +9866,7 @@ function ClubPanel({
     fontFamily: "'Inter'",
     marginTop: 6
   }
-}, umpireError))), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+}, umpireError))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -9987,7 +10024,7 @@ function ClubPanel({
     padding: 0,
     textDecoration: "underline"
   }
-}, "+ Invite a co-owner by email"))))), activeIsOwner && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
+}, "+ Invite a co-owner by email"))))), activeIsOwner && manageOpen && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -10108,7 +10145,7 @@ function ClubPanel({
       lineHeight: 1,
       fontSize: 14
     }
-  }, "\u00d7"))))), activeIsOwner && onSearchPublicFederations && /*#__PURE__*/React.createElement("div", {
+  }, "\u00d7"))))), activeIsOwner && manageOpen && onSearchPublicFederations && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
