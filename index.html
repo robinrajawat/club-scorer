@@ -9605,11 +9605,87 @@ function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), activeIsOwner && manageOpen && onSetVisibility && /*#__PURE__*/React.createElement("div", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", ".", activeClub.visibility && /*#__PURE__*/React.createElement("span", {
     style: {
+      marginLeft: 8,
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: activeClub.visibility === "public" ? COLORS.gold : COLORS.inkSoft
+    }
+  }, activeClub.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
       marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement(VisibilitySwitch, {
+  }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 13
+  }), "Record Book"), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onLeave(activeClub.id),
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, "Leave club")), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 12,
+      marginBottom: 10,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.gold} 6%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, "Manage club"), onSetVisibility && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
     isPublic: activeClub.visibility === "public",
     busy: visBusy,
     onChange: handleSetVisibility,
@@ -9617,11 +9693,25 @@ function ClubPanel({
     privateHint: "Private \u2014 not discoverable"
   })), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Invite people"), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap"
     }
-  }, activeIsOwner && manageOpen && (inviteCode ? /*#__PURE__*/React.createElement("div", {
+  }, (inviteCode ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -9716,56 +9806,7 @@ function ClubPanel({
       fontSize: 12,
       cursor: "pointer"
     }
-  }, "Invite someone")), activeClub.ownerUid === currentUid ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => setConfirmDeleteClub(true),
-    style: {
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: "none",
-      background: "none",
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      textDecoration: "underline"
-    }
-  }, "Delete club") : /*#__PURE__*/React.createElement("button", {
-    onClick: () => onLeave(activeClub.id),
-    style: {
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: "none",
-      background: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      textDecoration: "underline"
-    }
-  }, "Leave club")), onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      marginTop: 10,
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      width: "fit-content"
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 13
-  }), "Record Book"), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
+  }, "Invite someone"))))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -10185,7 +10226,46 @@ function ClubPanel({
       padding: 0,
       textDecoration: "underline"
     }
-  }, "+ Find a federation to join")), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "+ Find a federation to join")), activeIsOwner && manageOpen && activeClub.ownerUid === currentUid && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.ball} 6%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.ball} 30%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.ball,
+      marginBottom: 6
+    }
+  }, "Danger zone"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      marginBottom: 8,
+      lineHeight: 1.5
+    }
+  }, "Deletes this club for everyone, including any teams, tournaments, and player profiles it administers. This can't be undone."), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDeleteClub(true),
+    style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.ball}`,
+      background: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, "Delete club")), confirmRemoveMember && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: confirmRemoveMember.role === "coOwner" ? "Remove co-owner?" : "Remove member?",
     message: confirmRemoveMember.role === "coOwner" ? `Remove ${confirmRemoveMember.name} as co-owner of "${activeClub.name}"? They'll stay on as a plain member.` : `Remove ${confirmRemoveMember.name} from "${activeClub.name}"?`,
     confirmLabel: "Remove",
@@ -11056,34 +11136,46 @@ function FederationsPanel({
     }
   }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 10,
-      paddingTop: 10,
-      borderTop: `1px dashed ${COLORS.willow}`
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.ball} 6%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.ball} 30%, transparent)`
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.ball,
+      marginBottom: 6
+    }
+  }, "Danger zone"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8,
+      lineHeight: 1.5
+    }
+  }, "No clubs are affiliated, so this is safe to remove for good. This can't be undone."), /*#__PURE__*/React.createElement("button", {
     onClick: () => requestDeleteFederation(f.id),
     disabled: deleteFedBusy,
     className: "cs-btn",
     style: {
+      padding: "6px 10px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.ball}`,
       background: "none",
-      border: "none",
       color: COLORS.ball,
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer",
-      padding: 0,
-      textDecoration: "underline"
+      fontSize: 12,
+      cursor: "pointer"
     }
-  }, deleteFedBusy ? "\u2026" : "Delete this federation"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      marginTop: 4,
-      lineHeight: 1.5
-    }
-  }, "No clubs are affiliated, so this is safe to remove for good."), deleteFedError && /*#__PURE__*/React.createElement("div", {
+  }, deleteFedBusy ? "\u2026" : "Delete this federation"), deleteFedError && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
