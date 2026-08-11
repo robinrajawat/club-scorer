@@ -7462,7 +7462,9 @@ function AccountScreen({
       width: "100%",
       marginBottom: 12
     }
-  }, linkBusy ? "\u2026" : "Link Google account"), (linkError || linkSuccess) && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(GoogleGLogo, {
+    size: 15
+  }), linkBusy ? "\u2026" : "Link Google account"), (linkError || linkSuccess) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
