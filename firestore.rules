@@ -141,6 +141,44 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Availability polls — same open-by-code, bearer-capability trust model as /sharedMatches:
+    // a teammate responding needs no account, only the link (see createAvailabilityPoll/
+    // submitPollResponse in index.html). What's different from /sharedMatches is WHO can create
+    // one in the first place: that's restricted to the team's club owner/co-owner, checked here
+    // by following clubId on the new doc back to the real club and reusing isClubOwner (defined
+    // below, for the /clubs rules) — Firestore evaluates rules top-to-bottom in one file, but a
+    // function can be called before its own match block appears textually, so this is fine.
+    //
+    // `list` stays denied for the same reason as /sharedMatches — a poll code is meant to be a
+    // capability you already have, not one more document in an enumerable collection. Finding
+    // "every poll for team X" is instead served by the separate, membership-gated pointer index
+    // at /clubs/{clubId}/teams/{teamId}/polls/{code} below, same shape as /tournamentMatches
+    // above serves the equivalent need for shared matches.
+    //
+    // Responding is scoped to touching ONLY the `responses` map — every other field on the poll
+    // (question, fixtureDate, clubId, teamId, createdAt, createdByUid) must stay exactly as it
+    // was. This does not stop one respondent from overwriting another's already-submitted answer
+    // if they know the poll link, the same coarse "the link is the credential" trust boundary
+    // /sharedMatches already accepts for something with far higher stakes (full scoring access).
+    // ---------------------------------------------------------------------
+    match /availabilityPolls/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data)
+        && request.resource.data.responses == {};
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responses'])
+        && request.resource.data.clubId == resource.data.clubId
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.question == resource.data.question
+        && request.resource.data.fixtureDate == resource.data.fixtureDate
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdByUid == resource.data.createdByUid;
+      allow delete: if request.auth != null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data);
+    }
+
+    // ---------------------------------------------------------------------
     // Clubs — shared team rosters gated by Google-account membership, not a bearer code.
     // Owner and co-owner are functionally identical throughout — every helper below treats them
     // as one tier by checking both ownerUid and coOwnerUids.
@@ -238,6 +276,19 @@ service cloud.firestore {
     // Owner/co-owner only — plain members can read a club's teams (to pick them for scoring) but
     // never write to them.
     match /clubs/{clubId}/teams/{teamId} {
+      allow read: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
+      allow write: if request.auth != null
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
+    }
+
+    // Pointer index for "every availability poll for this team" (loadTeamPolls in index.html) —
+    // same shape and same reasoning as /tournamentMatches/{tournamentId}/entries above: the real
+    // poll (question, fixtureDate, responses) lives in the open-by-code /availabilityPolls/{code}
+    // collection, which can't be queried/listed; this lightweight pointer ({code, question,
+    // fixtureDate, createdAt}, no responses) is what a captain's "past polls" list actually reads,
+    // gated by ordinary club membership like the rest of a club's data rather than by a code.
+    match /clubs/{clubId}/teams/{teamId}/polls/{code} {
       allow read: if request.auth != null
         && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
       allow write: if request.auth != null
