@@ -9812,21 +9812,45 @@ function ClubPanel({
     paddingTop: 10,
     borderTop: `1px dashed ${COLORS.willow}`
   }
-}, /*#__PURE__*/React.createElement("button", {
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between"
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, `Umpires \u00b7 ${(activeClub.umpires || []).length}`), /*#__PURE__*/React.createElement("button", {
   onClick: () => setUmpiresOpen(o => !o),
   className: "cs-btn",
+  "aria-label": umpiresOpen ? "Hide umpires" : "Show umpires",
   style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
     background: "none",
     border: "none",
     color: COLORS.pitch,
     fontFamily: "'Inter'",
     fontWeight: 600,
-    fontSize: 12,
+    fontSize: 11.5,
     cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline"
+    padding: 0
   }
-}, umpiresOpen ? "Hide umpires" : `Manage umpires (${(activeClub.umpires || []).length})`), umpiresOpen && /*#__PURE__*/React.createElement("div", {
+}, umpiresOpen ? "Hide" : "Manage", /*#__PURE__*/React.createElement(ChevronDown, {
+  size: 13,
+  style: {
+    transform: umpiresOpen ? "rotate(180deg)" : "none",
+    transition: "transform 0.15s"
+  }
+}))), umpiresOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 8
   }
@@ -9913,21 +9937,45 @@ function ClubPanel({
     paddingTop: 10,
     borderTop: `1px dashed ${COLORS.willow}`
   }
-}, /*#__PURE__*/React.createElement("button", {
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between"
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, `Members \u00b7 ${activeClub.memberUids.length}`), /*#__PURE__*/React.createElement("button", {
   onClick: () => setMembersOpen(o => !o),
   className: "cs-btn",
+  "aria-label": membersOpen ? "Hide members" : "Show members",
   style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
     background: "none",
     border: "none",
     color: COLORS.pitch,
     fontFamily: "'Inter'",
     fontWeight: 600,
-    fontSize: 12,
+    fontSize: 11.5,
     cursor: "pointer",
-    padding: 0,
-    textDecoration: "underline"
+    padding: 0
   }
-}, membersOpen ? "Hide members" : `Manage members (${activeClub.memberUids.length})`), membersOpen && /*#__PURE__*/React.createElement("div", {
+}, membersOpen ? "Hide" : "Manage", /*#__PURE__*/React.createElement(ChevronDown, {
+  size: 13,
+  style: {
+    transform: membersOpen ? "rotate(180deg)" : "none",
+    transition: "transform 0.15s"
+  }
+}))), membersOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 8
   }
