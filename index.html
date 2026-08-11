@@ -10103,26 +10103,28 @@ function ClubPanel({
   },
   className: "cs-btn",
   style: {
-    background: "none",
-    border: "none",
+    padding: "5px 9px",
+    borderRadius: 8,
+    border: `1px solid ${COLORS.willow}`,
+    background: COLORS.surface,
     color: COLORS.pitch,
     cursor: "pointer",
     fontFamily: "'Inter'",
     fontWeight: 600,
-    fontSize: 11.5,
-    padding: 0,
-    textDecoration: "underline"
+    fontSize: 11.5
   }
 }, "+ Invite a co-owner by email"))))), activeIsOwner && manageOpen && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
-      paddingTop: 10,
-      borderTop: `1px dashed ${COLORS.willow}`
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
+      fontSize: 10.5,
       fontWeight: 700,
       letterSpacing: 0.4,
       textTransform: "uppercase",
@@ -10264,15 +10266,15 @@ function ClubPanel({
     onClick: () => setFindFedOpen(true),
     className: "cs-btn",
     style: {
-      background: "none",
-      border: "none",
+      padding: "5px 9px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
       color: COLORS.pitch,
       cursor: "pointer",
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      padding: 0,
-      textDecoration: "underline"
+      fontSize: 11.5
     }
   }, "+ Find a federation to join")), activeIsOwner && manageOpen && activeClub.ownerUid === currentUid && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10786,7 +10788,23 @@ function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, f.description), onOpenRecords && /*#__PURE__*/React.createElement("button", {
+  }, f.description), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginBottom: 10
+    }
+  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated", f.visibility && /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: f.visibility === "public" ? COLORS.gold : COLORS.inkSoft
+    }
+  }, f.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("federation", f.id, f.name),
     className: "cs-btn",
     style: {
@@ -11100,40 +11118,43 @@ function FederationsPanel({
     onClick: () => setFindClubOpen(true),
     className: "cs-btn",
     style: {
-      background: "none",
-      border: "none",
+      padding: "5px 9px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
       color: COLORS.pitch,
       cursor: "pointer",
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 11.5,
-      padding: 0,
-      textDecoration: "underline"
+      marginRight: 6
     }
   }, "+ Find a club to invite"), /*#__PURE__*/React.createElement("button", {
     onClick: () => startEmailInvite("coOwner"),
     className: "cs-btn",
     style: {
-      background: "none",
-      border: "none",
+      padding: "5px 9px",
+      borderRadius: 8,
+      border: `1px solid ${COLORS.willow}`,
+      background: COLORS.surface,
       color: COLORS.pitch,
       cursor: "pointer",
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      padding: 0,
-      textDecoration: "underline"
+      fontSize: 11.5
     }
   }, "+ Invite a co-owner by email")))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
-      paddingTop: 10,
-      borderTop: `1px dashed ${COLORS.willow}`
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
+      fontSize: 10.5,
       fontWeight: 700,
       letterSpacing: 0.4,
       textTransform: "uppercase",
