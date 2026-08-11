@@ -7587,17 +7587,33 @@ function AccountScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Not signed in — matches and teams are only saved on this device."), /*#__PURE__*/React.createElement(Btn, {
+  }, "Not signed in — matches and teams are only saved on this device."), /*#__PURE__*/React.createElement("button", {
     onClick: handleSignIn,
     disabled: busy,
+    className: "cs-btn",
     style: {
       width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      fontFamily: "'Inter', sans-serif",
+      fontWeight: 600,
+      fontSize: 14.5,
+      borderRadius: 14,
+      padding: "13px 14px",
+      minHeight: 48,
+      cursor: busy ? "not-allowed" : "pointer",
       border: `1px solid ${COLORS.willow}`,
-      boxShadow: "none"
+      background: COLORS.surface,
+      color: COLORS.ink,
+      opacity: busy ? 0.6 : 1,
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent"
     }
   }, /*#__PURE__*/React.createElement(GoogleGLogo, {
     size: 16
-  }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
+  }), busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -12168,19 +12184,33 @@ function WelcomeScreen({
       color: COLORS.ball,
       lineHeight: 1.5
     }
-  }, error), /*#__PURE__*/React.createElement(Btn, {
+  }, error), /*#__PURE__*/React.createElement("button", {
     onClick: handleSignIn,
     disabled: busy,
+    className: "cs-btn",
     style: {
       width: "100%",
-      padding: "15px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      fontFamily: "'Inter', sans-serif",
+      fontWeight: 600,
       fontSize: 15,
+      borderRadius: 14,
+      padding: "15px",
+      minHeight: 48,
+      cursor: busy ? "not-allowed" : "pointer",
       border: `1px solid ${COLORS.willow}`,
-      boxShadow: "none"
+      background: COLORS.surface,
+      color: COLORS.ink,
+      opacity: busy ? 0.6 : 1,
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent"
     }
   }, /*#__PURE__*/React.createElement(GoogleGLogo, {
     size: 17
-  }), " ", busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
+  }), busy ? "Opening Google…" : "Sign in with Google"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
