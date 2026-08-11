@@ -61,7 +61,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - Full backup and restore for a signed-in account, from Account → Your data: export your profile, teams, and matches to a `.json` file, and import that file back in later — into the same account to restore, or into a different one to migrate. Doesn't cover clubs (those are shared state owned by membership, not something a personal backup can safely restore) or matches only ever shared via a match code (those were never tied to your account to begin with).
 
 **After the match**
-- Full scorecard with batting and bowling figures, toss result, and Player of the Match.
+- Full scorecard with batting and bowling figures, toss result, Player of the Match, and Best Fielder (catches + run outs) — both auto-suggested with the reasoning shown (runs + 20/wicket for Player of the Match; most fielding dismissals for Best Fielder) or picked manually from anyone in the match.
 - Saved matches show a relative date at a glance — Today, Yesterday, or the day and date further back.
 
 **Tournaments**
