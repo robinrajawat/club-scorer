@@ -8759,6 +8759,15 @@ function HelpScreen({
   onBack,
   onReplayTour
 }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  // Matches against both the question and the answer text -- someone searching "DLS" or "9-a-side"
+  // is often describing what they want to know, not quoting the exact question wording back, so
+  // limiting the search to just `e.q` would miss a lot of otherwise-findable entries.
+  const filteredSections = q ? HELP_SECTIONS.map(section => ({
+    ...section,
+    entries: section.entries.filter(e => e.q.toLowerCase().includes(q) || e.a.toLowerCase().includes(q))
+  })).filter(section => section.entries.length > 0) : HELP_SECTIONS;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -8796,10 +8805,26 @@ function HelpScreen({
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
-      marginBottom: 20,
+      marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "The things that genuinely aren't obvious just from exploring \u2014 not a full manual. See the README on GitHub for everything else."), HELP_SECTIONS.map(section => /*#__PURE__*/React.createElement("div", {
+  }, "The things that genuinely aren't obvious just from exploring \u2014 not a full manual. See the README on GitHub for everything else."), /*#__PURE__*/React.createElement(TextField, {
+    value: query,
+    onChange: setQuery,
+    placeholder: "Search Help & FAQ",
+    style: {
+      marginBottom: 20
+    }
+  }), filteredSections.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No results for \u201c", query.trim(), "\u201d.") : filteredSections.map(section => /*#__PURE__*/React.createElement("div", {
     key: section.title,
     style: {
       marginBottom: 22
@@ -15839,7 +15864,7 @@ function FixtureRow({
       flexShrink: 0,
       whiteSpace: "nowrap"
     }
-  }, match.status === "complete" ? matchResultText(match) || "View" : "In progress") : /*#__PURE__*/React.createElement(Btn, {
+  }, match.status === "complete" ? matchResultText(match) || "View" : matchScoreLine(match) || "In progress") : /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onScore,
     style: {
@@ -26932,6 +26957,13 @@ function CricketScorer() {
       setNavDirection(to >= from ? "forward" : "back");
       return next;
     });
+    // Swapping which top-level screen renders doesn't move the scroll position on its own --
+    // without this, navigating away from partway down a long page (Account is the one people
+    // actually notice this on, but it's not special-cased to it) leaves the destination screen
+    // opened mid-scroll instead of from the top. Same fix SetupScreen already has for its own
+    // internal step changes, just centralized here since every top-level transition already
+    // funnels through this one function.
+    window.scrollTo(0, 0);
   }
   // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
