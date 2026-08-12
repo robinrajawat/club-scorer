@@ -19351,13 +19351,21 @@ function TeamEditScreen({
     style: {
       display: "flex",
       flexDirection: "column",
-      gap: 8,
-      padding: "6px 8px 12px 58px"
+      gap: 14,
+      padding: "10px 8px 14px 58px"
     }
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, "Email"), /*#__PURE__*/React.createElement("input", {
     value: p.email,
     onChange: e => updateEmail(p._key, e.target.value),
-    placeholder: "Email \u2014 lets other clubs borrow this player",
+    placeholder: "player@example.com",
     autoCapitalize: "none",
     autoCorrect: "off",
     autoComplete: "off",
@@ -19366,14 +19374,29 @@ function TeamEditScreen({
       width: "100%",
       boxSizing: "border-box",
       fontFamily: "'Inter'",
-      fontSize: 12.5,
+      fontSize: 13,
       color: COLORS.ink,
       background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
-      padding: "5px 8px"
+      padding: "7px 8px"
     }
-  }), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.inkSoft,
+      marginTop: 4
+    }
+  }, "Lets other clubs find and borrow this player onto their own roster \u2014 leave blank to keep them private to this team.")), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, "Age & role"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -19395,30 +19418,37 @@ function TeamEditScreen({
       background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
-      padding: "5px 4px"
+      padding: "6px 4px"
     }
-  }), PLAYER_ROLES.map(r => pillBtn(p.role === r.value, r.label, () => updatePlayerField(p._key, "role", p.role === r.value ? "" : r.value), r.value))), /*#__PURE__*/React.createElement("div", {
+  }), PLAYER_ROLES.map(r => pillBtn(p.role === r.value, r.label, () => updatePlayerField(p._key, "role", p.role === r.value ? "" : r.value), r.value)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 5
+    }
+  }, "Batting hand"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
-      alignItems: "center",
       flexWrap: "wrap"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, PLAYER_HANDS.map(h => pillBtn(p.battingHand === h.value, h.label, () => updatePlayerField(p._key, "battingHand", p.battingHand === h.value ? "" : h.value), "bat-" + h.value)))), (p.role === "bowler" || p.role === "allrounder") && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
+      fontSize: 11.5,
+      fontWeight: 600,
       color: COLORS.inkSoft,
-      marginRight: 2
+      marginBottom: 5
     }
-  }, "Bats"), PLAYER_HANDS.map(h => pillBtn(p.battingHand === h.value, h.label, () => updatePlayerField(p._key, "battingHand", p.battingHand === h.value ? "" : h.value), "bat-" + h.value)), /*#__PURE__*/React.createElement("span", {
+  }, "Bowling hand"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      margin: "0 2px 0 8px"
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
     }
-  }, "Bowls"), PLAYER_HANDS.map(h => pillBtn(p.bowlingHand === h.value, h.label, () => updatePlayerField(p._key, "bowlingHand", p.bowlingHand === h.value ? "" : h.value), "bowl-" + h.value))), /*#__PURE__*/React.createElement("div", {
+  }, PLAYER_HANDS.map(h => pillBtn(p.bowlingHand === h.value, h.label, () => updatePlayerField(p._key, "bowlingHand", p.bowlingHand === h.value ? "" : h.value), "bowl-" + h.value)))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -19430,9 +19460,9 @@ function TeamEditScreen({
     disabled: publishBusyKey === p._key || !p.email.trim(),
     style: {
       flexShrink: 0,
-      padding: "0 12px",
-      minHeight: 32,
-      fontSize: 11.5
+      padding: "0 14px",
+      minHeight: 34,
+      fontSize: 12
     }
   }, publishBusyKey === p._key ? "\u2026" : p.public ? "Save details" : "Make public"), p.public && /*#__PURE__*/React.createElement("button", {
     type: "button",
