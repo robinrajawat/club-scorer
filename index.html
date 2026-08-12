@@ -18718,6 +18718,12 @@ function TeamEditScreen({
     email: p.email || "",
     public: !!p.public,
     homeClubId: p.homeClubId || null,
+    // Only set when this row was already backed by a published player doc at mount -- used to
+    // warn if `name` (edited via the row's own name input above) drifts from it, since
+    // computePlayerCareerStats matches a player to their past scorecards by name string, not a
+    // stable id. A brand-new publish (was never public before) isn't a rename, so this stays
+    // null in that case and no warning is shown.
+    _originalName: p.public ? p.name : null,
     // Age/role/hand live only on the shared player doc, not on the roster entry itself (avoids
     // two copies drifting apart) — so re-opening an already-published player's row starts these
     // blank rather than pre-filled; editing here always writes straight through to that doc.
@@ -19348,7 +19354,13 @@ function TeamEditScreen({
       gap: 14,
       padding: "10px 8px 14px 58px"
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, p._originalName && p.name.trim() && p.name.trim().toLowerCase() !== p._originalName.trim().toLowerCase() && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.gold
+    }
+  }, "Career stats are matched by name against past scorecards \u2014 renaming means stats already recorded under \"", p._originalName, "\" won't show up under this one."), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
