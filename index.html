@@ -18871,6 +18871,7 @@ function TeamEditScreen({
       key,
       type: "button",
       onClick,
+      "aria-pressed": active,
       style: {
         padding: "4px 10px",
         borderRadius: 12,
@@ -19155,14 +19156,7 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Globe, {
     size: 13
-  }), "Borrow a public player from another club"), publishError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 11.5,
-      fontFamily: "'Inter'",
-      marginBottom: 10
-    }
-  }, publishError), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }), "Borrow a public player from another club"), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -19366,6 +19360,7 @@ function TeamEditScreen({
     value: p.email,
     onChange: e => updateEmail(p._key, e.target.value),
     placeholder: "player@example.com",
+    "aria-label": "Email",
     autoCapitalize: "none",
     autoCorrect: "off",
     autoComplete: "off",
@@ -19407,6 +19402,7 @@ function TeamEditScreen({
     value: p.age,
     onChange: e => updatePlayerField(p._key, "age", e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
     placeholder: "Age",
+    "aria-label": "Age",
     inputMode: "numeric",
     style: {
       width: 52,
@@ -19479,7 +19475,14 @@ function TeamEditScreen({
       textDecoration: "underline",
       padding: 0
     }
-  }, "Make private"))))))), /*#__PURE__*/React.createElement(Btn, {
+  }, "Make private")), publishError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 11.5,
+      fontFamily: "'Inter'",
+      marginTop: 8
+    }
+  }, publishError)))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => {
