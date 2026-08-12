@@ -798,6 +798,15 @@ function friendlyEmailAuthError(err) {
       return "Couldn't reach the server \u2014 check your connection and try again.";
     case "auth/operation-not-allowed":
       return "Email/password sign-in isn't turned on for this app yet.";
+    // Codes below are specific to the email action-code flow (password reset / verify email /
+    // recover email links) rather than the sign-in/sign-up flows above, but share this same
+    // switch since the messaging style should match.
+    case "auth/expired-action-code":
+      return "This link has expired \u2014 request a new one and try again.";
+    case "auth/invalid-action-code":
+      return "This link has already been used or is no longer valid \u2014 request a new one.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
     default:
       return err.message || "Something went wrong.";
   }
@@ -1079,6 +1088,26 @@ function getPollCodeFromUrl() {
     if (!raw) return null;
     const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
     return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+// Firebase Auth appends `mode` and `oobCode` (plus apiKey/lang, which the SDK reads on its own)
+// to whatever "Custom action URL" is set in the Console's email templates -- see
+// AuthActionScreen for what handles each mode. Only recognizes the 3 modes that action actually
+// gets used for here (password reset, email verify, email-change recovery); anything else (e.g.
+// a stray mode= from some other source) is deliberately ignored rather than hijacking normal
+// navigation on a false match.
+function getAuthActionFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get("mode");
+    const oobCode = params.get("oobCode");
+    if (!oobCode || !["resetPassword", "verifyEmail", "recoverEmail"].includes(mode)) return null;
+    return {
+      mode,
+      oobCode
+    };
   } catch (e) {
     return null;
   }
@@ -12166,6 +12195,247 @@ function ShareMenu({
 
 
 // ---------- Screens ----------
+
+// Fulfillment side of the email action-code flow -- the page a person actually lands on after
+// clicking "Reset password" / "Verify email" / the email-change-recovery link in their inbox,
+// once the Console's "Custom action URL" for each template points here instead of Firebase's own
+// generic hosted page (see getAuthActionFromUrl for the query params this reads). WelcomeScreen's
+// existing "Forgot password?" flow is only the REQUEST side (sends the email); this is what
+// actually completes it.
+function AuthActionScreen({
+  mode,
+  oobCode,
+  onDone
+}) {
+  const [status, setStatus] = useState("checking"); // checking | resetForm | success | error
+  const [errorMsg, setErrorMsg] = useState("");
+  const [actionEmail, setActionEmail] = useState(""); // the email tied to this code, once known
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (mode === "resetPassword") {
+          const email = await auth.verifyPasswordResetCode(oobCode);
+          if (cancelled) return;
+          setActionEmail(email);
+          setStatus("resetForm");
+        } else if (mode === "verifyEmail") {
+          await auth.applyActionCode(oobCode);
+          if (cancelled) return;
+          setStatus("success");
+        } else if (mode === "recoverEmail") {
+          // checkActionCode's data.email is the address being RESTORED (the original, pre-change
+          // address) -- applyActionCode is what actually reverts the account to it.
+          const info = await auth.checkActionCode(oobCode);
+          const restoredEmail = info.data && info.data.email;
+          await auth.applyActionCode(oobCode);
+          if (cancelled) return;
+          setActionEmail(restoredEmail || "");
+          setStatus("success");
+        }
+      } catch (e) {
+        if (cancelled) return;
+        console.error("auth action failed", mode, e.code, e.message);
+        setErrorMsg(friendlyEmailAuthError(e));
+        setStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, oobCode]);
+  async function submitNewPassword() {
+    if (saving) return;
+    if (newPassword.length < 6) {
+      setSaveError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSaveError("Passwords don't match.");
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    try {
+      await auth.confirmPasswordReset(oobCode, newPassword);
+      setSaving(false);
+      setStatus("success");
+    } catch (e) {
+      setSaving(false);
+      console.error("confirm password reset failed", e.code, e.message);
+      setSaveError(friendlyEmailAuthError(e));
+    }
+  }
+  async function resendResetLink() {
+    if (!actionEmail || resendBusy) return;
+    setResendBusy(true);
+    const result = await sendPasswordReset(actionEmail);
+    setResendBusy(false);
+    if (result.ok) setResendSent(true);
+  }
+  const wrapStyle = {
+    padding: "16px 20px 40px",
+    maxWidth: 400,
+    margin: "0 auto",
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    boxSizing: "border-box"
+  };
+  const titleStyle = {
+    fontFamily: "'DM Serif Display', serif",
+    fontSize: 24,
+    color: COLORS.pitch,
+    marginBottom: 8,
+    textAlign: "center"
+  };
+  const bodyStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 13.5,
+    color: COLORS.inkSoft,
+    lineHeight: 1.5,
+    textAlign: "center",
+    marginBottom: 20
+  };
+  if (status === "checking") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrapStyle
+    }, /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Checking link\u2026",
+      size: 26
+    }));
+  }
+  if (status === "error") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrapStyle
+    }, /*#__PURE__*/React.createElement("div", {
+      style: titleStyle
+    }, "Link didn't work"), /*#__PURE__*/React.createElement("div", {
+      style: bodyStyle
+    }, errorMsg), /*#__PURE__*/React.createElement(Btn, {
+      variant: "primary",
+      onClick: onDone,
+      style: {
+        width: "100%"
+      }
+    }, "Back to sign in"));
+  }
+  if (status === "resetForm") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrapStyle
+    }, /*#__PURE__*/React.createElement("div", {
+      style: titleStyle
+    }, "Choose a new password"), /*#__PURE__*/React.createElement("div", {
+      style: bodyStyle
+    }, "For ", /*#__PURE__*/React.createElement("strong", null, actionEmail)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "password",
+      value: newPassword,
+      onChange: e => setNewPassword(e.target.value),
+      placeholder: "New password",
+      autoComplete: "new-password",
+      style: {
+        fontFamily: "'Inter', sans-serif",
+        fontSize: 15,
+        padding: "12px 14px",
+        borderRadius: 10,
+        border: `1.5px solid ${COLORS.creamDark}`,
+        background: COLORS.surface,
+        color: COLORS.ink,
+        width: "100%",
+        boxSizing: "border-box",
+        boxShadow: "inset 0 1px 2px rgba(42,36,32,0.05)"
+      }
+    }), /*#__PURE__*/React.createElement("input", {
+      type: "password",
+      value: confirmPassword,
+      onChange: e => setConfirmPassword(e.target.value),
+      placeholder: "Confirm new password",
+      autoComplete: "new-password",
+      style: {
+        fontFamily: "'Inter', sans-serif",
+        fontSize: 15,
+        padding: "12px 14px",
+        borderRadius: 10,
+        border: `1.5px solid ${COLORS.creamDark}`,
+        background: COLORS.surface,
+        color: COLORS.ink,
+        width: "100%",
+        boxSizing: "border-box",
+        boxShadow: "inset 0 1px 2px rgba(42,36,32,0.05)"
+      }
+    })), saveError && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: COLORS.ball,
+        fontSize: 12.5,
+        fontFamily: "'Inter'",
+        marginBottom: 12,
+        textAlign: "center"
+      }
+    }, saveError), /*#__PURE__*/React.createElement(Btn, {
+      variant: "primary",
+      onClick: submitNewPassword,
+      disabled: saving,
+      style: {
+        width: "100%"
+      }
+    }, saving ? "\u2026" : "Reset password"));
+  }
+  // success
+  const successMessage = mode === "resetPassword" ? "Your password has been updated. You can sign in with it now." : mode === "verifyEmail" ? "Your email is verified." : `Your sign-in email has been changed back to ${actionEmail || "its original address"}. If you didn't make this change yourself, reset your password now to secure your account.`;
+  return /*#__PURE__*/React.createElement("div", {
+    style: wrapStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: titleStyle
+  }, "Done"), /*#__PURE__*/React.createElement("div", {
+    style: bodyStyle
+  }, successMessage), mode === "recoverEmail" && actionEmail && !resendSent && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: resendResetLink,
+    disabled: resendBusy,
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      textDecoration: "underline",
+      marginBottom: 16
+    }
+  }, resendBusy ? "\u2026" : "Send me a password reset link"), resendSent && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.turfFixed,
+      textAlign: "center",
+      marginBottom: 16
+    }
+  }, "Reset link sent \u2014 check your inbox."), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onDone,
+    style: {
+      width: "100%"
+    }
+  }, "Continue to Club Scorer"));
+}
 
 function WelcomeScreen({
   onSignIn,
@@ -26449,6 +26719,7 @@ function ResultScreen({
 const SCREEN_DEPTH = {
   home: 0,
   login: 0,
+  "auth-action": 0,
   setup: 1,
   teams: 1,
   match: 1,
@@ -26464,10 +26735,11 @@ const SCREEN_DEPTH = {
   "tournament-detail": 2
 };
 function CricketScorer() {
+  const initialAuthAction = useRef(getAuthActionFromUrl()).current;
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
@@ -27974,7 +28246,28 @@ function CricketScorer() {
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: wrapStyle,
     className: "no-print"
-  }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), screen === "login" && /*#__PURE__*/React.createElement(NavWrap, {
+  }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), screen === "auth-action" && initialAuthAction && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "auth-action",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(AuthActionScreen, {
+    mode: initialAuthAction.mode,
+    oobCode: initialAuthAction.oobCode,
+    onDone: () => {
+      // Drop mode/oobCode from the URL so refreshing (or just leaving the tab open) doesn't
+      // re-run an already-used, now-invalid code -- same reasoning as the follow/tournament/poll
+      // codes never getting cleaned up because those stay valid to revisit, unlike a one-time
+      // action code.
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("mode");
+        url.searchParams.delete("oobCode");
+        url.searchParams.delete("apiKey");
+        url.searchParams.delete("lang");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      } catch (e) {}
+      setScreen(user ? "home" : "login");
+    }
+  })), screen === "login" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "login",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
