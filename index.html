@@ -15026,13 +15026,20 @@ function TournamentsScreen({
       fontSize: 13
     }
   }, t.label))), sourceTab === "clubs" && clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
       overflowX: "auto",
       paddingBottom: 4,
-      marginBottom: 16
+      flex: 1
     }
   }, clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
@@ -15049,14 +15056,37 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, c.name))), activeClubId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("club", activeClubId, activeClubName),
+    className: "cs-btn",
+    "aria-label": `${activeClubName} Record Book`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 17
+  }))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
       overflowX: "auto",
       paddingBottom: 4,
-      marginBottom: 16
+      flex: 1
     }
   }, myFederations.map(f => /*#__PURE__*/React.createElement("button", {
     key: f.id,
@@ -15073,7 +15103,23 @@ function TournamentsScreen({
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, f.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, f.name))), activeFederationId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("federation", activeFederationId, activeFederationName),
+    className: "cs-btn",
+    "aria-label": `${activeFederationName} Record Book`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 17
+  }))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -15137,29 +15183,7 @@ function TournamentsScreen({
       color: statusFilter === key ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, label)))), (activeClubId || activeFederationId) && !creating && onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords(activeFederationId ? "federation" : "club", activeFederationId || activeClubId, activeFederationName || activeClubName),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 5,
-      width: "100%",
-      background: "none",
-      border: "none",
-      padding: "8px 0 2px",
-      fontSize: 12.5,
-      fontWeight: 600,
-      fontFamily: "'Inter'",
-      color: COLORS.inkSoft,
-      textDecoration: "underline",
-      cursor: "pointer",
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 13
-  }), `${activeFederationName || activeClubName} Record Book`), creatingSeries && /*#__PURE__*/React.createElement(Modal, {
+  }, label)))), creatingSeries && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setCreatingSeries(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
