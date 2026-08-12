@@ -9754,20 +9754,35 @@ function ClubPanel({
       color: COLORS.gold,
       flexShrink: 0
     }
-  }, clubRoleLabel(activeClub))), activeIsOwner && /*#__PURE__*/React.createElement("div", {
+  }, clubRoleLabel(activeClub))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 8,
       flexShrink: 0
     }
-  }, onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
+  }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
+    className: "cs-btn",
+    "aria-label": `${activeClub.name} Record Book`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 17
+  })), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
     isPublic: activeClub.visibility === "public",
     busy: visBusy,
     onChange: handleSetVisibility,
     publicHint: "Public \u2014 federations can find and invite this club",
     privateHint: "Private \u2014 not discoverable"
-  }), /*#__PURE__*/React.createElement("button", {
+  }), activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
@@ -9803,33 +9818,7 @@ function ClubPanel({
       letterSpacing: 0.4,
       color: activeClub.visibility === "public" ? COLORS.gold : COLORS.inkSoft
     }
-  }, activeClub.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap",
-      marginBottom: 10
-    }
-  }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 13
-  }), "Record Book"), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, activeClub.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => onLeave(activeClub.id),
     style: {
       padding: "6px 10px",
@@ -9840,9 +9829,10 @@ function ClubPanel({
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 12,
-      cursor: "pointer"
+      cursor: "pointer",
+      marginBottom: 10
     }
-  }, "Leave club")), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
+  }, "Leave club"), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12,
       marginBottom: 10,
@@ -10942,18 +10932,33 @@ function FederationsPanel({
       letterSpacing: 0.4,
       color: COLORS.gold
     }
-  }, roleLabel(f))), isOwner(f) && /*#__PURE__*/React.createElement("div", {
+  }, roleLabel(f))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 8,
       flexShrink: 0
     }
-  }, /*#__PURE__*/React.createElement(VisibilitySwitch, {
+  }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onOpenRecords("federation", f.id, f.name),
+    className: "cs-btn",
+    "aria-label": `${f.name} Record Book`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 17
+  })), isOwner(f) && /*#__PURE__*/React.createElement(VisibilitySwitch, {
     isPublic: f.visibility === "public",
     busy: visBusyId === f.id,
     onChange: isPublic => handleSetVisibility(f.id, isPublic)
-  }), /*#__PURE__*/React.createElement("button", {
+  }), isOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -10990,28 +10995,7 @@ function FederationsPanel({
       letterSpacing: 0.4,
       color: f.visibility === "public" ? COLORS.gold : COLORS.inkSoft
     }
-  }, f.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords("federation", f.id, f.name),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      marginBottom: 10,
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.gold}`,
-      background: "rgba(184,137,43,0.08)",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      width: "fit-content"
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 13
-  }), "Record Book"), /*#__PURE__*/React.createElement("div", {
+  }, f.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
