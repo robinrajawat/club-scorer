@@ -12872,6 +12872,15 @@ function HomeScreen({
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  // Matches against both team names and the tournament name (when it belongs to one) -- someone
+  // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
+  // scroll hunting for a specific date. Venue isn't included: local-only/offline matches never
+  // carry it on this lightweight list (see upsertLocalPointer), only cloud-synced ones do, and a
+  // filter that only sometimes searches a field would be more confusing than one that reliably
+  // doesn't.
+  const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "28px 16px 40px",
@@ -13002,6 +13011,13 @@ function HomeScreen({
     size: 14
   }), "Search players")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
+  }), matches.length > 0 && /*#__PURE__*/React.createElement(TextField, {
+    value: query,
+    onChange: setQuery,
+    placeholder: "Search your matches",
+    style: {
+      marginBottom: 14
+    }
   }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -13018,14 +13034,23 @@ function HomeScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Saved Matches"), /*#__PURE__*/React.createElement("div", {
+  }, "Saved Matches"), !q && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), matches.map((m, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), filteredMatches.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "24px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No matches match \u201c", query.trim(), "\u201d.") : filteredMatches.map((m, i) => /*#__PURE__*/React.createElement("div", {
     key: m.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
