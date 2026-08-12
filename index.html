@@ -4725,6 +4725,19 @@ function buildPollShareText(question, fixtureDate, code) {
   lines.push(buildPollUrl(code));
   return lines.join("\n");
 }
+// createdAt is a plain millis number (see createAvailabilityPoll) -- expiresAt itself is a
+// Firestore Timestamp only on the full poll doc, not the lightweight list pointer, so this is
+// computed from createdAt + the fixed TTL rather than read off expiresAt, working the same way
+// whichever shape of poll object it's given (list pointer or full doc).
+function pollExpiryDateLabel(createdAt) {
+  if (!createdAt) return null;
+  const d = new Date(createdAt + POLL_TTL_DAYS * 24 * 60 * 60 * 1000);
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
 function buildFollowUrl(code) {
   try {
     const {
@@ -8418,7 +8431,7 @@ const HELP_SECTIONS = [{
     a: "Export (Account \u2192 Your data) gives you a JSON backup of your profile, teams, and matches saved to that account. Import restores it \u2014 into the same account, or a different one to migrate. It doesn't cover clubs (shared state, not personal data) or matches only ever shared via a score code."
   }, {
     q: "Do share links, poll links, or invite codes ever expire?",
-    a: "Club invite codes always expire 7 days after they're sent \u2014 that one's enforced no matter what, shown as a countdown next to each pending invite. View links (match and tournament) and availability poll links can *optionally* expire too, on servers that have turned that on: months of nobody using one before it quietly goes stale, refreshed automatically every time it's actually used (a ball scored, a tournament reshared, a poll response). None of this ever touches the underlying match, tournament, club, or poll data itself \u2014 only the link stops working, and a new one can always be generated. The one thing that's never set up to expire on its own is a match kept with no account at all (a guest match, reachable only by its score code) \u2014 that would mean losing the only copy of it, so it's excluded entirely."
+    a: `Club invite codes always expire 7 days after they're sent \u2014 that one's enforced no matter what, shown as a countdown next to each pending invite. View links (match and tournament) can *optionally* expire too, on servers that have turned that on: months of nobody using one before it quietly goes stale, refreshed automatically every time it's actually used (a ball scored, a tournament reshared). Availability polls are different \u2014 on servers with that turned on, a poll expires a fixed ${POLL_TTL_DAYS} days after it was created, shown right on the poll itself, regardless of how many responses come in after. None of this ever touches the underlying match, tournament, club, or poll data itself \u2014 only the link stops working, and a new one can always be generated. The one thing that's never set up to expire on its own is a match kept with no account at all (a guest match, reachable only by its score code) \u2014 that would mean losing the only copy of it, so it's excluded entirely.`
   }]
 }, {
   title: "Clubs & federations",
@@ -17788,6 +17801,7 @@ function AvailabilityPollModal({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [createdCode, setCreatedCode] = useState(null); // set right after a successful create
+  const [createdAt, setCreatedAt] = useState(null); // pairs with createdCode, for the exact expiry date
   const [copied, setCopied] = useState(false);
   const [confirmDeleteCode, setConfirmDeleteCode] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -17829,6 +17843,7 @@ function AvailabilityPollModal({
       createdAt: result.poll.createdAt
     }, ...(cur || [])]);
     setCreatedCode(result.code);
+    setCreatedAt(result.poll.createdAt);
   }
   async function openResults(code) {
     setActivePoll(null);
@@ -17903,7 +17918,7 @@ function AvailabilityPollModal({
       color: COLORS.inkSoft,
       marginBottom: 16
     }
-  }, `${team.name} \u2014 poll who's around, then share the link. No account needed to respond. Polls expire on their own after a few months.`), view === "list" && /*#__PURE__*/React.createElement("div", null, polls === null ? /*#__PURE__*/React.createElement(LoadingNote, {
+  }, `${team.name} \u2014 poll who's around, then share the link. No account needed to respond. Polls expire automatically ${POLL_TTL_DAYS} days after being created.`), view === "list" && /*#__PURE__*/React.createElement("div", null, polls === null ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading polls\u2026",
     size: 22
   }) : polls.length === 0 ? /*#__PURE__*/React.createElement("div", {
@@ -18014,7 +18029,15 @@ function AvailabilityPollModal({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, "Poll created \u2014 share this link:"), /*#__PURE__*/React.createElement("div", {
+  }, "Poll created \u2014 share this link:"), pollExpiryDateLabel(createdAt) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: -6,
+      marginBottom: 10
+    }
+  }, `Expires ${pollExpiryDateLabel(createdAt)}`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -18062,6 +18085,7 @@ function AvailabilityPollModal({
   }, "View responses"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => {
       setCreatedCode(null);
+      setCreatedAt(null);
       setQuestion(`Available for ${team.name}'s next match?`);
       setFixtureDate("");
       setView("list");
@@ -18085,9 +18109,16 @@ function AvailabilityPollModal({
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
+      marginBottom: 2
+    }
+  }, activePoll.fixtureDate), pollExpiryDateLabel(activePoll.createdAt) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, activePoll.fixtureDate), /*#__PURE__*/React.createElement("div", {
+  }, `Expires ${pollExpiryDateLabel(activePoll.createdAt)}`), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12
     }
