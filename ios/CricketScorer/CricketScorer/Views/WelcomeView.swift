@@ -50,7 +50,7 @@ struct WelcomeView: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color("PitchColor"), Color("PitchDarkColor")],
+                        colors: [Color(red: 0.176, green: 0.314, blue: 0.086), Color(red: 0.122, green: 0.227, blue: 0.059)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -59,8 +59,8 @@ struct WelcomeView: View {
                 .overlay(Image(systemName: "circle.fill").foregroundStyle(.white).font(.title3))
 
             Text("Club Scorer")
-                .font(.custom("DMSerifDisplay-Regular", size: 34))
-                .foregroundStyle(Color("PitchColor"))
+                .font(.system(size: 34, weight: .regular, design: .serif))
+                .foregroundStyle(Color(red: 0.176, green: 0.314, blue: 0.086))
 
             Text("Ball-by-ball scoring for friendly games")
                 .font(.footnote)

@@ -54,6 +54,34 @@ project under a new identifier.
 - Email/password sign-in, sign-up, and password reset, with error copy
   matching the web app's `friendlyEmailAuthError()`.
 - Welcome screen layout (logo, Google button, divider, email flow).
+- Home screen: local matches list, new match, swipe to delete.
+- New match setup: team names, players, overs, who bats first.
+- Full ball-by-ball scoring: runs, wides, no-balls, byes, leg byes,
+  wickets (with type), automatic strike rotation (including the
+  odd-runs-on-last-ball rule), new-bowler and new-batter prompts,
+  second-innings target/required-rate, and a result screen.
+
+This is a genuinely playable single-device scorer end to end — not a demo
+screen.
+
+## Known simplifications (vs. the web app)
+
+These are deliberate cuts to get a working core loop shipped, not bugs:
+
+- **No cloud sync yet.** Matches are stored locally on-device
+  (`UserDefaults`/JSON) via `MatchStore`. The web app's Firestore sync,
+  multi-device continuity, and share/live-follow links aren't ported.
+- **No Google sign-in yet** — see below.
+- **No teams/players management screens, no tournaments, no records/series
+  stats, no PDF export, no polls, no push notifications.**
+- **Run-outs record no completed runs** — a run-out mid-run should credit
+  the runs completed before the dismissal; this version records 0. Fine for
+  casual scoring, wrong for a competitive scorecard.
+- **No free-hit tracking** after a no-ball.
+- **No manual batting-order override** — next batter is chosen from a
+  picker of unused players, not a drag-reordered lineup.
+- **No undo.** Once a ball's recorded, it's recorded — no correction flow
+  yet if you fat-finger a run count.
 
 ## What's stubbed
 
@@ -62,5 +90,3 @@ project under a new identifier.
   in Info.plist. Wiring it before that config exists fails silently on
   device, so `signInWithGoogle()` currently returns a clear "not yet wired
   up" message instead.
-- Everything past sign-in: home screen, match scoring, teams, tournaments,
-  sync. Ports next once auth is confirmed working end-to-end on your phone.
