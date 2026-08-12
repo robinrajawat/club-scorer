@@ -17794,8 +17794,19 @@ function AvailabilityPollModal({
   const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     let cancelled = false;
-    loadTeamPolls(clubId, team.id).then(list => {
-      if (!cancelled) setPolls(list);
+    loadTeamPolls(clubId, team.id).then(async list => {
+      if (cancelled) return;
+      setPolls(list); // show questions immediately, counts fill in a moment later
+      // loadTeamPolls reads the lightweight index doc (question/date only, no responses --
+      // see its own comment), so counts here would always read as 0 without this follow-up.
+      const withResponses = await Promise.all(list.map(async p => {
+        const full = await loadPollByCode(p.code);
+        return {
+          ...p,
+          responses: full ? full.responses : {}
+        };
+      }));
+      if (!cancelled) setPolls(withResponses);
     });
     return () => {
       cancelled = true;
@@ -17873,6 +17884,7 @@ function AvailabilityPollModal({
   return /*#__PURE__*/React.createElement(Modal, {
     onClose: onClose
   }, /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
     style: {
       maxHeight: "70vh",
       overflowY: "auto"
