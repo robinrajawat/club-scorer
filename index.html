@@ -14997,7 +14997,39 @@ function TournamentsScreen({
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, f.name))))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, f.name))))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: openCreate,
+    disabled: totalTeamOptions < 2,
+    style: {
+      width: "100%",
+      padding: "14px",
+      fontSize: 15,
+      marginBottom: 16,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 18,
+    strokeWidth: 2.5
+  }), activeFederationName ? ` New Tournament in ${activeFederationName}` : activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !creating && canManage && totalTeamOptions >= 2 && /*#__PURE__*/React.createElement("button", {
+    onClick: openCreateSeries,
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      marginTop: -8,
+      marginBottom: 16,
+      textDecoration: "underline"
+    }
+  }, "or start a head-to-head series instead"), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -15036,54 +15068,22 @@ function TournamentsScreen({
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      gap: 6,
+      gap: 5,
       width: "100%",
-      padding: "11px",
-      fontSize: 13,
+      background: "none",
+      border: "none",
+      padding: "8px 0 2px",
+      fontSize: 12.5,
       fontWeight: 600,
       fontFamily: "'Inter'",
-      borderRadius: 12,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      color: COLORS.pitch,
+      color: COLORS.inkSoft,
+      textDecoration: "underline",
       cursor: "pointer",
       marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 16
-  }), `${activeFederationName || activeClubName} Record Book`), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    onClick: openCreate,
-    disabled: totalTeamOptions < 2,
-    style: {
-      width: "100%",
-      padding: "14px",
-      fontSize: 15,
-      marginBottom: 16,
-      borderRadius: 14
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 18,
-    strokeWidth: 2.5
-  }), activeFederationName ? ` New Tournament in ${activeFederationName}` : activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !creating && canManage && totalTeamOptions >= 2 && /*#__PURE__*/React.createElement("button", {
-    onClick: openCreateSeries,
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "center",
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      cursor: "pointer",
-      marginTop: -8,
-      marginBottom: 16,
-      textDecoration: "underline"
-    }
-  }, "or start a head-to-head series instead"), creatingSeries && /*#__PURE__*/React.createElement(Modal, {
+    size: 13
+  }), `${activeFederationName || activeClubName} Record Book`), creatingSeries && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setCreatingSeries(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
