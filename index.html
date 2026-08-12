@@ -12867,6 +12867,8 @@ function HomeScreen({
   pendingCount,
   requestBadgeCount = 0,
   tournamentNameById = {},
+  tournaments = [],
+  onOpenTournament,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -12886,6 +12888,21 @@ function HomeScreen({
   // filter that only sometimes searches a field would be more confusing than one that reliably
   // doesn't.
   const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
+  // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
+  // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
+  // taps Start on it. Searched alongside saved matches so "that Riverside game" finds it whether
+  // it's already been played or is still just sitting on a tournament's schedule -- without this,
+  // searching for an upcoming game here would silently come back empty, which is worse than not
+  // having search at all. Only surfaced while there's an active query (see below) -- a permanent
+  // always-visible upcoming section is a bigger change than what was asked for here.
+  const upcomingFixtures = tournaments.flatMap(t => (t.fixtures || []).filter(f => !f.matchId).map(f => ({
+    tournament: t,
+    fixture: f
+  })));
+  const filteredUpcoming = q ? upcomingFixtures.filter(({
+    tournament: t,
+    fixture: f
+  }) => f.teamA.toLowerCase().includes(q) || f.teamB.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)) : [];
   // In progress first (the ones someone likely opened this screen to resume), completed second and
   // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
   // result set is already short and specific, so splitting it into two labeled groups (one likely
@@ -13114,7 +13131,7 @@ function renderMatchCard(m, i) {
   }), matches.length > 0 && /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
-    placeholder: "Search your matches",
+    placeholder: "Search your matches & fixtures",
     style: {
       marginBottom: 14
     }
@@ -13141,7 +13158,7 @@ function renderMatchCard(m, i) {
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), filteredMatches.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "24px 0",
@@ -13151,7 +13168,77 @@ function renderMatchCard(m, i) {
       fontStyle: "italic"
     }
   }, "No matches match \u201c", query.trim(), "\u201d.") : (() => {
-    if (q) return filteredMatches.map((m, i) => renderMatchCard(m, i));
+    if (q) return /*#__PURE__*/React.createElement(React.Fragment, null, filteredMatches.map((m, i) => renderMatchCard(m, i)), filteredUpcoming.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: filteredMatches.length > 0 ? 18 : 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
+      }
+    }, "Upcoming"), filteredUpcoming.map(({
+      tournament: t,
+      fixture: f
+    }, i) => /*#__PURE__*/React.createElement("button", {
+      key: f.id,
+      type: "button",
+      onClick: () => onOpenTournament(t),
+      className: "cs-btn",
+      style: {
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: COLORS.surface,
+        border: "none",
+        borderRadius: 12,
+        padding: "12px 14px",
+        marginBottom: 8,
+        cursor: "pointer",
+        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
+        animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "'Inter'",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: COLORS.gold,
+        marginBottom: 2
+      }
+    }, /*#__PURE__*/React.createElement(Trophy, {
+      size: 10
+    }), t.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14.5,
+        color: COLORS.ink
+      }
+    }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.inkSoft,
+        fontWeight: 500
+      }
+    }, "vs"), " ", f.teamB), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.inkSoft,
+        marginTop: 1
+      }
+    }, formatFixtureDateTime(f.date || "") || "Not yet scheduled")))));
     const showCompleted = completedExpanded || inProgressMatches.length === 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -28263,7 +28350,7 @@ function CricketScorer() {
   // source's list. Only one of activeTournamentClubId/activeTournamentFederationId is ever
   // non-null at a time (the source-selector UI enforces that), so these two branches can never
   // both apply.
-  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : [...tournaments.map(t => ({ ...t,
+  const allTournamentsFlat = [...tournaments.map(t => ({ ...t,
     _clubId: null,
     _federationId: null
   })), ...Object.entries(clubTournamentsById).flatMap(([cid, list]) => list.map(t => ({ ...t,
@@ -28273,6 +28360,7 @@ function CricketScorer() {
     _clubId: null,
     _federationId: fid
   })))];
+  const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
   async function handleCreateTournament(name, teamNames, groups, advancePerGroup) {
     const t = {
       id: uid(),
@@ -28575,6 +28663,13 @@ function CricketScorer() {
     pendingCount: pendingCount,
     requestBadgeCount: federationRequestsNeedingAction.length,
     tournamentNameById: tournamentNameById,
+    tournaments: allTournamentsFlat,
+    onOpenTournament: t => {
+      setViewingTournament(t);
+      setViewingTournamentClubId(t._clubId || null);
+      setViewingTournamentFederationId(t._federationId || null);
+      setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
+    },
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
