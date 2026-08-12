@@ -7299,15 +7299,13 @@ function AccountScreen({
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, "Shown around the app instead of your Google name, if you'd rather use something else."))), /*#__PURE__*/React.createElement("div", {
+  }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "14px 0"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -7369,13 +7367,15 @@ function AccountScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.5
     }
-  }, "No club has added you as a player yet. Once a club adds you to their roster using this exact email address, your profile shows up here automatically."), /*#__PURE__*/React.createElement("div", {
+  }, "No club has added you as a player yet. Once a club adds you to their roster using this exact email address, your profile shows up here automatically.")), /*#__PURE__*/React.createElement("div", {
     style: {
-      height: 1,
-      background: COLORS.creamDark,
-      margin: "14px 0"
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -7763,18 +7763,18 @@ function AccountScreen({
     boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
   }
 },
+  /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Manage"),
   user && /*#__PURE__*/React.createElement(React.Fragment, null,
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 10
-      }
-    }, "Clubs & Federations"),
     /*#__PURE__*/React.createElement(Btn, {
       onClick: onOpenClubAdmin,
       style: {
@@ -7813,15 +7813,34 @@ function AccountScreen({
         fontSize: 11,
         fontWeight: 700
       }
-    }, requestBadgeCount > 9 ? "9+" : requestBadgeCount)),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 1,
-        background: COLORS.creamDark,
-        margin: "14px 0"
-      }
-    })
+    }, requestBadgeCount > 9 ? "9+" : requestBadgeCount))
   ),
+  /*#__PURE__*/React.createElement("button", {
+    onClick: onOpenSharedLinks,
+    className: "cs-btn",
+    style: {
+      width: "100%",
+      marginTop: 10,
+      minHeight: 44,
+      background: "none",
+      border: `1.5px solid ${COLORS.willow}`,
+      borderRadius: 10,
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      cursor: "pointer"
+    }
+  }, "Manage Shared Links")
+), /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 14,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  }
+},
   /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -8000,36 +8019,7 @@ function AccountScreen({
     style: {
       color: COLORS.inkSoft
     }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.creamDark,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "No account needed?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 14
-    }
-  }, "Every in-progress match has a \"Get Code\" button on its scoring screen \u2014 share the code with a teammate and they can pick up scoring on their phone, no sign-in required."), /*#__PURE__*/React.createElement(Btn, {
-    onClick: onOpenSharedLinks,
-    style: {
-      width: "100%"
-    }
-  }, "Manage Shared Links")), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
