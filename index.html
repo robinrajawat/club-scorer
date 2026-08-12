@@ -1112,95 +1112,6 @@ function getAuthActionFromUrl() {
     return null;
   }
 }
-// ---------- Poll reminders ----------
-// Local-only notifications (no push server behind this static site, so nothing fires while the
-// app/tab is fully closed -- same honest limitation as Sakura's due-date reminders, which this
-// deliberately mirrors). What this DOES cover: while the app is open (or foregrounded), a one-time
-// nudge for any availability poll sent to a team you're rostered on that you haven't answered yet.
-// Requires a linked player profile (see linkPlayerIfMatch) to know which roster name is "you"
-// across different teams -- same name-matching convention computePlayerCareerStats already relies
-// on, not a new one introduced here.
-const REMINDERS_KEY = "cs_reminders_enabled";
-const REMINDERS_NOTIFIED_KEY = "cs_reminders_notified_polls";
-function remindersEnabled() {
-  try {
-    return localStorage.getItem(REMINDERS_KEY) === "1" && typeof Notification !== "undefined" && Notification.permission === "granted";
-  } catch (e) {
-    return false;
-  }
-}
-function isIOSDevice() {
-  return /iP(hone|od|ad)/.test(navigator.platform) || navigator.userAgent.indexOf("Mac") !== -1 && "ontouchend" in document;
-}
-function isStandaloneDisplay() {
-  return window.navigator.standalone === true || window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
-}
-function loadNotifiedPollsMap() {
-  try {
-    return JSON.parse(localStorage.getItem(REMINDERS_NOTIFIED_KEY) || "{}");
-  } catch (e) {
-    return {};
-  }
-}
-function saveNotifiedPollsMap(m) {
-  try {
-    localStorage.setItem(REMINDERS_NOTIFIED_KEY, JSON.stringify(m));
-  } catch (e) {}
-}
-// Walks every club the person belongs to -> every team in it -> every non-expired poll on that
-// team, looking for one where their own name is rostered but hasn't responded. This is several
-// sequential network round trips (clubs are usually few, so bounded in practice) rather than a
-// single query, because loadTeamPolls only returns the lightweight pointer doc (no responses --
-// see its own comment) and there's no cross-club index of polls to query directly.
-async function checkPollReminders(clubs, myPlayerName) {
-  if (!remindersEnabled() || !myPlayerName || !clubs || clubs.length === 0) return;
-  const nameLower = myPlayerName.trim().toLowerCase();
-  if (!nameLower) return;
-  const notified = loadNotifiedPollsMap();
-  let changed = false;
-  for (const club of clubs) {
-    let teams;
-    try {
-      teams = await loadClubTeams(club.id);
-    } catch (e) {
-      continue;
-    }
-    for (const team of teams) {
-      const roster = (team.players || []).map(p => (typeof p === "string" ? p : p.name || "").trim().toLowerCase());
-      if (!roster.includes(nameLower)) continue;
-      let pointerPolls;
-      try {
-        pointerPolls = await loadTeamPolls(club.id, team.id);
-      } catch (e) {
-        continue;
-      }
-      for (const p of pointerPolls) {
-        if (notified[p.code]) continue;
-        if (!p.createdAt || Date.now() > p.createdAt + POLL_TTL_DAYS * 24 * 60 * 60 * 1000) continue;
-        const full = await loadPollByCode(p.code);
-        if (!full) continue;
-        const responded = full.responses && Object.keys(full.responses).some(n => n.trim().toLowerCase() === nameLower);
-        notified[p.code] = true;
-        changed = true;
-        if (responded) continue; // already answered elsewhere -- mark seen, don't nag
-        try {
-          const n = new Notification("Availability: " + full.question, {
-            body: team.name + (full.fixtureDate ? " \u00b7 " + full.fixtureDate : ""),
-            tag: "cs-poll-" + p.code,
-            icon: "icons/icon-192.png"
-          });
-          n.onclick = function () {
-            try {
-              window.focus();
-            } catch (e) {}
-            n.close();
-          };
-        } catch (e) {}
-      }
-    }
-  }
-  if (changed) saveNotifiedPollsMap(notified);
-}
 // Writes/refreshes the read-only snapshot at /tournamentViews/{code} — see firestore.rules for why
 // this is a point-in-time snapshot rather than a live mirror. Reuses the tournament's own code
 // once one exists (persisted onto the tournament doc via the caller's onUpdateTournament) rather
@@ -7096,8 +7007,6 @@ function AccountScreen({
   const [dummyBusy, setDummyBusy] = useState(false);
   const [dummyStatus, setDummyStatus] = useState("");
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
-  const [remindersOn, setRemindersOn] = useState(remindersEnabled());
-  const [showIOSNotifModal, setShowIOSNotifModal] = useState(false);
   const importFileRef = useRef(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -7203,38 +7112,6 @@ function AccountScreen({
       return;
     }
     if (emailMode === "reset") setResetSent(true);
-  }
-  function handleRemindersToggle() {
-    if (typeof Notification === "undefined") {
-      if (isIOSDevice() && !isStandaloneDisplay()) {
-        setShowIOSNotifModal(true);
-      } else {
-        setActionError("Notifications aren't supported on this browser.");
-      }
-      return;
-    }
-    if (remindersOn) {
-      try {
-        localStorage.setItem(REMINDERS_KEY, "0");
-      } catch (e) {}
-      setRemindersOn(false);
-      return;
-    }
-    if (Notification.permission === "denied") {
-      setActionError("Notifications are blocked for Club Scorer in your browser settings.");
-      return;
-    }
-    Notification.requestPermission().then(perm => {
-      if (perm === "granted") {
-        try {
-          localStorage.setItem(REMINDERS_KEY, "1");
-        } catch (e) {}
-        setRemindersOn(true);
-        setActionError("");
-      } else {
-        setActionError("Notification permission was not granted.");
-      }
-    });
   }
   async function handleExport() {
     if (exporting) return;
@@ -8179,46 +8056,6 @@ function AccountScreen({
         textTransform: "uppercase",
         marginBottom: 10
       }
-    }, "Notifications"),
-    myPlayer ? /*#__PURE__*/React.createElement(Btn, {
-      onClick: handleRemindersToggle,
-      style: {
-        width: "100%"
-      }
-    }, remindersOn ? "Poll reminders on" : "Turn on poll reminders") : /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 12.5,
-        color: COLORS.inkSoft,
-        lineHeight: 1.5
-      }
-    }, "Sign in with the email your player profile was published under to get a nudge for polls you haven't answered."),
-    myPlayer && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        color: COLORS.inkSoft,
-        marginTop: 8,
-        lineHeight: 1.4
-      }
-    }, "Works while Club Scorer is open on this device \u2014 there's no background server behind this, so nothing arrives while it's fully closed."),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 1,
-        background: COLORS.cardDivider,
-        margin: "14px 0"
-      }
-    }),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 10
-      }
     }, "Your data"),
     /*#__PURE__*/React.createElement(Btn, {
       onClick: handleExport,
@@ -8600,44 +8437,7 @@ function AccountScreen({
     style: {
       width: "100%"
     }
-  }, deleting ? "Deleting\u2026" : "Permanently delete my account")), showIOSNotifModal && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setShowIOSNotifModal(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 10
-    }
-  }, "Turn on notifications"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      margin: "0 0 14px"
-    }
-  }, "iOS only allows notifications for apps added to your Home Screen \u2014 not for pages open in Safari itself."), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.8,
-      margin: 0
-    }
-  }, /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: COLORS.ink
-    }
-  }, "1."), " Tap the Share icon in Safari", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: COLORS.ink
-    }
-  }, "2."), " Choose \u201cAdd to Home Screen\u201d", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: COLORS.ink
-    }
-  }, "3."), " Open Club Scorer from that new icon, then turn reminders on from there")));
+  }, deleting ? "Deleting\u2026" : "Permanently delete my account")));
 }
 
 // Every match this device/account knows about that currently has an active score code and/or
@@ -27324,15 +27124,6 @@ function CricketScorer() {
   useEffect(() => {
     if (user && screen === "login") setScreen("home");
   }, [user]);
-  // Poll reminders: checked on boot/whenever clubs or the linked player identity change, then on
-  // a standing timer while the app stays open -- same cadence as Sakura's due-date reminders,
-  // since this is the same "foreground-only, no push server" pattern (see checkPollReminders).
-  useEffect(() => {
-    if (!myPlayer || !myPlayer.name || clubs.length === 0) return;
-    checkPollReminders(clubs, myPlayer.name);
-    const interval = setInterval(() => checkPollReminders(clubs, myPlayer.name), 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [clubs, myPlayer]);
   // Offline outbox: retry queued writes whenever the browser tells us we're back online, and on a
   // slow poll as a safety net for platforms where the 'online' event doesn't fire reliably. The
   // poll also keeps the visible pending count in sync with reality (e.g. after a match screen's

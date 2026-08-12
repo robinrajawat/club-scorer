@@ -86,7 +86,6 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 - Installable to your phone's home screen on both iOS and Android for an app-like icon and experience.
 - Once loaded, the app keeps working with no signal — handy for grounds with patchy reception.
 - Light, dark, or match-your-phone theme, set from Account → Appearance. Device-local, so it's a per-device preference rather than something that follows your account.
-- Poll reminders (Account → Notifications, once signed in with a linked player profile) — a one-time nudge for any availability poll sent to a team you're rostered on that you haven't answered yet. Local-only: there's no push server behind this static site, so it only fires while the app is open or foregrounded on that device, never while fully closed. On iOS this needs the app added to your Home Screen first (Safari itself doesn't support it).
 
 **Help & orientation**
 - A short, dismissible tour on first launch — just the handful of things you genuinely wouldn't discover by exploring (score codes vs. view codes, borrowing a player, clubs/federations, tournaments vs. series), not a full walkthrough. Shown once per device, skippable at any point.
