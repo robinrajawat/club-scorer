@@ -1,0 +1,103 @@
+# iOS native rewrite — status (parked)
+
+Last worked on: August 2026. Parked in favor of the existing PWA — see
+"Why parked" below. Tell Claude to read this file to pick the thread back up.
+
+## Where this came from
+
+Cricket Scorer already exists as a mature single-file web app
+(`index.html` at repo root) with Firebase Auth + Firestore, a PWA manifest,
+and a service worker — genuinely feature-complete: teams, tournaments,
+records/series stats, live-follow/share links, PDF export.
+
+This `ios/` folder is a from-scratch SwiftUI native rewrite of that app,
+not a wrapper around the web version. Decision context: a `WKWebView` wrap
+was considered and rejected (feels like a website, weak App Review case) in
+favor of native SwiftUI, on the reasoning that native gestures/animations/
+push notifications are worth the much larger build cost — see "Why parked"
+for the reconsideration of that tradeoff.
+
+## Why parked
+
+Comparing native progress against the already-working PWA, the honest
+sizing was: 6–10 weeks of focused solo work to reach real parity (sync,
+teams, tournaments with NRR/qualification logic, records, sharing, PDF
+export). Tournaments and sync are the two genuinely hard remaining pieces;
+everything else is volume more than difficulty. Decided to park rather than
+ship a native app that's a downgrade from the PWA for weeks/months.
+
+**Before resuming, worth re-asking:** is the goal still "real native app
+in the App Store," or would getting the PWA even better (push notification
+reliability, install prompts, offline robustness) get 80% of the value for
+a fraction of the effort? The PWA already has `manifest.json` + `sw.js` +
+offline support working. Re-litigate this, don't just resume out of
+momentum.
+
+## What's built (~15% of full parity)
+
+All under `ios/CricketScorer/CricketScorer/`:
+
+- **Auth** (`Services/AuthViewModel.swift`, `Views/WelcomeView.swift`):
+  email/password sign-in, sign-up, password reset. Error copy ported from
+  the web app's `friendlyEmailAuthError()`. Google sign-in is stubbed (see
+  below).
+- **Home** (`Views/HomeView.swift`): local matches list, new match button,
+  swipe to delete.
+- **New match setup** (`Views/NewMatchView.swift`): team names, players
+  (comma-separated text entry — no roster management screen), overs limit,
+  who bats first.
+- **Live scoring** (`Views/MatchScoringView.swift`,
+  `Services/ScoringEngine.swift`, `Models/Match.swift`): full ball-by-ball
+  engine — runs, wides, no-balls, byes, leg byes, wickets with type,
+  automatic strike rotation (including the "odd runs on last ball of over"
+  rule), new-bowler and new-batter prompts, over/innings/match completion,
+  second-innings target and required run rate.
+- **Result** (`Views/ResultView.swift`): basic result summary + both
+  innings' scorecards.
+- **Persistence** (`Services/MatchStore.swift`): local-only, UserDefaults +
+  JSON via Codable. No cloud sync.
+
+This is a genuinely playable single-device scorer end to end — not a demo
+screen. Not yet run on-device to confirm the build actually compiles/runs
+in Xcode (was about to be tried on a 17 Pro / iOS 26.5 with a free Apple ID
+when this got parked).
+
+## Known simplifications in what's built
+
+- Run-outs record 0 completed runs (should credit runs completed before the
+  dismissal).
+- No free-hit tracking after a no-ball.
+- No manual batting-order override — next batter comes from a picker of
+  unused players, not a drag-reordered lineup.
+- No undo — a misrecorded ball can't be corrected yet.
+
+## What's next, roughly in priority order
+
+1. **First on-device build.** Hasn't been verified end-to-end in Xcode yet.
+   Follow `ios/README.md` setup steps. This should happen before any more
+   feature work — confirms the Firebase wiring and signing actually work.
+2. **Firestore sync + Google sign-in** (medium effort). The thing that
+   makes this a real "your data, your devices" app instead of a local toy.
+   Needs: `GoogleSignIn-iOS` SDK, `REVERSED_CLIENT_ID` URL scheme from
+   `GoogleService-Info.plist`, and sync/conflict-resolution logic (two
+   devices scoring the same match) — that last part is genuine logic, not
+   just SDK wiring.
+3. **Teams/players management** (small–medium) — mostly CRUD + a search
+   screen.
+4. **Tournaments** (large) — brackets, standings, net-run-rate math,
+   qualification scenarios. The single hardest remaining piece.
+5. **Records/series stats** (medium) — aggregation across matches.
+6. **Sharing/live-follow links** (medium) — needs a public, unauthenticated
+   read path in Firestore plus a viewer UI.
+7. **PDF export** (small–medium).
+8. **Scoring-engine refinements** (small) — undo, run-out partial runs,
+   free hits.
+9. **Polish** (ongoing) — animations, haptics, edge cases, empty states.
+
+## Setup reminder for whoever opens this in Xcode
+
+No `.xcodeproj` is committed (binary project files diff badly). Follow
+`ios/README.md` to generate one. Use Xcode's file-system-synchronized
+groups (blue folder icons) when adding the `App`/`Views`/`Models`/
+`Services` folders, not manual drag-in of loose files — otherwise every new
+Swift file needs a manual "Add Files" step in Xcode after each `git pull`.
