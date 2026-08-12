@@ -12873,6 +12873,11 @@ function HomeScreen({
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
   const [query, setQuery] = useState("");
+  // Collapsed by default -- a season's worth of completed matches otherwise buries the in-progress
+  // ones (the matches someone's actually mid-way through and likely opened this screen to resume)
+  // under everything already finished. Forced open below whenever there are no in-progress matches
+  // to separate it from, since folding the only content on screen would just look empty.
+  const [completedExpanded, setCompletedExpanded] = useState(false);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -12881,6 +12886,101 @@ function HomeScreen({
   // filter that only sometimes searches a field would be more confusing than one that reliably
   // doesn't.
   const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
+  // In progress first (the ones someone likely opened this screen to resume), completed second and
+  // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
+  // result set is already short and specific, so splitting it into two labeled groups (one likely
+  // collapsed) would just be extra taps to find the one match being searched for.
+  const inProgressMatches = filteredMatches.filter(m => m.status !== "complete");
+  const completedMatches = filteredMatches.filter(m => m.status === "complete");
+function renderMatchCard(m, i) {
+    return /*#__PURE__*/React.createElement("div", {
+    key: m.id,
+    style: {
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement(SwipeableRow, {
+    onDelete: () => setConfirmDeleteId(m.id),
+    deleteLabel: "Delete"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cs-row",
+    style: {
+      background: COLORS.surface,
+      padding: "14px 14px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => onOpen(m.id),
+    style: {
+      cursor: "pointer",
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      flexShrink: 0,
+      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turfFixed,
+      boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
+    }
+  }), /*#__PURE__*/React.createElement("div", null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.gold,
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 10
+  }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink
+    }
+  }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontWeight: 500
+    }
+  }, "vs"), " ", m.teamB), (() => {
+    // Cloud-synced matches land in `matches` as full docs (loadIndex reads them straight from
+    // Firestore), so compute fresh from m.innings when it's there -- it's already up to date and
+    // needs no extra plumbing. A local-only/offline match never carries full innings data on this
+    // screen, only the lightweight pointer upsertLocalPointer wrote at save time, so it falls back
+    // to that pointer's own pre-computed m.scoreLine instead.
+    const line = m.innings ? matchScoreLine(m) : m.scoreLine;
+    return line ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: m.status === "complete" ? COLORS.turf : COLORS.inkSoft,
+        marginTop: 2
+      }
+    }, line) : null;
+  })(), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`))))));
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "28px 16px 40px",
@@ -13050,93 +13150,54 @@ function HomeScreen({
       color: COLORS.inkSoft,
       fontStyle: "italic"
     }
-  }, "No matches match \u201c", query.trim(), "\u201d.") : filteredMatches.map((m, i) => /*#__PURE__*/React.createElement("div", {
-    key: m.id,
-    style: {
-      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
-    }
-  }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => setConfirmDeleteId(m.id),
-    deleteLabel: "Delete"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cs-row",
-    style: {
-      background: COLORS.surface,
-      padding: "14px 14px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => onOpen(m.id),
-    style: {
-      cursor: "pointer",
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      gap: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      flexShrink: 0,
-      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turfFixed,
-      boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
-    }
-  }), /*#__PURE__*/React.createElement("div", null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      fontFamily: "'Inter'",
-      fontSize: 10,
-      fontWeight: 700,
-      letterSpacing: 0.5,
-      textTransform: "uppercase",
-      color: COLORS.gold,
-      marginBottom: 2
-    }
-  }, /*#__PURE__*/React.createElement(Trophy, {
-    size: 10
-  }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 14.5,
-      color: COLORS.ink
-    }
-  }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.inkSoft,
-      fontWeight: 500
-    }
-  }, "vs"), " ", m.teamB), (() => {
-    // Cloud-synced matches land in `matches` as full docs (loadIndex reads them straight from
-    // Firestore), so compute fresh from m.innings when it's there -- it's already up to date and
-    // needs no extra plumbing. A local-only/offline match never carries full innings data on this
-    // screen, only the lightweight pointer upsertLocalPointer wrote at save time, so it falls back
-    // to that pointer's own pre-computed m.scoreLine instead.
-    const line = m.innings ? matchScoreLine(m) : m.scoreLine;
-    return line ? /*#__PURE__*/React.createElement("div", {
+  }, "No matches match \u201c", query.trim(), "\u201d.") : (() => {
+    if (q) return filteredMatches.map((m, i) => renderMatchCard(m, i));
+    const showCompleted = completedExpanded || inProgressMatches.length === 0;
+    return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 12.5,
-        fontWeight: 600,
-        color: m.status === "complete" ? COLORS.turf : COLORS.inkSoft,
-        marginTop: 2
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
       }
-    }, line) : null;
-  })(), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 1
-    }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`)))))))) : /*#__PURE__*/React.createElement("div", {
+    }, "In Progress"), inProgressMatches.map((m, i) => renderMatchCard(m, i)), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: inProgressMatches.length > 0 ? 18 : 0
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setCompletedExpanded(e => !e),
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        width: "100%",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "4px 0 10px",
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        opacity: 0.75
+      }
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 13,
+      style: {
+        transform: showCompleted ? "rotate(90deg)" : "none",
+        transition: "transform 0.15s ease",
+        flexShrink: 0
+      }
+    }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i))));
+  })()) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
