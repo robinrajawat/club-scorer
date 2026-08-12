@@ -4719,6 +4719,12 @@ function buildPollUrl(code) {
     return `?poll=${code}`;
   }
 }
+function buildPollShareText(question, fixtureDate, code) {
+  const lines = [question];
+  if (fixtureDate) lines.push(fixtureDate);
+  lines.push(buildPollUrl(code));
+  return lines.join("\n");
+}
 function buildFollowUrl(code) {
   try {
     const {
@@ -17827,6 +17833,11 @@ function AvailabilityPollModal({
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
+  function shareToWhatsApp(code, q, fixtureDateVal) {
+    const text = buildPollShareText(q, fixtureDateVal, code);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
   async function confirmDelete() {
     setDeleting(true);
     setDeleteError("");
@@ -18013,7 +18024,16 @@ function AvailabilityPollModal({
     style: {
       flexShrink: 0
     }
-  }, copied ? "Copied!" : "Copy")), /*#__PURE__*/React.createElement("div", {
+  }, copied ? "Copied!" : "Copy")), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => shareToWhatsApp(createdCode, question, fixtureDate),
+    style: {
+      width: "100%",
+      marginBottom: 14,
+      background: COLORS.turfFixed,
+      color: "#fff",
+      border: "none"
+    }
+  }, "Share on WhatsApp"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -18092,6 +18112,29 @@ function AvailabilityPollModal({
       }
     }, r ? STATUS_LABEL[r.status] : "\u2014"));
   })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 12px",
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.surface,
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      marginBottom: 8
+    }
+  }, buildPollUrl(activePoll.code)), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => shareToWhatsApp(activePoll.code, activePoll.question, activePoll.fixtureDate),
+    style: {
+      width: "100%",
+      marginBottom: 8,
+      background: COLORS.turfFixed,
+      color: "#fff",
+      border: "none"
+    }
+  }, "Share on WhatsApp"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
