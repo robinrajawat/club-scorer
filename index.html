@@ -19492,6 +19492,62 @@ function TeamEditScreen({
   }))))))); 
 }
 
+// Up to 2 letters: first+last name initials, or just the one letter for a single-word name.
+// "?" only for a genuinely empty name, which shouldn't happen in practice (every player has one).
+function playerInitials(name) {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+// Deterministic pick from the same TEAM_COLOR_PRESETS palette jersey colors already use, so two
+// players with different names reliably land on different (but stable across reloads) colors,
+// rather than every initials-avatar in a list being the same flat color.
+function playerAvatarColor(name) {
+  const s = name || "";
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return TEAM_COLOR_PRESETS[hash % TEAM_COLOR_PRESETS.length];
+}
+// Photo if the player has one (only ever set via linkPlayerIfMatch, when they've signed in with
+// the exact email they were published under — most roster entries never will), otherwise a
+// colored initials circle instead of leaving blank space.
+function PlayerAvatar({
+  name,
+  photoURL,
+  size = 40
+}) {
+  if (photoURL) {
+    return /*#__PURE__*/React.createElement("img", {
+      src: photoURL,
+      alt: "",
+      style: {
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        objectFit: "cover",
+        flexShrink: 0
+      }
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      background: playerAvatarColor(name),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: Math.round(size * 0.4),
+      flexShrink: 0
+    }
+  }, playerInitials(name));
+}
+
 // Search-and-pick UI for transferring a published player to a different home club (see
 // transferPlayerHomeClub) — deliberately searches the same public clubDirectory used for
 // federation affiliation, not an open-ended raw club id field, so the target has to be a real,
@@ -19737,16 +19793,10 @@ function PlayersScreen({
         gap: 12,
         marginBottom: 4
       }
-    }, selected.photoURL && /*#__PURE__*/React.createElement("img", {
-      src: selected.photoURL,
-      alt: "",
-      style: {
-        width: 48,
-        height: 48,
-        borderRadius: "50%",
-        flexShrink: 0,
-        objectFit: "cover"
-      }
+    }, /*#__PURE__*/React.createElement(PlayerAvatar, {
+      name: selected.name,
+      photoURL: selected.photoURL,
+      size: 48
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'DM Serif Display', serif",
@@ -19948,8 +19998,8 @@ function PlayersScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
+      justifyContent: "flex-start",
+      gap: 10,
       padding: "12px 14px",
       borderRadius: 12,
       border: "none",
@@ -19957,6 +20007,14 @@ function PlayersScreen({
       cursor: "pointer",
       textAlign: "left",
       boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement(PlayerAvatar, {
+    name: p.name,
+    photoURL: p.photoURL,
+    size: 34
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19971,7 +20029,7 @@ function PlayersScreen({
       fontSize: 11.5,
       color: COLORS.inkSoft
     }
-  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))));
+  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 ")))))));
 }
 function Modal({
   children,
