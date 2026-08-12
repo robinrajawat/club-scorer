@@ -8755,6 +8755,27 @@ function FirstLaunchTour({
     }
   }, isLast ? "Get started" : "Next")));
 }
+// Wraps every case-insensitive occurrence of `query` in `text` with a highlighted span -- used by
+// HelpScreen's search so a match is visible right where it actually occurred, not just implied by
+// the entry surviving the filter. Regex special characters in the query are escaped since this is
+// free-typed search text, not a pattern -- a query like "9-a-side" or "(over)" must be matched
+// literally, not interpreted. Returns the plain string unchanged when there's no query or no match,
+// so this is safe to call unconditionally rather than needing a separate no-query code path.
+function highlightMatch(text, query) {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => i % 2 === 1 ? /*#__PURE__*/React.createElement("mark", {
+    key: i,
+    style: {
+      background: COLORS.gold,
+      color: "#fff",
+      borderRadius: 3,
+      padding: "0 1px"
+    }
+  }, part) : part);
+}
 function HelpScreen({
   onBack,
   onReplayTour
@@ -8856,14 +8877,14 @@ function HelpScreen({
       color: COLORS.ink,
       marginBottom: 5
     }
-  }, e.q), /*#__PURE__*/React.createElement("div", {
+  }, highlightMatch(e.q, query.trim())), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
       color: COLORS.inkSoft,
       lineHeight: 1.55
     }
-  }, e.a))))), onReplayTour && /*#__PURE__*/React.createElement("button", {
+  }, highlightMatch(e.a, query.trim())))))), onReplayTour && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onReplayTour,
     className: "cs-btn",
