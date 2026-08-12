@@ -1801,6 +1801,30 @@ async function unpublishPlayer(email) {
 // computePlayerCareerStats), never stored on this doc, so nothing historical is lost. Any other
 // club's roster that borrowed this player keeps its own local copy of name/number regardless (see
 // isBorrowed in TeamEditScreen) — they just won't be able to find or re-borrow this player again.
+// Moves a published player to a different home club, owner-only (enforced by rules, same
+// authority deletePlayer already requires from the CURRENT home club). Replaces the old
+// delete-then-let-the-new-club-republish workaround: age/role/batting-bowling hand and the
+// player's public/private id (their email) all carry over untouched, only homeClubId changes.
+// The destination doesn't need to consent -- the current home club's owner already has full
+// authority to erase this player outright (deletePlayer), so handing them to a specific club
+// instead is strictly less drastic, not a bigger power grant.
+async function transferPlayerHomeClub(email, newClubId) {
+  const id = normalizeEmail(email);
+  try {
+    await db.collection("players").doc(id).update({
+      homeClubId: newClubId
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    console.error("transfer player failed", e.code, e.message);
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only that player's current home club owner can transfer them." : e.message || "Couldn't transfer this player."
+    };
+  }
+}
 async function deletePlayer(email) {
   const id = normalizeEmail(email);
   try {
@@ -19468,6 +19492,130 @@ function TeamEditScreen({
   }))))))); 
 }
 
+// Search-and-pick UI for transferring a published player to a different home club (see
+// transferPlayerHomeClub) — deliberately searches the same public clubDirectory used for
+// federation affiliation, not an open-ended raw club id field, so the target has to be a real,
+// discoverable club rather than something typed in blind.
+function TransferPlayerModal({
+  player,
+  onSearchClubs,
+  onTransfer,
+  onClose
+}) {
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState(null); // null = not searched yet
+  const [searching, setSearching] = useState(false);
+  const [target, setTarget] = useState(null); // club object, once picked
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function runSearch() {
+    setSearching(true);
+    setError("");
+    const list = await onSearchClubs(term);
+    setSearching(false);
+    setResults(list.filter(c => c.id !== player.homeClubId));
+  }
+  async function confirmTransfer() {
+    setBusy(true);
+    setError("");
+    const result = await onTransfer(player.email, target.id);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error || "Couldn't transfer this player.");
+      return;
+    }
+    onClose(target);
+  }
+  if (target) {
+    return /*#__PURE__*/React.createElement(ConfirmModal, {
+      title: `Transfer ${player.name} to ${target.name}?`,
+      message: `${target.name} becomes the club that administers ${player.name}'s public profile \u2014 name, age, role, and batting/bowling hand carry over unchanged. Career stats stay computed from actual match data either way, and any team that already borrowed this player keeps its own local roster copy regardless.`,
+      confirmLabel: "Transfer",
+      busy: busy,
+      onConfirm: confirmTransfer,
+      onCancel: () => {
+        setTarget(null);
+        setError("");
+      }
+    });
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Transfer to another club"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 16
+    }
+  }, `Search for the club ${player.name} is moving to. Only public clubs are searchable here \u2014 same directory as finding a club to affiliate with a federation.`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: term,
+    onChange: setTerm,
+    placeholder: "Club name",
+    style: {
+      flex: 1
+    }
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: runSearch,
+    disabled: searching,
+    style: {
+      flexShrink: 0
+    }
+  }, searching ? "\u2026" : "Search")), results !== null && (results.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No public clubs match that search.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, results.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    type: "button",
+    onClick: () => setTarget(c),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 12,
+      padding: "10px 12px",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13.5,
+      color: COLORS.ink
+    }
+  }, c.name)))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12.5,
+      fontFamily: "'Inter'",
+      marginTop: 10
+    }
+  }, error));
+}
+
 // Search + profile for the public player directory (see publishPlayer/loadPublicPlayers).
 // clubs is passed through only to resolve a player's homeClubId into a readable name for the
 // stats section's "scoped to X's tournaments" label — see computePlayerCareerStats for why
@@ -19477,6 +19625,8 @@ function PlayersScreen({
   onLoadPublicPlayers,
   onComputeCareerStats,
   onDeletePlayer,
+  onSearchPublicClubs,
+  onTransferPlayer,
   currentUid,
   clubs = []
 }) {
@@ -19489,6 +19639,7 @@ function PlayersScreen({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [transferOpen, setTransferOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     onLoadPublicPlayers().then(list => {
@@ -19671,6 +19822,22 @@ function PlayersScreen({
       }
     }, deleteError), /*#__PURE__*/React.createElement("button", {
       type: "button",
+      onClick: () => setTransferOpen(true),
+      className: "cs-btn",
+      style: {
+        background: "none",
+        border: "none",
+        color: COLORS.pitch,
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12,
+        cursor: "pointer",
+        padding: 4,
+        marginRight: 10,
+        textDecoration: "underline"
+      }
+    }, "Transfer to another club"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
       onClick: () => setConfirmDelete(true),
       className: "cs-btn",
       style: {
@@ -19691,6 +19858,21 @@ function PlayersScreen({
       busy: deleteBusy,
       onConfirm: handleDeletePlayer,
       onCancel: () => setConfirmDelete(false)
+    }), transferOpen && /*#__PURE__*/React.createElement(TransferPlayerModal, {
+      player: selected,
+      onSearchClubs: onSearchPublicClubs,
+      onTransfer: onTransferPlayer,
+      onClose: newClub => {
+        setTransferOpen(false);
+        if (newClub) {
+          const updated = {
+            ...selected,
+            homeClubId: newClub.id
+          };
+          setPlayers(list => list.map(p => p.email === selected.email ? updated : p));
+          openPlayer(updated);
+        }
+      }
     }));
   }
   return /*#__PURE__*/React.createElement("div", {
@@ -27657,6 +27839,8 @@ function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     onComputeCareerStats: computePlayerCareerStats,
     onDeletePlayer: deletePlayer,
+    onSearchPublicClubs: searchPublicClubs,
+    onTransferPlayer: transferPlayerHomeClub,
     currentUid: user && user.uid,
     clubs: clubs
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {

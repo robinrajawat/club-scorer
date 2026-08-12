@@ -336,9 +336,9 @@ service cloud.firestore {
 
       allow update: if request.auth != null && (
         // (A) Home club's owner/co-owner editing name/public. homeClubId, email, and linkedUid
-        // must not change via this branch — homeClubId transfer isn't supported (same reasoning
-        // as a club's ownerUid never moving through its general-edit branch), and linkedUid is
-        // exclusively branch (B)'s to set.
+        // must not change via this branch — homeClubId transfer isn't supported here (see (C)
+        // below for the dedicated transfer path instead), and linkedUid is exclusively branch
+        // (B)'s to set.
         (
           isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data) &&
           request.resource.data.homeClubId == resource.data.homeClubId &&
@@ -361,6 +361,20 @@ service cloud.firestore {
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL']) ||
             request.resource.data.photoURL == request.auth.token.get('picture', null)
           )
+        )
+        ||
+        // (C) Transfer to a different home club — authorized by the CURRENT home club's
+        // owner/co-owner only (same authority deletePlayer already requires from them; handing
+        // the player to a specific new club is strictly less drastic than the delete they're
+        // already allowed to do unilaterally, so no separate consent from the destination club is
+        // required here). homeClubId is the only field this branch may touch — everything else
+        // (name/age/role/hands/email/linkedUid/public) carries over exactly as it was, unlike the
+        // old delete-and-republish workaround this replaces, which lost that info. See
+        // transferPlayerHomeClub in index.html.
+        (
+          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['homeClubId']) &&
+          request.resource.data.homeClubId != resource.data.homeClubId
         )
       );
 

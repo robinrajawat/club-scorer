@@ -47,7 +47,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 **Players**
 - A cross-club public player directory: publish a player from your club's roster (name + email, optionally age/role/batting-and-bowling hand), and any club can find and borrow them without retyping their details.
 - Search the directory and open a player's profile to see their stats — runs, highest score, batting average and strike rate, wickets, best bowling figures, economy, and catches taken — scoped to their home club's own tournaments (there's no way to see every match a player's ever played across the whole app, since matches aren't indexed globally; the profile says so explicitly rather than pretending to be comprehensive).
-- The home club's owner can unpublish a player (pulls them out of the directory without breaking any roster that already borrowed them) or delete their profile outright. Stats are computed fresh from match data every time, never stored on the player doc, so deleting a profile never loses history.
+- The home club's owner can unpublish a player (pulls them out of the directory without breaking any roster that already borrowed them), delete their profile outright, or transfer them to a different (public) home club — name, age, role, and batting/bowling hand carry over unchanged, only which club administers them changes. Stats are computed fresh from match data every time, never stored on the player doc, so deleting or transferring a profile never loses history.
 
 **Live score & sharing**
 - Runs-per-over and run-rate charts, with the most expensive over highlighted and each bar labeled.
