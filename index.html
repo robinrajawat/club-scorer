@@ -19513,12 +19513,14 @@ function TransferPlayerModal({
     setError("");
     const list = await onSearchClubs(term);
     setSearching(false);
-    setResults(list.filter(c => c.id !== player.homeClubId));
+    // clubDirectory docs key themselves as `clubId`, not `id` -- see setClubVisibility/
+    // SearchAndRequestPanel's own idKey handling of the same directory.
+    setResults(list.filter(c => c.clubId !== player.homeClubId));
   }
   async function confirmTransfer() {
     setBusy(true);
     setError("");
-    const result = await onTransfer(player.email, target.id);
+    const result = await onTransfer(player.email, target.clubId);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't transfer this player.");
@@ -19565,6 +19567,9 @@ function TransferPlayerModal({
     value: term,
     onChange: setTerm,
     placeholder: "Club name",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
     style: {
       flex: 1
     }
@@ -19572,7 +19577,9 @@ function TransferPlayerModal({
     onClick: runSearch,
     disabled: searching,
     style: {
-      flexShrink: 0
+      flexShrink: 0,
+      padding: "0 16px",
+      minHeight: 44
     }
   }, searching ? "\u2026" : "Search")), results !== null && (results.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19588,7 +19595,7 @@ function TransferPlayerModal({
       gap: 6
     }
   }, results.map(c => /*#__PURE__*/React.createElement("button", {
-    key: c.id,
+    key: c.clubId,
     type: "button",
     onClick: () => setTarget(c),
     className: "cs-btn",
@@ -19600,13 +19607,22 @@ function TransferPlayerModal({
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 12,
       padding: "10px 12px",
-      cursor: "pointer",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13.5,
       color: COLORS.ink
     }
-  }, c.name)))), error && /*#__PURE__*/React.createElement("div", {
+  }, c.name), c.ownerName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft
+    }
+  }, "Owner: ", c.ownerName))))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12.5,
@@ -19867,7 +19883,7 @@ function PlayersScreen({
         if (newClub) {
           const updated = {
             ...selected,
-            homeClubId: newClub.id
+            homeClubId: newClub.clubId
           };
           setPlayers(list => list.map(p => p.email === selected.email ? updated : p));
           openPlayer(updated);
