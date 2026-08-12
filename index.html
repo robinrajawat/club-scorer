@@ -23636,6 +23636,13 @@ function MatchScreen({
     writeSeqRef.current = conflict.writeSeq || 0;
     setMatch(conflict);
     setConflict(null);
+    // The person just chose to discard their local version in favor of the server's -- any queued
+    // pending write for this match (from an earlier network hiccup, now superseded) has to go too,
+    // or loadMatch would keep resurrecting that stale pre-conflict snapshot on the next reopen
+    // instead of what was actually just resolved here, and the next ball scored would immediately
+    // conflict again. "Keep mine" doesn't need this: it re-saves through queueSave -> saveMatch,
+    // which already clears the pending write itself once that save actually succeeds.
+    clearPendingWrite(match.id);
   }
   function pushHistory() {
     setHistory(h => {
