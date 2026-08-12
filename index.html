@@ -1226,6 +1226,12 @@ function upsertLocalPointer(match, extra) {
     shareCode: match.shareCode || null,
     viewCode: match.viewCode || null,
     tournamentId: match.tournamentId || null,
+    // Cloud-synced matches arrive on the Home screen as full match docs (see loadIndex), so
+    // MatchScoreLine can be computed there directly from match.innings. A local-only pointer is
+    // all Home ever sees for an offline/not-signed-in match, though -- there's no full match doc
+    // riding along with it -- so the score has to be baked in here, at save time, or the list item
+    // would have nothing to show at all for those matches.
+    scoreLine: matchScoreLine(match),
     ...extra
   });
   lsSetIndex(idx);
@@ -4741,6 +4747,20 @@ function matchResultText(match) {
   }
   const margin = target - 1 - i2.runs;
   return `${i1.battingTeam} won by ${margin} run${margin === 1 ? "" : "s"}`;
+}
+// One-line score summary for the Home screen match list -- "Team A won by 4 wickets" once
+// complete, or "Team B 86-3 (10.2 ov)" (whichever innings is actually live) while in progress.
+// Returns null before any ball's been bowled (nothing meaningful to show yet), matching
+// matchResultText's own null-means-nothing-to-show convention. Deliberately just the current
+// inning's own line, not both innings' scores plus a chase context -- this has to fit on a
+// list-item row shared with the team names and overs/status caption, not the full detail a
+// spectator gets from MatchStatsPanel once they've actually opened the match.
+function matchScoreLine(match) {
+  if (!match || !match.innings || match.innings.length === 0) return null;
+  if (match.status === "complete") return matchResultText(match);
+  const inn = match.innings[match.currentInningIndex] || match.innings[match.innings.length - 1];
+  if (!inn || !inn.battingOrder || inn.battingOrder.length === 0) return null;
+  return `${inn.battingTeam} ${inn.runs}-${inn.wickets} (${oversLabel(inn.legalBalls, inn.ballsPerOver)} ov)`;
 }
 // Shared between MatchScreen (the live scoring screen, which used to compute this inline) and
 // MatchStatsPanel (the read-only panel FollowScreen/ScorecardOverlay both use, which never had
@@ -13022,7 +13042,23 @@ function HomeScreen({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", m.teamB), /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", m.teamB), (() => {
+    // Cloud-synced matches land in `matches` as full docs (loadIndex reads them straight from
+    // Firestore), so compute fresh from m.innings when it's there -- it's already up to date and
+    // needs no extra plumbing. A local-only/offline match never carries full innings data on this
+    // screen, only the lightweight pointer upsertLocalPointer wrote at save time, so it falls back
+    // to that pointer's own pre-computed m.scoreLine instead.
+    const line = m.innings ? matchScoreLine(m) : m.scoreLine;
+    return line ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: m.status === "complete" ? COLORS.turf : COLORS.inkSoft,
+        marginTop: 2
+      }
+    }, line) : null;
+  })(), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
