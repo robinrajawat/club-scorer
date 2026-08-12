@@ -14847,12 +14847,7 @@ function TournamentsScreen({
       lineHeight: 1.5
     }
   }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
     style: {
-      display: "flex",
-      gap: 8,
-      overflowX: "auto",
-      paddingBottom: 4,
       marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -14867,9 +14862,32 @@ function TournamentsScreen({
       border: !activeClubId && !activeFederationId ? "none" : `1px solid ${COLORS.willow}`,
       background: !activeClubId && !activeFederationId ? COLORS.pitchFixed : COLORS.surface,
       color: !activeClubId && !activeFederationId ? "#fff" : COLORS.inkSoft,
-      whiteSpace: "nowrap"
+      whiteSpace: "nowrap",
+      marginBottom: clubs.length > 0 || myFederations.length > 0 ? 12 : 0
     }
-  }, "My Tournaments"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
+  }, "My Tournaments"), clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: myFederations.length > 0 ? 12 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 6
+    }
+  }, "Clubs"), /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
+    style: {
+      display: "flex",
+      gap: 8,
+      overflowX: "auto",
+      paddingBottom: 4
+    }
+  }, clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
     onClick: () => onSelectSource(c.id),
     style: {
@@ -14884,7 +14902,25 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name)), myFederations.map(f => /*#__PURE__*/React.createElement("button", {
+  }, c.name)))), myFederations.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.gold,
+      textTransform: "uppercase",
+      marginBottom: 6
+    }
+  }, "Federations"), /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
+    style: {
+      display: "flex",
+      gap: 8,
+      overflowX: "auto",
+      paddingBottom: 4
+    }
+  }, myFederations.map(f => /*#__PURE__*/React.createElement("button", {
     key: f.id,
     onClick: () => onSelectFederationSource(f.id),
     style: {
@@ -14899,7 +14935,7 @@ function TournamentsScreen({
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, f.name))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, f.name))))), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
