@@ -17904,8 +17904,11 @@ function AvailabilityPollModal({
     }
   }, "No polls sent yet.") : polls.map(p => {
     const c = counts(p);
-    return /*#__PURE__*/React.createElement("button", {
+    return /*#__PURE__*/React.createElement(SwipeableRow, {
       key: p.code,
+      onDelete: () => setConfirmDeleteCode(p.code),
+      deleteLabel: "Delete"
+    }, /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => openResults(p.code),
       className: "cs-btn",
@@ -17917,7 +17920,7 @@ function AvailabilityPollModal({
         border: `1px solid ${COLORS.willow}`,
         borderRadius: 12,
         padding: "10px 12px",
-        marginBottom: 8,
+        marginBottom: 0,
         cursor: "pointer"
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -17934,7 +17937,7 @@ function AvailabilityPollModal({
         fontSize: 11.5,
         color: COLORS.inkSoft
       }
-    }, p.fixtureDate ? `${p.fixtureDate} \u00b7 ` : "", `${c.yes} yes \u00b7 ${c.no} no \u00b7 ${c.maybe} maybe`));
+    }, p.fixtureDate ? `${p.fixtureDate} \u00b7 ` : "", `${c.yes} yes \u00b7 ${c.no} no \u00b7 ${c.maybe} maybe`)));
   }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: () => setView("create"),
