@@ -14847,6 +14847,11 @@ function TournamentsScreen({
   const [busy, setBusy] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | upcoming | ongoing | completed
+  // Which source tab is showing -- mirrors the same tab bar TeamsScreen already uses to switch
+  // between My Teams/Clubs/Federations, for consistency across the two screens doing an
+  // analogous job (picking whose tournaments/teams to browse). Defaults to whichever source was
+  // already active coming into this screen, rather than always resetting to "mine".
+  const [sourceTab, setSourceTab] = useState(activeFederationId ? "federations" : activeClubId ? "clubs" : "mine");
   const [useGroups, setUseGroups] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
   const [advancePerGroup, setAdvancePerGroup] = useState(2);
@@ -14995,46 +15000,55 @@ function TournamentsScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), /*#__PURE__*/React.createElement("div", {
+  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 16
+      display: "flex",
+      gap: 6,
+      marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => onSelectSource(null),
+  }, [{
+    key: "mine",
+    label: "My Tournaments"
+  }, ...(clubs.length > 0 ? [{
+    key: "clubs",
+    label: "Clubs"
+  }] : []), ...(myFederations.length > 0 ? [{
+    key: "federations",
+    label: "Federations"
+  }] : [])].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.key,
+    type: "button",
+    onClick: () => {
+      setSourceTab(t.key);
+      // Switching into Clubs/Federations with nothing picked yet defaults to the first one --
+      // an empty "pick one" state right after tapping the tab would just be an extra, pointless
+      // step when there's an obvious first choice sitting right there.
+      if (t.key === "mine") onSelectSource(null);
+      else if (t.key === "clubs" && !activeClubId) onSelectSource(clubs[0].id);
+      else if (t.key === "federations" && !activeFederationId) onSelectFederationSource(myFederations[0].id);
+    },
+    className: "cs-btn",
     style: {
-      padding: "7px 13px",
-      borderRadius: 20,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
+      flex: 1,
+      padding: "9px 8px",
+      borderRadius: 12,
+      border: "none",
       cursor: "pointer",
-      border: !activeClubId && !activeFederationId ? "none" : `1px solid ${COLORS.willow}`,
-      background: !activeClubId && !activeFederationId ? COLORS.pitchFixed : COLORS.surface,
-      color: !activeClubId && !activeFederationId ? "#fff" : COLORS.inkSoft,
-      whiteSpace: "nowrap",
-      marginBottom: clubs.length > 0 || myFederations.length > 0 ? 12 : 0
-    }
-  }, "My Tournaments"), clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: myFederations.length > 0 ? 12 : 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
+      background: sourceTab === t.key ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: sourceTab === t.key ? "#fff" : COLORS.inkSoft,
+      boxShadow: sourceTab === t.key ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
       fontFamily: "'Inter'",
-      fontSize: 10.5,
       fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 6
+      fontSize: 13
     }
-  }, "Clubs"), /*#__PURE__*/React.createElement("div", {
+  }, t.label))), sourceTab === "clubs" && clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
       overflowX: "auto",
-      paddingBottom: 4
+      paddingBottom: 4,
+      marginBottom: 16
     }
   }, clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
@@ -15051,23 +15065,14 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name)))), myFederations.length > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.gold,
-      textTransform: "uppercase",
-      marginBottom: 6
-    }
-  }, "Federations"), /*#__PURE__*/React.createElement("div", {
+  }, c.name))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
       overflowX: "auto",
-      paddingBottom: 4
+      paddingBottom: 4,
+      marginBottom: 16
     }
   }, myFederations.map(f => /*#__PURE__*/React.createElement("button", {
     key: f.id,
@@ -15084,7 +15089,7 @@ function TournamentsScreen({
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, f.name))))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, f.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
