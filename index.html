@@ -1853,6 +1853,26 @@ async function loadPublicPlayers() {
     return [];
   }
 }
+// Checks which of a team's BORROWED players (see isBorrowed in TeamEditScreen) no longer have a
+// player doc at all -- i.e. their home club deleted them outright (see deletePlayer), as opposed
+// to merely unpublishing them (doc still exists, just not searchable -- not what this flags,
+// since the roster copy itself is still legitimately theirs to keep either way). A roster row is
+// a static snapshot taken at borrow time and never re-synced (see addBorrowedPlayer's own
+// comment), so this is the only way the app ever notices the source was actually deleted.
+async function checkDeletedBorrowedPlayers(emails) {
+  const unique = Array.from(new Set(emails));
+  const results = await Promise.all(unique.map(async email => {
+    try {
+      const doc = await db.collection("players").doc(email).get();
+      return [email, doc.exists];
+    } catch (e) {
+      // Fail open -- a transient read error shouldn't slap a "no longer published" badge on a
+      // player who's actually still fine.
+      return [email, true];
+    }
+  }));
+  return new Set(results.filter(([, exists]) => !exists).map(([email]) => email));
+}
 // Called once right after sign-in (see the auth effect in CricketScorer) — if a player doc
 // already exists at this exact email and nobody's linked to it yet, attach it to this account.
 // Silent no-op otherwise (no matching player, or already linked to someone) — this is a courtesy
@@ -6655,6 +6675,7 @@ function TextField({
   value,
   onChange,
   onBlur,
+  onKeyDown,
   placeholder,
   style,
   autoCapitalize,
@@ -6668,6 +6689,7 @@ function TextField({
     value: value,
     onChange: e => onChange(e.target.value),
     onBlur: onBlur,
+    onKeyDown: onKeyDown,
     placeholder: placeholder,
     autoCapitalize: autoCapitalize,
     autoCorrect: autoCorrect,
@@ -18725,6 +18747,21 @@ function TeamEditScreen({
   // had on this team, so it goes through the same ConfirmModal pattern as every other destructive
   // action in the app, instead of the previous single-tap X.
   const [confirmRemove, setConfirmRemove] = useState(null); // the player row object, or null
+  // Checked once on mount against whatever borrowed players this roster already had (see
+  // isBorrowed) — a set of emails whose player doc no longer exists at all, so the badge below
+  // can flag a roster row whose source was actually deleted, not just merely unpublished.
+  const [deletedBorrowedEmails, setDeletedBorrowedEmails] = useState(new Set());
+  useEffect(() => {
+    const borrowedEmails = players.filter(p => isBorrowed(p) && p.email).map(p => p.email);
+    if (borrowedEmails.length === 0) return;
+    let cancelled = false;
+    checkDeletedBorrowedPlayers(borrowedEmails).then(set => {
+      if (!cancelled) setDeletedBorrowedEmails(set);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   async function openBrowse() {
     setBrowseOpen(true);
     if (publicPlayers.length > 0) return;
@@ -18771,9 +18808,15 @@ function TeamEditScreen({
     const c = clubs.find(x => x.id === p.homeClubId);
     return c ? c.name : "another club";
   }
+  const [addError, setAddError] = useState("");
   function addPlayer() {
     const n = newPlayer.trim();
-    if (!n || players.some(p => p.name === n)) return;
+    if (!n) return;
+    if (players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
+      setAddError(`${n} is already on this team.`);
+      return;
+    }
+    setAddError("");
     setPlayers(p => [...p, {
       name: n,
       number: newNumber.trim(),
@@ -19049,11 +19092,17 @@ function TeamEditScreen({
     style: {
       display: "flex",
       gap: 8,
-      marginBottom: 12
+      marginBottom: addError ? 4 : 12
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: newPlayer,
-    onChange: setNewPlayer,
+    onChange: v => {
+      setNewPlayer(v);
+      if (addError) setAddError("");
+    },
+    onKeyDown: e => {
+      if (e.key === "Enter") addPlayer();
+    },
     placeholder: "Player name"
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19063,6 +19112,9 @@ function TeamEditScreen({
   }, /*#__PURE__*/React.createElement(TextField, {
     value: newNumber,
     onChange: v => setNewNumber(v.replace(/[^0-9]/g, "").slice(0, 3)),
+    onKeyDown: e => {
+      if (e.key === "Enter") addPlayer();
+    },
     placeholder: "#",
     style: {
       textAlign: "center"
@@ -19075,7 +19127,14 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }))), clubId && /*#__PURE__*/React.createElement("button", {
+  }))), addError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginBottom: 12
+    }
+  }, addError), clubId && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: openBrowse,
     className: "cs-btn",
@@ -19189,7 +19248,22 @@ function TeamEditScreen({
       borderRadius: 8,
       whiteSpace: "nowrap"
     }
-  }, "Borrowed \u00b7 ", homeClubName(p))), /*#__PURE__*/React.createElement("button", {
+  }, "Borrowed \u00b7 ", homeClubName(p)), p.email && deletedBorrowedEmails.has(p.email) && /*#__PURE__*/React.createElement("span", {
+    title: "The player their home club published has since been deleted \u2014 your roster still keeps its own local copy of their name/number, this is just letting you know the source is gone.",
+    style: {
+      flexShrink: 0,
+      fontFamily: "'Inter'",
+      fontSize: 9.5,
+      fontWeight: 700,
+      letterSpacing: 0.3,
+      textTransform: "uppercase",
+      color: COLORS.ball,
+      background: "rgba(198,58,58,0.14)",
+      padding: "2px 6px",
+      borderRadius: 8,
+      whiteSpace: "nowrap"
+    }
+  }, "No longer published")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
