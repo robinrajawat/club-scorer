@@ -19724,7 +19724,7 @@ function EditPlayerModal({
     marginBottom: 5
   };
   return /*#__PURE__*/React.createElement(Modal, {
-    onClose: onClose
+    onClose: busy ? () => {} : onClose
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
