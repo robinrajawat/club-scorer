@@ -7775,32 +7775,70 @@ function AccountScreen({
     }
   }, "Manage"),
   user && /*#__PURE__*/React.createElement(React.Fragment, null,
-    /*#__PURE__*/React.createElement(Btn, {
-      onClick: onOpenClubAdmin,
-      style: {
-        width: "100%"
-      }
-    }, "Manage Clubs & Federations"),
     /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: onOpenClubAdmin,
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        fontFamily: "'Inter'"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase"
+      }
+    }, "Clubs & Federations"), /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 18,
+      style: {
+        color: COLORS.inkSoft
+      }
+    })),
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 1,
+        background: COLORS.creamDark,
+        margin: "14px 0"
+      }
+    }),
+    /*#__PURE__*/React.createElement("button", {
+      type: "button",
       onClick: onOpenRequests,
       className: "cs-btn",
       style: {
-        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
         width: "100%",
-        marginTop: 10,
-        minHeight: 44,
         background: "none",
-        border: `1.5px solid ${COLORS.willow}`,
-        borderRadius: 10,
-        color: COLORS.pitch,
-        fontFamily: "'Inter'",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        fontFamily: "'Inter'"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 11,
         fontWeight: 700,
-        fontSize: 13.5,
-        cursor: "pointer"
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase"
       }
     }, "Requests", requestBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
-        marginLeft: 8,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -7811,27 +7849,53 @@ function AccountScreen({
         background: COLORS.ballFixed,
         color: "#fff",
         fontSize: 11,
-        fontWeight: 700
+        fontWeight: 700,
+        textTransform: "none",
+        letterSpacing: "normal"
       }
-    }, requestBadgeCount > 9 ? "9+" : requestBadgeCount))
+    }, requestBadgeCount > 9 ? "9+" : requestBadgeCount)), /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 18,
+      style: {
+        color: COLORS.inkSoft
+      }
+    })),
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 1,
+        background: COLORS.creamDark,
+        margin: "14px 0"
+      }
+    })
   ),
   /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: onOpenSharedLinks,
     className: "cs-btn",
     style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
       width: "100%",
-      marginTop: 10,
-      minHeight: 44,
       background: "none",
-      border: `1.5px solid ${COLORS.willow}`,
-      borderRadius: 10,
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5,
-      cursor: "pointer"
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'"
     }
-  }, "Manage Shared Links")
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Shared Links"), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }))
 ), /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
