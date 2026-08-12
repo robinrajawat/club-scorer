@@ -19745,7 +19745,14 @@ function EditPlayerModal({
     value: name,
     onChange: setName,
     placeholder: "Player name"
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }), name.trim() && name.trim().toLowerCase() !== (player.name || "").trim().toLowerCase() && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.gold,
+      marginTop: 4
+    }
+  }, "Career stats are matched by name against past scorecards \u2014 renaming means stats already recorded under the old name won't show up under this one.")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: labelStyle
   }, "Age & role"), /*#__PURE__*/React.createElement("div", {
     style: {
