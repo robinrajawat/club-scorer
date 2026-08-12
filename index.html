@@ -5636,16 +5636,15 @@ function applyBall(inning, event) {
     const extraPrefix = event.extraKind === "wide" ? "Wd+" : event.extraKind === "noball" ? "Nb+" : "";
     display = runsBeforeWicket > 0 ? `${extraPrefix}${runsBeforeWicket}+W` : `${extraPrefix}W`;
     cur.strikerName = event.newBatsman || "";
-    // A wicket-triggered replacement can be a returning retired-hurt batsman, not just a brand-new
-    // one — ensureBatsman's own retiredHurt-clear (see there) only fires for the CURRENT striker at
-    // the top of the ball that dismisses them, which is the outgoing player, not this incoming one.
-    // Clear it here too so it's correct immediately rather than waiting for their first ball.
-    if (event.newBatsman && cur.batsmen[event.newBatsman] && cur.batsmen[event.newBatsman].retiredHurt) {
-      cur.batsmen[event.newBatsman] = {
-        ...cur.batsmen[event.newBatsman],
-        retiredHurt: false
-      };
-    }
+    // Create (or resume) the incoming batsman's record immediately rather than waiting for their
+    // first ball — applyBall previously only ensured the OUTGOING striker/non-striker (see the
+    // ensureBatsman calls at the top of this function), so a replacement who was then dismissed
+    // before ever facing a "run" ball (a golden duck) had no entry in cur.batsmen yet. That left
+    // them invisible to the Next batsman picker's excludeList (which only scans existing
+    // cur.batsmen keys), so they'd show up as pickable again on the very wicket that dismissed
+    // them. ensureBatsman also covers a returning retired-hurt batsman, clearing that flag the
+    // moment they're back at the crease rather than waiting for their first ball either.
+    ensureBatsman(cur, cur.strikerName);
   }
   cur.bowlers[cur.bowlerName] = bowler;
   // Captured before the wicket-ball reset just below, specifically so the partnership milestone
