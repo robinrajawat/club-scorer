@@ -16676,6 +16676,16 @@ function TournamentDetailScreen({
   // row of the same batting/bowling leaderboards already computed above for the Tournament Stats
   // tables, surfaced as their own callout since "who's leading" is the thing people actually look
   // for first, same reasoning as Player of the Tournament just below.
+  // Player of the Tournament is an end-of-tournament award -- showing (or letting someone pick) a
+  // "winner" while matches remain unplayed is premature: the auto-suggestion would keep changing
+  // as more fixtures complete, and a manual pick wouldn't update to reflect it. Only Table Toppers
+  // and the Orange/Purple Cap stay visible mid-tournament (see comment there) -- those are
+  // legitimately interesting as live standings, not a final award. completedTournamentMatches.some
+  // rather than the lighter matchId-only tournamentStatus() check used on the tournament list --
+  // this screen already has full match data loaded, so it can confirm each fixture's match is
+  // actually complete, not just linked.
+  const tournamentFixtures = tournament.fixtures || [];
+  const isTournamentComplete = tournamentFixtures.length > 0 && tournamentFixtures.every(f => f.matchId && completedTournamentMatches.some(m => m.id === f.matchId));
   const orangeCap = tournamentBatters[0] || null;
   const purpleCap = tournamentBowlers[0] || null;
   // Table Toppers: the standings leader, but only once someone's actually played — computeStandings
@@ -16771,7 +16781,29 @@ function TournamentDetailScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, tournament.name), canManage && /*#__PURE__*/React.createElement("button", {
+  }, tournament.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexShrink: 0
+    }
+  }, matches !== null && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowShare(true),
+    className: "cs-btn",
+    "aria-label": "Share tournament",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 17
+  })), canManage && /*#__PURE__*/React.createElement("button", {
     onClick: handleDelete,
     disabled: deleting,
     className: "cs-btn",
@@ -16787,19 +16819,7 @@ function TournamentDetailScreen({
       flexShrink: 0,
       padding: 4
     }
-  }, deleting ? "Deleting\u2026" : "Delete")), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => onStartMatch(tournament),
-    style: {
-      width: "100%",
-      padding: "12px",
-      fontSize: 13.5,
-      marginBottom: 20,
-      borderRadius: 14
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 16,
-    strokeWidth: 2.5
-  }), " Score an Extra Match (not on the fixture list)"), matches === null ?  /*#__PURE__*/React.createElement("div", {
+  }, deleting ? "Deleting\u2026" : "Delete"))), matches === null ?  /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0"
@@ -16812,24 +16832,13 @@ function TournamentDetailScreen({
       justifyContent: "center"
     }
   })) : /*#__PURE__*/React.createElement(React.Fragment, null,
-    /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowShare(true),
-    style: {
-      width: "100%",
-      marginBottom: 16,
-      fontSize: 12.5,
-      padding: "9px"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 14
-  }), " Share Tournament"),
     showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
     tournament: tournament,
     standings: standings,
     onClose: () => setShowShare(false),
     onUpdateTournament: onUpdateTournament
   }),
-    /*#__PURE__*/React.createElement("div", {
+    isTournamentComplete && /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
     borderRadius: 16,
@@ -17158,14 +17167,26 @@ function TournamentDetailScreen({
       fontSize: 12.5
     }
   }, t.label))),
-    activeTab === "schedule" && matches !== null && /*#__PURE__*/React.createElement(FixturesSection, {
+    activeTab === "schedule" && matches !== null && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => onStartMatch(tournament),
+    style: {
+      width: "100%",
+      padding: "12px",
+      fontSize: 13.5,
+      marginBottom: 20,
+      borderRadius: 14
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 16,
+    strokeWidth: 2.5
+  }), " Score an Extra Match (not on the fixture list)"), /*#__PURE__*/React.createElement(FixturesSection, {
     tournament: tournament,
     matches: matches,
     onStartFixtureMatch: onStartFixtureMatch,
     onUpdateTournament: onUpdateTournament,
     onOpenMatch: onOpenMatch,
     canManage: canManage
-  }),
+  })),
     activeTab === "standings" && /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings ? /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
     key: g.label
   }, /*#__PURE__*/React.createElement("div", {
