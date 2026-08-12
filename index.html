@@ -13172,6 +13172,7 @@ function renderMatchCard(m, i) {
       type: "button",
       onClick: () => setCompletedExpanded(e => !e),
       className: "cs-btn",
+      "aria-expanded": showCompleted,
       style: {
         display: "flex",
         alignItems: "center",
