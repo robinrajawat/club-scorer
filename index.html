@@ -18429,7 +18429,12 @@ function TeamsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches."))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches.", !activeClubName && clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 12
+    }
+  }, "Looking for your club's team? Switch to a club above \\u2014 My Teams only holds squads private to you.")))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
