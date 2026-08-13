@@ -3,6 +3,27 @@
 Last worked on: August 2026. Parked in favor of the existing PWA — see
 "Why parked" below. Tell Claude to read this file to pick the thread back up.
 
+## Session close-out (this pass)
+
+Three commits, all source-only, none compiled:
+
+1. Run-out completed runs, free-hit tracking, undo — in
+   `ScoringEngine.swift`/`MatchScoringView.swift`/`Match.swift`.
+2. Teams/players management — new `Team`/`TeamStore`/`TeamsListView`/
+   `TeamEditorView`, wired into `NewMatchView`.
+3. A first tournaments slice — new `Tournament`/`TournamentEngine`/
+   `TournamentStore`/three views. Single round-robin group only; no
+   groups, knockout stage, Super Over, no-result, or DLS.
+
+Explicitly not touched: Firestore sync, Google sign-in, records/series
+stats, sharing, PDF export.
+
+**Next actual step, unchanged from before this session:** #1 on the
+priority list below — first on-device build in Xcode. Nothing written in
+this pass has compiled, run, or been tested. Re-read "Why parked" before
+resuming feature work regardless of build results — that calculus hasn't
+been touched by any of this.
+
 **Important caveat on everything below "What's built":** the environment
 this was written in has no Swift toolchain and no Xcode — it's a Linux
 sandbox. The scoring-engine refinements described here were written
