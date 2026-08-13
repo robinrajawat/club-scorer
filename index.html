@@ -10205,17 +10205,15 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 4
+      marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 6,
-      minWidth: 0
+      minWidth: 0,
+      marginBottom: 6
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -10239,8 +10237,8 @@ function ClubPanel({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
-      flexShrink: 0
+      flexWrap: "wrap",
+      gap: 8
     }
   }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
@@ -10259,8 +10257,7 @@ function ClubPanel({
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 11.5,
-      whiteSpace: "nowrap",
-      flexShrink: 0
+      whiteSpace: "nowrap"
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
@@ -10282,8 +10279,7 @@ function ClubPanel({
       padding: "4px 9px",
       fontFamily: "'Inter'",
       fontWeight: 700,
-      fontSize: 11,
-      flexShrink: 0
+      fontSize: 11
     }
   }, manageOpen ? "Done" : "Manage"))), activeClub.description && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11395,22 +11391,24 @@ function FederationsPanel({
     style: cardStyle
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 4
+      marginBottom: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 6
+      gap: 6,
+      minWidth: 0,
+      marginBottom: 6
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,
-      color: COLORS.pitch
+      color: COLORS.pitch,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
   }, f.name), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -11418,14 +11416,15 @@ function FederationsPanel({
       fontWeight: 700,
       textTransform: "uppercase",
       letterSpacing: 0.4,
-      color: COLORS.gold
+      color: COLORS.gold,
+      flexShrink: 0
     }
   }, roleLabel(f))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
-      flexShrink: 0
+      flexWrap: "wrap",
+      gap: 8
     }
   }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("federation", f.id, f.name),
@@ -11444,8 +11443,7 @@ function FederationsPanel({
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 11.5,
-      whiteSpace: "nowrap",
-      flexShrink: 0
+      whiteSpace: "nowrap"
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
