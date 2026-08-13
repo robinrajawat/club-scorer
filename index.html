@@ -3842,6 +3842,11 @@ function generateGroupRoundRobinFixtures(groups, double) {
   }
   return fixtures;
 }
+// TEST-EXTRACT-START: standings-and-dls — tests/run.js pulls computeStandings through
+// maxWicketsFor (and everything harmlessly declared in between) plus the DLS block right after
+// it, out by these markers. Keep this contiguous: the extraction is a single textual slice, not a
+// dependency graph, so computeStandings' call to maxWicketsFor only resolves if maxWicketsFor's
+// own declaration is somewhere inside this same slice too.
 function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {
@@ -4944,6 +4949,7 @@ function dlsTarget(S, R1, R2, G50) {
     par: target - 1
   };
 }
+// TEST-EXTRACT-END: standings-and-dls
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
   teams: "Teams & Format",

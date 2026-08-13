@@ -55,6 +55,14 @@ function loadEngine() {
 
   const packUtils = extractBlock(source, "pack-utils");
   const scoringEngine = extractBlock(source, "scoring-engine");
+  // This block re-declares DEFAULT_RULES itself (needed by battingTeamXISize's fallback path,
+  // which none of these tests exercise since every fixture sets inning.maxWickets explicitly) —
+  // strip that one declaration so it doesn't collide with the mock injected below, which
+  // scoring-engine already depends on.
+  const standingsAndDls = extractBlock(source, "standings-and-dls").replace(
+    /const DEFAULT_RULES = \{[^}]*\};/,
+    ""
+  );
 
   const DEFAULT_RULES = {
     ballsPerOver: 6,
@@ -70,7 +78,11 @@ function loadEngine() {
     const DEFAULT_RULES = ${JSON.stringify(DEFAULT_RULES)};
     ${packUtils}
     ${scoringEngine}
-    module.exports = { newInning, applyBall, ensureBatsman, ensureBowler, packMatchForFirestore, findEmptyKeyPath };
+    ${standingsAndDls}
+    module.exports = {
+      newInning, applyBall, ensureBatsman, ensureBowler, packMatchForFirestore, findEmptyKeyPath,
+      computeStandings, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal
+    };
   `;
   const Module = require("module");
   const m = new Module(INDEX_HTML, null);
@@ -93,7 +105,10 @@ function check(label, condition, detail) {
 }
 
 function run() {
-  const { newInning, applyBall, ensureBatsman, ensureBowler, packMatchForFirestore, findEmptyKeyPath } = loadEngine();
+  const {
+    newInning, applyBall, ensureBatsman, ensureBowler, packMatchForFirestore, findEmptyKeyPath,
+    computeStandings, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal
+  } = loadEngine();
   const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
   function freshInning(maxWickets, roster) {
@@ -298,6 +313,163 @@ function run() {
     inn = applyBall(inn, { kind: "run", legal: true, runs: 6 });
     const packed = packMatchForFirestore({ id: "test", innings: [inn] });
     check("a normal over of scoring never produces an empty-string key anywhere", findEmptyKeyPath(packed, "") === null);
+  }
+
+  // ---- 13. computeStandings: normal result — winner gets 2pts, NRR sign is correct --------
+  {
+    const tournament = { id: "T1", teams: ["A", "B"] };
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 110, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 140, wickets: 8, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match]);
+    const a = rows.find(r => r.team === "A");
+    const b = rows.find(r => r.team === "B");
+    check("normal result: winning team gets 2 points", a.points === 2 && a.won === 1);
+    check("normal result: losing team gets 0 points", b.points === 0 && b.lost === 1);
+    check("normal result: winning team's NRR is positive", a.nrr > 0);
+    check("normal result: losing team's NRR is negative", b.nrr < 0);
+  }
+
+  // ---- 14. computeStandings: all-out team credited full overs (not just balls faced) -----
+  {
+    const tournament = { id: "T1", teams: ["A", "B"] };
+    // A bowled out in just 10 overs (60 balls) of a 20-over match — must still be credited the
+    // full 20 for run-rate purposes, or being bowled out cheaply would perversely inflate NRR.
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 60, wickets: 10, legalBalls: 60, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 61, wickets: 2, legalBalls: 90, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match]);
+    const a = rows.find(r => r.team === "A");
+    check("all-out team is credited the full overs limit, not balls actually faced", a.oversFor === 20);
+  }
+
+  // ---- 15. computeStandings: no-result excludes runs/overs but still awards 1pt each ------
+  {
+    const tournament = { id: "T1", teams: ["A", "B"] };
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20, noResult: true,
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 80, wickets: 3, legalBalls: 90, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 10, wickets: 0, legalBalls: 12, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match]);
+    const a = rows.find(r => r.team === "A");
+    const b = rows.find(r => r.team === "B");
+    check("no-result: 1 point each", a.points === 1 && b.points === 1);
+    check("no-result: neither win/loss/tie recorded", a.won === 0 && a.lost === 0 && a.tied === 0);
+    check("no-result: runs/overs excluded from NRR entirely", a.runsFor === 0 && a.oversFor === 0);
+    check("no-result: tracked in its own noResult column, not conflated with tied", a.noResult === 1 && a.tied === 0);
+  }
+
+  // ---- 16. computeStandings: a level match with a decided Super Over awards 2/0, not a tie -
+  {
+    const tournament = { id: "T1", teams: ["A", "B"] };
+    const superOver = {
+      id: "SO1", status: "complete",
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 8 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 10 }
+      ]
+    };
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20, superOverMatchId: "SO1",
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 150, wickets: 6, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match, superOver]);
+    const a = rows.find(r => r.team === "A");
+    const b = rows.find(r => r.team === "B");
+    check("super-over-decided match: winner gets 2 points, not 1", b.points === 2 && b.won === 1);
+    check("super-over-decided match: loser gets 0 points, not 1", a.points === 0 && a.lost === 1);
+    check("super-over-decided match: not counted as tied for either side", a.tied === 0 && b.tied === 0);
+  }
+
+  // ---- 17. computeStandings: knockout-stage fixture excluded even within a single group ----
+  {
+    const tournament = {
+      id: "T1", teams: ["A", "B"],
+      fixtures: [{ matchId: "M1", stage: "Final" }]
+    };
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 100, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match]);
+    const a = rows.find(r => r.team === "A");
+    check("a Final (or any staged knockout fixture) never counts toward the league table", a.played === 0 && a.points === 0);
+  }
+
+  // ---- 18. computeStandings: DLS-revised overs credit the chasing side correctly on NRR ----
+  {
+    const tournament = { id: "T1", teams: ["A", "B"] };
+    // Second innings revised down to 30 overs by a rain interruption; team B is all out inside
+    // that revised limit — NRR must credit them with the revised 30, not the original 50.
+    const match = {
+      id: "M1", tournamentId: "T1", status: "complete", oversLimit: 50, revisedOvers: 30,
+      innings: [
+        { battingTeam: "A", bowlingTeam: "B", runs: 200, wickets: 10, legalBalls: 300, ballsPerOver: 6, maxWickets: 10 },
+        { battingTeam: "B", bowlingTeam: "A", runs: 150, wickets: 10, legalBalls: 150, ballsPerOver: 6, maxWickets: 10 }
+      ]
+    };
+    const rows = computeStandings(tournament, [match]);
+    const b = rows.find(r => r.team === "B");
+    check("DLS-revised overs: all-out chasing side credited the REVISED limit, not the original", b.oversFor === 30);
+  }
+
+  // ---- 19. dlsTarget: three-branch formula (R2<R1, R2===R1, R2>R1) matches ICC §5.6 --------
+  {
+    // R2 < R1: target scales DOWN proportionally to the resource lost.
+    const lower = dlsTarget(250, 90, 60, 200);
+    check("dlsTarget R2<R1: target scales down with resource lost", lower.target === Math.floor(250 * 60 / 90) + 1);
+    // R2 === R1: no resource difference, target is simply S+1 (par is the original score).
+    const equal = dlsTarget(180, 75, 75, 200);
+    check("dlsTarget R2===R1: target is just S+1 with equal resources", equal.target === 181 && equal.par === 180);
+    // R2 > R1: target scales UP using G50.
+    const higher = dlsTarget(180, 60, 90, 200);
+    check("dlsTarget R2>R1: target scales up using G50", higher.target === Math.floor(180 + 200 * (90 - 60) / 100) + 1);
+    check("dlsTarget: par is always target minus 1", higher.par === higher.target - 1);
+  }
+
+  // ---- 20. dlsResourcePercent: exact table values and mid-over interpolation ---------------
+  {
+    check("dlsResourcePercent: 50 overs, 0 wickets = 100.0% exactly", dlsResourcePercent(50, 0) === 100.0);
+    check("dlsResourcePercent: 0 overs left = 0% regardless of wickets", dlsResourcePercent(0, 3) === 0);
+    check("dlsResourcePercent: 10+ wickets lost is always 0%, no table lookup needed", dlsResourcePercent(25, 10) === 0);
+    // 25.5 overs left, 2 wickets down should sit strictly between the 25-over and 26-over rows.
+    const interpolated = dlsResourcePercent(25.5, 2);
+    check(
+      "dlsResourcePercent: interpolates strictly between the two nearest whole-over rows",
+      interpolated > 60.5 && interpolated < 62.0,
+      `got ${interpolated}`
+    );
+  }
+
+  // ---- 21. oversLeftTrueDecimal: true decimal overs, distinct from cricket's X.Y notation --
+  {
+    // 4 overs + 3 balls bowled of a 50-over (300-ball) match = 46 overs' worth of balls left,
+    // i.e. exactly 46.0 true decimal overs remaining — not cricket notation.
+    check("oversLeftTrueDecimal: whole-over case", oversLeftTrueDecimal(50, 27) === 45.5);
+    // 4 balls into an over is 4/6 = 0.6667 true decimal, NOT ".4" as cricket notation would show.
+    const withPartial = oversLeftTrueDecimal(50, 4);
+    check(
+      "oversLeftTrueDecimal: a partial over is true decimal (balls/6), not cricket's X.Y notation",
+      Math.abs(withPartial - (49 + 2 / 6)) < 1e-9,
+      `got ${withPartial}`
+    );
   }
 
   console.log(`\n${passed} passed, ${failures} failed.`);
