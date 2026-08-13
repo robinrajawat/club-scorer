@@ -67,6 +67,14 @@ All under `ios/CricketScorer/CricketScorer/`:
   delete named rosters, searchable list, and a menu in New match setup to
   prefill a team's name/players from a saved one. Local-only persistence,
   same pattern as matches.
+- **Tournaments** (`Models/Tournament.swift`,
+  `Services/TournamentEngine.swift`, `Services/TournamentStore.swift`,
+  `Views/TournamentsListView.swift`, `Views/TournamentDetailView.swift`,
+  `Views/TournamentEditorView.swift`): create a single round-robin group
+  from ≥2 saved Teams (auto-generates fixtures), start/resume each fixture
+  as a real Match, and a points/NRR standings table computed from
+  completed matches. Deliberately narrow first slice — see "Recent source
+  changes" below for exactly what's cut versus the web app's full system.
 - **Result** (`Views/ResultView.swift`): basic result summary + both
   innings' scorecards.
 - **Persistence** (`Services/MatchStore.swift`): local-only, UserDefaults +
@@ -90,8 +98,11 @@ when this got parked).
 
 Four items that used to be listed here — run-out completed runs, free-hit
 tracking, undo, and teams/players management — have source written now.
-See "Recent source changes (unverified)" below for exactly what changed
-and what to double-check first in Xcode.
+A fifth, a first tournaments slice, also now has source written but is
+listed separately below since it's large enough to warrant its own
+"what's cut" writeup rather than a one-liner. See "Recent source changes
+(unverified)" below for exactly what changed and what to double-check
+first in Xcode.
 
 ## Recent source changes (unverified — first Xcode build should confirm these before trusting them)
 
@@ -142,11 +153,46 @@ and what to double-check first in Xcode.
   reordering interacts correctly with `.onMove` inside a `Form` section
   versus a plain `List` — this is a common enough SwiftUI quirk that it's
   worth specifically eyeballing on first run, not just trusting it compiles.
+- **Tournaments — first slice, deliberately narrow.** Read the web app's
+  actual `computeStandings()` in index.html before writing any of this
+  rather than guessing at the formula. What's ported: points (win=2, tie=1)
+  and the NRR calculation itself, including the "credit full overs if
+  bowled out/quota completed" rule that keeps a cheap dismissal from
+  inflating NRR. What's cut, and why each one specifically doesn't apply
+  yet to an iOS `Match`/`Tournament` that has none of the underlying
+  concepts: no **groups** (one flat round-robin only), no **knockout
+  stage/bracket** (so no need yet for the web app's fixture-`stage`
+  exclusion logic — that's a real piece of complexity to bring back
+  later, not something this port avoided by being clever), no **Super
+  Over tie-break chain** (a tied match just stays tied here), no
+  **no-result/abandoned-match** handling (iOS `Match` has no status
+  between "in progress" and `"complete"`), no **DLS/revised-overs**. Full
+  reasoning for each cut is in the doc comment at the top of
+  `TournamentEngine.swift` — read that before extending this file rather
+  than re-deriving it.
+  Tournament creation deliberately requires picking from *already-saved*
+  Teams rather than typing rosters ad hoc, since a round-robin needs each
+  team's roster available across multiple fixtures — `TournamentEditorView`
+  says so plainly if no teams are saved yet, rather than degrading into
+  its own free-text form.
+  Starting a fixture shows an explicit "who bats first" picker
+  (`FixtureStartSheet`) rather than defaulting to Team A — this
+  deliberately avoids repeating a bug the web app's own comments describe
+  fixing (`teamAIsBattingFirst` in index.html): hard-coding the batting
+  side regardless of an actual toss/choice used to silently put the wrong
+  team's players in the opening line-up.
+  Not yet checked, because there's no compiler to check it: whether
+  `.sheet(item:)` and `.navigationDestination(item:)` — both used here for
+  the fixture-start sheet and jumping into the started match — behave as
+  expected when `Fixture`/`Match` change out from under the binding mid-
+  presentation. Worth a specific look on first run rather than assuming
+  the pattern that worked for `MatchScoringView`'s simpler `.sheet(item:)`
+  usage scales cleanly here.
 
-None of these four touched Firestore sync, Google sign-in, tournaments,
-records, sharing, or PDF export — those are all still exactly where they
-were (see "What's next" below), and #1 on that list — the first on-device
-build — is still the real blocker before any of this can be trusted.
+None of these five touched Firestore sync, Google sign-in, records,
+sharing, or PDF export — those are all still exactly where they were (see
+"What's next" below), and #1 on that list — the first on-device build — is
+still the real blocker before any of this can be trusted.
 
 ## What's next, roughly in priority order
 
@@ -162,15 +208,15 @@ build — is still the real blocker before any of this can be trusted.
    sandbox: adding SPM package dependencies happens in Xcode's UI, and the
    `REVERSED_CLIENT_ID`/plist values come from the Firebase console, not
    from source. Whoever picks this up needs Xcode open.
-3. **Tournaments** (large) — brackets, standings, net-run-rate math,
-   qualification scenarios. The single hardest remaining piece.
-4. **Records/series stats** (medium) — aggregation across matches.
-5. **Sharing/live-follow links** (medium) — needs a public, unauthenticated
+3. **Records/series stats** (medium) — aggregation across matches.
+4. **Sharing/live-follow links** (medium) — needs a public, unauthenticated
    read path in Firestore plus a viewer UI.
-6. **PDF export** (small–medium).
-7. **Polish** (ongoing) — animations, haptics, edge cases, empty states.
-   Also on this list now: adding a `teamId` link from Match back to Team
-   (see "Recent source changes" above).
+5. **PDF export** (small–medium).
+6. **Polish** (ongoing) — animations, haptics, edge cases, empty states.
+   Also on this list now: adding a `teamId` link from Match back to Team,
+   and (larger) bringing tournaments up from the single-round-robin slice
+   to groups + knockout stage + Super Over + no-result + DLS (see "Recent
+   source changes" above for the specific list).
 
 ## Setup reminder for whoever opens this in Xcode
 

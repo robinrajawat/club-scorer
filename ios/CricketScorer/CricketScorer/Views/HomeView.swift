@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var store = MatchStore()
     @StateObject private var teamStore = TeamStore()
+    @StateObject private var tournamentStore = TournamentStore()
     @State private var showingNewMatch = false
 
     var body: some View {
@@ -49,6 +50,13 @@ struct HomeView: View {
                         TeamsListView(teamStore: teamStore)
                     } label: {
                         Label("Teams", systemImage: "person.3")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        TournamentsListView(tournamentStore: tournamentStore, teamStore: teamStore, matchStore: store)
+                    } label: {
+                        Label("Tournaments", systemImage: "trophy")
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
