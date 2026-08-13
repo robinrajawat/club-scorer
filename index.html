@@ -1342,8 +1342,18 @@ function pendingWriteCount() {
 // nothing left to reconcile it against.
 function pruneOrphanedPendingWrites() {
   try {
-    const indexIds = new Set(lsGetIndex().map(m => m.id));
-    for (const id of lsPendingIds()) {
+    const ids = lsPendingIds();
+    if (ids.length === 0) return;
+    const index = lsGetIndex();
+    // lsGetIndex silently returns [] both when there's genuinely nothing there AND when the stored
+    // JSON failed to parse (see its own try/catch) — those two cases are indistinguishable from
+    // here, and treating the second one as "nothing exists, so every queued write is orphaned"
+    // would delete real, not-yet-synced scoring data outright. Only prune against a non-empty
+    // index, where a missing id is unambiguous; if the index looks empty, leave the outbox alone
+    // rather than risk it.
+    if (index.length === 0) return;
+    const indexIds = new Set(index.map(m => m.id));
+    for (const id of ids) {
       if (!indexIds.has(id)) {
         console.error("[outbox] pruning orphaned pending write for a deleted/unknown match:", id);
         clearPendingWrite(id);
@@ -1479,8 +1489,23 @@ async function savePrimaryMatch(match) {
   const emptyKeyPath = findEmptyKeyPath(packMatchForFirestore(match), "");
   if (emptyKeyPath) {
     console.error("[saveMatch] blocked before write \u2014 empty field name at:", emptyKeyPath, "| match id:", match.id, "| shareCode:", match.shareCode || "(none)", "| full match snapshot:", JSON.stringify(match));
+    // Same local-fallback pattern as the catch block below (network/permission failures): keep the
+    // device usable and the local index pointer consistent even though the cloud write can't
+    // happen. Without this, a match that hits this check on its very FIRST save attempt would get
+    // queued for retry (saveMatch still does that for any non-conflict failure) with no local
+    // index entry to show for it — which pruneOrphanedPendingWrites would then treat as an orphan
+    // and delete on the very next app load, silently losing track of the one match that most
+    // needs to stay visible until someone fixes it.
+    const fallback = lsSetItem(`${LS_PREFIX}match:${match.id}`, JSON.stringify(match));
+    if (fallback.ok) upsertLocalPointer(match, {
+      cloud: false
+    });
     return {
       ok: false,
+      // Distinct from a plain network/permission failure: this one can't be fixed by retrying, so
+      // callers (saveMatch's liveViews mirror below) can skip a doomed second attempt at the same
+      // bad data instead of re-deriving that fact themselves from the error text.
+      structuralError: true,
       error: `Can't sync \u2014 found a blank name at "${emptyKeyPath}". There's likely an empty player name involved in scoring; share this path so it can be tracked down.`
     };
   }
@@ -1611,10 +1636,9 @@ async function saveMatch(match) {
     // Skip the mirror write too when the primary save already found an unfixable structural
     // problem (see savePrimaryMatch's pre-flight check) — the same bad data would just fail here
     // as well, and there's no point spending a network round-trip and a confusing console error
-    // confirming something already known. Re-checking directly rather than pattern-matching
-    // result.error, which is free-text and shouldn't be relied on as a signal.
-    const alreadyKnownBad = !result.ok && findEmptyKeyPath(packMatchForFirestore(match), "");
-    if (!alreadyKnownBad) try {
+    // confirming something already known. Reading the flag savePrimaryMatch already set rather
+    // than recomputing the same pack+scan a second time on every failed save.
+    if (!result.structuralError) try {
       await db.collection("liveViews").doc(match.viewCode).set(packMatchForFirestore({
         ...match,
         updatedAt: Date.now(),
@@ -22144,6 +22168,12 @@ function SyncStatusBanner({
 }) {
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState(null);
+  // Once the outbox is empty, whatever lastError was showing is no longer relevant — without this,
+  // it would silently resurface next time count goes above 0 for a completely unrelated reason
+  // (a different match failing later), reading as if it were about that new failure.
+  useEffect(() => {
+    if (!count) setLastError(null);
+  }, [count]);
   if (!count) return null;
   async function handleTap() {
     if (syncing) return;
