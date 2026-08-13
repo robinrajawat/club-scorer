@@ -7277,12 +7277,12 @@ function AuthBar({
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      gap: 5,
+      gap: 4,
       textAlign: "center",
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
-      padding: "6px 4px",
+      fontSize: 11,
+      padding: "6px 2px",
       borderRadius: 7,
       cursor: "pointer",
       border: `1.5px solid ${themePref === opt.value ? COLORS.pitch : COLORS.creamDark}`,
@@ -7290,8 +7290,10 @@ function AuthBar({
       color: themePref === opt.value ? "#fff" : COLORS.inkSoft
     }
   }, /*#__PURE__*/React.createElement(opt.icon, {
-    size: 12
-  }), opt.label))), /*#__PURE__*/React.createElement("div", {
+    size: 11
+  }), opt.label, themePref === opt.value && /*#__PURE__*/React.createElement(Check, {
+    size: 10
+  })))), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
