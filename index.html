@@ -21619,10 +21619,39 @@ function PlayersScreen({
     }
   }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 ")))))));
 }
+// A11y note: every bottom sheet in the app routes through this one component, so fixing it once
+// here fixes it everywhere — no call site needs to change. Adds: role="dialog"/aria-modal so
+// VoiceOver/TalkBack actually announce a sheet opened (this is the PRIMARY access technology on
+// the phone-first surface this app targets, not a keyboard edge case); Escape-to-close for anyone
+// with a hardware/Bluetooth keyboard or Android's back-equivalent gesture; and focus moved into
+// the sheet on open, restored to whatever triggered it on close, so a screen-reader or
+// keyboard/switch-control user isn't left stranded on a background element they can no longer
+// reach while the sheet is open.
 function Modal({
   children,
   onClose
 }) {
+  const sheetRef = useRef(null);
+  const previouslyFocused = useRef(null);
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement;
+    // Focus the sheet itself (not a specific control inside it, since Modal's content varies by
+    // caller) — makes it the next thing a screen reader or Tab press lands on, without assuming
+    // anything about what's inside.
+    if (sheetRef.current) sheetRef.current.focus();
+    function onKeyDown(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      // Return focus to whatever opened this sheet — a background button that's still there and
+      // still meaningful once the sheet closes, rather than leaving focus on <body>.
+      if (previouslyFocused.current && previouslyFocused.current.focus) {
+        previouslyFocused.current.focus();
+      }
+    };
+  }, []);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
@@ -21636,6 +21665,10 @@ function Modal({
     },
     onClick: onClose
   }, /*#__PURE__*/React.createElement("div", {
+    ref: sheetRef,
+    role: "dialog",
+    "aria-modal": "true",
+    tabIndex: -1,
     onClick: e => e.stopPropagation(),
     style: {
       background: COLORS.cream,
@@ -21647,7 +21680,8 @@ function Modal({
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
       boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
-      animation: "cs-slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1)"
+      animation: "cs-slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+      outline: "none"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
