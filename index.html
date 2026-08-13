@@ -1332,6 +1332,27 @@ function clearPendingWrite(id) {
 function pendingWriteCount() {
   return lsPendingIds().length;
 }
+// A match deleted BEFORE this fix shipped can leave an orphaned outbox entry behind — deleteMatch
+// now clears its own pending write, but that's only for deletes going forward; an entry queued and
+// then orphaned earlier (e.g. the match kept failing the empty-key pre-flight check, someone
+// deleted it from a build that predates that cleanup) survives in localStorage indefinitely,
+// re-read and retried on every single app load no matter how many times the page is reloaded,
+// since a reload doesn't touch localStorage at all. Run once at startup: anything queued for a
+// match that no longer has a local index entry (i.e. was deleted) is safe to drop — there's
+// nothing left to reconcile it against.
+function pruneOrphanedPendingWrites() {
+  try {
+    const indexIds = new Set(lsGetIndex().map(m => m.id));
+    for (const id of lsPendingIds()) {
+      if (!indexIds.has(id)) {
+        console.error("[outbox] pruning orphaned pending write for a deleted/unknown match:", id);
+        clearPendingWrite(id);
+      }
+    }
+  } catch (e) {
+    console.error("prune orphaned pending writes failed", e);
+  }
+}
 let flushInFlight = false;
 // Retries every queued match once. Safe to call as often as you like (on 'online', on a timer, or
 // opportunistically right after any other successful save) — it's a no-op re-entrancy guard plus
@@ -27684,6 +27705,7 @@ function CricketScorer() {
       flushPendingWrites().then(refreshPendingCountIfMounted);
     }
     window.addEventListener("online", handleOnline);
+    pruneOrphanedPendingWrites(); // sweep up anything left behind by a delete from before that cleanup existed
     refreshPendingCountIfMounted();
     flushPendingWrites().then(refreshPendingCountIfMounted); // catch up on anything queued from a prior session
     const poll = setInterval(() => {
