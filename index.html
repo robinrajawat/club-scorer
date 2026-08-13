@@ -12848,6 +12848,7 @@ function HomeScreen({
   onOpenTournaments,
   onOpenPlayers,
   pendingCount,
+  onPendingSynced,
   requestBadgeCount = 0,
   tournamentNameById = {},
   tournaments = [],
@@ -13004,7 +13005,8 @@ function renderMatchCard(m, i) {
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
-    count: pendingCount
+    count: pendingCount,
+    onSynced: onPendingSynced
   })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
     onDismiss: onDismissInstallHint
   }), /*#__PURE__*/React.createElement("div", {
@@ -21992,7 +21994,8 @@ function TournamentPrintReport({
 // path where every save reaches the server immediately.
 function SyncStatusBanner({
   count,
-  dark
+  dark,
+  onSynced
 }) {
   const [syncing, setSyncing] = useState(false);
   if (!count) return null;
@@ -22000,6 +22003,10 @@ function SyncStatusBanner({
     if (syncing) return;
     setSyncing(true);
     await flushPendingWrites();
+    // Without this, a tap that actually succeeds (clears the outbox) still leaves the banner
+    // reading the old count — nothing refreshes it until the next 15s background poll or an
+    // 'online' event, so a successful retry looks indistinguishable from tapping doing nothing.
+    if (onSynced) onSynced();
     setSyncing(false);
   }
   return /*#__PURE__*/React.createElement("button", {
@@ -23644,6 +23651,7 @@ function MatchScreen({
   setMatch,
   onExit,
   pendingCount,
+  onPendingSynced,
   tournament
 }) {
   const [padCollapsed, setPadCollapsed] = useState(false);
@@ -24659,7 +24667,8 @@ function MatchScreen({
     match: match
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
-    dark: true
+    dark: true,
+    onSynced: onPendingSynced
   }), match.isSuperOver && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -27251,6 +27260,13 @@ function CricketScorer() {
     });
   }, [user, pendingGoogleLink]);
   const [pendingCount, setPendingCount] = useState(0);
+  // Hoisted out of the poll effect below so SyncStatusBanner's own manual "tap to retry" can call
+  // it directly too — without this, a tap-triggered flush could succeed and clear the outbox, but
+  // the banner would still read the old count (and look like tapping did nothing) until the next
+  // 15s poll or 'online' event happened to catch up.
+  function refreshPendingCount() {
+    setPendingCount(pendingWriteCount());
+  }
   // Separate from the top-level `loading` splash (which only covers local-first data — matches,
   // teams, tournaments — and clears quickly). Clubs have no local fallback (loadClubs just
   // returns [] when signed out), so this stays true across whichever refreshClubs() call actually
@@ -27513,20 +27529,20 @@ function CricketScorer() {
   // own save clears its own entry) without threading a callback through every save call site.
   useEffect(() => {
     let cancelled = false;
-    function refreshPendingCount() {
-      if (!cancelled) setPendingCount(pendingWriteCount());
+    function refreshPendingCountIfMounted() {
+      if (!cancelled) refreshPendingCount();
     }
     function handleOnline() {
-      flushPendingWrites().then(refreshPendingCount);
+      flushPendingWrites().then(refreshPendingCountIfMounted);
     }
     window.addEventListener("online", handleOnline);
-    refreshPendingCount();
-    flushPendingWrites().then(refreshPendingCount); // catch up on anything queued from a prior session
+    refreshPendingCountIfMounted();
+    flushPendingWrites().then(refreshPendingCountIfMounted); // catch up on anything queued from a prior session
     const poll = setInterval(() => {
       if (navigator.onLine !== false) {
-        flushPendingWrites().then(refreshPendingCount);
+        flushPendingWrites().then(refreshPendingCountIfMounted);
       } else {
-        refreshPendingCount();
+        refreshPendingCountIfMounted();
       }
     }, 15000);
     return () => {
@@ -28673,6 +28689,7 @@ function CricketScorer() {
     onOpenTournaments: () => setScreen("tournaments"),
     onOpenPlayers: () => setScreen("players"),
     pendingCount: pendingCount,
+    onPendingSynced: refreshPendingCount,
     requestBadgeCount: federationRequestsNeedingAction.length,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
@@ -28711,6 +28728,7 @@ function CricketScorer() {
     setMatch: setMatch,
     onExit: exitToHome,
     pendingCount: pendingCount,
+    onPendingSynced: refreshPendingCount,
     tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
