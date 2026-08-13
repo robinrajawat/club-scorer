@@ -4175,6 +4175,13 @@ function computeTournamentPlacement(tournament, matches) {
   const fixtures = tournament.fixtures || [];
   if (!fixtures.length) return null;
   const matchById = new Map((matches || []).filter(Boolean).map(m => [m.id, m]));
+  // Best-known "decided on" date, ISO-validated the same way tournamentDateRangeLabel does —
+  // fixture dates are freeform/optional, so this is a best-effort label, not a guarantee. Falls
+  // back to the tournament's createdAt (always present) when no fixture date was ever set.
+  function latestFixtureDate(fx) {
+    const dates = fx.filter(f => ISO_DATETIME_RE.test(f.date || "")).map(f => f.date.slice(0, 10)).sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  }
   function fixturesForStage(label) {
     return fixtures.filter(f => f.stage === label);
   }
@@ -4197,6 +4204,7 @@ function computeTournamentPlacement(tournament, matches) {
       tournamentName: tournament.name,
       champion,
       runnerUp,
+      decidedDate: latestFixtureDate([finalFixture]),
       via: "knockout"
     };
   }
@@ -4212,9 +4220,11 @@ function computeTournamentPlacement(tournament, matches) {
     tournamentName: tournament.name,
     champion: standings[0].team,
     runnerUp: standings[1] ? standings[1].team : null,
+    decidedDate: latestFixtureDate(fixtures),
     via: "table"
   };
 }
+
 
 // ---------- Account profile (display name override) ----------
 async function loadProfile() {
@@ -18263,17 +18273,29 @@ function RecordsScreen({
   // Year/team filters as the rest of the page even though it's computed from tournaments+matches
   // rather than computeClubRecords' match-only aggregation. Sorted newest-first so a club's most
   // recent silverware leads, same instinct as "recent form" mattering more than old history.
+  // effectiveTs prefers the decided fixture's actual date over the tournament doc's createdAt —
+  // createdAt is just "when the tournament was set up," which can be months before a long
+  // season's final actually gets played, so it's a worse proxy for "which year did this happen."
   const placements = (tournaments || []).map(t => {
     const p = computeTournamentPlacement(t, matches);
-    return p && { ...p, createdAt: t.createdAt || 0, year: t.createdAt ? new Date(t.createdAt).getFullYear() : null };
-  }).filter(Boolean).filter(p => recordsTab !== "currentYear" || p.createdAt >= yearStartTs).filter(p => teamFilter === "all" || p.champion === teamFilter || p.runnerUp === teamFilter).sort((a, b) => b.createdAt - a.createdAt);
+    if (!p) return null;
+    const effectiveTs = p.decidedDate ? new Date(p.decidedDate + "T00:00:00").getTime() : t.createdAt || 0;
+    const year = p.decidedDate ? Number(p.decidedDate.slice(0, 4)) : t.createdAt ? new Date(t.createdAt).getFullYear() : null;
+    return { ...p, effectiveTs, year };
+  }).filter(Boolean).filter(p => recordsTab !== "currentYear" || p.effectiveTs >= yearStartTs).filter(p => teamFilter === "all" || p.champion === teamFilter || p.runnerUp === teamFilter).sort((a, b) => b.effectiveTs - a.effectiveTs);
   // Title tally per team, for the "most decorated" summary line above the year-by-year list —
   // counts championships only (a runner-up finish isn't a title), across whatever's in scope.
   const titleCounts = placements.reduce((acc, p) => {
     acc[p.champion] = (acc[p.champion] || 0) + 1;
     return acc;
   }, {});
-  const mostTitled = Object.entries(titleCounts).sort((a, b) => b[1] - a[1])[0] || null;
+  const titleEntries = Object.entries(titleCounts);
+  const maxTitles = titleEntries.length ? Math.max(...titleEntries.map(([, c]) => c)) : 0;
+  const titleLeaders = titleEntries.filter(([, c]) => c === maxTitles);
+  // Only surface the "most decorated" banner when there's a single, unambiguous leader — a tie
+  // (e.g. two teams with 1 title each) has no honest "most" to report. The full year-by-year list
+  // below still shows every title either way, so nothing is hidden, just not mis-claimed.
+  const mostTitled = titleLeaders.length === 1 ? titleLeaders[0] : null;
   const dateLabel = ts => ts ? relativeDayLabel(ts) || "\u2014" : "\u2014";
   // Player search is a client-side filter on already-computed rows (name is always the first
   // cell) — applies only to the player-named leaderboards/milestones, not the team-total or
