@@ -1151,6 +1151,19 @@ function getPollCodeFromUrl() {
     return null;
   }
 }
+// Backs the installed PWA's home-screen shortcut menu (manifest.json's "shortcuts") — e.g.
+// long-pressing the app icon offers "New match" as a quick action. Deliberately tiny/allow-listed
+// (unlike the follow/tournament/poll codes above, this never reaches Firestore or any other
+// user-controlled destination) since, unlike those, this value could end up in a shortcut
+// bookmarked or shared outside the app's own control.
+function getShortcutActionFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("action");
+    return raw === "new-match" ? raw : null;
+  } catch (e) {
+    return null;
+  }
+}
 // Firebase Auth appends `mode` and `oobCode` (plus apiKey/lang, which the SDK reads on its own)
 // to whatever "Custom action URL" is set in the Console's email templates -- see
 // AuthActionScreen for what handles each mode. Only recognizes the 3 modes that action actually
@@ -13420,6 +13433,14 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement("div", {
     onClick: () => onOpen(m.id),
+    onKeyDown: e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onOpen(m.id);
+      }
+    },
+    role: "button",
+    tabIndex: 0,
     style: {
       cursor: "pointer",
       flex: 1,
@@ -19748,6 +19769,14 @@ function TeamsScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     onClick: canManage ? () => onEdit(t) : undefined,
+    onKeyDown: canManage ? e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onEdit(t);
+      }
+    } : undefined,
+    role: canManage ? "button" : undefined,
+    tabIndex: canManage ? 0 : undefined,
     style: {
       cursor: canManage ? "pointer" : "default",
       flex: 1
@@ -27820,6 +27849,7 @@ function CricketScorer() {
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
+  const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
@@ -28215,9 +28245,15 @@ function CricketScorer() {
     return unsubAuth;
   }, []);
   // Once someone signs in from the welcome screen (or already had a session restored), move
-  // straight past it into Home rather than leaving them stuck looking at a sign-in button.
+  // straight past it into Home rather than leaving them stuck looking at a sign-in button. If the
+  // app was opened via the "New match" home-screen shortcut, land straight on Setup instead —
+  // same destination as tapping Home's own "New" button, just skipping the extra tap for the
+  // exact case that shortcut exists for. Only ever fires once: initialShortcutAction is a ref
+  // (frozen at mount from the URL), not state, so it can't re-trigger on a later sign-out/in.
   useEffect(() => {
-    if (user && screen === "login") setScreen("home");
+    if (user && screen === "login") {
+      setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
+    }
   }, [user]);
   // Offline outbox: retry queued writes whenever the browser tells us we're back online, and on a
   // slow poll as a safety net for platforms where the 'online' event doesn't fire reliably. The
@@ -29373,7 +29409,7 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
     onSignIn: handleSignInGoogle,
-    onSkip: () => setScreen("home")
+    onSkip: () => setScreen(initialShortcutAction === "new-match" ? "setup" : "home")
   })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "home",
     direction: navDirection
