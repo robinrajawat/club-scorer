@@ -15565,29 +15565,7 @@ function TournamentsScreen({
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, c.name))), activeClubId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords("club", activeClubId, activeClubName),
-    className: "cs-btn cs-shine",
-    "aria-label": `${activeClubName} Record Book`,
-    style: {
-      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
-      borderRadius: 20,
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: "5px 10px 5px 8px",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 11.5,
-      whiteSpace: "nowrap",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 14
-  }), "Records")), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, c.name)))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -15618,29 +15596,7 @@ function TournamentsScreen({
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
       whiteSpace: "nowrap"
     }
-  }, f.name))), activeFederationId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenRecords("federation", activeFederationId, activeFederationName),
-    className: "cs-btn cs-shine",
-    "aria-label": `${activeFederationName} Record Book`,
-    style: {
-      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
-      borderRadius: 20,
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: "5px 10px 5px 8px",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 11.5,
-      whiteSpace: "nowrap",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 14
-  }), "Records")), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, f.name)))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -16650,6 +16606,7 @@ function FixturesSection({
   onStartFixtureMatch,
   onUpdateTournament,
   onOpenMatch,
+  onOpenRecords,
   canManage = true
 }) {
   const [busy, setBusy] = useState(false);
@@ -16898,7 +16855,29 @@ function FixturesSection({
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, champion, " won the tournament")), stages.flatMap(s => fixturesForStage(s.label)).filter(f => !isFixturePlayed(f)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, champion, " won the tournament"), onOpenRecords && /*#__PURE__*/React.createElement("button", {
+    onClick: onOpenRecords,
+    className: "cs-btn cs-shine",
+    style: {
+      marginLeft: "auto",
+      flexShrink: 0,
+      background: "rgba(46,28,4,0.14)",
+      border: "none",
+      borderRadius: 8,
+      color: "#2e1c04",
+      cursor: "pointer",
+      padding: "6px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      whiteSpace: "nowrap"
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 13
+  }), "Record Book")), stages.flatMap(s => fixturesForStage(s.label)).filter(f => !isFixturePlayed(f)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     match: f.matchId ? matchById.get(f.matchId) : null,
@@ -17265,6 +17244,7 @@ function TournamentDetailScreen({
   onUpdateTournament,
   onOpenMatch,
   onDeleteTournament,
+  onOpenRecords,
   canManage = true
 }) {
   const [matches, setMatches] = useState(null); // null = loading
@@ -17806,6 +17786,7 @@ function TournamentDetailScreen({
     onStartFixtureMatch: onStartFixtureMatch,
     onUpdateTournament: onUpdateTournament,
     onOpenMatch: onOpenMatch,
+    onOpenRecords: onOpenRecords,
     canManage: canManage
   })),
     activeTab === "standings" && /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings ? /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
@@ -29541,6 +29522,11 @@ function CricketScorer() {
       openMatch(id);
     },
     onDeleteTournament: handleDeleteTournament,
+    // Lets the champion banner (see FixturesSection) link straight to the club/federation's
+    // Record Book the moment a title's actually decided — the same handleOpenRecords used by the
+    // Club/Federation screen entry points, just resolved from whichever source this tournament
+    // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
+    onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
