@@ -9,9 +9,18 @@ struct MatchScoringView: View {
     @State private var showingWicketSheet = false
     @State private var wicketType: WicketType = .bowled
     @State private var dismissedIsStriker = true
+    @State private var runOutCompletedRuns = 0
     @State private var pendingBowler: String?
     @State private var pendingBatter: String?
     @State private var navigateToResult = false
+
+    /// Snapshot of `match` taken before each ball is applied, so a misrecorded ball can be
+    /// undone. Deliberately a stack of full `Match` snapshots rather than a hand-written
+    /// "reverse the last mutation" function — over/innings completion, strike rotation, and
+    /// now free-hit state all interact, and reversing that correctly in every case is much
+    /// more failure-prone than just restoring the previous known-good state. Session-only:
+    /// it resets if this view is dismissed, same as the rest of `@State` here.
+    @State private var history: [Match] = []
 
     init(match: Match, store: MatchStore) {
         _match = State(initialValue: match)
@@ -39,6 +48,17 @@ struct MatchScoringView: View {
         }
         .navigationTitle("\(match.teamAName) vs \(match.teamBName)")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    undoLastBall()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                }
+                .disabled(history.isEmpty)
+                .accessibilityLabel("Undo last ball")
+            }
+        }
         .navigationDestination(isPresented: $navigateToResult) {
             ResultView(match: match)
         }
@@ -66,6 +86,16 @@ struct MatchScoringView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            if inning.freeHitNext {
+                Text("FREE HIT")
+                    .font(.caption.weight(.bold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.2))
+                    .foregroundStyle(.orange)
+                    .clipShape(Capsule())
+            }
         }
     }
 
@@ -86,13 +116,14 @@ struct MatchScoringView: View {
     }
 
     private func ballLabel(_ ball: BallEvent) -> String {
-        if ball.isWicket { return "W" }
+        let mark = ball.isFreeHit ? "•" : ""
+        if ball.isWicket { return "W" + mark }
         switch ball.extraType {
-        case .wide: return "wd\(ball.runs > 0 ? "+\(ball.runs)" : "")"
-        case .noBall: return "nb\(ball.runs > 0 ? "+\(ball.runs)" : "")"
-        case .bye: return "b\(ball.runs)"
-        case .legBye: return "lb\(ball.runs)"
-        case .none: return "\(ball.runs)"
+        case .wide: return "wd\(ball.runs > 0 ? "+\(ball.runs)" : "")" + mark
+        case .noBall: return "nb\(ball.runs > 0 ? "+\(ball.runs)" : "")" + mark
+        case .bye: return "b\(ball.runs)" + mark
+        case .legBye: return "lb\(ball.runs)" + mark
+        case .none: return "\(ball.runs)" + mark
         }
     }
 
@@ -209,6 +240,8 @@ struct MatchScoringView: View {
             }
 
             Button {
+                wicketType = inning.freeHitNext ? .runOut : .bowled
+                runOutCompletedRuns = 0
                 showingWicketSheet = true
             } label: {
                 Text("Wicket")
@@ -255,11 +288,24 @@ struct MatchScoringView: View {
         }
     }
 
+    /// On a free hit, only a run out can actually dismiss the batter — everything else
+    /// (bowled, caught, lbw, stumped, hit wicket) doesn't count. Restricting the picker here
+    /// is the primary defense; ScoringEngine.apply also defends against it independently in
+    /// case a ball ever gets constructed some other way.
+    private var availableWicketTypes: [WicketType] {
+        inning.freeHitNext ? [.runOut] : WicketType.allCases
+    }
+
     private var wicketSheet: some View {
         NavigationStack {
             Form {
+                if inning.freeHitNext {
+                    Text("Free hit — only a run out counts here.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
                 Picker("How out", selection: $wicketType) {
-                    ForEach(WicketType.allCases) { Text($0.label).tag($0) }
+                    ForEach(availableWicketTypes) { Text($0.label).tag($0) }
                 }
                 if inning.nonStrikerName != nil {
                     Picker("Who's out", selection: $dismissedIsStriker) {
@@ -267,6 +313,12 @@ struct MatchScoringView: View {
                         Text(inning.nonStrikerName ?? "Non-striker").tag(false)
                     }
                     .pickerStyle(.segmented)
+                }
+                if wicketType == .runOut {
+                    Stepper("Runs completed: \(runOutCompletedRuns)", value: $runOutCompletedRuns, in: 0...3)
+                    Text("Runs the batters completed before the throw came in — these still count toward the team and striker totals.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Wicket")
@@ -310,14 +362,18 @@ struct MatchScoringView: View {
         guard let striker = inning.strikerName, let nonStriker = inning.nonStrikerName,
               let bowler = inning.currentBowlerName else { return }
         let dismissed = dismissedIsStriker ? striker : nonStriker
+        // Only a run out can carry completed runs — every other dismissal type is 0 runs,
+        // same as before.
+        let runs = wicketType == .runOut ? runOutCompletedRuns : 0
         let ball = BallEvent(
-            runs: 0, extraType: .none, isWicket: true, wicketType: wicketType,
+            runs: runs, extraType: .none, isWicket: true, wicketType: wicketType,
             dismissedBatterName: dismissed, strikerName: striker, nonStrikerName: nonStriker, bowlerName: bowler
         )
         apply(ball)
     }
 
     private func apply(_ ball: BallEvent) {
+        history.append(match)
         var updated = match
         ScoringEngine.apply(ball, to: &updated)
         match = updated
@@ -325,6 +381,16 @@ struct MatchScoringView: View {
         if updated.status == "complete" {
             navigateToResult = true
         }
+    }
+
+    /// Restores the match to its state before the last recorded ball. Bowler/batter
+    /// selection prompts aren't part of this history — only actual scoring deliveries —
+    /// since those aren't "balls" that can be misrecorded in the same sense.
+    private func undoLastBall() {
+        guard let previous = history.popLast() else { return }
+        match = previous
+        persist()
+        navigateToResult = false
     }
 
     private func persist() {

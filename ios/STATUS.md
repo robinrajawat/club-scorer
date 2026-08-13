@@ -1,7 +1,17 @@
-# iOS native rewrite — status (parked)
+# iOS native rewrite — status (parked, source-only progress since)
 
 Last worked on: August 2026. Parked in favor of the existing PWA — see
 "Why parked" below. Tell Claude to read this file to pick the thread back up.
+
+**Important caveat on everything below "What's built":** the environment
+this was written in has no Swift toolchain and no Xcode — it's a Linux
+sandbox. The scoring-engine refinements described here were written
+against the existing code's patterns and reviewed by eye (brace/paren
+balance checked mechanically), but **not compiled, not run, and not
+tested on a simulator or device.** Treat them as a first draft to verify
+in Xcode, not as working code. This doesn't change the "why parked"
+calculus — see that section — it's just cleanup of a few known gaps
+while parked, done the only way possible without a Mac in the loop.
 
 ## Where this came from
 
@@ -64,12 +74,56 @@ when this got parked).
 
 ## Known simplifications in what's built
 
-- Run-outs record 0 completed runs (should credit runs completed before the
-  dismissal).
-- No free-hit tracking after a no-ball.
 - No manual batting-order override — next batter comes from a picker of
   unused players, not a drag-reordered lineup.
-- No undo — a misrecorded ball can't be corrected yet.
+
+Three items that used to be listed here — run-out completed runs, free-hit
+tracking, and undo — have source written now. See "Recent source changes
+(unverified)" below for exactly what changed and what to double-check
+first in Xcode.
+
+## Recent source changes (unverified — first Xcode build should confirm these before trusting them)
+
+- **Run-out partial runs.** `BallEvent.runs` on a run-out dismissal now
+  holds runs completed before the throw (0–3, via a stepper in the wicket
+  sheet), and those runs count toward the team total and the striker's
+  score the same way any other delivery's runs do. `ScoringEngine.apply`
+  also now applies the batters'-crossing rotation for odd completed runs
+  on a run-out, which it previously skipped entirely for any wicket.
+  Worth re-checking by hand: the "who's out" picker captures a *name*
+  before the ball is applied, decoupled from "striker"/"non-striker" — the
+  rotation logic runs after that capture, so it shouldn't invalidate the
+  name, but this is exactly the kind of ordering bug that's easy to get
+  subtly wrong without a compiler and a real device to try odd-run run-outs
+  against.
+- **Free-hit tracking.** `InningsState.freeHitNext` and
+  `BallEvent.isFreeHit` are new. A no-ball sets the next delivery as a free
+  hit; the free hit carries forward through any illegal deliveries (e.g. a
+  wide bowled on the free hit) rather than being consumed by them. On a
+  free hit, the wicket sheet only offers "Run out" as a dismissal option,
+  and `ScoringEngine.apply` independently downgrades any other wicket type
+  to not-out if one somehow arrives — belt-and-suspenders, since the sheet
+  is the real gate. Not yet decided/handled: some leagues also grant a free
+  hit after a wide, not just a no-ball — this only implements the no-ball
+  version, which is the more universal rule but worth confirming against
+  whatever ruleset the target users actually play under.
+- **Undo.** Deliberately *not* a hand-written "reverse the last mutation"
+  function — over-completion, innings-advancement, and now free-hit state
+  all interact, and reversing that correctly for every branch is a lot of
+  surface area to get right blind. Instead `MatchScoringView` keeps a
+  session-only stack of full `Match` snapshots, pushed before each ball is
+  applied; undo just pops and restores. Simpler, but only covers scoring
+  deliveries — the bowler/batter-selection prompts aren't snapshotted, so
+  undo can't step back through a wrong bowler pick, only through balls.
+  Also doesn't survive leaving the screen (it's plain `@State`), which is
+  probably fine for "I fat-fingered the last ball" but worth deciding
+  explicitly rather than assuming.
+
+None of these three touched Firestore sync, Google sign-in, teams/players
+management, tournaments, records, sharing, or PDF export — those are all
+still exactly where they were (see "What's next" below), and #1 on that
+list — the first on-device build — is still the real blocker before any of
+this can be trusted.
 
 ## What's next, roughly in priority order
 

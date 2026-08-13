@@ -12,8 +12,24 @@ enum ScoringEngine {
     /// Applies a completed ball to the match, mutating in place. Returns true if the innings
     /// (or match) just completed as a result, so the caller can navigate accordingly.
     @discardableResult
-    static func apply(_ ball: BallEvent, to match: inout Match) -> Bool {
+    static func apply(_ rawBall: BallEvent, to match: inout Match) -> Bool {
         guard var inning = match.current else { return false }
+
+        var ball = rawBall
+        let wasFreeHit = inning.freeHitNext
+        ball.isFreeHit = wasFreeHit
+
+        // Free-hit rule: on a free hit, a dismissal only stands if it's a run out — the
+        // batter can't be given out bowled/caught/lbw/stumped/hit-wicket. The scoring pad
+        // is expected to already hide those options while a free hit is active (see
+        // MatchScoringView.wicketSheet), but the engine defends against it too rather than
+        // trusting the caller, since this struct can in principle be constructed anywhere.
+        // Any runs completed before the (ignored) dismissal still count.
+        if ball.isFreeHit, ball.isWicket, ball.wicketType != .runOut {
+            ball.isWicket = false
+            ball.wicketType = nil
+            ball.dismissedBatterName = nil
+        }
 
         if inning.overs.isEmpty || inning.overs.last!.isComplete {
             inning.overs.append(Over(bowlerName: ball.bowlerName))
@@ -22,6 +38,15 @@ enum ScoringEngine {
         inning.runs += ball.totalRuns
 
         if ball.isWicket {
+            // Run outs can happen mid-run: `ball.runs` holds whatever the batters completed
+            // before the throw, and — same as any other delivery — they physically cross ends
+            // for each of those completed runs before the dismissal takes effect. Non-run-out
+            // wicket types always carry runs == 0 (enforced by the scoring pad), so this is a
+            // no-op for them.
+            if ball.runs % 2 == 1, let s = inning.strikerName, let n = inning.nonStrikerName {
+                inning.strikerName = n
+                inning.nonStrikerName = s
+            }
             inning.wickets += 1
             inning.fallOfWickets.append(
                 FallOfWicket(
@@ -43,6 +68,17 @@ enum ScoringEngine {
                 inning.strikerName = n
                 inning.nonStrikerName = s
             }
+        }
+
+        // A no-ball always grants a free hit next. If we're already in a free hit and this
+        // delivery was itself illegal (e.g. a wide bowled on the free hit), the free hit
+        // carries over to the next ball rather than being consumed. Any legal delivery clears it.
+        if ball.extraType == .noBall {
+            inning.freeHitNext = true
+        } else if !ball.isLegal {
+            inning.freeHitNext = wasFreeHit
+        } else {
+            inning.freeHitNext = false
         }
 
         if ball.isLegal, inning.overs.last!.isComplete, !inning.complete {

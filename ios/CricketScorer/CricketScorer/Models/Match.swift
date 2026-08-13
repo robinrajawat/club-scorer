@@ -32,6 +32,10 @@ struct BallEvent: Codable, Equatable, Identifiable {
     var strikerName: String
     var nonStrikerName: String
     var bowlerName: String
+    /// True if this delivery was bowled as a free hit (i.e. it followed a no-ball).
+    /// Defaulted for backward compatibility with any match JSON saved before this
+    /// field existed — old saves just decode every ball as `false`.
+    var isFreeHit: Bool = false
 
     var isLegal: Bool { extraType != .wide && extraType != .noBall }
 
@@ -74,6 +78,10 @@ struct InningsState: Codable, Equatable {
     var overs: [Over] = []
     var strikerName: String?
     var nonStrikerName: String?
+    /// True if the *next* legal delivery bowled in this innings is a free hit
+    /// (i.e. the previous ball was a no-ball, or was itself a free-hit delivery
+    /// that turned out to be another illegal ball).
+    var freeHitNext: Bool = false
 
     var runs: Int = 0
     var wickets: Int = 0

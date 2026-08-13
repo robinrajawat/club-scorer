@@ -74,14 +74,13 @@ These are deliberate cuts to get a working core loop shipped, not bugs:
 - **No Google sign-in yet** — see below.
 - **No teams/players management screens, no tournaments, no records/series
   stats, no PDF export, no polls, no push notifications.**
-- **Run-outs record no completed runs** — a run-out mid-run should credit
-  the runs completed before the dismissal; this version records 0. Fine for
-  casual scoring, wrong for a competitive scorecard.
-- **No free-hit tracking** after a no-ball.
 - **No manual batting-order override** — next batter is chosen from a
   picker of unused players, not a drag-reordered lineup.
-- **No undo.** Once a ball's recorded, it's recorded — no correction flow
-  yet if you fat-finger a run count.
+
+Three items formerly on this list — run-out partial runs, free-hit
+tracking, and undo — have source written (see STATUS.md for what changed
+and what's still unverified about it, since none of this has been run in
+Xcode yet).
 
 ## What's stubbed
 
