@@ -1310,11 +1310,23 @@ let flushInFlight = false;
 // Retries every queued match once. Safe to call as often as you like (on 'online', on a timer, or
 // opportunistically right after any other successful save) — it's a no-op re-entrancy guard plus
 // a cheap localStorage scan when the queue is empty, which is the common case.
+// Retries every queued match once. Safe to call as often as you like (on 'online', on a timer, or
+// opportunistically right after any other successful save) — it's a no-op re-entrancy guard plus
+// a cheap localStorage scan when the queue is empty, which is the common case. Returns a summary
+// so a manual "tap to retry" can tell the person WHY it's still stuck instead of silently doing
+// nothing visible — see SyncStatusBanner.
 async function flushPendingWrites() {
-  if (flushInFlight) return;
+  if (flushInFlight) return {
+    remaining: lsPendingIds().length,
+    lastError: null
+  };
   const ids = lsPendingIds();
-  if (ids.length === 0) return;
+  if (ids.length === 0) return {
+    remaining: 0,
+    lastError: null
+  };
   flushInFlight = true;
+  let lastError = null;
   try {
     for (const id of ids) {
       const raw = localStorage.getItem(PENDING_PREFIX + id);
@@ -1332,16 +1344,24 @@ async function flushPendingWrites() {
       const result = await savePrimaryMatch(match);
       if (result.ok) {
         clearPendingWrite(id);
+      } else if (result.conflict) {
+        // Also leave it queued rather than looping on it forever here — a background flush has no
+        // human to ask "which version wins", so it waits for whoever's actually scoring this match
+        // to reopen it, which re-attempts the save and surfaces the conflict properly (see
+        // MatchScreen's conflict banner). We deliberately don't resolve conflicts here.
+        lastError = `${match.teamA || "This match"} has a newer version on another device \u2014 open it to resolve.`;
+      } else {
+        // Plain network/permission/etc failure: leave it queued, try again next flush.
+        lastError = result.error || "Couldn't reach the server.";
       }
-      // Network failure: leave it queued, try again next flush.
-      // Conflict: also leave it queued rather than looping on it forever here — a background
-      // flush has no human to ask "which version wins", so it waits for whoever's actually
-      // scoring this match to reopen it, which re-attempts the save and surfaces the conflict
-      // properly (see MatchScreen's conflict banner). We deliberately don't resolve conflicts here.
     }
   } finally {
     flushInFlight = false;
   }
+  return {
+    remaining: lsPendingIds().length,
+    lastError
+  };
 }
 // Runs one write attempt inside a Firestore transaction that enforces optimistic concurrency: the
 // write only lands if the server's writeSeq still matches what this client last saw. This is what
@@ -6234,31 +6254,44 @@ function MilestoneToast({
     style: {
       position: "fixed",
       top: "max(14px, env(safe-area-inset-top))",
-      left: "50%",
+      left: 0,
       zIndex: 79,
-      pointerEvents: "none"
+      pointerEvents: "none",
+      display: "flex",
+      justifyContent: "center",
+      // Previously `left: 50%` + a matching translateX(-50%) on the inner pill, with nothing
+      // capping how wide that inner element could grow — a long bowler/team name on a long
+      // template (e.g. "Two wickets in the over for {name}", which front-loads 29 characters of
+      // fixed text before the name even starts) could run past the screen edge on a narrow phone
+      // and render invisibly off-canvas, which is what looked like the message being cut off.
+      // Centering via a full-width flex row instead, so the maxWidth+wrap below on the pill itself
+      // has room to actually take effect.
+      width: "100vw"
     }
   }, /*#__PURE__*/React.createElement("div", {
     key: toast.key,
     style: {
-      transform: "translateX(-50%)",
       display: "flex",
       alignItems: "center",
       gap: 9,
+      maxWidth: "min(88vw, 380px)",
       background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
       color: "#2e1c04",
       padding: "10px 18px",
-      borderRadius: 30,
+      borderRadius: 20,
       boxShadow: "0 8px 24px rgba(184,137,43,0.45)",
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13,
-      whiteSpace: "nowrap",
+      whiteSpace: "normal",
+      textAlign: "center",
+      lineHeight: 1.3,
       animation: "cs-toastDown 0.32s cubic-bezier(0.22, 1, 0.36, 1)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 16
+      fontSize: 16,
+      flexShrink: 0
     }
   }, MILESTONE_ICONS[m.type] || "\u2728"), m.text));
 }
@@ -21998,18 +22031,35 @@ function SyncStatusBanner({
   onSynced
 }) {
   const [syncing, setSyncing] = useState(false);
+  const [lastError, setLastError] = useState(null);
   if (!count) return null;
   async function handleTap() {
     if (syncing) return;
     setSyncing(true);
-    await flushPendingWrites();
-    // Without this, a tap that actually succeeds (clears the outbox) still leaves the banner
-    // reading the old count — nothing refreshes it until the next 15s background poll or an
-    // 'online' event, so a successful retry looks indistinguishable from tapping doing nothing.
+    setLastError(null);
+    const {
+      lastError: error
+    } = await flushPendingWrites();
+    // Without the onSynced() call, a tap that actually succeeds (clears the outbox) still leaves
+    // the banner reading the old count — nothing refreshes it until the next 15s background poll
+    // or an 'online' event, so a successful retry looks indistinguishable from tapping doing
+    // nothing. And without surfacing `error`, a retry that keeps genuinely failing (bad auth,
+    // unpublished Firestore rules, a real conflict) looks exactly the same as that same silent
+    // nothing — this is what tells the person WHY it's still stuck instead of just inviting them
+    // to tap the same button again.
     if (onSynced) onSynced();
+    setLastError(error || null);
     setSyncing(false);
   }
-  return /*#__PURE__*/React.createElement("button", {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: handleTap,
     disabled: syncing,
     className: "cs-btn",
@@ -22025,12 +22075,19 @@ function SyncStatusBanner({
       fontWeight: 600,
       fontSize: 12,
       padding: "6px 10px",
-      cursor: syncing ? "default" : "pointer",
-      marginBottom: 12
+      cursor: syncing ? "default" : "pointer"
     }
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 13
-  }), syncing ? "Syncing\u2026" : `${count} match${count === 1 ? "" : "es"} not synced \u2014 tap to retry`);
+  }), syncing ? "Syncing\u2026" : `${count} match${count === 1 ? "" : "es"} not synced \u2014 tap to retry`), lastError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: dark ? "rgba(242,236,217,0.75)" : "#b3392f",
+      textAlign: "center",
+      maxWidth: 280
+    }
+  }, lastError));
 }
 // Shown when a scored ball's save collides with a newer write from another device — the two
 // devices' local states have genuinely diverged and nothing here tries to auto-merge ball-by-ball
