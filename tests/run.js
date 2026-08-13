@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Regression suite for the scoring engine (index.html's newInning/applyBall/ensureBatsman/
-// ensureBowler/packMatchForFirestore/findEmptyKeyPath).
+// ensureBowler/packMatchForFirestore/findEmptyKeyPath) plus tournament standings and DLS
+// (computeStandings/dlsTarget/dlsResourcePercent/oversLeftTrueDecimal).
 //
 // This does NOT test a copy of that logic — it extracts the functions straight out of the current
 // index.html at run time (see extractBlock below), so a change to the real file is what gets
 // tested, and a stale duplicate can never quietly drift out of sync with what's actually shipped.
 // Run with: node tests/run.js
 //
-// Every test here exists because of a real bug that reached production and was hard to trace once
-// it did:
+// The scoring-engine cases below each exist because of a real bug that reached production and was
+// hard to trace once it did:
 //   - "golden duck reappears as pickable" — a dismissed batsman's own replacement, if dismissed
 //     before ever facing a run ball, had no record yet and could be picked again on the very
 //     wicket that got them out.
@@ -17,6 +18,12 @@
 //     next sync with an error that gave no indication of where the problem was.
 // Both were only found after real (production) reports. This suite exists so the NEXT bug in this
 // family fails a `node tests/run.js` run instead of a phone screen days or weeks later.
+//
+// The standings/DLS cases are the opposite origin: computeStandings and the DLS calculation are
+// the two highest-stakes, most-branching pieces of logic in the app (knockout exclusion, tie vs.
+// no-result vs. Super-Over chains, revised-overs NRR crediting, the three-branch DLS formula) and
+// had zero coverage despite that. These were added proactively, ahead of a production incident
+// rather than after one — ordinary regression insurance, not a postmortem.
 
 const fs = require("fs");
 const path = require("path");
