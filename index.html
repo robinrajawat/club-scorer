@@ -4161,6 +4161,61 @@ const BRACKET_SEED_PAIRS = {
   2: [[0, 1]]
 };
 
+// A tournament's final placement (champion/runner-up), computed the same way FixturesSection
+// derives its "X won the tournament" banner, but as a standalone pure function so RecordsScreen
+// can ask it of every tournament a club/federation has ever run, not just the one currently open.
+// Two ways a tournament resolves a champion: (1) a decided Final fixture in its knockout bracket
+// (mirrors FixturesSection exactly — same stages/fixturesForStage/stageDecided logic), or (2), for
+// a tournament with too few teams for any bracket at all (fewer than 2, so applicableKnockoutStages
+// returns []), the points-table topper once every fixture is complete — that's the only notion of
+// "won it" a pure round-robin-with-no-knockout tournament has. A tournament that HAS a bracket but
+// hasn't finished it yields no placement at all (not the standings leader), since an unplayed Final
+// isn't a result. Returns null if the tournament has no fixtures yet or nothing is decided.
+function computeTournamentPlacement(tournament, matches) {
+  const fixtures = tournament.fixtures || [];
+  if (!fixtures.length) return null;
+  const matchById = new Map((matches || []).filter(Boolean).map(m => [m.id, m]));
+  function fixturesForStage(label) {
+    return fixtures.filter(f => f.stage === label);
+  }
+  function stageDecided(label) {
+    const fx = fixturesForStage(label);
+    return fx.length > 0 && fx.every(f => f.matchId && matchWinner(matchById.get(f.matchId), matchById));
+  }
+  const groupStandings = computeGroupStandings(tournament, matches || []);
+  const advancePerGroup = tournament.advancePerGroup || 2;
+  const stages = applicableKnockoutStages(groupStandings ? groupStandings.length * advancePerGroup : tournament.teams.length);
+  if (stages.length) {
+    const finalStage = stages[stages.length - 1];
+    if (!stageDecided(finalStage.label)) return null;
+    const finalFixture = fixturesForStage(finalStage.label)[0];
+    const champion = matchWinner(matchById.get(finalFixture.matchId), matchById);
+    if (!champion) return null;
+    const runnerUp = finalFixture.teamA === champion ? finalFixture.teamB : finalFixture.teamA;
+    return {
+      tournamentId: tournament.id,
+      tournamentName: tournament.name,
+      champion,
+      runnerUp,
+      via: "knockout"
+    };
+  }
+  // No bracket ever applies (fewer than 2 teams) — fall back to the standings topper, but only
+  // once the tournament is actually finished (every fixture played), same reasoning FixturesSection
+  // uses for groupStageDone: a leader mid-tournament isn't a result yet.
+  const allPlayed = fixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
+  if (!allPlayed) return null;
+  const standings = computeStandings(tournament, matches || []);
+  if (!standings.length || standings[0].played === 0) return null;
+  return {
+    tournamentId: tournament.id,
+    tournamentName: tournament.name,
+    champion: standings[0].team,
+    runnerUp: standings[1] ? standings[1].team : null,
+    via: "table"
+  };
+}
+
 // ---------- Account profile (display name override) ----------
 async function loadProfile() {
   if (!auth.currentUser) return null;
@@ -10179,20 +10234,27 @@ function ClubPanel({
     }
   }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("club", activeClub.id, activeClub.name),
-    className: "cs-btn",
+    className: "cs-btn cs-shine",
     "aria-label": `${activeClub.name} Record Book`,
     style: {
-      background: "none",
-      border: "none",
+      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
+      borderRadius: 20,
       color: COLORS.pitch,
       cursor: "pointer",
-      padding: 4,
+      padding: "5px 10px 5px 8px",
       display: "flex",
-      alignItems: "center"
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      whiteSpace: "nowrap",
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 17
-  })), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    size: 14
+  }), "Records"), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
     isPublic: activeClub.visibility === "public",
     busy: visBusy,
     onChange: handleSetVisibility,
@@ -11357,20 +11419,27 @@ function FederationsPanel({
     }
   }, onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("federation", f.id, f.name),
-    className: "cs-btn",
+    className: "cs-btn cs-shine",
     "aria-label": `${f.name} Record Book`,
     style: {
-      background: "none",
-      border: "none",
+      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
+      borderRadius: 20,
       color: COLORS.pitch,
       cursor: "pointer",
-      padding: 4,
+      padding: "5px 10px 5px 8px",
       display: "flex",
-      alignItems: "center"
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      whiteSpace: "nowrap",
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 17
-  })), isOwner(f) && /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    size: 14
+  }), "Records"), isOwner(f) && /*#__PURE__*/React.createElement(VisibilitySwitch, {
     isPublic: f.visibility === "public",
     busy: visBusyId === f.id,
     onChange: isPublic => handleSetVisibility(f.id, isPublic)
@@ -15488,21 +15557,27 @@ function TournamentsScreen({
     }
   }, c.name))), activeClubId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("club", activeClubId, activeClubName),
-    className: "cs-btn",
+    className: "cs-btn cs-shine",
     "aria-label": `${activeClubName} Record Book`,
     style: {
-      background: "none",
-      border: "none",
+      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
+      borderRadius: 20,
       color: COLORS.pitch,
       cursor: "pointer",
-      padding: 4,
+      padding: "5px 10px 5px 8px",
       display: "flex",
       alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      whiteSpace: "nowrap",
       flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 17
-  }))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
+    size: 14
+  }), "Records")), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -15535,21 +15610,27 @@ function TournamentsScreen({
     }
   }, f.name))), activeFederationId && onOpenRecords && /*#__PURE__*/React.createElement("button", {
     onClick: () => onOpenRecords("federation", activeFederationId, activeFederationName),
-    className: "cs-btn",
+    className: "cs-btn cs-shine",
     "aria-label": `${activeFederationName} Record Book`,
     style: {
-      background: "none",
-      border: "none",
+      background: `color-mix(in srgb, ${COLORS.gold} 10%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${COLORS.gold} 35%, transparent)`,
+      borderRadius: 20,
       color: COLORS.pitch,
       cursor: "pointer",
-      padding: 4,
+      padding: "5px 10px 5px 8px",
       display: "flex",
       alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      whiteSpace: "nowrap",
       flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
-    size: 17
-  }))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+    size: 14
+  }), "Records")), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -18145,15 +18226,19 @@ function RecordsScreen({
   onBack
 }) {
   const [matches, setMatches] = useState(null); // null = loading
+  const [tournaments, setTournaments] = useState(null); // null = loading; needed for title placements, not just matches
   const [recordsTab, setRecordsTab] = useState("allTime"); // "allTime" | "currentYear"
   const [teamFilter, setTeamFilter] = useState("all"); // "all" | a team name from matches
   const [playerQuery, setPlayerQuery] = useState("");
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const tournaments = sourceType === "federation" ? await loadFederationTournaments(sourceId) : await loadClubTournaments(sourceId);
-      const lists = await Promise.all(tournaments.map(t => loadTournamentMatches(t.id)));
-      if (!cancelled) setMatches(lists.flat());
+      const tlist = sourceType === "federation" ? await loadFederationTournaments(sourceId) : await loadClubTournaments(sourceId);
+      const lists = await Promise.all(tlist.map(t => loadTournamentMatches(t.id)));
+      if (!cancelled) {
+        setMatches(lists.flat());
+        setTournaments(tlist);
+      }
     })();
     return () => {
       cancelled = true;
@@ -18174,6 +18259,21 @@ function RecordsScreen({
   // everywhere else — no separate per-team code path needed.
   const teamFilteredMatches = matches && teamFilter !== "all" ? matches.filter(m => m.teamA === teamFilter || m.teamB === teamFilter) : matches;
   const records = teamFilteredMatches ? computeClubRecords(teamFilteredMatches, recordsTab === "currentYear" ? yearStartTs : undefined) : null;
+  // Titles — one placement per tournament (see computeTournamentPlacement), scoped by the same
+  // Year/team filters as the rest of the page even though it's computed from tournaments+matches
+  // rather than computeClubRecords' match-only aggregation. Sorted newest-first so a club's most
+  // recent silverware leads, same instinct as "recent form" mattering more than old history.
+  const placements = (tournaments || []).map(t => {
+    const p = computeTournamentPlacement(t, matches);
+    return p && { ...p, createdAt: t.createdAt || 0, year: t.createdAt ? new Date(t.createdAt).getFullYear() : null };
+  }).filter(Boolean).filter(p => recordsTab !== "currentYear" || p.createdAt >= yearStartTs).filter(p => teamFilter === "all" || p.champion === teamFilter || p.runnerUp === teamFilter).sort((a, b) => b.createdAt - a.createdAt);
+  // Title tally per team, for the "most decorated" summary line above the year-by-year list —
+  // counts championships only (a runner-up finish isn't a title), across whatever's in scope.
+  const titleCounts = placements.reduce((acc, p) => {
+    acc[p.champion] = (acc[p.champion] || 0) + 1;
+    return acc;
+  }, {});
+  const mostTitled = Object.entries(titleCounts).sort((a, b) => b[1] - a[1])[0] || null;
   const dateLabel = ts => ts ? relativeDayLabel(ts) || "\u2014" : "\u2014";
   // Player search is a client-side filter on already-computed rows (name is always the first
   // cell) — applies only to the player-named leaderboards/milestones, not the team-total or
@@ -18259,7 +18359,103 @@ function RecordsScreen({
       fontSize: 13,
       cursor: "pointer"
     }
-  }, t.label))), matches && matches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, t.label))), placements.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Titles"), mostTitled && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 10,
+      color: "#2e1c04",
+      boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 18
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5
+    }
+  }, `${mostTitled[0]} \u2014 most decorated, ${mostTitled[1]} title${mostTitled[1] === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "4px 14px",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, placements.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: p.tournamentId,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 0",
+      borderTop: i > 0 ? `1px dashed ${COLORS.creamDark}` : "none"
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 15,
+    color: COLORS.gold,
+    style: {
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, p.tournamentName), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, p.runnerUp ? `Runner-up: ${p.runnerUp}` : "\u00a0")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink
+    }
+  }, p.champion), p.year && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, p.year)))))), matches && matches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
