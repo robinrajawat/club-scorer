@@ -369,6 +369,33 @@ const LogOut = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
   x2: "9",
   y2: "12"
 }));
+const Sun = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "4"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
+}));
+const Moon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"
+}));
+const Monitor = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
+  x: "2",
+  y: "4",
+  width: "20",
+  height: "14",
+  rx: "2"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "8",
+  y1: "21",
+  x2: "16",
+  y2: "21"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "18",
+  x2: "12",
+  y2: "21"
+}));
 const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
 }), /*#__PURE__*/React.createElement("line", {
@@ -7231,19 +7258,26 @@ function AuthBar({
     }
   }, [{
     value: "light",
-    label: "Light"
+    label: "Light",
+    icon: Sun
   }, {
     value: "dark",
-    label: "Dark"
+    label: "Dark",
+    icon: Moon
   }, {
     value: "system",
-    label: "System"
+    label: "System",
+    icon: Monitor
   }].map(opt => /*#__PURE__*/React.createElement("button", {
     key: opt.value,
     type: "button",
     onClick: () => onSetTheme(opt.value),
     style: {
       flex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
       textAlign: "center",
       fontFamily: "'Inter'",
       fontWeight: 600,
@@ -7255,7 +7289,9 @@ function AuthBar({
       background: themePref === opt.value ? COLORS.pitch : "none",
       color: themePref === opt.value ? "#fff" : COLORS.inkSoft
     }
-  }, opt.label))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(opt.icon, {
+    size: 12
+  }), opt.label))), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
@@ -7471,16 +7507,10 @@ function AccountScreen({
   onSaveProfile,
   onExportData,
   onImportData,
-  themePref,
-  onSetTheme,
   onDeleteAccount,
   onOpenSharedLinks,
   onOpenRequests,
-  onOpenHelp,
-  onOpenFeedback,
   requestBadgeCount = 0,
-  focusTarget,
-  onFocusHandled,
   onOpenClubAdmin,
   onBack,
   redirectError,
@@ -7517,24 +7547,6 @@ function AccountScreen({
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [linkSuccess, setLinkSuccess] = useState("");
-  // Scrolls to and briefly highlights the About/Support card when opened via the AuthBar
-  // dropdown's "About & Support" shortcut, instead of leaving someone to hunt for it at the
-  // bottom of this otherwise long, scrolling screen.
-  const aboutCardRef = useRef(null);
-  const [aboutHighlight, setAboutHighlight] = useState(false);
-  useEffect(() => {
-    if (focusTarget === "about" && aboutCardRef.current) {
-      aboutCardRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
-      setAboutHighlight(true);
-      const t = setTimeout(() => setAboutHighlight(false), 1800);
-      if (onFocusHandled) onFocusHandled();
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line
-  }, []);
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
@@ -8503,7 +8515,7 @@ function AccountScreen({
       color: COLORS.inkSoft
     }
   }))
-), /*#__PURE__*/React.createElement("div", {
+), user && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
     borderRadius: 16,
@@ -8522,305 +8534,60 @@ function AccountScreen({
       textTransform: "uppercase",
       marginBottom: 10
     }
-  }, "Appearance"),
+  }, "Your data"),
+  /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleExport,
+    disabled: exporting,
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, exporting ? "Preparing\u2026" : "Export my data (.json)"),
   /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      gap: 8
-    }
-  }, [{
-    value: "light",
-    label: "Light"
-  }, {
-    value: "dark",
-    label: "Dark"
-  }, {
-    value: "system",
-    label: "System"
-  }].map(opt => /*#__PURE__*/React.createElement(Btn, {
-    key: opt.value,
-    variant: themePref === opt.value ? "primary" : "default",
-    onClick: () => onSetTheme(opt.value),
-    style: {
-      flex: 1,
-      fontSize: 13.5,
-      padding: "10px 8px",
-      minHeight: 40
-    }
-  }, opt.label))),
-  user && /*#__PURE__*/React.createElement(React.Fragment, null,
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 1,
-        background: COLORS.cardDivider,
-        margin: "14px 0"
-      }
-    }),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 10
-      }
-    }, "Your data"),
-    /*#__PURE__*/React.createElement(Btn, {
-      onClick: handleExport,
-      disabled: exporting,
-      style: {
-        width: "100%",
-        marginBottom: 10
-      }
-    }, exporting ? "Preparing\u2026" : "Export my data (.json)"),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11.5,
-        color: COLORS.inkSoft,
-        lineHeight: 1.5
-      }
-    }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account."),
-    /*#__PURE__*/React.createElement("input", {
-      ref: importFileRef,
-      type: "file",
-      accept: "application/json,.json",
-      style: {
-        display: "none"
-      },
-      onChange: handleImportFile
-    }),
-    /*#__PURE__*/React.createElement(Btn, {
-      onClick: () => importFileRef.current && importFileRef.current.click(),
-      disabled: importing,
-      style: {
-        width: "100%",
-        marginTop: 10
-      }
-    }, importing ? "Restoring\u2026" : "Import from backup (.json)"),
-    importResult && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 12,
-        color: importResult.ok ? COLORS.turf : COLORS.ball,
-        marginTop: 8,
-        lineHeight: 1.5
-      }
-    }, importResult.ok ? `Restored ${importResult.profileRestored ? "your profile, " : ""}${importResult.teamsCount} team${importResult.teamsCount === 1 ? "" : "s"}, and ${importResult.matchesCount} match${importResult.matchesCount === 1 ? "" : "es"}.` : importResult.error || `Restored what it could, but ${importResult.failedCount} match${importResult.failedCount === 1 ? "" : "es"} failed \u2014 try again in a moment.`),
-    showImportConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
-      title: "Import this backup?",
-      message: "This overwrites your profile, teams, and any matches in the backup that share an id with one already in this account. It doesn\u2019t touch your clubs \u2014 those aren\u2019t part of the backup file. This can\u2019t be undone.",
-      confirmLabel: "Import",
-      onConfirm: handleConfirmImport,
-      onCancel: () => {
-        setShowImportConfirm(false);
-        setPendingImportData(null);
-      }
-    })
-  )
-), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginTop: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenHelp,
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      padding: 0,
-      fontFamily: "'Inter'"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Help & FAQ"), /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 18,
-    style: {
-      color: COLORS.inkSoft
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenFeedback,
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      padding: 0,
-      fontFamily: "'Inter'"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Send Feedback"), /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 18,
-    style: {
-      color: COLORS.inkSoft
-    }
-  }))), /*#__PURE__*/React.createElement("div", {
-    ref: aboutCardRef,
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginTop: 14,
-      boxShadow: aboutHighlight ? `0 0 0 2px ${COLORS.pitch}, 0 4px 14px rgba(42,36,32,0.05)` : "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      transition: "box-shadow 0.4s ease"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(Info, {
-    size: 14,
-    style: {
-      color: COLORS.inkSoft
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
+      fontSize: 11.5,
       color: COLORS.inkSoft,
-      textTransform: "uppercase"
+      lineHeight: 1.5
     }
-  }, "About")), /*#__PURE__*/React.createElement("div", {
+  }, "Your profile, teams, matches saved to this account, and the clubs you belong to \u2014 as a JSON file you can keep. Doesn\u2019t include matches only ever shared via a match code, since those aren\u2019t linked to your account."),
+  /*#__PURE__*/React.createElement("input", {
+    ref: importFileRef,
+    type: "file",
+    accept: "application/json,.json",
     style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+      display: "none"
+    },
+    onChange: handleImportFile
+  }),
+  /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => importFileRef.current && importFileRef.current.click(),
+    disabled: importing,
     style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 12
+      width: "100%",
+      marginTop: 10
     }
-  }, "Ball-by-ball cricket scoring for friendly club games — single-file, no build step, made by a fellow club scorer."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
+  }, importing ? "Restoring\u2026" : "Import from backup (.json)"),
+  importResult && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 12
+      color: importResult.ok ? COLORS.turf : COLORS.ball,
+      marginTop: 8,
+      lineHeight: 1.5
     }
-  }, "Open source under the ", /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: COLORS.ink
+  }, importResult.ok ? `Restored ${importResult.profileRestored ? "your profile, " : ""}${importResult.teamsCount} team${importResult.teamsCount === 1 ? "" : "s"}, and ${importResult.matchesCount} match${importResult.matchesCount === 1 ? "" : "es"}.` : importResult.error || `Restored what it could, but ${importResult.failedCount} match${importResult.failedCount === 1 ? "" : "es"} failed \u2014 try again in a moment.`),
+  showImportConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Import this backup?",
+    message: "This overwrites your profile, teams, and any matches in the backup that share an id with one already in this account. It doesn\u2019t touch your clubs \u2014 those aren\u2019t part of the backup file. This can\u2019t be undone.",
+    confirmLabel: "Import",
+    onConfirm: handleConfirmImport,
+    onCancel: () => {
+      setShowImportConfirm(false);
+      setPendingImportData(null);
     }
-  }, "MIT License"), " — free to use, copy, modify and share. \u00A9 2026 Robin Singh Rajawat."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer", "_blank", "noopener,noreferrer"),
-    style: {
-      flex: "1 1 auto",
-      minHeight: 40,
-      padding: "0 14px",
-      fontSize: 13
-    }
-  }, "View source"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
-    style: {
-      flex: "1 1 auto",
-      minHeight: 40,
-      padding: "0 14px",
-      fontSize: 13
-    }
-  }, "View license")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 10
-    }
-  }, "Club Scorer stays free, with no ads and no locked features. If it's useful for your club, a tip is appreciated but never expected."), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => window.open("https://ko-fi.com/robinrajawat", "_blank", "noopener,noreferrer"),
-    className: "cs-btn cs-shine",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 7,
-      width: "100%",
-      minHeight: 42,
-      padding: "0 14px",
-      borderRadius: 10,
-      border: "none",
-      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      color: "#2e1c04",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5,
-      cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(184,137,43,0.3)"
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: 16,
-    height: 16,
-    viewBox: "0 0 24 24",
-    fill: "currentColor",
-    "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"
-  })), "Buy me a coffee")), user && /*#__PURE__*/React.createElement("div", {
+  })
+), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.05)",
       borderRadius: 16,
@@ -9069,7 +8836,7 @@ const HELP_SECTIONS = [{
   title: "Appearance",
   entries: [{
     q: "Does my theme choice (Light/Dark/System) follow my account?",
-    a: "No \u2014 it's saved per device, on purpose, same as house rules default to being local-first. Switch it separately on each device from Account \u2192 Appearance."
+    a: "No \u2014 it's saved per device, on purpose, same as house rules default to being local-first. Switch it separately on each device from the account menu \u2192 Appearance."
   }]
 }];
 // Shown once per device (see hasSeenTour/markTourSeen), only on the Home screen so it never
@@ -9306,7 +9073,7 @@ function HelpScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Account"), /*#__PURE__*/React.createElement("div", {
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 26,
@@ -9446,7 +9213,7 @@ function FeedbackScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Account"), /*#__PURE__*/React.createElement("div", {
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 26,
@@ -9519,6 +9286,163 @@ function FeedbackScreen({
       marginTop: 8
     }
   }, error))));
+}
+function AboutScreen({
+  onBack
+}) {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 18,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 14,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "About")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 12
+    }
+  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.cardDivider,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 12
+    }
+  }, "Open source under the ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, "MIT License"), " \u2014 free to use, copy, modify and share. \u00A9 2026 Robin Singh Rajawat."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer", "_blank", "noopener,noreferrer"),
+    style: {
+      flex: "1 1 auto",
+      minHeight: 40,
+      padding: "0 14px",
+      fontSize: 13
+    }
+  }, "View source"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
+    style: {
+      flex: "1 1 auto",
+      minHeight: 40,
+      padding: "0 14px",
+      fontSize: 13
+    }
+  }, "View license")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.cardDivider,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 10
+    }
+  }, "Club Scorer stays free, with no ads and no locked features. If it's useful for your club, a tip is appreciated but never expected."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => window.open("https://ko-fi.com/robinrajawat", "_blank", "noopener,noreferrer"),
+    className: "cs-btn cs-shine",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+      width: "100%",
+      minHeight: 42,
+      padding: "0 14px",
+      borderRadius: 10,
+      border: "none",
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      color: "#2e1c04",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      cursor: "pointer",
+      boxShadow: "0 2px 8px rgba(184,137,43,0.3)"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "currentColor",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"
+  })), "Buy me a coffee"))));
 }
 function SharedLinksScreen({
   matches,
@@ -27662,10 +27586,6 @@ function CricketScorer() {
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
-  // Which card inside AccountScreen to auto-scroll to and briefly highlight once it mounts --
-  // set when the AuthBar dropdown's "About & Support" item is used to jump straight there
-  // instead of making someone scroll past profile/password/data settings to find it.
-  const [accountFocusTarget, setAccountFocusTarget] = useState(null);
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
   // Set only while openMatch's Firestore/localStorage read is in flight — a match can be sizeable
@@ -27834,10 +27754,6 @@ function CricketScorer() {
     // internal step changes, just centralized here since every top-level transition already
     // funnels through this one function.
     window.scrollTo(0, 0);
-  }
-  function openAboutFromMenu() {
-    setAccountFocusTarget("about");
-    setScreen("account");
   }
   // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
@@ -29235,7 +29151,7 @@ function CricketScorer() {
     onOpenAccount: () => setScreen("account"),
     onOpenHelp: () => setScreen("help"),
     onOpenFeedback: () => setScreen("feedback"),
-    onOpenAbout: openAboutFromMenu,
+    onOpenAbout: () => setScreen("about"),
     onSignOut: signOutUser,
     themePref: themePref,
     onSetTheme: handleSetTheme,
@@ -29429,16 +29345,10 @@ function CricketScorer() {
     onSaveProfile: handleSaveProfile,
     onExportData: handleExportData,
     onImportData: handleImportData,
-    themePref: themePref,
-    onSetTheme: handleSetTheme,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenRequests: () => setScreen("requests"),
-    onOpenHelp: () => setScreen("help"),
-    onOpenFeedback: () => setScreen("feedback"),
     requestBadgeCount: federationRequestsNeedingAction.length,
-    focusTarget: accountFocusTarget,
-    onFocusHandled: () => setAccountFocusTarget(null),
     onOpenClubAdmin: () => {
       setTeamsTab("clubs");
       setScreen("teams");
@@ -29451,7 +29361,7 @@ function CricketScorer() {
     navKey: "help",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HelpScreen, {
-    onBack: () => setScreen("account"),
+    onBack: () => setScreen("home"),
     onReplayTour: () => {
       setShowTour(true);
       setScreen("home");
@@ -29460,8 +29370,13 @@ function CricketScorer() {
     navKey: "feedback",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FeedbackScreen, {
-    onBack: () => setScreen("account"),
+    onBack: () => setScreen("home"),
     userEmail: user && user.email
+  })), screen === "about" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "about",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(AboutScreen, {
+    onBack: () => setScreen("home")
   })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "requests",
     direction: navDirection
