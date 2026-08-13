@@ -337,6 +337,38 @@ const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   x2: "12.01",
   y2: "8"
 }));
+const HelpCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "10"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "12",
+  y1: "17",
+  x2: "12.01",
+  y2: "17"
+}));
+const User = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "7",
+  r: "4"
+}));
+const MessageCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+}));
+const LogOut = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+}), /*#__PURE__*/React.createElement("polyline", {
+  points: "16 17 21 12 16 7"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "21",
+  y1: "12",
+  x2: "9",
+  y2: "12"
+}));
 const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
 }), /*#__PURE__*/React.createElement("line", {
@@ -7033,17 +7065,206 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
   x2: "3",
   y2: "12"
 }));
+// Account button + its quick-access dropdown. Previously this button led straight into the
+// full-screen AccountScreen, which meant Help & FAQ, Send Feedback, and About/Support -- things
+// people reasonably expect to find in one tap from an account menu -- were stranded at the
+// bottom of a long scrolling profile page. This dropdown surfaces those directly (same
+// fixed-position portal pattern as MoveTeamMenu/ShareMenu elsewhere in the app), while "Manage
+// Account" still opens the full screen for profile/password/data/danger-zone tasks that
+// genuinely need a whole page.
 function AuthBar({
   user,
   profile,
   onOpenAccount,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
   badgeCount = 0
 }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const btnRef = useRef(null);
   const label = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "Account").split(" ")[0] : "Sign in";
-  return /*#__PURE__*/React.createElement("button", {
+  const email = user && (profile && profile.email || user.email);
+  function toggle() {
+    setOpen(o => {
+      const next = !o;
+      if (next && btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        setPos({
+          top: rect.bottom + 8,
+          right: Math.max(8, window.innerWidth - rect.right)
+        });
+      }
+      return next;
+    });
+  }
+  function go(action) {
+    setOpen(false);
+    if (action) action();
+  }
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await onSignOut();
+    } finally {
+      setSigningOut(false);
+      setOpen(false);
+    }
+  }
+  const menuItemStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    width: "100%",
+    textAlign: "left",
+    background: "none",
+    border: "none",
+    color: COLORS.ink,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 13,
+    padding: "9px 10px",
+    borderRadius: 8,
+    cursor: "pointer"
+  };
+  const sectionLabelStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft,
+    padding: "8px 10px 4px"
+  };
+  const dividerStyle = {
+    height: 1,
+    background: COLORS.cardDivider,
+    margin: "4px 0"
+  };
+  const menu = open && pos && /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setOpen(false),
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 100
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    role: "menu",
+    style: {
+      position: "fixed",
+      top: pos.top,
+      right: pos.right,
+      width: 234,
+      maxHeight: "min(80vh, 520px)",
+      overflowY: "auto",
+      background: COLORS.surface,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      borderRadius: 14,
+      padding: 8,
+      fontFamily: "'Inter'",
+      boxShadow: "0 12px 32px rgba(42,36,32,0.22)",
+      zIndex: 101
+    }
+  }, user && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "6px 10px 8px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, label), email && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 1,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, email)), user && /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenAccount),
+    style: menuItemStyle
+  }, /*#__PURE__*/React.createElement(User, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), user ? "Manage account" : "Sign in"), /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
+  }, "Help"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenHelp),
+    style: menuItemStyle
+  }, /*#__PURE__*/React.createElement(HelpCircle, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), "Help & FAQ"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenFeedback),
+    style: menuItemStyle
+  }, /*#__PURE__*/React.createElement(MessageCircle, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), "Send Feedback"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenAbout),
+    style: menuItemStyle
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), "About & Support"), user && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: handleSignOut,
+    disabled: signingOut,
+    style: {
+      ...menuItemStyle,
+      color: COLORS.ball,
+      cursor: signingOut ? "default" : "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(LogOut, {
+    size: 15
+  }), signingOut ? "Signing out\u2026" : "Sign out")))), document.body);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    ref: btnRef,
     type: "button",
     className: "cs-btn cs-shine",
-    onClick: onOpenAccount,
+    onClick: toggle,
+    "aria-label": "Account menu",
+    "aria-haspopup": "true",
+    "aria-expanded": open,
     style: {
       position: "relative",
       display: "flex",
@@ -7106,7 +7327,7 @@ function AuthBar({
       border: "2px solid #fff",
       boxShadow: "0 1px 3px rgba(42,36,32,0.35)"
     }
-  }, badgeCount > 9 ? "9+" : badgeCount));
+  }, badgeCount > 9 ? "9+" : badgeCount)), menu);
 }
 function RuleChoice({
   label,
@@ -7177,6 +7398,8 @@ function AccountScreen({
   onOpenHelp,
   onOpenFeedback,
   requestBadgeCount = 0,
+  focusTarget,
+  onFocusHandled,
   onOpenClubAdmin,
   onBack,
   redirectError,
@@ -7213,6 +7436,24 @@ function AccountScreen({
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [linkSuccess, setLinkSuccess] = useState("");
+  // Scrolls to and briefly highlights the About/Support card when opened via the AuthBar
+  // dropdown's "About & Support" shortcut, instead of leaving someone to hunt for it at the
+  // bottom of this otherwise long, scrolling screen.
+  const aboutCardRef = useRef(null);
+  const [aboutHighlight, setAboutHighlight] = useState(false);
+  useEffect(() => {
+    if (focusTarget === "about" && aboutCardRef.current) {
+      aboutCardRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+      setAboutHighlight(true);
+      const t = setTimeout(() => setAboutHighlight(false), 1800);
+      if (onFocusHandled) onFocusHandled();
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line
+  }, []);
   const currentName = profile && profile.displayName || user && user.displayName || "";
   const dirty = nameDraft.trim() !== currentName.trim();
   const displayedError = actionError || redirectError;
@@ -8369,12 +8610,14 @@ function AccountScreen({
       color: COLORS.inkSoft
     }
   }))), /*#__PURE__*/React.createElement("div", {
+    ref: aboutCardRef,
     style: {
       background: COLORS.surface,
       borderRadius: 16,
       padding: 18,
       marginTop: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      boxShadow: aboutHighlight ? `0 0 0 2px ${COLORS.pitch}, 0 4px 14px rgba(42,36,32,0.05)` : "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      transition: "box-shadow 0.4s ease"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13013,6 +13256,10 @@ function HomeScreen({
   user,
   profile,
   onOpenAccount,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
   onJoinCode,
   onOpenTournaments,
   onOpenPlayers,
@@ -13167,6 +13414,10 @@ function renderMatchCard(m, i) {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
     badgeCount: requestBadgeCount
   })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -27326,6 +27577,10 @@ function CricketScorer() {
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
+  // Which card inside AccountScreen to auto-scroll to and briefly highlight once it mounts --
+  // set when the AuthBar dropdown's "About & Support" item is used to jump straight there
+  // instead of making someone scroll past profile/password/data settings to find it.
+  const [accountFocusTarget, setAccountFocusTarget] = useState(null);
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
   // Set only while openMatch's Firestore/localStorage read is in flight — a match can be sizeable
@@ -27494,6 +27749,10 @@ function CricketScorer() {
     // internal step changes, just centralized here since every top-level transition already
     // funnels through this one function.
     window.scrollTo(0, 0);
+  }
+  function openAboutFromMenu() {
+    setAccountFocusTarget("about");
+    setScreen("account");
   }
   // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
@@ -28889,6 +29148,10 @@ function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: () => setScreen("account"),
+    onOpenHelp: () => setScreen("help"),
+    onOpenFeedback: () => setScreen("feedback"),
+    onOpenAbout: openAboutFromMenu,
+    onSignOut: signOutUser,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
     onOpenPlayers: () => setScreen("players"),
@@ -29087,6 +29350,8 @@ function CricketScorer() {
     onOpenHelp: () => setScreen("help"),
     onOpenFeedback: () => setScreen("feedback"),
     requestBadgeCount: federationRequestsNeedingAction.length,
+    focusTarget: accountFocusTarget,
+    onFocusHandled: () => setAccountFocusTarget(null),
     onOpenClubAdmin: () => {
       setTeamsTab("clubs");
       setScreen("teams");
