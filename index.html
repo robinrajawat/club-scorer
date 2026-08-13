@@ -1763,6 +1763,11 @@ async function deleteMatch(id) {
   } catch (e) {
     console.error("local delete failed", e);
   }
+  // Without this, a match that was queued for retry (e.g. it kept failing the pre-flight
+  // empty-key check) stays in the outbox forever even after being deleted here — the "not synced"
+  // banner never clears, and the next flush would either keep failing on the same dead match or,
+  // worse, silently recreate the very doc that was just deleted.
+  clearPendingWrite(id);
   clearUndoHistory(id);
 }
 // ---------- Undo history (per-match, device-local) ----------
@@ -27934,6 +27939,10 @@ function CricketScorer() {
     const pointer = lsGetIndex().find(m => m.id === id);
     await deleteMatch(id);
     refreshIndex();
+    // deleteMatch clears this match's outbox entry, but the "N not synced" banner reads a separate
+    // pendingCount state that otherwise only updates on the 15s poll — without this, deleting the
+    // one match that was stuck retrying still leaves the banner showing until that poll catches up.
+    refreshPendingCount();
     if (pointer && pointer.tournamentId) {
       // Best-effort, not awaited — a failure here shouldn't block or error out the delete itself,
       // same reasoning as the tournament-pointer cleanup inside deleteMatch.
