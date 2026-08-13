@@ -1254,6 +1254,28 @@ function packMatchForFirestore(match) {
     }))
   };
 }
+// Firestore rejects a map with a literal empty-string key ("Document fields must not be empty"),
+// which gives no indication of WHERE in a large match document that key is — unhelpful even with
+// devtools open, and unreachable at all when the person reporting it is on a phone. This walks the
+// data that's actually about to be sent and returns a human-readable path to the first empty key
+// it finds (or null), so savePrimaryMatch can catch this before attempting the write and surface
+// exactly where the problem is — e.g. "innings[1].batsmen" for an empty batsman name.
+function findEmptyKeyPath(obj, path) {
+  if (!obj || typeof obj !== "object") return null;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      const found = findEmptyKeyPath(obj[i], `${path}[${i}]`);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const k of Object.keys(obj)) {
+    if (k === "") return path || "(root)";
+    const found = findEmptyKeyPath(obj[k], path ? `${path}.${k}` : k);
+    if (found) return found;
+  }
+  return null;
+}
 function unpackMatchFromFirestore(match) {
   if (!match || !match.innings) return match;
   return {
@@ -1422,6 +1444,21 @@ function notifyLiveMatchSynced(id, writeSeq) {
   } : cur);
 }
 async function savePrimaryMatch(match) {
+  // Pre-flight check against the SAME transform Firestore will actually receive (packMatchForFirestore),
+  // not the raw in-memory match — so this catches exactly what would otherwise reach the server and
+  // fail there with "Document fields must not be empty" and no indication of where. Checking here
+  // means: (1) it fails fast with a specific, actionable path instead of burning a transaction
+  // round-trip only to get a generic Firestore error, and (2) that path shows up directly in the
+  // SyncStatusBanner's error text — reachable on a phone with no devtools, since it's just surfaced
+  // as this save's `error` like any other failure reason.
+  const emptyKeyPath = findEmptyKeyPath(packMatchForFirestore(match), "");
+  if (emptyKeyPath) {
+    console.error("[saveMatch] blocked before write \u2014 empty field name at:", emptyKeyPath, "| match id:", match.id, "| shareCode:", match.shareCode || "(none)", "| full match snapshot:", JSON.stringify(match));
+    return {
+      ok: false,
+      error: `Can't sync \u2014 found a blank name at "${emptyKeyPath}". There's likely an empty player name involved in scoring; share this path so it can be tracked down.`
+    };
+  }
   try {
     if (match.shareCode) {
       const ref = db.collection("sharedMatches").doc(match.shareCode);
