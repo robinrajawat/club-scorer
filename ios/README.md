@@ -55,11 +55,15 @@ project under a new identifier.
   matching the web app's `friendlyEmailAuthError()`.
 - Welcome screen layout (logo, Google button, divider, email flow).
 - Home screen: local matches list, new match, swipe to delete.
-- New match setup: team names, players, overs, who bats first.
+- New match setup: team names, players, overs, who bats first — plus,
+  since this session, a "fill from saved team" menu sourced from a new
+  Teams screen (add/edit/delete saved rosters, search).
 - Full ball-by-ball scoring: runs, wides, no-balls, byes, leg byes,
-  wickets (with type), automatic strike rotation (including the
-  odd-runs-on-last-ball rule), new-bowler and new-batter prompts,
-  second-innings target/required-rate, and a result screen.
+  wickets (with type — including run-out with completed-runs credit),
+  free hits, automatic strike rotation (including the
+  odd-runs-on-last-ball rule and crossing on completed run-out runs),
+  new-bowler and new-batter prompts, second-innings target/required-rate,
+  undo of the last-recorded ball, and a result screen.
 
 This is a genuinely playable single-device scorer end to end — not a demo
 screen.
@@ -72,15 +76,15 @@ These are deliberate cuts to get a working core loop shipped, not bugs:
   (`UserDefaults`/JSON) via `MatchStore`. The web app's Firestore sync,
   multi-device continuity, and share/live-follow links aren't ported.
 - **No Google sign-in yet** — see below.
-- **No teams/players management screens, no tournaments, no records/series
-  stats, no PDF export, no polls, no push notifications.**
+- **No tournaments, no records/series stats, no PDF export, no polls, no
+  push notifications.**
 - **No manual batting-order override** — next batter is chosen from a
   picker of unused players, not a drag-reordered lineup.
 
-Three items formerly on this list — run-out partial runs, free-hit
-tracking, and undo — have source written (see STATUS.md for what changed
-and what's still unverified about it, since none of this has been run in
-Xcode yet).
+Four items formerly on this list — run-out partial runs, free-hit
+tracking, undo, and teams/players management — now have source written.
+See STATUS.md for what changed in each and what's still unverified, since
+none of it has been run in Xcode yet.
 
 ## What's stubbed
 

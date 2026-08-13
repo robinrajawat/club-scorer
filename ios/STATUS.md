@@ -54,14 +54,19 @@ All under `ios/CricketScorer/CricketScorer/`:
 - **Home** (`Views/HomeView.swift`): local matches list, new match button,
   swipe to delete.
 - **New match setup** (`Views/NewMatchView.swift`): team names, players
-  (comma-separated text entry — no roster management screen), overs limit,
-  who bats first.
+  (comma-separated text entry, now with an optional "fill from saved
+  team" menu — see Teams below), overs limit, who bats first.
 - **Live scoring** (`Views/MatchScoringView.swift`,
   `Services/ScoringEngine.swift`, `Models/Match.swift`): full ball-by-ball
   engine — runs, wides, no-balls, byes, leg byes, wickets with type,
   automatic strike rotation (including the "odd runs on last ball of over"
   rule), new-bowler and new-batter prompts, over/innings/match completion,
   second-innings target and required run rate.
+- **Teams** (`Models/Team.swift`, `Services/TeamStore.swift`,
+  `Views/TeamsListView.swift`, `Views/TeamEditorView.swift`): save/edit/
+  delete named rosters, searchable list, and a menu in New match setup to
+  prefill a team's name/players from a saved one. Local-only persistence,
+  same pattern as matches.
 - **Result** (`Views/ResultView.swift`): basic result summary + both
   innings' scorecards.
 - **Persistence** (`Services/MatchStore.swift`): local-only, UserDefaults +
@@ -76,11 +81,17 @@ when this got parked).
 
 - No manual batting-order override — next batter comes from a picker of
   unused players, not a drag-reordered lineup.
+- Saved teams are copied into a match at creation time (name + roster
+  text), not referenced by id — editing a saved team afterward doesn't
+  update matches already created from it. Verified this matches the web
+  app's own behavior (`selectTeamA`/`selectTeamB` in index.html do the same
+  local-state copy), except the web app *also* keeps a `teamId` on the
+  match for traceability, which this doesn't yet.
 
-Three items that used to be listed here — run-out completed runs, free-hit
-tracking, and undo — have source written now. See "Recent source changes
-(unverified)" below for exactly what changed and what to double-check
-first in Xcode.
+Four items that used to be listed here — run-out completed runs, free-hit
+tracking, undo, and teams/players management — have source written now.
+See "Recent source changes (unverified)" below for exactly what changed
+and what to double-check first in Xcode.
 
 ## Recent source changes (unverified — first Xcode build should confirm these before trusting them)
 
@@ -118,12 +129,24 @@ first in Xcode.
   Also doesn't survive leaving the screen (it's plain `@State`), which is
   probably fine for "I fat-fingered the last ball" but worth deciding
   explicitly rather than assuming.
+- **Teams/players management.** New `Team` model (name + player list),
+  `TeamStore` for local persistence (mirrors `MatchStore`), a searchable
+  `TeamsListView` (add/edit/delete), and a `TeamEditorView` with drag-to-
+  reorder and swipe-to-delete for the roster. Wired into `NewMatchView` as
+  a menu next to each team-name field that prefills name + comma-separated
+  players from a saved team. Deliberately did *not* add a `teamId` field to
+  `Match` to link a match back to the team it came from — that's a real gap
+  versus the web app (see "Known simplifications" above) but adding it
+  felt like scope creep for what was asked; flagging it instead of quietly
+  doing extra schema work. Not yet checked: whether `EditButton()`-driven
+  reordering interacts correctly with `.onMove` inside a `Form` section
+  versus a plain `List` — this is a common enough SwiftUI quirk that it's
+  worth specifically eyeballing on first run, not just trusting it compiles.
 
-None of these three touched Firestore sync, Google sign-in, teams/players
-management, tournaments, records, sharing, or PDF export — those are all
-still exactly where they were (see "What's next" below), and #1 on that
-list — the first on-device build — is still the real blocker before any of
-this can be trusted.
+None of these four touched Firestore sync, Google sign-in, tournaments,
+records, sharing, or PDF export — those are all still exactly where they
+were (see "What's next" below), and #1 on that list — the first on-device
+build — is still the real blocker before any of this can be trusted.
 
 ## What's next, roughly in priority order
 
@@ -135,18 +158,19 @@ this can be trusted.
    Needs: `GoogleSignIn-iOS` SDK, `REVERSED_CLIENT_ID` URL scheme from
    `GoogleService-Info.plist`, and sync/conflict-resolution logic (two
    devices scoring the same match) — that last part is genuine logic, not
-   just SDK wiring.
-3. **Teams/players management** (small–medium) — mostly CRUD + a search
-   screen.
-4. **Tournaments** (large) — brackets, standings, net-run-rate math,
+   just SDK wiring. Also blocked on things Claude can't do from a Linux
+   sandbox: adding SPM package dependencies happens in Xcode's UI, and the
+   `REVERSED_CLIENT_ID`/plist values come from the Firebase console, not
+   from source. Whoever picks this up needs Xcode open.
+3. **Tournaments** (large) — brackets, standings, net-run-rate math,
    qualification scenarios. The single hardest remaining piece.
-5. **Records/series stats** (medium) — aggregation across matches.
-6. **Sharing/live-follow links** (medium) — needs a public, unauthenticated
+4. **Records/series stats** (medium) — aggregation across matches.
+5. **Sharing/live-follow links** (medium) — needs a public, unauthenticated
    read path in Firestore plus a viewer UI.
-7. **PDF export** (small–medium).
-8. **Scoring-engine refinements** (small) — undo, run-out partial runs,
-   free hits.
-9. **Polish** (ongoing) — animations, haptics, edge cases, empty states.
+6. **PDF export** (small–medium).
+7. **Polish** (ongoing) — animations, haptics, edge cases, empty states.
+   Also on this list now: adding a `teamId` link from Match back to Team
+   (see "Recent source changes" above).
 
 ## Setup reminder for whoever opens this in Xcode
 

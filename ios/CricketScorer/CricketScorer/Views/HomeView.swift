@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var store = MatchStore()
+    @StateObject private var teamStore = TeamStore()
     @State private var showingNewMatch = false
 
     var body: some View {
@@ -43,6 +44,13 @@ struct HomeView: View {
                         Label("New match", systemImage: "plus")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        TeamsListView(teamStore: teamStore)
+                    } label: {
+                        Label("Teams", systemImage: "person.3")
+                    }
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
                         if let email = authViewModel.user?.email {
@@ -57,7 +65,7 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showingNewMatch) {
-                NewMatchView(store: store)
+                NewMatchView(store: store, teamStore: teamStore)
             }
         }
     }

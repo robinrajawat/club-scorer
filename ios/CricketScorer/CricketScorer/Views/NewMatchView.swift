@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NewMatchView: View {
     @ObservedObject var store: MatchStore
+    @ObservedObject var teamStore: TeamStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var teamAName = ""
@@ -16,10 +17,14 @@ struct NewMatchView: View {
         NavigationStack {
             Form {
                 Section("Teams") {
-                    TextField("Team A name", text: $teamAName)
-                    TextField("Team A players (comma separated)", text: $teamAPlayersText, axis: .vertical)
-                    TextField("Team B name", text: $teamBName)
-                    TextField("Team B players (comma separated)", text: $teamBPlayersText, axis: .vertical)
+                    teamField(
+                        nameLabel: "Team A name", name: $teamAName,
+                        playersLabel: "Team A players (comma separated)", playersText: $teamAPlayersText
+                    )
+                    teamField(
+                        nameLabel: "Team B name", name: $teamBName,
+                        playersLabel: "Team B players (comma separated)", playersText: $teamBPlayersText
+                    )
                 }
 
                 Section("Format") {
@@ -44,6 +49,34 @@ struct NewMatchView: View {
                     Button("Start") { start() }
                 }
             }
+        }
+    }
+
+    private func teamField(
+        nameLabel: String, name: Binding<String>,
+        playersLabel: String, playersText: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField(nameLabel, text: name)
+                if !teamStore.teams.isEmpty {
+                    Menu {
+                        ForEach(teamStore.teams) { team in
+                            Button(team.name) {
+                                name.wrappedValue = team.name
+                                playersText.wrappedValue = team.players.joined(separator: ", ")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "person.3")
+                    }
+                    // Prefilling copies the roster text at this moment, same as the web
+                    // app's team selector (verified against index.html's selectTeamA/B) —
+                    // editing the saved Team afterward won't retroactively update this match.
+                    .accessibilityLabel("Fill from saved team")
+                }
+            }
+            TextField(playersLabel, text: playersText, axis: .vertical)
         }
     }
 
