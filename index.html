@@ -1236,6 +1236,9 @@ function upsertLocalPointer(match, extra) {
   });
   lsSetIndex(idx);
 }
+// TEST-EXTRACT-START: pack-utils — tests/run.js pulls this exact block out by these markers, so
+// keep packMatchForFirestore and findEmptyKeyPath contiguous and self-contained (no references to
+// anything outside this span) or the extraction breaks.
 function packMatchForFirestore(match) {
   // Firestore rejects any array that directly contains another array ("nested arrays").
   // inning.overs is exactly that: an array of per-over ball-event arrays. Every previous fix in
@@ -1276,6 +1279,7 @@ function findEmptyKeyPath(obj, path) {
   }
   return null;
 }
+// TEST-EXTRACT-END: pack-utils
 function unpackMatchFromFirestore(match) {
   if (!match || !match.innings) return match;
   return {
@@ -1583,7 +1587,13 @@ async function saveMatch(match) {
     queuePendingWrite(match);
   }
   if (match.viewCode) {
-    try {
+    // Skip the mirror write too when the primary save already found an unfixable structural
+    // problem (see savePrimaryMatch's pre-flight check) — the same bad data would just fail here
+    // as well, and there's no point spending a network round-trip and a confusing console error
+    // confirming something already known. Re-checking directly rather than pattern-matching
+    // result.error, which is free-text and shouldn't be relied on as a signal.
+    const alreadyKnownBad = !result.ok && findEmptyKeyPath(packMatchForFirestore(match), "");
+    if (!alreadyKnownBad) try {
       await db.collection("liveViews").doc(match.viewCode).set(packMatchForFirestore({
         ...match,
         updatedAt: Date.now(),
@@ -4343,11 +4353,18 @@ async function importUserData(data) {
     for (const match of data.matches) {
       if (!match || !match.id) continue;
       try {
-        await db.collection("users").doc(uid).collection("matches").doc(match.id).set(packMatchForFirestore({
+        const packed = packMatchForFirestore({
           ...match,
           writeSeq: 0,
           updatedAt: Date.now()
-        }));
+        });
+        const emptyKeyPath = findEmptyKeyPath(packed, "");
+        if (emptyKeyPath) {
+          console.error("import: match restore skipped \u2014 empty field name at", emptyKeyPath, "| match id:", match.id);
+          failedMatches.push(match.id);
+          continue;
+        }
+        await db.collection("users").doc(uid).collection("matches").doc(match.id).set(packed);
         matchesCount++;
       } catch (e) {
         console.error("import: match restore failed", match.id, e);
@@ -5251,6 +5268,10 @@ function allMatchPlayers(match) {
   });
   return Array.from(names);
 }
+// TEST-EXTRACT-START: scoring-engine — tests/run.js pulls newInning through the end of applyBall
+// out by these markers, so keep this whole span self-contained (only DEFAULT_RULES, ensureBatsman,
+// ensureBowler, oversLabel, runsDisplay as external deps — all defined in between and covered by
+// the same markers) or the extraction breaks.
 function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
   const r = {
     ...DEFAULT_RULES,
@@ -5987,6 +6008,7 @@ function applyBall(inning, event) {
   }
   return cur;
 }
+// TEST-EXTRACT-END: scoring-engine
 
 // ---------- UI atoms ----------
 function BallBadge({
