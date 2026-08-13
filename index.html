@@ -7080,6 +7080,8 @@ function AuthBar({
   onOpenFeedback,
   onOpenAbout,
   onSignOut,
+  themePref,
+  onSetTheme,
   badgeCount = 0
 }) {
   const [open, setOpen] = useState(false);
@@ -7218,6 +7220,42 @@ function AuthBar({
   }, /*#__PURE__*/React.createElement(LogOut, {
     size: 15
   }), signingOut ? "Signing out\u2026" : "Sign out"), /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
+  }, "Appearance"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      padding: "0 10px 6px"
+    }
+  }, [{
+    value: "light",
+    label: "Light"
+  }, {
+    value: "dark",
+    label: "Dark"
+  }, {
+    value: "system",
+    label: "System"
+  }].map(opt => /*#__PURE__*/React.createElement("button", {
+    key: opt.value,
+    type: "button",
+    onClick: () => onSetTheme(opt.value),
+    style: {
+      flex: 1,
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      padding: "6px 4px",
+      borderRadius: 7,
+      cursor: "pointer",
+      border: `1.5px solid ${themePref === opt.value ? COLORS.pitch : COLORS.creamDark}`,
+      background: themePref === opt.value ? COLORS.pitch : "none",
+      color: themePref === opt.value ? "#fff" : COLORS.inkSoft
+    }
+  }, opt.label))), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
@@ -13303,6 +13341,8 @@ function HomeScreen({
   onOpenFeedback,
   onOpenAbout,
   onSignOut,
+  themePref,
+  onSetTheme,
   onJoinCode,
   onOpenTournaments,
   onOpenPlayers,
@@ -13461,6 +13501,8 @@ function renderMatchCard(m, i) {
     onOpenFeedback: onOpenFeedback,
     onOpenAbout: onOpenAbout,
     onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme,
     badgeCount: requestBadgeCount
   })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -29195,6 +29237,8 @@ function CricketScorer() {
     onOpenFeedback: () => setScreen("feedback"),
     onOpenAbout: openAboutFromMenu,
     onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
     onOpenPlayers: () => setScreen("players"),
