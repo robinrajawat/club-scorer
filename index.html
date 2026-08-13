@@ -5459,6 +5459,29 @@ function applyBall(inning, event) {
       runs: 0
     };
   }
+  // Defense in depth: a delivery should never be recorded with no striker/non-striker/bowler
+  // assigned — normally prevented by the UI (needsNewBatsman/needsNewBowler hide the scoring
+  // buttons whenever one is missing), but this app has no realtime sync between devices scoring
+  // the same shared match — each one only reconciles with the server at save time (see the
+  // writeSeq conflict check), so one device's view of who's currently batting/bowling can go
+  // stale relative to another's for a stretch. If a ball ever gets applied against a state that's
+  // missing one of these, silently proceeding corrupts data far more subtly than refusing to:
+  // downstream, `cur.bowlers[cur.bowlerName] = bowler` (unlike ensureBatsman/ensureBowler, which
+  // guard against an empty name) would happily create a bowler record keyed by a literal empty
+  // string — which Firestore then rejects outright with an opaque "Document fields must not be
+  // empty", failing sync for the ENTIRE match, not just this one ball. Refusing outright here is a
+  // strictly safer failure mode: the ball simply doesn't get recorded (matching what the UI
+  // already visually promised by hiding the scoring buttons) instead of silently corrupting the
+  // innings. Logged so a real hit is traceable instead of just vanishing.
+  if (event.kind !== "penalty" && (!inning.strikerName || !inning.nonStrikerName || !inning.bowlerName)) {
+    console.error("[applyBall] refused \u2014 missing striker/non-striker/bowler for this delivery", {
+      strikerName: inning.strikerName,
+      nonStrikerName: inning.nonStrikerName,
+      bowlerName: inning.bowlerName,
+      eventKind: event.kind
+    });
+    return inning;
+  }
   const cur = {
     ...inning
   };
@@ -5703,7 +5726,11 @@ function applyBall(inning, event) {
     // moment they're back at the crease rather than waiting for their first ball either.
     ensureBatsman(cur, cur.strikerName);
   }
-  cur.bowlers[cur.bowlerName] = bowler;
+  // Guarded to match ensureBatsman/ensureBowler's own "never key a record by an empty name"
+  // rule — normally unreachable now that the guard above refuses a bowler-less delivery outright,
+  // but kept here too as a second layer: this is the exact line that used to silently create a
+  // literal empty-string bowler key (see that guard's comment for why that's so damaging).
+  if (cur.bowlerName) cur.bowlers[cur.bowlerName] = bowler;
   // Captured before the wicket-ball reset just below, specifically so the partnership milestone
   // check further down (afterPartnership) can still see a partnership that reached 50/100 in the
   // SAME ball it ended on — a run out with runs completed before the wicket (runsThisBall > 0 on
