@@ -1100,6 +1100,90 @@ function downloadTextFile(filename, mimeType, text) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// Real street-address search for the venue field, via OpenStreetMap's public Nominatim instance --
+// free, no API key, and the only genuinely free option that handles actual addresses rather than
+// just city/place names (Open-Meteo's own geocoding is Geonames-backed place-name search, not
+// address-level). This is the community-run demo instance, not a production SLA service, so this
+// stays strictly best-effort: any failure (network, rate limit, downtime) just returns no
+// suggestions rather than surfacing an error, and the free-text field remains usable regardless.
+// Per Nominatim's usage policy (https://operations.osmfoundation.org/policies/nominatim/), this is
+// exactly the allowed use case -- an end-user-triggered search, one request per keystroke pause,
+// for a small app's moderate user count -- not bulk/automated geocoding. Deliberately not setting
+// a custom header: browsers block scripts from overriding User-Agent anyway, and the browser's own
+// Referer already identifies the requesting site, which is what the policy is actually after.
+async function searchAddress(query) {
+  const q = (query || "").trim();
+  if (q.length < 3) return [];
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []).map(r => ({
+      label: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon)
+    })).filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng));
+  } catch (e) {
+    return [];
+  }
+}
+// WMO weather interpretation codes (the `weather_code` Open-Meteo returns) -> a short label and an
+// emoji rather than a hand-authored SVG icon, consistent with how venue already uses a plain pin
+// emoji rather than a custom icon component on this card.
+const WMO_WEATHER_CODES = {
+  0: { emoji: "\u2600\uFE0F", label: "Clear" },
+  1: { emoji: "\uD83C\uDF24\uFE0F", label: "Mostly clear" },
+  2: { emoji: "\u26C5", label: "Partly cloudy" },
+  3: { emoji: "\u2601\uFE0F", label: "Overcast" },
+  45: { emoji: "\uD83C\uDF2B\uFE0F", label: "Fog" },
+  48: { emoji: "\uD83C\uDF2B\uFE0F", label: "Fog" },
+  51: { emoji: "\uD83C\uDF26\uFE0F", label: "Light drizzle" },
+  53: { emoji: "\uD83C\uDF26\uFE0F", label: "Drizzle" },
+  55: { emoji: "\uD83C\uDF26\uFE0F", label: "Heavy drizzle" },
+  56: { emoji: "\uD83C\uDF27\uFE0F", label: "Freezing drizzle" },
+  57: { emoji: "\uD83C\uDF27\uFE0F", label: "Freezing drizzle" },
+  61: { emoji: "\uD83C\uDF27\uFE0F", label: "Light rain" },
+  63: { emoji: "\uD83C\uDF27\uFE0F", label: "Rain" },
+  65: { emoji: "\uD83C\uDF27\uFE0F", label: "Heavy rain" },
+  66: { emoji: "\uD83C\uDF27\uFE0F", label: "Freezing rain" },
+  67: { emoji: "\uD83C\uDF27\uFE0F", label: "Freezing rain" },
+  71: { emoji: "\uD83C\uDF28\uFE0F", label: "Light snow" },
+  73: { emoji: "\uD83C\uDF28\uFE0F", label: "Snow" },
+  75: { emoji: "\uD83C\uDF28\uFE0F", label: "Heavy snow" },
+  77: { emoji: "\uD83C\uDF28\uFE0F", label: "Snow grains" },
+  80: { emoji: "\uD83C\uDF26\uFE0F", label: "Rain showers" },
+  81: { emoji: "\uD83C\uDF26\uFE0F", label: "Rain showers" },
+  82: { emoji: "\uD83C\uDF27\uFE0F", label: "Heavy showers" },
+  85: { emoji: "\uD83C\uDF28\uFE0F", label: "Snow showers" },
+  86: { emoji: "\uD83C\uDF28\uFE0F", label: "Snow showers" },
+  95: { emoji: "\u26C8\uFE0F", label: "Thunderstorm" },
+  96: { emoji: "\u26C8\uFE0F", label: "Thunderstorm" },
+  99: { emoji: "\u26C8\uFE0F", label: "Thunderstorm" }
+};
+function weatherCodeInfo(code) {
+  return WMO_WEATHER_CODES[code] || { emoji: "\uD83C\uDF21\uFE0F", label: "\u2014" };
+}
+// Daily forecast for one fixture's ground and date, via Open-Meteo's free, no-key forecast API.
+// Only useful within its ~16-day forecast horizon -- callers are expected to check the fixture's
+// date is both in the future and within that window before calling this, since a request for a
+// date outside the returned range simply won't find a match in `daily.time` and this returns null.
+async function fetchFixtureWeather(lat, lng, dateStr) {
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const idx = data.daily && data.daily.time ? data.daily.time.indexOf(dateStr) : -1;
+    if (idx === -1) return null;
+    return {
+      code: data.daily.weather_code[idx],
+      tempMax: Math.round(data.daily.temperature_2m_max[idx]),
+      tempMin: Math.round(data.daily.temperature_2m_min[idx]),
+      precipProbability: data.daily.precipitation_probability_max[idx]
+    };
+  } catch (e) {
+    return null;
+  }
+}
 // RFC 4180-ish CSV: quote a cell only when it actually needs it (contains a comma, a quote, or a
 // newline), doubling any internal quotes -- the common convention every spreadsheet app (Excel,
 // Sheets, Numbers) already expects, so "download as CSV" opens cleanly as a real table rather than
@@ -13394,17 +13478,55 @@ function relativeDayLabel(ts) {
 // of the app already uses for exactly this kind of lightweight edit sheet.
 function VenueEditModal({
   value,
+  initialLat,
+  initialLng,
   onSave,
   onClose
 }) {
   const [venue, setVenueValue] = useState(value || "");
+  // Verified coordinates from picking a real address suggestion -- cleared the moment the person
+  // edits the text further, since a hand-edited string no longer necessarily matches the address
+  // that produced these coordinates, and a stale wrong location silently feeding the weather card
+  // would be worse than no location at all.
+  const [coords, setCoords] = useState(initialLat != null && initialLng != null ? {
+    lat: initialLat,
+    lng: initialLng
+  } : null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Debounced address search -- one Nominatim request per pause in typing, not per keystroke, both
+  // to stay comfortably under their 1 request/second usage policy and because there's no reason to
+  // search on every character.
+  useEffect(() => {
+    if (coords) return; // just picked a suggestion -- don't immediately re-search its own label
+    const q = venue.trim();
+    if (q.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      const results = await searchAddress(q);
+      setSuggestions(results);
+      setSearching(false);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [venue, coords]);
+  function pickSuggestion(s) {
+    setVenueValue(s.label);
+    setCoords({
+      lat: s.lat,
+      lng: s.lng
+    });
+    setSuggestions([]);
+  }
   async function save() {
     if (busy) return;
     setBusy(true);
     setError("");
-    const result = await onSave(venue.trim());
+    const result = await onSave(venue.trim(), coords ? coords.lat : null, coords ? coords.lng : null);
     setBusy(false);
     if (result && result.ok === false) {
       setError(result.error || "Couldn't save the venue.");
@@ -13423,12 +13545,54 @@ function VenueEditModal({
     }
   }, "Edit venue"), /*#__PURE__*/React.createElement(TextField, {
     value: venue,
-    onChange: setVenueValue,
+    onChange: v => {
+      setVenueValue(v);
+      setCoords(null);
+    },
     placeholder: "e.g. Riverside Ground",
     onKeyDown: e => {
-      if (e.key === "Enter") save();
+      if (e.key === "Enter" && suggestions.length === 0) save();
     }
-  }), error && /*#__PURE__*/React.createElement("div", {
+  }), coords && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.turf,
+      marginTop: 5
+    }
+  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), !coords && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      marginTop: 5
+    }
+  }, "No address match \u2014 you can still save this as free text, but weather won't be available"), suggestions.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6,
+      border: `1px solid ${COLORS.cardDivider}`,
+      borderRadius: 10,
+      overflow: "hidden"
+    }
+  }, suggestions.map((s, idx) => /*#__PURE__*/React.createElement("button", {
+    key: idx,
+    type: "button",
+    onClick: () => pickSuggestion(s),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderBottom: idx < suggestions.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
+      padding: "8px 10px",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ink
+    }
+  }, s.label))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -13474,7 +13638,30 @@ function UpcomingFixtureCard({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  const [weather, setWeather] = useState(null);
   const friendlyDateTime = formatFixtureDateTime(f.date || "");
+  const fixtureDateStr = ISO_DATETIME_RE.test(f.date || "") ? f.date.split("T")[0] : null;
+  // Open-Meteo's forecast horizon is 16 days -- outside that window (or for a fixture with no
+  // scheduled date, or a venue with no verified coordinates) there's simply nothing to show, so
+  // this quietly does nothing rather than showing a permanent "no forecast yet" placeholder.
+  useEffect(() => {
+    if (!fixtureDateStr || t.venueLat == null || t.venueLng == null) {
+      setWeather(null);
+      return;
+    }
+    const daysOut = Math.floor((new Date(fixtureDateStr + "T00:00:00") - new Date(new Date().toDateString())) / 86400000);
+    if (daysOut < 0 || daysOut > 15) {
+      setWeather(null);
+      return;
+    }
+    let cancelled = false;
+    fetchFixtureWeather(t.venueLat, t.venueLng, fixtureDateStr).then(result => {
+      if (!cancelled) setWeather(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtureDateStr, t.venueLat, t.venueLng]);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -13592,7 +13779,20 @@ function UpcomingFixtureCard({
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, friendlyDateTime || "Not yet scheduled")), f.date && /*#__PURE__*/React.createElement("button", {
+  }, friendlyDateTime || "Not yet scheduled")), weather && /*#__PURE__*/React.createElement("div", {
+    "aria-label": `Forecast: ${weatherCodeInfo(weather.code).label}, ${weather.tempMin}\u2013${weather.tempMax}\u00b0C`,
+    title: `${weatherCodeInfo(weather.code).label} \u00b7 ${weather.tempMin}\u2013${weather.tempMax}\u00b0C \u00b7 ${weather.precipProbability}% rain`,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      flexShrink: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name)),
     className: "cs-btn",
@@ -13644,7 +13844,9 @@ function UpcomingFixtureCard({
     onClose: () => setPickerOpen(false)
   }), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: t.venue || "",
-    onSave: venue => onEditVenue(t, venue),
+    initialLat: t.venueLat,
+    initialLng: t.venueLng,
+    onSave: (venue, lat, lng) => onEditVenue(t, venue, lat, lng),
     onClose: () => setVenueModalOpen(false)
   }));
 }
@@ -30007,10 +30209,15 @@ function CricketScorer() {
   // side effect of scoring a tournament's first fixture (see linkFixtureToMatch's fallbackVenue
   // backfill). This is the first place it becomes directly editable, surfaced right on the Upcoming
   // card since that's where someone would actually want to fix a wrong or missing ground.
-  async function handleEditVenueFromHome(tournament, venue) {
+  // lat/lng are only present when VenueEditModal's address search actually matched a real address
+  // (see coords in that component) -- null for a hand-typed venue with no match, which is fine to
+  // save as free text, it just means no weather forecast can be looked up for it.
+  async function handleEditVenueFromHome(tournament, venue, lat, lng) {
     const updated = {
       ...tournament,
-      venue: venue || null
+      venue: venue || null,
+      venueLat: lat != null ? lat : null,
+      venueLng: lng != null ? lng : null
     };
     return saveTournamentFromHome(tournament, updated);
   }
