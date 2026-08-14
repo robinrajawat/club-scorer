@@ -25464,23 +25464,24 @@ function MatchScreen({
     style: {
       display: "inline-flex",
       alignItems: "baseline",
-      gap: 6,
-      marginTop: 8,
-      padding: "6px 12px",
+      gap: 5,
+      marginTop: 7,
+      padding: "5px 10px",
       background: "rgba(255,255,255,0.16)",
-      borderRadius: 10
+      borderRadius: 9,
+      maxWidth: "100%"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 15,
+      fontSize: 13,
       fontWeight: 700,
       color: "#fff"
     }
   }, "Need ", Math.max(runsNeeded, 0), " off ", Math.max(ballsLeft, 0), " ball", Math.max(ballsLeft, 0) === 1 ? "" : "s"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 11.5,
+      fontSize: 10.5,
       opacity: 0.75
     }
   }, "(", oversLabel(ballsLeft, inning.ballsPerOver), " ov)")), /*#__PURE__*/React.createElement("div", {
