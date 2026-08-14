@@ -6407,6 +6407,13 @@ function OversStrip({
     }
   }, overs.map((balls, i) => {
     const isCurrent = i === lastIndex;
+    // Per-over runs/wickets summary, shown next to the over's label. This replaces the "This
+    // over: N" line that used to live up in the score header (below the main score) -- keeping
+    // it here instead means it also comes for free on every previous over as you scroll back,
+    // rather than only ever describing the in-progress one.
+    const overRuns = balls.reduce((s, ev) => s + (ev.runs || 0), 0);
+    const overWkts = balls.filter(ev => ev.kind === "wicket").length;
+    const overSummary = balls.length === 0 ? null : `${overRuns} run${overRuns === 1 ? "" : "s"}${overWkts > 0 ? `, ${overWkts} wkt${overWkts === 1 ? "" : "s"}` : ""}`;
     return /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
@@ -6417,14 +6424,27 @@ function OversStrip({
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        marginBottom: 5
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 10.5,
         fontWeight: 700,
         letterSpacing: 0.5,
-        color: isCurrent ? COLORS.turf : COLORS.inkSoft,
-        marginBottom: 5
+        color: isCurrent ? COLORS.turf : COLORS.inkSoft
       }
-    }, isCurrent ? "THIS OVER" : `OVER ${i + 1}`), /*#__PURE__*/React.createElement("div", {
+    }, isCurrent ? "THIS OVER" : `OVER ${i + 1}`), overSummary && /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 600,
+        color: COLORS.inkSoft
+      }
+    }, overSummary)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 6,
@@ -25276,12 +25296,6 @@ function MatchScreen({
       onExit: onExit
     });
   }
-  const currentOverBalls = inning.overs[inning.overs.length - 1] || [];
-  // Every ball's own runs (batted, byes/legbyes, and the full wide/no-ball total including any
-  // penalty) all count toward what a team actually scored off the over -- unlike bowlerRunsThisOver
-  // (applyBall's maiden check), which deliberately excludes byes/legbyes since those aren't charged
-  // against the bowler's own figures. "Runs this over" is a team/spectator number, not a bowling one.
-  const thisOverRuns = currentOverBalls.reduce((s, b) => s + (b.runs || 0), 0);
   // Doesn't include Timed out -- unlike every other dismissal here, it isn't tied to a delivery at
   // all (the incoming batsman simply never arrives within the time limit), so it doesn't fit this
   // list or the "tap Wicket during a live ball" flow the rest of this screen is built around. It
@@ -25434,14 +25448,7 @@ function MatchScreen({
       fontSize: 18,
       opacity: 0.75
     }
-  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", effectiveOversLimit, ")")), currentOverBalls.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      opacity: 0.75,
-      marginTop: 2
-    }
-  }, "This over: ", thisOverRuns), isChasing && /*#__PURE__*/React.createElement("div", {
+  }, "(", oversLabel(inning.legalBalls, inning.ballsPerOver), "/", effectiveOversLimit, ")")), isChasing && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "inline-flex",
       alignItems: "baseline",
