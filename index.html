@@ -191,6 +191,12 @@ const Hand = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
 }), /*#__PURE__*/React.createElement("path", {
   d: "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
 }));
+// Inbox: for the account menu's quick-access entry to the Inbox screen (polls + requests).
+const InboxIcon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
+  points: "22 12 16 12 14 15 10 15 8 12 2 12"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+}));
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",
@@ -7382,6 +7388,7 @@ function AuthBar({
   user,
   profile,
   onOpenAccount,
+  onOpenInbox,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
@@ -7512,7 +7519,44 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), user ? "Manage account" : "Sign in"), user && /*#__PURE__*/React.createElement("button", {
+  }), user ? "Manage account" : "Sign in"), user && onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenInbox),
+    style: {
+      ...menuItemStyle,
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 9
+    }
+  }, /*#__PURE__*/React.createElement(InboxIcon, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), "Inbox"), badgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      flexShrink: 0,
+      minWidth: 18,
+      height: 18,
+      padding: "0 4px",
+      borderRadius: 9,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: 700,
+      lineHeight: 1
+    }
+  }, badgeCount > 9 ? "9+" : badgeCount)), user && /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
     className: "cs-btn",
@@ -8740,6 +8784,8 @@ function AccountScreen({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
+        boxSizing: "border-box",
+        flexShrink: 0,
         minWidth: 18,
         height: 18,
         padding: "0 4px",
@@ -8748,6 +8794,7 @@ function AccountScreen({
         color: "#fff",
         fontSize: 11,
         fontWeight: 700,
+        lineHeight: 1,
         textTransform: "none",
         letterSpacing: "normal"
       }
@@ -14353,6 +14400,7 @@ function HomeScreen({
   user,
   profile,
   onOpenAccount,
+  onOpenInbox,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
@@ -14597,6 +14645,7 @@ function renderMatchCard(m, i) {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
+    onOpenInbox: onOpenInbox,
     onOpenHelp: onOpenHelp,
     onOpenFeedback: onOpenFeedback,
     onOpenAbout: onOpenAbout,
@@ -31139,6 +31188,7 @@ function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: () => setScreen("account"),
+    onOpenInbox: () => setScreen("inbox"),
     onOpenHelp: () => setScreen("help"),
     onOpenFeedback: () => setScreen("feedback"),
     onOpenAbout: () => setScreen("about"),
