@@ -570,7 +570,12 @@ const COLORS = {
   turfFixed: "var(--cs-turf-fixed)",
   pitchFixed: "var(--cs-pitch-fixed)",
   ballFixed: "var(--cs-ball-fixed)",
-  ballLightFixed: "var(--cs-ball-light-fixed)"
+  ballLightFixed: "var(--cs-ball-light-fixed)",
+  // A distinct "this is happening right now" red, deliberately separate from ball/ballFixed (the
+  // cricket-ball accent color) even though both are reds — this one is reserved for live/urgent
+  // status (pulsing dots, alert borders) and, like the app's other accent colors, stays constant
+  // across both themes rather than flipping with dark mode.
+  live: "#e6544b"
 };
 // Jersey color presets offered when editing a team — deliberately a curated set rather than
 // leaving people to the raw native color picker for the common case, since a handful of
@@ -13682,7 +13687,7 @@ function renderMatchCard(m, i) {
       // Twitch, sports apps), whereas green usually reads as "healthy/done" rather than "happening
       // right now". Having two different colors for the same in-progress state across screens
       // would be a genuine inconsistency, not a stylistic choice.
-      background: m.status === "complete" ? COLORS.inkSoft : "#e6544b",
+      background: m.status === "complete" ? COLORS.inkSoft : COLORS.live,
       boxShadow: m.status === "complete" ? "none" : "0 0 0 3px rgba(230,84,75,0.18)",
       animation: m.status === "complete" ? "none" : "cs-pulse 1.6s ease infinite"
     }
@@ -23002,7 +23007,7 @@ function SyncStatusBanner({
       alignItems: "center",
       gap: 6,
       background: dark ? "rgba(242,236,217,0.14)" : "rgba(230,84,75,0.1)",
-      border: `1px solid ${dark ? "rgba(242,236,217,0.35)" : "#e6544b55"}`,
+      border: `1px solid ${dark ? "rgba(242,236,217,0.35)" : COLORS.live + "55"}`,
       borderRadius: 10,
       color: dark ? COLORS.creamFixed : "#b3392f",
       fontFamily: "'Inter'",
@@ -24250,7 +24255,7 @@ function FollowScreen({
       width: 8,
       height: 8,
       borderRadius: "50%",
-      background: inningsBreak ? COLORS.willow : "#e6544b",
+      background: inningsBreak ? COLORS.willow : COLORS.live,
       animation: inningsBreak ? "none" : "cs-pulse 1.6s ease infinite",
       flexShrink: 0
     }
