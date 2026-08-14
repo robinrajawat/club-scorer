@@ -13387,6 +13387,75 @@ function relativeDayLabel(ts) {
   const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
+// Venue lives on the tournament, not the individual fixture — so this edits "this tournament's
+// ground" even though it's opened from one specific fixture's card, same as how the tournament's
+// venue is otherwise only ever set as a side effect of scoring its first fixture. Small enough
+// (one field) not to need its own bespoke modal shell — reuses the generic Modal wrapper the rest
+// of the app already uses for exactly this kind of lightweight edit sheet.
+function VenueEditModal({
+  value,
+  onSave,
+  onClose
+}) {
+  const [venue, setVenueValue] = useState(value || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const result = await onSave(venue.trim());
+    setBusy(false);
+    if (result && result.ok === false) {
+      setError(result.error || "Couldn't save the venue.");
+      return;
+    }
+    onClose();
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: busy ? () => {} : onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 16
+    }
+  }, "Edit venue"), /*#__PURE__*/React.createElement(TextField, {
+    value: venue,
+    onChange: setVenueValue,
+    placeholder: "e.g. Riverside Ground",
+    onKeyDown: e => {
+      if (e.key === "Enter") save();
+    }
+  }), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.live,
+      marginTop: 6
+    }
+  }, error), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onClose,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: save,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, busy ? "\u2026" : "Save")));
+}
 // An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
 // section both use this). Own component rather than a plain render function -- it needs its own
 // pickerOpen state for the inline date/time modal (letting a fixture be scheduled right from Home
@@ -13400,9 +13469,11 @@ function UpcomingFixtureCard({
   index: i,
   onOpenTournament,
   onScheduleFixture,
-  onStartFixture
+  onStartFixture,
+  onEditVenue
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
   const friendlyDateTime = formatFixtureDateTime(f.date || "");
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13453,14 +13524,35 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB), t.venue && /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB)), onEditVenue ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Fixture venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      marginTop: 2,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 500,
+      color: t.venue ? COLORS.inkSoft : COLORS.turf
+    }
+  }, "\uD83D\uDCCD ", t.venue || "Add venue") : t.venue && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, "\uD83D\uDCCD ", t.venue)), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCD ", t.venue), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -13550,6 +13642,10 @@ function UpcomingFixtureCard({
       setPickerOpen(false);
     } : null,
     onClose: () => setPickerOpen(false)
+  }), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+    value: t.venue || "",
+    onSave: venue => onEditVenue(t, venue),
+    onClose: () => setVenueModalOpen(false)
   }));
 }
 function HomeScreen({
@@ -13578,6 +13674,7 @@ function HomeScreen({
   onOpenTournament,
   onScheduleFixture,
   onStartFixture,
+  onEditVenue,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -13945,7 +14042,8 @@ function renderMatchCard(m, i) {
       index: i,
       onOpenTournament: onOpenTournament,
       onScheduleFixture: onScheduleFixture,
-      onStartFixture: onStartFixture
+      onStartFixture: onStartFixture,
+      onEditVenue: onEditVenue
     }))));
     const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && (completedMatches.length > 0 || sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
@@ -14022,7 +14120,8 @@ function renderMatchCard(m, i) {
       index: i,
       onOpenTournament: onOpenTournament,
       onScheduleFixture: onScheduleFixture,
-      onStartFixture: onStartFixture
+      onStartFixture: onStartFixture,
+      onEditVenue: onEditVenue
     })), upcomingExpanded && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: onOpenTournaments,
@@ -29852,20 +29951,13 @@ function CricketScorer() {
       ok: true
     };
   }
-  // Lets a fixture's date/time be set right from the Home screen's Upcoming section, without
-  // first navigating into the tournament. Same underlying save as FixturesSection's updateDate
-  // (mirrored below), just addressed by the fixture's own tournament -- via the _clubId/
-  // _federationId tag allTournamentsFlat already attaches to every entry -- instead of reading
-  // viewingTournamentClubId/FederationId state, since Home never opens that screen at all and
-  // that state wouldn't reflect the tournament this fixture actually belongs to.
-  async function handleScheduleFixtureFromHome(tournament, fixtureId, date) {
-    const updated = {
-      ...tournament,
-      fixtures: (tournament.fixtures || []).map(f => f.id === fixtureId ? {
-        ...f,
-        date
-      } : f)
-    };
+  // Saves an updated tournament doc back to whichever of the three storage locations it actually
+  // lives in, addressed by the tournament's own _clubId/_federationId tag (allTournamentsFlat
+  // attaches this to every entry) rather than assuming which one's "currently active" -- shared by
+  // every Home-screen edit that touches a tournament without navigating into it first (scheduling
+  // a fixture, editing venue, and any future one), so this branch only needs to be right in one
+  // place instead of re-derived at each call site.
+  async function saveTournamentFromHome(tournament, updated) {
     const clubId = tournament._clubId;
     const federationId = tournament._federationId;
     if (federationId) {
@@ -29894,6 +29986,33 @@ function CricketScorer() {
     return {
       ok: true
     };
+  }
+  // Lets a fixture's date/time be set right from the Home screen's Upcoming section, without
+  // first navigating into the tournament. Same underlying save as FixturesSection's updateDate
+  // (mirrored below), just addressed by the fixture's own tournament -- via the _clubId/
+  // _federationId tag allTournamentsFlat already attaches to every entry -- instead of reading
+  // viewingTournamentClubId/FederationId state, since Home never opens that screen at all and
+  // that state wouldn't reflect the tournament this fixture actually belongs to.
+  async function handleScheduleFixtureFromHome(tournament, fixtureId, date) {
+    const updated = {
+      ...tournament,
+      fixtures: (tournament.fixtures || []).map(f => f.id === fixtureId ? {
+        ...f,
+        date
+      } : f)
+    };
+    return saveTournamentFromHome(tournament, updated);
+  }
+  // Venue currently has no dedicated edit UI anywhere else in the app -- it's only ever set as a
+  // side effect of scoring a tournament's first fixture (see linkFixtureToMatch's fallbackVenue
+  // backfill). This is the first place it becomes directly editable, surfaced right on the Upcoming
+  // card since that's where someone would actually want to fix a wrong or missing ground.
+  async function handleEditVenueFromHome(tournament, venue) {
+    const updated = {
+      ...tournament,
+      venue: venue || null
+    };
+    return saveTournamentFromHome(tournament, updated);
   }
   function handleStartMatchInTournament(t) {
     setPresetTournament(t);
@@ -30048,6 +30167,7 @@ function CricketScorer() {
     },
     onScheduleFixture: handleScheduleFixtureFromHome,
     onStartFixture: handleStartFixtureMatch,
+    onEditVenue: handleEditVenueFromHome,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
