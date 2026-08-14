@@ -23597,7 +23597,20 @@ function MatchStatsPanel({
         fontWeight: 400
       }
     }, "(", b.balls, ")")));
-  }), liveInn.bowlerName && /*#__PURE__*/React.createElement("div", {
+  }), liveInn.strikerName && liveInn.nonStrikerName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      textAlign: "right",
+      marginTop: 2
+    }
+  }, "Partnership: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink,
+      fontWeight: 600
+    }
+  }, liveInn.partnershipRuns || 0), " (", liveInn.partnershipBalls || 0, ")"), liveInn.bowlerName && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 8,
       paddingTop: 8,
@@ -23647,24 +23660,29 @@ function MatchStatsPanel({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, match.innings.map((inn, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    onClick: () => setTab(i),
-    className: "cs-btn cs-shine",
-    style: {
-      flex: 1,
-      padding: "9px 0",
-      borderRadius: 10,
-      border: "none",
-      background: tab === i ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: tab === i ? "#fff" : COLORS.ink,
-      boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer"
-    }
-  }, inn.battingTeam))), /*#__PURE__*/React.createElement("div", {
+  }, match.innings.map((inn, i) => {
+    const started = inn.battingOrder && inn.battingOrder.length > 0;
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => started && setTab(i),
+      disabled: !started,
+      className: "cs-btn cs-shine",
+      style: {
+        flex: 1,
+        padding: "9px 0",
+        borderRadius: 10,
+        border: "none",
+        background: tab === i ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+        color: tab === i ? "#fff" : started ? COLORS.ink : COLORS.inkSoft,
+        boxShadow: tab === i ? "0 3px 10px rgba(45,80,22,0.3)" : "0 1px 3px rgba(42,36,32,0.06)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13,
+        cursor: started ? "pointer" : "not-allowed",
+        opacity: started ? 1 : 0.5
+      }
+    }, inn.battingTeam);
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "16px",
       maxWidth: 560,
