@@ -14227,7 +14227,8 @@ function UpcomingFixtureCard({
 // polls feature already uses.
 function PollSummaryCard({
   clubs,
-  clubTeamsById
+  clubTeamsById,
+  matches = []
 }) {
   const [summary, setSummary] = useState(null); // null while loading, [] once loaded with nothing pending
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
@@ -14248,14 +14249,30 @@ function PollSummaryCard({
         team
       })));
       const pointerLists = await Promise.all(teamRefs.map(ref => loadTeamPolls(ref.clubId, ref.team.id)));
-      const activeRefs = teamRefs.flatMap((ref, i) => (pointerLists[i] || []).filter(p => {
-        const ms = expiresAtMillis(p.expiresAt);
-        return ms == null || ms > Date.now();
-      }).map(p => ({
-        ...ref,
-        code: p.code,
-        question: p.question
-      })));
+      // Team ids whose poll is already visible on its own match card on Home (see
+      // MatchPollSummary) -- skip exactly that one poll for those teams below, so the same poll
+      // isn't shown twice. Mirrors MatchPollSummary's own selection (the newest still-active poll
+      // for the team; pointerLists is already newest-first per loadTeamPolls) so what's excluded
+      // here is exactly what's already showing there, not a broader guess that might hide a
+      // second, genuinely different active poll the same team happens to have.
+      const matchCardTeamIds = new Set();
+      (matches || []).forEach(m => {
+        resolvePollTeams(m.teamA, m.teamB, clubs, clubTeamsById).forEach(entry => {
+          matchCardTeamIds.add(entry.team.id);
+        });
+      });
+      const activeRefs = teamRefs.flatMap((ref, i) => {
+        const activePointers = (pointerLists[i] || []).filter(p => {
+          const ms = expiresAtMillis(p.expiresAt);
+          return ms == null || ms > Date.now();
+        });
+        const newestActiveCode = activePointers[0] && activePointers[0].code;
+        return activePointers.filter(p => !(matchCardTeamIds.has(ref.team.id) && p.code === newestActiveCode)).map(p => ({
+          ...ref,
+          code: p.code,
+          question: p.question
+        }));
+      });
       const fullPolls = await Promise.all(activeRefs.map(ref => loadPollByCode(ref.code)));
       const items = [];
       activeRefs.forEach((ref, i) => {
@@ -14281,7 +14298,7 @@ function PollSummaryCard({
     return () => {
       cancelled = true;
     };
-  }, [clubs, clubTeamsById, refreshKey]);
+  }, [clubs, clubTeamsById, matches, refreshKey]);
   if (!summary || summary.length === 0) return null;
   const totalPending = summary.reduce((s, item) => s + item.pendingCount, 0);
   return /*#__PURE__*/React.createElement("div", {
@@ -14732,7 +14749,8 @@ function renderMatchCard(m, i) {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement(PollSummaryCard, {
     clubs: clubs,
-    clubTeamsById: clubTeamsById
+    clubTeamsById: clubTeamsById,
+    matches: matches
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -20377,7 +20395,7 @@ function AvailabilityPollModal({
   initialCode,
   fixtureContext
 }) {
-  const [view, setView] = useState(initialCode ? "list" : fixtureContext ? "create" : "list");
+  const [view, setView] = useState(initialCode ? "results" : fixtureContext ? "create" : "list");
   const [polls, setPolls] = useState(null); // null = loading
   const [activePoll, setActivePoll] = useState(null); // full poll doc, once fetched for "results"
   const [question, setQuestion] = useState(fixtureContext && fixtureContext.question ? fixtureContext.question : `Available for ${team.name}'s next match?`);
@@ -20395,6 +20413,20 @@ function AvailabilityPollModal({
     loadTeamPolls(clubId, team.id).then(async list => {
       if (cancelled) return;
       setPolls(list); // show questions immediately, counts fill in a moment later
+      // Deep-link straight to one poll's results as soon as we know it still exists -- doesn't
+      // wait on the response-count hydration below, which is only needed for the list view this
+      // immediately navigates away from. Waiting on that made the sheet open showing the full
+      // list (or its loading state) for a beat before jumping to results, a jarring swap right
+      // after the sheet had just settled into place. Falls back to the list view on a stale code
+      // (poll deleted since the summary that linked here last loaded) rather than leaving the
+      // results view stuck on its own loading state forever.
+      if (initialCode) {
+        if (list.some(p => p.code === initialCode)) {
+          openResults(initialCode);
+        } else if (!cancelled) {
+          setView("list");
+        }
+      }
       // loadTeamPolls reads the lightweight index doc (question/date only, no responses --
       // see its own comment), so counts here would always read as 0 without this follow-up.
       const withResponses = await Promise.all(list.map(async p => {
@@ -20405,12 +20437,6 @@ function AvailabilityPollModal({
         };
       }));
       if (!cancelled) setPolls(withResponses);
-      // Deep-link straight to one poll's results, once the list load above confirms it still
-      // exists for this team (rather than blindly trusting a code handed down from Home, which
-      // could be stale if the poll was deleted between the summary loading and this tap).
-      if (initialCode && !cancelled && list.some(p => p.code === initialCode)) {
-        openResults(initialCode);
-      }
     });
     return () => {
       cancelled = true;
