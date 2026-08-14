@@ -23496,10 +23496,12 @@ function MatchStatsPanel({
     match: match
   }), showLiveSummary && /*#__PURE__*/React.createElement("div", {
     style: {
-      margin: "14px 16px 0",
-      maxWidth: 560 - 32,
-      marginLeft: "auto",
-      marginRight: "auto",
+      padding: "14px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       background: COLORS.surface,
       borderRadius: 16,
       padding: 16,
@@ -23554,7 +23556,7 @@ function MatchStatsPanel({
   }, "This Over"), /*#__PURE__*/React.createElement(OversStrip, {
     overs: liveInn.overs,
     ballsPerOver: liveInn.ballsPerOver
-  }))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  })))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
