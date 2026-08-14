@@ -16185,7 +16185,9 @@ function TournamentsScreen({
   onOpenTournament,
   onOpenRecords,
   onBack,
-  currentUid
+  currentUid,
+  clubsLoading,
+  federationsLoading
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -16334,12 +16336,24 @@ function TournamentsScreen({
     size: 16
   }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 24,
-      color: COLORS.pitch,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
       marginBottom: 4
     }
-  }, "Tournaments"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch
+    }
+  }, "Tournaments"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Refreshing\u2026",
+    size: 14,
+    style: {
+      fontSize: 11.5
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -20463,6 +20477,7 @@ function TeamsScreen({
   onRemoveFederationCoOwner,
   onRedeemFederationCoOwnerInvite,
   clubsLoading,
+  federationsLoading,
   onOpenRecords,
   onAddUmpire,
   onRemoveUmpire
@@ -20521,12 +20536,24 @@ function TeamsScreen({
     size: 16
   }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 26,
-      color: COLORS.pitch,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
       marginBottom: 4
     }
-  }, tab === "clubs" ? "Clubs" : tab === "federations" ? "Federations" : "Teams"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 26,
+      color: COLORS.pitch
+    }
+  }, tab === "clubs" ? "Clubs" : tab === "federations" ? "Federations" : "Teams"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Refreshing\u2026",
+    size: 14,
+    style: {
+      fontSize: 11.5
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -29084,6 +29111,14 @@ function CricketScorer() {
   // returns [] when signed out), so this stays true across whichever refreshClubs() call actually
   // resolves it — see the auth-state effect below for why that's no longer the same call every time.
   const [clubsLoading, setClubsLoading] = useState(true);
+  // Federation data loads via two fire-and-forget calls inside refreshClubs (kept unawaited there
+  // deliberately, so federations don't add a round trip of latency on top of clubs/teams/
+  // tournaments) -- but that meant nothing ever tracked whether they'd actually finished, so any
+  // screen showing federation data had no way to show a loading state for it and would just show
+  // whatever was in federationsById at that instant, which could still be empty/stale a moment
+  // after clubsLoading had already gone false. Tracked separately so a screen CAN show its own
+  // loading state for federations specifically without slowing down the clubs/teams path.
+  const [federationsLoading, setFederationsLoading] = useState(true);
   const fontLoaded = useRef(false);
   const initialLoadDone = useRef(false);
   // Custom left-edge swipe-to-go-back (see swipe-gesture useEffect near the bottom of this
@@ -29107,6 +29142,15 @@ function CricketScorer() {
     // internal step changes, just centralized here since every top-level transition already
     // funnels through this one function.
     window.scrollTo(0, 0);
+    // Club/federation data (see refreshClubs) previously only ever loaded once, right after
+    // sign-in -- someone else's edit (or even this same person's, from a different device or tab)
+    // would never show up on Teams or Tournaments without a full sign-out/in or page reload.
+    // Re-running it in the background every time either screen is entered keeps it current without
+    // blocking the navigation itself; both screens already render progressively off whatever's in
+    // state, so this just quietly refreshes underneath rather than needing its own transition.
+    if (next === "teams" || next === "tournaments") {
+      refreshClubs();
+    }
   }
   // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
@@ -29118,17 +29162,30 @@ function CricketScorer() {
     const [teamEntries, tournamentEntries] = await Promise.all([Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)])), Promise.all(clubList.map(async c => [c.id, await loadClubTournaments(c.id)]))]);
     setClubTeamsById(Object.fromEntries(teamEntries));
     setClubTournamentsById(Object.fromEntries(tournamentEntries));
-    const fedIds = Array.from(new Set(clubList.flatMap(c => c.federationIds || [])));
     // Federations only depend on clubList (just fetched above), not on the team/tournament loads
-    // right above — so this used to wait behind them for no reason, adding a whole extra
-    // round-trip of latency to "why does the federation list take a while to show up".
-    if (fedIds.length > 0) {
-      loadFederationsByIds(fedIds).then(feds => {
-        const freshFederationsById = Object.fromEntries(feds.map(f => [f.id, f]));
-        setFederationsById(prev => ({
-          ...prev,
-          ...freshFederationsById
-        }));
+    // right above — so this stays unawaited relative to refreshClubs itself, deliberately, so
+    // federations don't add a round trip of latency on top of clubs/teams/tournaments. Wrapped in
+    // its own tracked async block now (rather than two separate untracked fire-and-forget .then()
+    // chains) so federationsLoading accurately reflects when BOTH federation sources -- club-
+    // affiliated and directly-owned -- have actually settled, instead of nothing ever tracking
+    // completion at all.
+    (async () => {
+      setFederationsLoading(true);
+      const fedIds = Array.from(new Set(clubList.flatMap(c => c.federationIds || [])));
+      // auth.currentUser rather than the component's `user` state deliberately: refreshClubs runs
+      // synchronously right after setUser(u) in the SAME auth-state-change callback (see below),
+      // and React state updates don't apply until the next render -- reading `user` here would see
+      // whatever it was BEFORE this callback, stale exactly on the one call that matters most
+      // (right after sign-in). auth.currentUser is the SDK's own, not React's, so it's already
+      // current.
+      const ownedUid = auth.currentUser ? auth.currentUser.uid : null;
+      const [affiliatedFeds, ownedFeds] = await Promise.all([fedIds.length > 0 ? loadFederationsByIds(fedIds) : Promise.resolve([]), ownedUid ? loadMyOwnedFederations(ownedUid) : Promise.resolve([])]);
+      const freshFederationsById = Object.fromEntries([...affiliatedFeds, ...ownedFeds].map(f => [f.id, f]));
+      setFederationsById(prev => ({
+        ...prev,
+        ...freshFederationsById
+      }));
+      if (affiliatedFeds.length > 0) {
         // Self-heal any affiliatedClubIds drift now that both sides (clubList, just loaded above,
         // and these federations' current affiliatedClubIds, just loaded here) are in hand — see
         // reconcileFederationAffiliation's own comment for why this can't just be made atomic at
@@ -29139,32 +29196,16 @@ function CricketScorer() {
         // still in use — the server-side rule always reads the true current document — but that
         // the button confidently offered "safe to delete" right up until a real click on it
         // returned a confusing permission error instead).
-        reconcileFederationAffiliation(clubList, freshFederationsById).then(corrected => {
-          if (Object.keys(corrected).length > 0) {
-            setFederationsById(prev => ({
-              ...prev,
-              ...corrected
-            }));
-          }
-        });
-      });
-    }
-    // Also pick up any federation this user owns/co-owns directly (see loadMyOwnedFederations) --
-    // independent of the club-affiliation walk just above, so an owner who never affiliated one of
-    // their own clubs still sees (and can host a tournament under) a federation they run. Uses
-    // auth.currentUser rather than the component's `user` state deliberately: refreshClubs runs
-    // synchronously right after setUser(u) in the SAME auth-state-change callback (see below), and
-    // React state updates don't apply until the next render -- reading `user` here would see
-    // whatever it was BEFORE this callback, stale exactly on the one call that matters most (right
-    // after sign-in). auth.currentUser is the SDK's own, not React's, so it's already current.
-    if (auth.currentUser) {
-      loadMyOwnedFederations(auth.currentUser.uid).then(feds => {
-        setFederationsById(prev => ({
-          ...prev,
-          ...Object.fromEntries(feds.map(f => [f.id, f]))
-        }));
-      });
-    }
+        const corrected = await reconcileFederationAffiliation(clubList, freshFederationsById);
+        if (Object.keys(corrected).length > 0) {
+          setFederationsById(prev => ({
+            ...prev,
+            ...corrected
+          }));
+        }
+      }
+      setFederationsLoading(false);
+    })();
     setClubsLoading(false);
     return clubList;
   }
@@ -30744,6 +30785,7 @@ function CricketScorer() {
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     clubsLoading: clubsLoading,
+    federationsLoading: federationsLoading,
     onOpenRecords: handleOpenRecords,
     onAddUmpire: handleAddUmpire,
     onRemoveUmpire: handleRemoveUmpire
@@ -30776,7 +30818,9 @@ function CricketScorer() {
     },
     onOpenRecords: handleOpenRecords,
     onBack: () => setScreen("home"),
-    currentUid: user && user.uid
+    currentUid: user && user.uid,
+    clubsLoading: clubsLoading,
+    federationsLoading: federationsLoading
   })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "records",
     direction: navDirection
