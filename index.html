@@ -23328,11 +23328,23 @@ function RunsPerOverChart({
       background: COLORS.ball,
       display: "inline-block"
     }
-  }), "Most expensive"))), /*#__PURE__*/React.createElement("svg", {
-    width: "100%",
+  }), "Most expensive"))), totalOvers > 14 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 6
+    }
+  }, "\u2192 scroll for more overs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: W,
     height: H,
     viewBox: `0 0 ${W} ${H}`,
-    preserveAspectRatio: "none",
     style: {
       display: "block"
     }
@@ -23395,7 +23407,7 @@ function RunsPerOverChart({
       fontFamily: "'IBM Plex Mono', monospace",
       fill: COLORS.inkSoft
     }, overNum));
-  })));
+  }))));
 }
 // Folded-by-default toss/house-rules line — most matches use standard rules, so this stays out
 // of the way until someone actually wants to check what was agreed.
