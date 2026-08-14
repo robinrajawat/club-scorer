@@ -13426,12 +13426,82 @@ function HomeScreen({
     tournament: t,
     fixture: f
   }) => f.teamA.toLowerCase().includes(q) || f.teamB.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)) : [];
+  // Chronological, nearest first -- fixtures without a scheduled date/time yet fall to the end
+  // rather than sorting arbitrarily first, since "not yet scheduled" isn't more urgent than
+  // something happening tomorrow. f.date is an ISO datetime-local string ("YYYY-MM-DDTHH:MM"),
+  // which sorts correctly as a plain string compare -- no need to parse it into a Date first.
+  const sortedUpcomingFixtures = [...upcomingFixtures].sort((a, b) => {
+    if (!a.fixture.date && !b.fixture.date) return 0;
+    if (!a.fixture.date) return 1;
+    if (!b.fixture.date) return -1;
+    return a.fixture.date < b.fixture.date ? -1 : a.fixture.date > b.fixture.date ? 1 : 0;
+  });
   // In progress first (the ones someone likely opened this screen to resume), completed second and
   // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
   // result set is already short and specific, so splitting it into two labeled groups (one likely
   // collapsed) would just be extra taps to find the one match being searched for.
   const inProgressMatches = filteredMatches.filter(m => m.status !== "complete");
   const completedMatches = filteredMatches.filter(m => m.status === "complete");
+  // Shared between the search results view (filteredUpcoming) and the always-visible Upcoming
+  // section below (sortedUpcomingFixtures) so the card only has one definition to keep in sync.
+  function renderUpcomingCard({
+    tournament: t,
+    fixture: f
+  }, i) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: f.id,
+      type: "button",
+      onClick: () => onOpenTournament(t),
+      className: "cs-btn",
+      style: {
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        background: COLORS.surface,
+        border: "none",
+        borderRadius: 12,
+        padding: "12px 14px",
+        marginBottom: 8,
+        cursor: "pointer",
+        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
+        animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "'Inter'",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: COLORS.gold,
+        marginBottom: 2
+      }
+    }, /*#__PURE__*/React.createElement(Trophy, {
+      size: 10
+    }), t.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14.5,
+        color: COLORS.ink
+      }
+    }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.inkSoft,
+        fontWeight: 500
+      }
+    }, "vs"), " ", f.teamB), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.inkSoft,
+        marginTop: 1
+      }
+    }, formatFixtureDateTime(f.date || "") || "Not yet scheduled"));
+  }
 function renderMatchCard(m, i) {
     return /*#__PURE__*/React.createElement("div", {
     key: m.id,
@@ -13666,14 +13736,14 @@ function renderMatchCard(m, i) {
     size: 14
   }), "Search players")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), matches.length > 0 && /*#__PURE__*/React.createElement(TextField, {
+  }), matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
     placeholder: "Search your matches & fixtures",
     style: {
       marginBottom: 14
     }
-  }), matches.length > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }) : null, matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -13696,7 +13766,7 @@ function renderMatchCard(m, i) {
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && q ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "24px 0",
@@ -13721,62 +13791,7 @@ function renderMatchCard(m, i) {
         marginBottom: 8,
         opacity: 0.75
       }
-    }, "Upcoming"), filteredUpcoming.map(({
-      tournament: t,
-      fixture: f
-    }, i) => /*#__PURE__*/React.createElement("button", {
-      key: f.id,
-      type: "button",
-      onClick: () => onOpenTournament(t),
-      className: "cs-btn",
-      style: {
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        background: COLORS.surface,
-        border: "none",
-        borderRadius: 12,
-        padding: "12px 14px",
-        marginBottom: 8,
-        cursor: "pointer",
-        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
-        animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        fontFamily: "'Inter'",
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        textTransform: "uppercase",
-        color: COLORS.gold,
-        marginBottom: 2
-      }
-    }, /*#__PURE__*/React.createElement(Trophy, {
-      size: 10
-    }), t.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 14.5,
-        color: COLORS.ink
-      }
-    }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.inkSoft,
-        fontWeight: 500
-      }
-    }, "vs"), " ", f.teamB), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 12,
-        color: COLORS.inkSoft,
-        marginTop: 1
-      }
-    }, formatFixtureDateTime(f.date || "") || "Not yet scheduled")))));
+    }, "Upcoming"), filteredUpcoming.map(renderUpcomingCard)));
     const showCompleted = completedExpanded || inProgressMatches.length === 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -13789,9 +13804,24 @@ function renderMatchCard(m, i) {
         marginBottom: 8,
         opacity: 0.75
       }
-    }, "In Progress"), inProgressMatches.map((m, i) => renderMatchCard(m, i)), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, "In Progress"), inProgressMatches.map((m, i) => renderMatchCard(m, i)), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: inProgressMatches.length > 0 ? 18 : 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
+      }
+    }, "Upcoming"), sortedUpcomingFixtures.map(renderUpcomingCard)), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? 18 : 0
       }
     }, /*#__PURE__*/React.createElement("button", {
       type: "button",
