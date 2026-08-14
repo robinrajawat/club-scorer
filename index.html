@@ -23473,6 +23473,11 @@ function MatchStatsPanel({
   showOvers
 }) {
   const chasing = chasingInfo(match);
+  // The live-state summary (score line + Overs) is only worth surfacing for whoever's actually
+  // batting right now -- a completed earlier innings has nothing "live" left to show, and the
+  // full scorecard below already covers it in more detail than a ball-by-ball strip would.
+  const liveInn = match.innings[match.currentInningIndex] || match.innings[match.innings.length - 1];
+  const showLiveSummary = showOvers && liveInn && liveInn.battingOrder && liveInn.battingOrder.length > 0 && !liveInn.complete;
   return /*#__PURE__*/React.createElement(React.Fragment, null, match.venue && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 16px 0",
@@ -23484,7 +23489,37 @@ function MatchStatsPanel({
     }
   }, "\uD83D\uDCCD ", match.venue), /*#__PURE__*/React.createElement(MatchInfoFold, {
     match: match
-  }), chasing && /*#__PURE__*/React.createElement("div", {
+  }), showLiveSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      margin: "10px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: "100%",
+      padding: "8px 14px",
+      borderRadius: 12,
+      background: COLORS.surface,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      color: COLORS.ink,
+      display: "inline-flex",
+      alignItems: "baseline",
+      gap: 8,
+      fontFamily: "'Inter'"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700
+    }
+  }, liveInn.battingTeam, " ", liveInn.runs, "-", liveInn.wickets, " (", oversLabel(liveInn.legalBalls, liveInn.ballsPerOver), " ov)"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, "CRR ", crr(liveInn.runs, liveInn.legalBalls, liveInn.ballsPerOver)))), chasing && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center",
@@ -23543,7 +23578,7 @@ function MatchStatsPanel({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, showOvers && /*#__PURE__*/React.createElement("div", {
+  }, showOvers && !match.innings[tab].complete && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
