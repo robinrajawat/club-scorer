@@ -13448,7 +13448,14 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB), t.venue && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, "\uD83D\uDCCD ", t.venue)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -13577,6 +13584,11 @@ function HomeScreen({
   // under everything already finished. Forced open below whenever there are no in-progress matches
   // to separate it from, since folding the only content on screen would just look empty.
   const [completedExpanded, setCompletedExpanded] = useState(false);
+  // In Progress and Upcoming default open (they're what someone opened this screen to act on),
+  // Completed defaults closed (least urgent) -- but all three get the same fold affordance so a
+  // busy club can tuck any of them away once they've seen what's there, not just Completed.
+  const [inProgressExpanded, setInProgressExpanded] = useState(true);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(true);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -13665,8 +13677,14 @@ function renderMatchCard(m, i) {
       height: 8,
       borderRadius: "50%",
       flexShrink: 0,
-      background: m.status === "complete" ? COLORS.inkSoft : COLORS.turfFixed,
-      boxShadow: m.status === "complete" ? "none" : `0 0 0 3px rgba(74,124,46,0.18)`
+      // Matches the "Live" pulsing dot on the Follow screen (red, not green) -- red is the
+      // convention someone already recognizes from every other live-broadcast indicator (YouTube,
+      // Twitch, sports apps), whereas green usually reads as "healthy/done" rather than "happening
+      // right now". Having two different colors for the same in-progress state across screens
+      // would be a genuine inconsistency, not a stylistic choice.
+      background: m.status === "complete" ? COLORS.inkSoft : "#e6544b",
+      boxShadow: m.status === "complete" ? "none" : "0 0 0 3px rgba(230,84,75,0.18)",
+      animation: m.status === "complete" ? "none" : "cs-pulse 1.6s ease infinite"
     }
   }), /*#__PURE__*/React.createElement("div", null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13924,34 +13942,72 @@ function renderMatchCard(m, i) {
       onScheduleFixture: onScheduleFixture,
       onStartFixture: onStartFixture
     }))));
-    const showCompleted = completedExpanded || inProgressMatches.length === 0;
-    return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
+    return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && (completedMatches.length > 0 || sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setInProgressExpanded(e => !e),
+      className: "cs-btn",
+      "aria-expanded": inProgressExpanded,
       style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        width: "100%",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        marginBottom: 8,
         fontFamily: "'Inter'",
         fontSize: 10.5,
         fontWeight: 700,
         letterSpacing: 1,
         color: COLORS.inkSoft,
         textTransform: "uppercase",
-        marginBottom: 8,
         opacity: 0.75
       }
-    }, "In Progress"), inProgressMatches.map((m, i) => renderMatchCard(m, i)), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 13,
+      style: {
+        transform: inProgressExpanded ? "rotate(90deg)" : "none",
+        transition: "transform 0.15s ease",
+        flexShrink: 0
+      }
+    }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i)), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: inProgressMatches.length > 0 ? 18 : 0
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setUpcomingExpanded(e => !e),
+      className: "cs-btn",
+      "aria-expanded": upcomingExpanded,
       style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        width: "100%",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        marginBottom: 8,
         fontFamily: "'Inter'",
         fontSize: 10.5,
         fontWeight: 700,
         letterSpacing: 1,
         color: COLORS.inkSoft,
         textTransform: "uppercase",
-        marginBottom: 8,
         opacity: 0.75
       }
-    }, "Upcoming"), visibleUpcomingFixtures.map(({
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 13,
+      style: {
+        transform: upcomingExpanded ? "rotate(90deg)" : "none",
+        transition: "transform 0.15s ease",
+        flexShrink: 0
+      }
+    }), "Upcoming (", sortedUpcomingFixtures.length, ")"), upcomingExpanded && visibleUpcomingFixtures.map(({
       tournament: t,
       fixture: f
     }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
@@ -13962,7 +14018,7 @@ function renderMatchCard(m, i) {
       onOpenTournament: onOpenTournament,
       onScheduleFixture: onScheduleFixture,
       onStartFixture: onStartFixture
-    })), hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
+    })), upcomingExpanded && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: onOpenTournaments,
       className: "cs-btn",
