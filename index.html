@@ -508,7 +508,7 @@ const GLOBAL_CSS = `
   @keyframes cs-digitRoll { from { transform: translateY(65%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes cs-ballSpin { to { transform: rotate(360deg); } }
   @keyframes cs-swipeHint { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-8px); } }
-  @keyframes cs-toastDown { from { transform: translate(-50%, -18px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+  @keyframes cs-toastDown { from { transform: translateY(-18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .cs-btn { transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.14s ease, filter 0.1s ease; -webkit-tap-highlight-color: transparent; }
   .cs-btn:active { transform: scale(0.95) !important; filter: brightness(0.95); }
   .cs-no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
