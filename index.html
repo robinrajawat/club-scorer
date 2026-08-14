@@ -29128,6 +29128,14 @@ function CricketScorer() {
   // screen/state values.
   const backActionRef = useRef(null);
   const swipeStartRef = useRef(null); // {x, y} | null — set on a touchstart within the edge zone
+  // Guards refreshClubs against overlapping calls -- now that setScreen fires one on every visit
+  // to Teams/Tournaments (see below), a slower earlier call finishing AFTER a faster later one
+  // would otherwise silently overwrite fresher state with its own stale snapshot. Each call
+  // captures its own generation number and checks it's still current before every setState that
+  // depends on data fetched partway through -- a call that's been superseded just quietly stops
+  // instead of writing anything.
+  const clubsRefreshGenRef = useRef(0);
+  const lastClubsRefreshRef = useRef(0); // epoch ms of the last refreshClubs call that actually ran
   function setScreen(next) {
     setScreenRaw(current => {
       const from = SCREEN_DEPTH[current] ?? 0;
@@ -29148,7 +29156,11 @@ function CricketScorer() {
     // Re-running it in the background every time either screen is entered keeps it current without
     // blocking the navigation itself; both screens already render progressively off whatever's in
     // state, so this just quietly refreshes underneath rather than needing its own transition.
-    if (next === "teams" || next === "tournaments") {
+    // Throttled to once per 15s here specifically -- someone bouncing Home/Teams/Tournaments back
+    // and forth shouldn't re-run a multi-collection fetch on every single tap; a deliberate refresh
+    // trigger elsewhere (after creating a club, joining one, etc.) still always runs regardless.
+    if ((next === "teams" || next === "tournaments") && Date.now() - lastClubsRefreshRef.current > 15000) {
+      lastClubsRefreshRef.current = Date.now();
       refreshClubs();
     }
   }
@@ -29156,10 +29168,13 @@ function CricketScorer() {
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
   // round trip the moment you pick "New Match".
   async function refreshClubs() {
+    const gen = ++clubsRefreshGenRef.current;
     setClubsLoading(true);
     const clubList = await loadClubs();
+    if (clubsRefreshGenRef.current !== gen) return clubList; // superseded by a newer call while awaiting
     setClubs(clubList);
     const [teamEntries, tournamentEntries] = await Promise.all([Promise.all(clubList.map(async c => [c.id, await loadClubTeams(c.id)])), Promise.all(clubList.map(async c => [c.id, await loadClubTournaments(c.id)]))]);
+    if (clubsRefreshGenRef.current !== gen) return clubList;
     setClubTeamsById(Object.fromEntries(teamEntries));
     setClubTournamentsById(Object.fromEntries(tournamentEntries));
     // Federations only depend on clubList (just fetched above), not on the team/tournament loads
@@ -29180,6 +29195,7 @@ function CricketScorer() {
       // current.
       const ownedUid = auth.currentUser ? auth.currentUser.uid : null;
       const [affiliatedFeds, ownedFeds] = await Promise.all([fedIds.length > 0 ? loadFederationsByIds(fedIds) : Promise.resolve([]), ownedUid ? loadMyOwnedFederations(ownedUid) : Promise.resolve([])]);
+      if (clubsRefreshGenRef.current !== gen) return;
       const freshFederationsById = Object.fromEntries([...affiliatedFeds, ...ownedFeds].map(f => [f.id, f]));
       setFederationsById(prev => ({
         ...prev,
@@ -29197,6 +29213,7 @@ function CricketScorer() {
         // the button confidently offered "safe to delete" right up until a real click on it
         // returned a confusing permission error instead).
         const corrected = await reconcileFederationAffiliation(clubList, freshFederationsById);
+        if (clubsRefreshGenRef.current !== gen) return;
         if (Object.keys(corrected).length > 0) {
           setFederationsById(prev => ({
             ...prev,
@@ -29204,7 +29221,7 @@ function CricketScorer() {
           }));
         }
       }
-      setFederationsLoading(false);
+      if (clubsRefreshGenRef.current === gen) setFederationsLoading(false);
     })();
     setClubsLoading(false);
     return clubList;
