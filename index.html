@@ -13850,6 +13850,123 @@ function UpcomingFixtureCard({
     onClose: () => setVenueModalOpen(false)
   }));
 }
+// Availability polls (see createAvailabilityPoll) already exist, but the only way to see whether
+// anyone still hadn't responded was to open one specific team's screen and check one poll at a
+// time. This pulls together every still-active poll across every club team someone has access to,
+// so "3 people haven't said if they're free for Saturday" is visible on Home without hunting.
+// Renders nothing while loading and nothing once loaded if there's nothing pending, rather than a
+// permanent "no pending polls" banner that would just be one more thing competing for attention on
+// every visit.
+//
+// Reads via loadTeamPolls (pointer docs the person already has ordinary club-membership access to)
+// then loadPollByCode per active poll to get its roster/responses -- the actual poll doc lives in
+// the open-by-code /availabilityPolls collection that firestore.rules deliberately never allows
+// listing directly (same trust model as a match code), so fetching each one individually by the
+// code from its own pointer is the only allowed way to get there, same pattern the rest of the
+// polls feature already uses.
+function PollSummaryCard({
+  clubs,
+  clubTeamsById,
+  onOpenTeams
+}) {
+  const [summary, setSummary] = useState(null); // null while loading, [] once loaded with nothing pending
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const items = [];
+      for (const club of clubs || []) {
+        const teams = clubTeamsById[club.id] || [];
+        for (const team of teams) {
+          const pointers = await loadTeamPolls(club.id, team.id);
+          const active = pointers.filter(p => {
+            const ms = expiresAtMillis(p.expiresAt);
+            return ms == null || ms > Date.now();
+          });
+          for (const p of active) {
+            const full = await loadPollByCode(p.code);
+            if (!full) continue;
+            const roster = full.roster || [];
+            const responded = Object.keys(full.responses || {});
+            const pendingCount = roster.filter(name => !responded.includes(name)).length;
+            if (pendingCount > 0) {
+              items.push({
+                code: p.code,
+                teamName: team.name,
+                pendingCount
+              });
+            }
+          }
+        }
+      }
+      if (!cancelled) setSummary(items);
+    }
+    if (clubs && clubs.length > 0) {
+      load();
+    } else {
+      setSummary([]);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [clubs, clubTeamsById]);
+  if (!summary || summary.length === 0) return null;
+  const totalPending = summary.reduce((s, item) => s + item.pendingCount, 0);
+  const teamNames = summary.map(item => item.teamName);
+  const teamsLabel = teamNames.length <= 2 ? teamNames.join(", ") : `${teamNames.slice(0, 2).join(", ")} +${teamNames.length - 2} more`;
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenTeams,
+    className: "cs-btn cs-shine",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+      textAlign: "left",
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
+      border: "none",
+      borderRadius: 14,
+      padding: "12px 14px",
+      marginBottom: 14,
+      cursor: "pointer",
+      boxShadow: "0 3px 10px rgba(45,80,22,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement(Hand, {
+    size: 18,
+    style: {
+      color: "#fff",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: "#fff"
+    }
+  }, totalPending, " ", totalPending === 1 ? "response" : "responses", " still needed"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: "rgba(255,255,255,0.85)",
+      marginTop: 2,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, summary.length, " ", summary.length === 1 ? "poll" : "polls", " waiting \u2014 ", teamsLabel)), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 16,
+    color: "#fff",
+    style: {
+      flexShrink: 0
+    }
+  }));
+}
 function HomeScreen({
   matches,
   onNew,
@@ -13877,6 +13994,8 @@ function HomeScreen({
   onScheduleFixture,
   onStartFixture,
   onEditVenue,
+  clubs = [],
+  clubTeamsById = {},
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -14179,6 +14298,10 @@ function renderMatchCard(m, i) {
     size: 14
   }), "Search players")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
+  }), /*#__PURE__*/React.createElement(PollSummaryCard, {
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    onOpenTeams: onManageTeams
   }), matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
@@ -30375,6 +30498,8 @@ function CricketScorer() {
     onScheduleFixture: handleScheduleFixtureFromHome,
     onStartFixture: handleStartFixtureMatch,
     onEditVenue: handleEditVenueFromHome,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
