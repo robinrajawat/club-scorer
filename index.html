@@ -5235,6 +5235,44 @@ function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   });
   return out;
 }
+// Every still-active poll, across every team across every club someone has access to, that still
+// has at least one roster name who hasn't responded -- the Inbox's poll section and its badge
+// count both come from this same list, so what the badge promises is exactly what's waiting there.
+// Two parallel rounds (every team's pointer fetch, then every active poll's full-doc fetch) rather
+// than one round trip after another, same reasoning as any other fan-out fetch in this app: neither
+// round depends on any single result from the other within itself.
+async function loadPendingPollItems(clubs, clubTeamsById) {
+  const teamRefs = (clubs || []).flatMap(club => (clubTeamsById[club.id] || []).map(team => ({
+    clubId: club.id,
+    clubName: club.name,
+    team
+  })));
+  const pointerLists = await Promise.all(teamRefs.map(ref => loadTeamPolls(ref.clubId, ref.team.id)));
+  const activeRefs = teamRefs.flatMap((ref, i) => (pointerLists[i] || []).filter(p => {
+    const ms = expiresAtMillis(p.expiresAt);
+    return ms == null || ms > Date.now();
+  }).map(p => ({
+    ...ref,
+    code: p.code,
+    question: p.question
+  })));
+  const fullPolls = await Promise.all(activeRefs.map(ref => loadPollByCode(ref.code)));
+  const items = [];
+  activeRefs.forEach((ref, i) => {
+    const full = fullPolls[i];
+    if (!full) return;
+    const roster = full.roster || [];
+    const responded = Object.keys(full.responses || {});
+    const pendingCount = roster.filter(name => !responded.includes(name)).length;
+    if (pendingCount > 0) {
+      items.push({
+        ...ref,
+        pendingCount
+      });
+    }
+  });
+  return items;
+}
 function buildFollowUrl(code) {
   try {
     const {
@@ -7750,8 +7788,8 @@ function AccountScreen({
   onImportData,
   onDeleteAccount,
   onOpenSharedLinks,
-  onOpenRequests,
-  requestBadgeCount = 0,
+  onOpenInbox,
+  inboxBadgeCount = 0,
   onOpenClubAdmin,
   onBack,
   redirectError,
@@ -8673,7 +8711,7 @@ function AccountScreen({
     }),
     /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: onOpenRequests,
+      onClick: onOpenInbox,
       className: "cs-btn",
       style: {
         display: "flex",
@@ -8697,7 +8735,7 @@ function AccountScreen({
         color: COLORS.inkSoft,
         textTransform: "uppercase"
       }
-    }, "Requests", requestBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    }, "Inbox", inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
         display: "inline-flex",
         alignItems: "center",
@@ -8713,7 +8751,7 @@ function AccountScreen({
         textTransform: "none",
         letterSpacing: "normal"
       }
-    }, requestBadgeCount > 9 ? "9+" : requestBadgeCount)), /*#__PURE__*/React.createElement(ChevronRight, {
+    }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(ChevronRight, {
       size: 18,
       style: {
         color: COLORS.inkSoft
@@ -12316,7 +12354,7 @@ function FederationsPanel({
     onCancel: () => setConfirmRevokeInvite(null)
   }));
 }
-function RequestsScreen({
+function InboxScreen({
   requests,
   clubs,
   federationsById,
@@ -12324,10 +12362,12 @@ function RequestsScreen({
   onRespond,
   onCancel,
   onCompleteJoin,
+  pollItems = [],
   onBack
 }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
+  const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
   function clubById(id) {
     return clubs.find(c => c.id === id) || null;
   }
@@ -12405,7 +12445,7 @@ function RequestsScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0;
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -12438,7 +12478,7 @@ function RequestsScreen({
       color: COLORS.pitch,
       marginBottom: 4
     }
-  }, "Requests"), /*#__PURE__*/React.createElement("div", {
+  }, "Inbox"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -12446,7 +12486,7 @@ function RequestsScreen({
       marginBottom: 18,
       lineHeight: 1.5
     }
-  }, "Club-federation affiliation requests you've sent or received. A federation must be public before a club can find and request it, and a club must be public before a federation owner can find and invite it."), error && /*#__PURE__*/React.createElement("div", {
+  }, "Availability polls waiting on a response, and club-federation affiliation requests you've sent or received."), error && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.08)",
       border: "1.5px solid rgba(139,30,30,0.25)",
@@ -12467,7 +12507,58 @@ function RequestsScreen({
       fontSize: 13.5,
       lineHeight: 1.6
     }
-  }, "Nothing pending right now."), needsFinalize.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Nothing pending right now."), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Availability polls"), pollItems.map(item => /*#__PURE__*/React.createElement("button", {
+    key: item.code,
+    type: "button",
+    onClick: () => setOpenPoll(item),
+    className: "cs-btn",
+    style: {
+      ...cardStyle,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      width: "100%",
+      textAlign: "left",
+      border: "none",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, item.question || `${item.team.name}'s next match`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, item.team.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      flexShrink: 0,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.turf
+    }
+  }, item.pendingCount, " left", /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 14
+  }))))), needsFinalize.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
   }, "Approved \u2014 finish joining"), needsFinalize.map(r => /*#__PURE__*/React.createElement("div", {
     key: r.id,
@@ -12539,7 +12630,13 @@ function RequestsScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, busyId === r.id ? "\u2026" : "Cancel request")))));
+  }, busyId === r.id ? "\u2026" : "Cancel request")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+    clubId: openPoll.clubId,
+    clubName: openPoll.clubName,
+    team: openPoll.team,
+    initialCode: openPoll.code,
+    onClose: () => setOpenPoll(null)
+  }));
 }
 
 // Small "move to..." dropdown for a single team row — lets an existing personal team be moved
@@ -14211,193 +14308,6 @@ function UpcomingFixtureCard({
     onClose: () => setPollModalOpen(false)
   }));
 }
-// Availability polls (see createAvailabilityPoll) already exist, but the only way to see whether
-// anyone still hadn't responded was to open one specific team's screen and check one poll at a
-// time. This pulls together every still-active poll across every club team someone has access to,
-// so "3 people haven't said if they're free for Saturday" is visible on Home without hunting.
-// Renders nothing while loading and nothing once loaded if there's nothing pending, rather than a
-// permanent "no pending polls" banner that would just be one more thing competing for attention on
-// every visit.
-//
-// Reads via loadTeamPolls (pointer docs the person already has ordinary club-membership access to)
-// then loadPollByCode per active poll to get its roster/responses -- the actual poll doc lives in
-// the open-by-code /availabilityPolls collection that firestore.rules deliberately never allows
-// listing directly (same trust model as a match code), so fetching each one individually by the
-// code from its own pointer is the only allowed way to get there, same pattern the rest of the
-// polls feature already uses.
-function PollSummaryCard({
-  clubs,
-  clubTeamsById,
-  matches = []
-}) {
-  const [summary, setSummary] = useState(null); // null while loading, [] once loaded with nothing pending
-  const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
-  // Bumped when the poll modal closes, to force the effect below to re-run and pull fresh counts --
-  // covers both a poll being deleted and someone simply responding while it was open, either of
-  // which would otherwise leave this card showing stale numbers until Home itself remounted.
-  const [refreshKey, setRefreshKey] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    // Two parallel rounds rather than one round trip after another -- someone in several clubs
-    // with several teams each could otherwise be waiting on a long chain of sequential awaits
-    // before this card ever appears, when every team's pointer fetch (round 1) and every active
-    // poll's full-doc fetch (round 2) has no dependency on any of the others in its own round.
-    async function load() {
-      const teamRefs = (clubs || []).flatMap(club => (clubTeamsById[club.id] || []).map(team => ({
-        clubId: club.id,
-        clubName: club.name,
-        team
-      })));
-      const pointerLists = await Promise.all(teamRefs.map(ref => loadTeamPolls(ref.clubId, ref.team.id)));
-      // Team ids whose poll is already visible on its own match card on Home (see
-      // MatchPollSummary) -- skip exactly that one poll for those teams below, so the same poll
-      // isn't shown twice. Mirrors MatchPollSummary's own selection (the newest still-active poll
-      // for the team; pointerLists is already newest-first per loadTeamPolls) so what's excluded
-      // here is exactly what's already showing there, not a broader guess that might hide a
-      // second, genuinely different active poll the same team happens to have.
-      const matchCardTeamIds = new Set();
-      (matches || []).forEach(m => {
-        resolvePollTeams(m.teamA, m.teamB, clubs, clubTeamsById).forEach(entry => {
-          matchCardTeamIds.add(entry.team.id);
-        });
-      });
-      const activeRefs = teamRefs.flatMap((ref, i) => {
-        const activePointers = (pointerLists[i] || []).filter(p => {
-          const ms = expiresAtMillis(p.expiresAt);
-          return ms == null || ms > Date.now();
-        });
-        const newestActiveCode = activePointers[0] && activePointers[0].code;
-        return activePointers.filter(p => !(matchCardTeamIds.has(ref.team.id) && p.code === newestActiveCode)).map(p => ({
-          ...ref,
-          code: p.code,
-          question: p.question
-        }));
-      });
-      const fullPolls = await Promise.all(activeRefs.map(ref => loadPollByCode(ref.code)));
-      const items = [];
-      activeRefs.forEach((ref, i) => {
-        const full = fullPolls[i];
-        if (!full) return;
-        const roster = full.roster || [];
-        const responded = Object.keys(full.responses || {});
-        const pendingCount = roster.filter(name => !responded.includes(name)).length;
-        if (pendingCount > 0) {
-          items.push({
-            ...ref,
-            pendingCount
-          });
-        }
-      });
-      if (!cancelled) setSummary(items);
-    }
-    if (clubs && clubs.length > 0) {
-      load();
-    } else {
-      setSummary([]);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [clubs, clubTeamsById, matches, refreshKey]);
-  if (!summary || summary.length === 0) return null;
-  const totalPending = summary.reduce((s, item) => s + item.pendingCount, 0);
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
-      borderRadius: "14px 14px 0 0",
-      padding: "12px 14px",
-      boxShadow: "0 3px 10px rgba(45,80,22,0.25)"
-    }
-  }, /*#__PURE__*/React.createElement(Hand, {
-    size: 18,
-    style: {
-      color: "#fff",
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13,
-      color: "#fff"
-    }
-  }, totalPending, " ", totalPending === 1 ? "response" : "responses", " still needed")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: "0 0 14px 14px",
-      overflow: "hidden",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
-    }
-  }, summary.map((item, idx) => /*#__PURE__*/React.createElement("button", {
-    key: item.code,
-    type: "button",
-    onClick: () => setOpenPoll(item),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: "none",
-      borderTop: idx > 0 ? `1px solid ${COLORS.creamDark}` : "none",
-      padding: "10px 14px",
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, item.question || `${item.team.name}'s next match`), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      marginTop: 1
-    }
-  }, item.team.name)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      flexShrink: 0,
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 700,
-      color: COLORS.turf
-    }
-  }, item.pendingCount, " left", /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 14
-  }))))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: openPoll.clubId,
-    clubName: openPoll.clubName,
-    team: openPoll.team,
-    initialCode: openPoll.code,
-    onClose: () => {
-      setOpenPoll(null);
-      setRefreshKey(k => k + 1);
-    }
-  }));
-}
 function HomeScreen({
   matches,
   onNew,
@@ -14419,7 +14329,7 @@ function HomeScreen({
   onLoadPublicPlayers,
   pendingCount,
   onPendingSynced,
-  requestBadgeCount = 0,
+  inboxBadgeCount = 0,
   tournamentNameById = {},
   tournaments = [],
   onOpenTournament,
@@ -14657,7 +14567,7 @@ function renderMatchCard(m, i) {
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme,
-    badgeCount: requestBadgeCount
+    badgeCount: inboxBadgeCount
   })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -14747,10 +14657,6 @@ function renderMatchCard(m, i) {
     size: 17
   }), " Cups")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), /*#__PURE__*/React.createElement(PollSummaryCard, {
-    clubs: clubs,
-    clubTeamsById: clubTeamsById,
-    matches: matches
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -20387,11 +20293,11 @@ function AvailabilityPollModal({
   team,
   onClose,
   // Both optional, and mutually exclusive in practice: initialCode is "open this app straight to
-  // one specific poll's results" (see PollSummaryCard on Home, which otherwise had no way to link
-  // a tap through to the actual poll it was summarizing). fixtureContext is "open straight to
-  // creating a new poll FOR this fixture" (see the Upcoming card's "Send poll" action), pre-
-  // filling the question/date from the fixture and tagging the created poll with
-  // tournamentId/fixtureId so it can be traced back.
+  // one specific poll's results" (see the Inbox screen and MatchPollSummary, both of which
+  // otherwise had no way to link a tap through to the actual poll it was summarizing).
+  // fixtureContext is "open straight to creating a new poll FOR this fixture" (see the Upcoming
+  // card's "Send poll" action), pre-filling the question/date from the fixture and tagging the
+  // created poll with tournamentId/fixtureId so it can be traced back.
   initialCode,
   fixtureContext
 }) {
@@ -29385,7 +29291,7 @@ const SCREEN_DEPTH = {
   players: 1,
   "team-edit": 2,
   "shared-links": 2,
-  "requests": 2,
+  "inbox": 2,
   "tournament-detail": 2
 };
 function CricketScorer() {
@@ -29427,6 +29333,7 @@ function CricketScorer() {
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
+  const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[]
@@ -29671,8 +29578,8 @@ function CricketScorer() {
     setMyFederationRequests(rows);
   }
   // Reloads whenever the set of clubs/federations I own or co-own changes (sign-in, club/
-  // federation created, ownership granted) — this is what feeds the notification badge next to
-  // the profile button, plus the Requests inbox itself.
+  // federation created, ownership granted) — feeds the Inbox screen's requests section, and half
+  // of its combined badge count (see pendingPollItems below for the other half).
   useEffect(() => {
     if (!user || (myOwnedClubIds.length === 0 && myOwnedFederationIds.length === 0)) {
       setMyFederationRequests([]);
@@ -29695,6 +29602,21 @@ function CricketScorer() {
     }
     return false;
   });
+  async function refreshPendingPollItems() {
+    const items = await loadPendingPollItems(clubs, clubTeamsById);
+    setPendingPollItems(items);
+  }
+  // Reloads whenever clubs/teams change (sign-in, team roster edits, a new poll sent) — feeds the
+  // Inbox screen's polls section, and the other half of its combined badge count alongside
+  // federationRequestsNeedingAction above.
+  useEffect(() => {
+    if (!user || clubs.length === 0) {
+      setPendingPollItems([]);
+      return;
+    }
+    refreshPendingPollItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, clubs, clubTeamsById]);
   // Loads tournaments for every federation this user owns/co-owns -- same trigger condition as
   // the federationRequests effect just above (the ownership set changing). Only fetches ids not
   // already in federationTournamentsById, so re-renders and screen switches don't refetch
@@ -30295,6 +30217,8 @@ function CricketScorer() {
           return exitPoll;
         case "team-edit":
           return () => setScreen("teams");
+        case "inbox":
+          return () => setScreen("account");
         default:
           return null;
       }
@@ -31194,7 +31118,7 @@ function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    requestBadgeCount: federationRequestsNeedingAction.length,
+    inboxBadgeCount: federationRequestsNeedingAction.length + pendingPollItems.length,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -31396,8 +31320,8 @@ function CricketScorer() {
     onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenRequests: () => setScreen("requests"),
-    requestBadgeCount: federationRequestsNeedingAction.length,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: federationRequestsNeedingAction.length + pendingPollItems.length,
     onOpenClubAdmin: () => {
       setTeamsTab("clubs");
       setScreen("teams");
@@ -31426,10 +31350,10 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(AboutScreen, {
     onBack: () => setScreen("home")
-  })), screen === "requests" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "requests",
+  })), screen === "inbox" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "inbox",
     direction: navDirection
-  }, /*#__PURE__*/React.createElement(RequestsScreen, {
+  }, /*#__PURE__*/React.createElement(InboxScreen, {
     requests: myFederationRequests,
     clubs: clubs,
     federationsById: federationsById,
@@ -31437,6 +31361,7 @@ function CricketScorer() {
     onRespond: handleRespondFederationRequest,
     onCancel: handleCancelFederationRequest,
     onCompleteJoin: handleCompleteAcceptedFederationRequest,
+    pollItems: pendingPollItems,
     onBack: () => setScreen("account")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
