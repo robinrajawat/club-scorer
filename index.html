@@ -13948,6 +13948,10 @@ function PollSummaryCard({
 }) {
   const [summary, setSummary] = useState(null); // null while loading, [] once loaded with nothing pending
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
+  // Bumped when the poll modal closes, to force the effect below to re-run and pull fresh counts --
+  // covers both a poll being deleted and someone simply responding while it was open, either of
+  // which would otherwise leave this card showing stale numbers until Home itself remounted.
+  const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
     // Two parallel rounds rather than one round trip after another -- someone in several clubs
@@ -13994,7 +13998,7 @@ function PollSummaryCard({
     return () => {
       cancelled = true;
     };
-  }, [clubs, clubTeamsById]);
+  }, [clubs, clubTeamsById, refreshKey]);
   if (!summary || summary.length === 0) return null;
   const totalPending = summary.reduce((s, item) => s + item.pendingCount, 0);
   return /*#__PURE__*/React.createElement("div", {
@@ -14088,7 +14092,10 @@ function PollSummaryCard({
     clubName: openPoll.clubName,
     team: openPoll.team,
     initialCode: openPoll.code,
-    onClose: () => setOpenPoll(null)
+    onClose: () => {
+      setOpenPoll(null);
+      setRefreshKey(k => k + 1);
+    }
   }));
 }
 function HomeScreen({
