@@ -12636,10 +12636,12 @@ function ShareMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null); // {top, right} in viewport coords
+  const [menuAdjust, setMenuAdjust] = useState(null); // post-measure overrides once it's known the panel doesn't fit as opened
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copiedWhich, setCopiedWhich] = useState(null); // 'code' | 'link' | null
   const btnRef = useRef(null);
+  const menuRef = useRef(null);
   function toggleOpen() {
     setOpen(o => {
       const next = !o;
@@ -12652,10 +12654,39 @@ function ShareMenu({
           top: rect.bottom + 8,
           right: Math.max(8, window.innerWidth - rect.right)
         });
+      } else {
+        setMenuAdjust(null);
       }
       return next;
     });
   }
+  // The panel opens downward from the trigger by default, which is fine for the MatchScreen
+  // header (always near the top of the viewport) but not for a Home-list row, which can sit
+  // anywhere down a scrolling list -- opening below can run the ~230px-tall panel off the bottom
+  // of the screen with no way to reach the lower rows. Measure it once it's actually on the page
+  // and, if it doesn't fit, flip it above the trigger; if there isn't room on either side either,
+  // pin it in view and let it scroll internally instead of spilling past the viewport edge.
+  React.useLayoutEffect(() => {
+    if (!open || !pos || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const overflowBottom = rect.bottom - (window.innerHeight - 8);
+    if (overflowBottom <= 0) {
+      return;
+    }
+    const btnRect = btnRef.current && btnRef.current.getBoundingClientRect();
+    const spaceAbove = btnRect ? btnRect.top - 8 : 0;
+    if (btnRect && spaceAbove >= rect.height) {
+      setMenuAdjust({
+        top: Math.max(8, btnRect.top - 8 - rect.height)
+      });
+    } else {
+      setMenuAdjust({
+        top: 8,
+        maxHeight: window.innerHeight - 16,
+        overflowY: "auto"
+      });
+    }
+  }, [open, pos]);
   function flashCopied(which) {
     setCopiedWhich(which);
     setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
@@ -12751,6 +12782,7 @@ function ShareMenu({
       zIndex: 100
     }
   }), /*#__PURE__*/React.createElement("div", {
+    ref: menuRef,
     onClick: e => e.stopPropagation(),
     style: {
       position: "fixed",
@@ -12763,7 +12795,8 @@ function ShareMenu({
       padding: 8,
       fontFamily: "'Inter'",
       boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-      zIndex: 101
+      zIndex: 101,
+      ...menuAdjust
     }
   }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14297,8 +14330,8 @@ function renderMatchCard(m, i) {
     onGetCode: () => onGetShareCode(m),
     onGetViewCode: () => onGetViewCode(m),
     style: {
-      background: COLORS.creamDark,
-      border: `1px solid ${COLORS.cardDivider}`,
+      background: "none",
+      border: "none",
       color: COLORS.turf,
       width: 32,
       height: 32,
