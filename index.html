@@ -12509,7 +12509,7 @@ function InboxScreen({
     }
   }, "Nothing pending right now."), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
-  }, "Availability polls"), pollItems.map(item => /*#__PURE__*/React.createElement("button", {
+  }, "Availability polls"), pollItems.map((item, idx) => /*#__PURE__*/React.createElement("button", {
     key: item.code,
     type: "button",
     onClick: () => setOpenPoll(item),
@@ -12523,9 +12523,33 @@ function InboxScreen({
       width: "100%",
       textAlign: "left",
       border: "none",
-      cursor: "pointer"
+      cursor: "pointer",
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
     }
   }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 30,
+      height: 30,
+      borderRadius: "50%",
+      background: "rgba(74,124,46,0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Hand, {
+    size: 14,
+    style: {
+      color: COLORS.turf
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       minWidth: 0
     }
@@ -12545,24 +12569,30 @@ function InboxScreen({
       fontSize: 11.5,
       color: COLORS.inkSoft
     }
-  }, item.team.name)), /*#__PURE__*/React.createElement("div", {
+  }, item.team.name))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 4,
       flexShrink: 0,
       fontFamily: "'Inter'",
-      fontSize: 11.5,
+      fontSize: 11,
       fontWeight: 700,
-      color: COLORS.turf
+      color: "#fff",
+      background: COLORS.turfFixed,
+      padding: "4px 8px",
+      borderRadius: 20
     }
   }, item.pendingCount, " left", /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 14
+    size: 13
   }))))), needsFinalize.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
-  }, "Approved \u2014 finish joining"), needsFinalize.map(r => /*#__PURE__*/React.createElement("div", {
+  }, "Approved \u2014 finish joining"), needsFinalize.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id,
-    style: cardStyle
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
   }, requestLine(r), " \u2014 the federation approved this. Finish affiliating to start sharing teams."), /*#__PURE__*/React.createElement(Btn, {
@@ -12574,9 +12604,12 @@ function InboxScreen({
     }
   }, busyId === r.id ? "\u2026" : "Finish joining")))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
-  }, "Needs your response"), incoming.map(r => /*#__PURE__*/React.createElement("div", {
+  }, "Needs your response"), incoming.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id,
-    style: cardStyle
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
   }, requestLine(r)), /*#__PURE__*/React.createElement("div", {
@@ -12610,9 +12643,12 @@ function InboxScreen({
     }
   }, "Decline"))))), outgoing.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
-  }, "Sent \u2014 waiting on a response"), outgoing.map(r => /*#__PURE__*/React.createElement("div", {
+  }, "Sent \u2014 waiting on a response"), outgoing.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id,
-    style: cardStyle
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
   }, requestLine(r)), /*#__PURE__*/React.createElement("button", {
