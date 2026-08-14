@@ -23469,7 +23469,8 @@ function MatchInfoFold({
 function MatchStatsPanel({
   match,
   tab,
-  setTab
+  setTab,
+  showOvers
 }) {
   const chasing = chasingInfo(match);
   return /*#__PURE__*/React.createElement(React.Fragment, null, match.venue && /*#__PURE__*/React.createElement("div", {
@@ -23542,7 +23543,7 @@ function MatchStatsPanel({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, showOvers && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -23646,7 +23647,8 @@ function ScorecardOverlay({
   }, "Close"))), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
-    setTab: setTab
+    setTab: setTab,
+    showOvers: false
   }));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
@@ -23841,7 +23843,8 @@ function FollowScreen({
   }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
-    setTab: setTab
+    setTab: setTab,
+    showOvers: true
   }));
 }
 // Public, no-auth availability response page — reached via a ?poll=CODE link (see
