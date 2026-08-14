@@ -23558,6 +23558,27 @@ function MatchStatsPanel({
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      marginBottom: 8,
+      textTransform: "uppercase"
+    }
+  }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
+    overs: match.innings[tab].overs,
+    ballsPerOver: match.innings[tab].ballsPerOver
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
