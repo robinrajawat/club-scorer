@@ -23550,22 +23550,6 @@ function MatchStatsPanel({
       marginBottom: 14,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement(InningScorecard, {
-    inning: match.innings[tab],
-    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
-    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
-    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
-    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
-    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
-    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -23579,6 +23563,22 @@ function MatchStatsPanel({
   }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
     overs: match.innings[tab].overs,
     ballsPerOver: match.innings[tab].ballsPerOver
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: match.innings[tab],
+    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
+    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
+    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
