@@ -12803,7 +12803,7 @@ function ShareMenu({
       top: pos.top,
       right: pos.right,
       width: 270,
-      background: COLORS.ink,
+      background: `linear-gradient(160deg, ${COLORS.pitchFixed} 0%, ${COLORS.pitchDarkFixed} 100%)`,
       color: COLORS.creamFixed,
       borderRadius: 14,
       border: "1px solid rgba(242,236,217,0.08)",
@@ -14187,7 +14187,8 @@ function HomeScreen({
   onSetTheme,
   onJoinCode,
   onOpenTournaments,
-  onOpenPlayers,
+  onOpenPlayer,
+  onLoadPublicPlayers,
   pendingCount,
   onPendingSynced,
   requestBadgeCount = 0,
@@ -14217,6 +14218,27 @@ function HomeScreen({
   // busy club can tuck any of them away once they've seen what's there, not just Completed.
   const [inProgressExpanded, setInProgressExpanded] = useState(true);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+  // Merges what used to be a separate "Search players" screen into this one search box: same
+  // query, a tab to say which directory it's scoped to. The player directory is a full fetch
+  // (unlike the matches list, which is already in memory) -- only load it the first time someone
+  // actually switches to the Players tab, not on every Home visit.
+  const [searchTab, setSearchTab] = useState("matches"); // "matches" | "players"
+  const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
+  useEffect(() => {
+    if (searchTab !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
+    let cancelled = false;
+    setPlayersLoading(true);
+    onLoadPublicPlayers().then(list => {
+      if (cancelled) return;
+      setPublicPlayers(list);
+      setPlayersLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchTab, publicPlayers, hasPlayerSearch]);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -14225,6 +14247,8 @@ function HomeScreen({
   // filter that only sometimes searches a field would be more confusing than one that reliably
   // doesn't.
   const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
+  const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q)) : publicPlayers) : [];
+  const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
   // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
   // taps Start on it. Searched alongside saved matches so "that Riverside game" finds it whether
@@ -14489,44 +14513,60 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 17
-  }), " Cups")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "center",
-      marginBottom: 20
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenPlayers,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(Globe, {
-    size: 14
-  }), "Search players")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), " Cups")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement(PollSummaryCard, {
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  }), matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement(TextField, {
+  }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      background: COLORS.creamDark,
+      borderRadius: 12,
+      padding: 3,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSearchTab("matches"),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      borderRadius: 9,
+      border: "none",
+      background: searchTab === "matches" ? COLORS.pitch : "transparent",
+      color: searchTab === "matches" ? "#fff" : COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12.5,
+      cursor: "pointer"
+    }
+  }, "Matches"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSearchTab("players"),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "8px 0",
+      borderRadius: 9,
+      border: "none",
+      background: searchTab === "players" ? COLORS.pitch : "transparent",
+      color: searchTab === "players" ? "#fff" : COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12.5,
+      cursor: "pointer"
+    }
+  }, "Players")), (searchTab === "players" || matches.length > 0 || sortedUpcomingFixtures.length > 0) ? /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
-    placeholder: "Search your matches & fixtures",
+    placeholder: searchTab === "players" ? "Search public players by name" : "Search your matches & fixtures",
     style: {
       marginBottom: 14
     }
-  }) : null, matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }) : null, searchTab === "matches" && (matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -14735,7 +14775,62 @@ function renderMatchCard(m, i) {
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here."))), searchTab === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading players\u2026"
+  }) : filteredPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, (publicPlayers || []).length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredPlayers.map(p => /*#__PURE__*/React.createElement("button", {
+    key: p.id,
+    type: "button",
+    onClick: () => onOpenPlayer(p),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      gap: 10,
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: "none",
+      background: COLORS.surface,
+      cursor: "pointer",
+      textAlign: "left",
+      boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement(PlayerAvatar, {
+    name: p.name,
+    photoURL: p.photoURL,
+    size: 34
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14,
+      color: COLORS.ink
+    }
+  }, p.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -22245,6 +22340,7 @@ function TransferPlayerModal({
 // that's the honest scope rather than implying comprehensive career stats.
 function PlayersScreen({
   onBack,
+  initialSelected,
   onLoadPublicPlayers,
   onComputeCareerStats,
   onDeletePlayer,
@@ -22275,6 +22371,13 @@ function PlayersScreen({
     return () => {
       cancelled = true;
     };
+  }, []);
+  // Home's Players-tab search hands over the already-loaded player object it was showing, so this
+  // opens straight to that detail view instead of waiting on the list fetch above (which still
+  // runs in parallel, purely so "back to list" has something to show). Runs once on mount only --
+  // this screen doesn't need to react to it changing later, just what it was handed on entry.
+  useEffect(() => {
+    if (initialSelected) openPlayer(initialSelected);
   }, []);
   const filtered = query.trim() ? players.filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase())) : players;
   async function openPlayer(p) {
@@ -29118,6 +29221,10 @@ function CricketScorer() {
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [viewingTournamentFederationId, setViewingTournamentFederationId] = useState(null); // federation variant of the above -- at most one of this and viewingTournamentClubId is ever non-null
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
+  // Set when Home's Players-tab search result is tapped directly, so PlayersScreen opens straight
+  // to that player's detail instead of its own list view. Cleared on the way back to Home so a
+  // later, unrelated entry into the players screen doesn't reopen a stale profile.
+  const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
   const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
@@ -30839,7 +30946,11 @@ function CricketScorer() {
     onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
-    onOpenPlayers: () => setScreen("players"),
+    onOpenPlayer: player => {
+      setPlayersInitialSelected(player);
+      setScreen("players");
+    },
+    onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
     requestBadgeCount: federationRequestsNeedingAction.length,
@@ -31098,7 +31209,11 @@ function CricketScorer() {
     navKey: "players",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(PlayersScreen, {
-    onBack: () => setScreen("home"),
+    onBack: () => {
+      setScreen("home");
+      setPlayersInitialSelected(null);
+    },
+    initialSelected: playersInitialSelected,
     onLoadPublicPlayers: loadPublicPlayers,
     onComputeCareerStats: computePlayerCareerStats,
     onDeletePlayer: deletePlayer,
