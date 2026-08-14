@@ -23682,7 +23682,7 @@ function MatchStatsPanel({
         opacity: started ? 1 : 0.5
       }
     }, inn.battingTeam);
-  })), /*#__PURE__*/React.createElement("div", {
+  })), showOvers ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "16px",
       maxWidth: 560,
@@ -23765,6 +23765,32 @@ function MatchStatsPanel({
   }))), chartsOpen && /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), chartsOpen && /*#__PURE__*/React.createElement(RunsPerOverChart, {
+    match: match
+  })) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: match.innings[tab],
+    battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
+    bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
+    battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+  })), /*#__PURE__*/React.createElement(RunRateChart, {
+    match: match
+  }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
     match: match
   })));
 }
