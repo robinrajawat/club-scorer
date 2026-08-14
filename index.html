@@ -1050,22 +1050,36 @@ function icsEscape(text) {
 function icsLocalDateTime(iso) {
   return iso.replace(/[-:]/g, "").slice(0, 15) + "00"; // YYYY-MM-DDTHH:MM -> YYYYMMDDTHHMM + seconds
 }
+// One VEVENT block for a fixture — shared by buildTournamentICS (a whole schedule, looped) and
+// buildFixtureICS (a single fixture, for the Home screen's per-card "add to calendar") so the
+// event shape can't drift between the two.
+function fixtureIcsEvent(f, stamp, contextName) {
+  const start = icsLocalDateTime(f.date);
+  // Two-hour placeholder duration — the app has no fixed match length independent of overs/
+  // format, and this is just meant to block a calendar slot, not predict a finish time exactly.
+  const [datePart, timePart] = f.date.split("T");
+  const startDate = new Date(`${datePart}T${timePart}:00`);
+  const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+  const end = icsLocalDateTime(`${endDate.getFullYear()}-${pad2(endDate.getMonth() + 1)}-${pad2(endDate.getDate())}T${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
+  return ["BEGIN:VEVENT", `UID:${f.id}@cricket-scorer`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(`${f.teamA} vs ${f.teamB}`)}`, `DESCRIPTION:${icsEscape(`${contextName} fixture`)}`, "END:VEVENT"];
+}
 function buildTournamentICS(tournament) {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN"];
   (tournament.fixtures || []).forEach(f => {
     if (!ISO_DATETIME_RE.test(f.date || "")) return; // skip fixtures with no scheduled time
-    const start = icsLocalDateTime(f.date);
-    // Two-hour placeholder duration — the app has no fixed match length independent of overs/
-    // format, and this is just meant to block a calendar slot, not predict a finish time exactly.
-    const [datePart, timePart] = f.date.split("T");
-    const startDate = new Date(`${datePart}T${timePart}:00`);
-    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
-    const end = icsLocalDateTime(`${endDate.getFullYear()}-${pad2(endDate.getMonth() + 1)}-${pad2(endDate.getDate())}T${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
-    lines.push("BEGIN:VEVENT", `UID:${f.id}@cricket-scorer`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(`${f.teamA} vs ${f.teamB}`)}`, `DESCRIPTION:${icsEscape(`${tournament.name} fixture`)}`, "END:VEVENT");
+    lines.push(...fixtureIcsEvent(f, stamp, tournament.name));
   });
   lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+// Single-fixture variant — same event shape as buildTournamentICS's loop, just one VEVENT, for
+// adding just this one game to a calendar without pulling in the tournament's whole schedule.
+function buildFixtureICS(fixture, contextName) {
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN", ...fixtureIcsEvent(fixture, stamp, contextName), "END:VCALENDAR"];
   return lines.join("\r\n");
 }
 function downloadTextFile(filename, mimeType, text) {
@@ -13380,7 +13394,8 @@ function UpcomingFixtureCard({
   fixture: f,
   index: i,
   onOpenTournament,
-  onScheduleFixture
+  onScheduleFixture,
+  onStartFixture
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const friendlyDateTime = formatFixtureDateTime(f.date || "");
@@ -13433,7 +13448,19 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), onScheduleFixture ? /*#__PURE__*/React.createElement("button", {
+  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, onScheduleFixture ? /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setPickerOpen(true),
     className: "cs-btn",
@@ -13447,7 +13474,6 @@ function UpcomingFixtureCard({
       background: "none",
       border: "none",
       cursor: "pointer",
-      marginTop: 4,
       padding: 0,
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -13460,10 +13486,37 @@ function UpcomingFixtureCard({
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 1
+      color: COLORS.inkSoft
     }
-  }, friendlyDateTime || "Not yet scheduled"), pickerOpen && /*#__PURE__*/React.createElement(FixtureDateTimeModal, {
+  }, friendlyDateTime || "Not yet scheduled")), f.date && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name)),
+    className: "cs-btn",
+    "aria-label": "Add to calendar",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 30,
+      height: 30,
+      flexShrink: 0,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 14
+  })), onStartFixture && /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => onStartFixture(t, f),
+    style: {
+      padding: "7px 14px",
+      fontSize: 12,
+      flexShrink: 0
+    }
+  }, "Start match")), pickerOpen && /*#__PURE__*/React.createElement(FixtureDateTimeModal, {
     value: f.date || "",
     onSave: async iso => {
       // Firestore security rules are the real enforcement here (only the owner can write), not
@@ -13512,6 +13565,7 @@ function HomeScreen({
   tournaments = [],
   onOpenTournament,
   onScheduleFixture,
+  onStartFixture,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -13867,7 +13921,8 @@ function renderMatchCard(m, i) {
       fixture: f,
       index: i,
       onOpenTournament: onOpenTournament,
-      onScheduleFixture: onScheduleFixture
+      onScheduleFixture: onScheduleFixture,
+      onStartFixture: onStartFixture
     }))));
     const showCompleted = completedExpanded || inProgressMatches.length === 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -13905,7 +13960,8 @@ function renderMatchCard(m, i) {
       fixture: f,
       index: i,
       onOpenTournament: onOpenTournament,
-      onScheduleFixture: onScheduleFixture
+      onScheduleFixture: onScheduleFixture,
+      onStartFixture: onStartFixture
     })), hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: onOpenTournaments,
@@ -28802,25 +28858,11 @@ function CricketScorer() {
     setPresetTournament(null);
     if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
     // Came from "Score this fixture" — link the new match back onto that fixture so it shows as
-    // played instead of staying listed as upcoming. viewingTournament/viewingTournamentClubId are
-    // still valid here since navigating to Setup never clears them, only actually leaving the
-    // tournament (back, delete) does.
-    //
-    // Same update also backfills defaultRules/venue onto the tournament/series itself, but only if
-    // it doesn't already have them — the FIRST fixture scored for a tournament silently becomes its
-    // default going forward (see the matchRules useState in SetupScreen), so nobody has to
-    // separately configure "this tournament's rules" up front, and a deliberately-set default is
-    // never clobbered by a later fixture using different rules for a one-off reason.
-    if (setup.fixtureId && viewingTournament && viewingTournament.id === setup.tournamentId) {
-      handleUpdateTournament({
-        ...viewingTournament,
-        defaultRules: viewingTournament.defaultRules || setup.rules || null,
-        venue: viewingTournament.venue || setup.venue || null,
-        fixtures: (viewingTournament.fixtures || []).map(f => f.id === setup.fixtureId ? {
-          ...f,
-          matchId: m.id
-        } : f)
-      });
+    // played instead of staying listed as upcoming. Not awaited, same as elsewhere this fire-
+    // and-forget pattern is already used (e.g. handleDelete's tournament cleanup below) — a
+    // failure here shouldn't block the match that was just created and already navigated to.
+    if (setup.fixtureId && setup.tournamentId) {
+      linkFixtureToMatch(setup.tournamentId, setup.fixtureId, m.id, setup.rules, setup.venue);
     }
   }
   async function openMatch(id) {
@@ -28833,6 +28875,76 @@ function CricketScorer() {
       }
     } finally {
       setMatchLoading(false);
+    }
+  }
+  // Links a newly-created match back onto the fixture it came from, marking it played instead of
+  // leaving it listed as upcoming forever. Same reasoning as clearFixtureForDeletedMatch just
+  // below: independent of viewingTournament*Id (which reflects whatever tournament screen is
+  // CURRENTLY open, not necessarily the one this fixture belongs to) rather than assuming which
+  // one's active -- starting a match straight from Home's "Start match" button has no "currently
+  // viewed tournament" context at all, so relying on viewingTournament here would silently no-op
+  // and leave the fixture stuck showing as upcoming even after it's been played. Also backfills
+  // defaultRules/venue onto the tournament, but only if it doesn't already have them -- the first
+  // fixture scored for a tournament silently becomes its default going forward, same as before.
+  async function linkFixtureToMatch(tournamentId, fixtureId, matchId, fallbackRules, fallbackVenue) {
+    const personalIdx = tournaments.findIndex(t => t.id === tournamentId);
+    if (personalIdx !== -1) {
+      const t = tournaments[personalIdx];
+      const updatedT = {
+        ...t,
+        defaultRules: t.defaultRules || fallbackRules || null,
+        venue: t.venue || fallbackVenue || null,
+        fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
+          ...f,
+          matchId
+        } : f)
+      };
+      const updatedList = tournaments.map((x, i) => i === personalIdx ? updatedT : x);
+      setTournaments(updatedList);
+      await saveTournaments(updatedList);
+      return;
+    }
+    for (const [clubId, list] of Object.entries(clubTournamentsById)) {
+      const t = (list || []).find(x => x.id === tournamentId);
+      if (!t) continue;
+      const updatedT = {
+        ...t,
+        defaultRules: t.defaultRules || fallbackRules || null,
+        venue: t.venue || fallbackVenue || null,
+        fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
+          ...f,
+          matchId
+        } : f)
+      };
+      const result = await saveClubTournament(clubId, updatedT);
+      if (result.ok) {
+        setClubTournamentsById(prev => ({
+          ...prev,
+          [clubId]: (prev[clubId] || []).map(x => x.id === tournamentId ? updatedT : x)
+        }));
+      }
+      return;
+    }
+    for (const [fedId, list] of Object.entries(federationTournamentsById)) {
+      const t = (list || []).find(x => x.id === tournamentId);
+      if (!t) continue;
+      const updatedT = {
+        ...t,
+        defaultRules: t.defaultRules || fallbackRules || null,
+        venue: t.venue || fallbackVenue || null,
+        fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
+          ...f,
+          matchId
+        } : f)
+      };
+      const result = await saveFederationTournament(fedId, updatedT);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [fedId]: (prev[fedId] || []).map(x => x.id === tournamentId ? updatedT : x)
+        }));
+      }
+      return;
     }
   }
   // If a deleted match was linked to a tournament fixture, clear that fixture's matchId back to
@@ -29874,6 +29986,7 @@ function CricketScorer() {
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
     onScheduleFixture: handleScheduleFixtureFromHome,
+    onStartFixture: handleStartFixtureMatch,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
