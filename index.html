@@ -13368,6 +13368,125 @@ function relativeDayLabel(ts) {
   const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
+// An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
+// section both use this). Own component rather than a plain render function -- it needs its own
+// pickerOpen state for the inline date/time modal (letting a fixture be scheduled right from Home
+// without a trip into the tournament first), and hooks can't safely live in a function invoked via
+// .map() the way a real component instance can. onScheduleFixture is optional: search results and
+// the Upcoming section both pass it, but keeping the prop optional means this component doesn't
+// assume every caller wants scheduling wired up.
+function UpcomingFixtureCard({
+  tournament: t,
+  fixture: f,
+  index: i,
+  onOpenTournament,
+  onScheduleFixture
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const friendlyDateTime = formatFixtureDateTime(f.date || "");
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 8,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onOpenTournament(t),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      padding: 0,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      color: COLORS.gold,
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 10
+  }), t.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14.5,
+      color: COLORS.ink
+    }
+  }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontWeight: 500
+    }
+  }, "vs"), " ", f.teamB)), onScheduleFixture ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPickerOpen(true),
+    className: "cs-btn",
+    "aria-label": "Fixture date and time",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      marginTop: 4,
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: friendlyDateTime ? 600 : 500,
+      color: friendlyDateTime ? COLORS.inkSoft : COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 12
+  }), friendlyDateTime || "Set date & time") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, friendlyDateTime || "Not yet scheduled"), pickerOpen && /*#__PURE__*/React.createElement(FixtureDateTimeModal, {
+    value: f.date || "",
+    onSave: async iso => {
+      // Firestore security rules are the real enforcement here (only the owner can write), not
+      // any client-side check -- so a non-owner's save can still fail server-side even though the
+      // button was tappable. Surface that instead of closing the modal as if it worked.
+      const result = await onScheduleFixture(t, f.id, iso);
+      if (result && result.ok === false) {
+        alert(result.error || "Couldn't schedule this fixture.");
+        return;
+      }
+      setPickerOpen(false);
+    },
+    onClear: f.date ? async () => {
+      const result = await onScheduleFixture(t, f.id, "");
+      if (result && result.ok === false) {
+        alert(result.error || "Couldn't update this fixture.");
+        return;
+      }
+      setPickerOpen(false);
+    } : null,
+    onClose: () => setPickerOpen(false)
+  }));
+}
 function HomeScreen({
   matches,
   onNew,
@@ -13392,6 +13511,7 @@ function HomeScreen({
   tournamentNameById = {},
   tournaments = [],
   onOpenTournament,
+  onScheduleFixture,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -13449,66 +13569,6 @@ function HomeScreen({
   // collapsed) would just be extra taps to find the one match being searched for.
   const inProgressMatches = filteredMatches.filter(m => m.status !== "complete");
   const completedMatches = filteredMatches.filter(m => m.status === "complete");
-  // Shared between the search results view (filteredUpcoming) and the always-visible Upcoming
-  // section below (sortedUpcomingFixtures) so the card only has one definition to keep in sync.
-  function renderUpcomingCard({
-    tournament: t,
-    fixture: f
-  }, i) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: f.id,
-      type: "button",
-      onClick: () => onOpenTournament(t),
-      className: "cs-btn",
-      style: {
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        background: COLORS.surface,
-        border: "none",
-        borderRadius: 12,
-        padding: "12px 14px",
-        marginBottom: 8,
-        cursor: "pointer",
-        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
-        animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        fontFamily: "'Inter'",
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        textTransform: "uppercase",
-        color: COLORS.gold,
-        marginBottom: 2
-      }
-    }, /*#__PURE__*/React.createElement(Trophy, {
-      size: 10
-    }), t.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 14.5,
-        color: COLORS.ink
-      }
-    }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.inkSoft,
-        fontWeight: 500
-      }
-    }, "vs"), " ", f.teamB), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 12,
-        color: COLORS.inkSoft,
-        marginTop: 1
-      }
-    }, formatFixtureDateTime(f.date || "") || "Not yet scheduled"));
-  }
 function renderMatchCard(m, i) {
     return /*#__PURE__*/React.createElement("div", {
     key: m.id,
@@ -13798,7 +13858,17 @@ function renderMatchCard(m, i) {
         marginBottom: 8,
         opacity: 0.75
       }
-    }, "Upcoming"), filteredUpcoming.map(renderUpcomingCard)));
+    }, "Upcoming"), filteredUpcoming.map(({
+      tournament: t,
+      fixture: f
+    }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
+      key: f.id,
+      tournament: t,
+      fixture: f,
+      index: i,
+      onOpenTournament: onOpenTournament,
+      onScheduleFixture: onScheduleFixture
+    }))));
     const showCompleted = completedExpanded || inProgressMatches.length === 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -13826,7 +13896,17 @@ function renderMatchCard(m, i) {
         marginBottom: 8,
         opacity: 0.75
       }
-    }, "Upcoming"), visibleUpcomingFixtures.map(renderUpcomingCard), hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
+    }, "Upcoming"), visibleUpcomingFixtures.map(({
+      tournament: t,
+      fixture: f
+    }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
+      key: f.id,
+      tournament: t,
+      fixture: f,
+      index: i,
+      onOpenTournament: onOpenTournament,
+      onScheduleFixture: onScheduleFixture
+    })), hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: onOpenTournaments,
       className: "cs-btn",
@@ -29599,6 +29679,49 @@ function CricketScorer() {
       ok: true
     };
   }
+  // Lets a fixture's date/time be set right from the Home screen's Upcoming section, without
+  // first navigating into the tournament. Same underlying save as FixturesSection's updateDate
+  // (mirrored below), just addressed by the fixture's own tournament -- via the _clubId/
+  // _federationId tag allTournamentsFlat already attaches to every entry -- instead of reading
+  // viewingTournamentClubId/FederationId state, since Home never opens that screen at all and
+  // that state wouldn't reflect the tournament this fixture actually belongs to.
+  async function handleScheduleFixtureFromHome(tournament, fixtureId, date) {
+    const updated = {
+      ...tournament,
+      fixtures: (tournament.fixtures || []).map(f => f.id === fixtureId ? {
+        ...f,
+        date
+      } : f)
+    };
+    const clubId = tournament._clubId;
+    const federationId = tournament._federationId;
+    if (federationId) {
+      const result = await saveFederationTournament(federationId, updated);
+      if (result.ok) {
+        setFederationTournamentsById(prev => ({
+          ...prev,
+          [federationId]: (prev[federationId] || []).map(t => t.id === updated.id ? updated : t)
+        }));
+      }
+      return result;
+    }
+    if (clubId) {
+      const result = await saveClubTournament(clubId, updated);
+      if (result.ok) {
+        setClubTournamentsById(prev => ({
+          ...prev,
+          [clubId]: (prev[clubId] || []).map(t => t.id === updated.id ? updated : t)
+        }));
+      }
+      return result;
+    }
+    const updatedList = tournaments.map(t => t.id === updated.id ? updated : t);
+    setTournaments(updatedList);
+    await saveTournaments(updatedList);
+    return {
+      ok: true
+    };
+  }
   function handleStartMatchInTournament(t) {
     setPresetTournament(t);
     setScreen("setup");
@@ -29750,6 +29873,7 @@ function CricketScorer() {
       setViewingTournamentFederationId(t._federationId || null);
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
+    onScheduleFixture: handleScheduleFixtureFromHome,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
