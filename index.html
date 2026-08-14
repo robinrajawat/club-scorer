@@ -14292,20 +14292,20 @@ function renderMatchCard(m, i) {
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`)))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
     match: m,
     onGetCode: () => onGetShareCode(m),
     onGetViewCode: () => onGetViewCode(m),
     style: {
       background: COLORS.creamDark,
-      border: "none",
+      border: `1px solid ${COLORS.cardDivider}`,
       color: COLORS.turf,
       width: 32,
       height: 32,
       flexShrink: 0,
       marginLeft: 8
     }
-  })));
+  }))));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
