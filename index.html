@@ -13436,6 +13436,13 @@ function HomeScreen({
     if (!b.fixture.date) return -1;
     return a.fixture.date < b.fixture.date ? -1 : a.fixture.date > b.fixture.date ? 1 : 0;
   });
+  // Capped on the home screen -- a full tournament's fixture list could easily be 20+ games, and
+  // this is meant as a "here's what's next" glance, not a duplicate of the Cups tab (which already
+  // has the complete, unbounded list one tap away). Uncapped in search results below, since a
+  // filtered set is already short and specific.
+  const UPCOMING_HOME_LIMIT = 4;
+  const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
+  const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
   // In progress first (the ones someone likely opened this screen to resume), completed second and
   // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
   // result set is already short and specific, so splitting it into two labeled groups (one likely
@@ -13819,7 +13826,24 @@ function renderMatchCard(m, i) {
         marginBottom: 8,
         opacity: 0.75
       }
-    }, "Upcoming"), sortedUpcomingFixtures.map(renderUpcomingCard)), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, "Upcoming"), visibleUpcomingFixtures.map(renderUpcomingCard), hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: onOpenTournaments,
+      className: "cs-btn",
+      style: {
+        display: "block",
+        width: "100%",
+        textAlign: "center",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "6px 0 2px",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12,
+        color: COLORS.turf
+      }
+    }, "+", hiddenUpcomingCount, " more in Cups")), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? 18 : 0
       }
