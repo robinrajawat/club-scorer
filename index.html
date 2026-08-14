@@ -495,6 +495,7 @@ const GLOBAL_CSS = `
   @keyframes cs-slideUp { from { transform: translateY(28px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes cs-fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes cs-scrim { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes cs-menuPop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes cs-navInRight { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes cs-navInLeft { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes cs-sheetIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -12677,7 +12678,8 @@ function ShareMenu({
     const spaceAbove = btnRect ? btnRect.top - 8 : 0;
     if (btnRect && spaceAbove >= rect.height) {
       setMenuAdjust({
-        top: Math.max(8, btnRect.top - 8 - rect.height)
+        top: Math.max(8, btnRect.top - 8 - rect.height),
+        transformOrigin: "bottom right"
       });
     } else {
       setMenuAdjust({
@@ -12764,7 +12766,7 @@ function ShareMenu({
   const rowLabelStyle = {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     fontSize: 13,
     fontWeight: 700
   };
@@ -12774,12 +12776,24 @@ function ShareMenu({
     margin: "3px 0 8px",
     lineHeight: 1.4
   };
+  const iconChipStyle = {
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    background: "rgba(242,236,217,0.1)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
+  };
   const menu = open && pos && /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     onClick: () => setOpen(false),
     style: {
       position: "fixed",
       inset: 0,
-      zIndex: 100
+      background: "rgba(0,0,0,0.12)",
+      zIndex: 100,
+      animation: "cs-scrim 0.2s ease"
     }
   }), /*#__PURE__*/React.createElement("div", {
     ref: menuRef,
@@ -12791,32 +12805,41 @@ function ShareMenu({
       width: 270,
       background: COLORS.ink,
       color: COLORS.creamFixed,
-      borderRadius: 12,
-      padding: 8,
+      borderRadius: 14,
+      border: "1px solid rgba(242,236,217,0.08)",
+      padding: 10,
       fontFamily: "'Inter'",
-      boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2)",
+      transformOrigin: "top right",
+      animation: "cs-menuPop 0.16s cubic-bezier(0.22, 1, 0.36, 1)",
       zIndex: 101,
       ...menuAdjust
     }
   }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 10px",
-      borderBottom: "1px solid rgba(242,236,217,0.15)"
+      borderBottom: "1px solid rgba(242,236,217,0.1)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: rowLabelStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: iconChipStyle
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
-    size: 14
-  }), "Invite to help score"), /*#__PURE__*/React.createElement("div", {
+    size: 12
+  })), "Invite to help score"), /*#__PURE__*/React.createElement("div", {
     style: rowSubStyle
   }, "Full access \u2014 they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleInviteCopy,
     style: {
       width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
-      borderRadius: 8,
+      borderRadius: 10,
       color: COLORS.creamFixed,
       fontFamily: "'IBM Plex Mono'",
       fontWeight: 600,
@@ -12825,7 +12848,9 @@ function ShareMenu({
       padding: "8px 10px",
       cursor: "pointer"
     }
-  }, copiedWhich === "code" ? "Copied!" : match.shareCode) : /*#__PURE__*/React.createElement("button", {
+  }, copiedWhich === "code" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+    size: 14
+  }), "Copied!") : match.shareCode) : /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleInviteCopy,
     disabled: busy,
@@ -12833,7 +12858,7 @@ function ShareMenu({
       width: "100%",
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
-      borderRadius: 8,
+      borderRadius: 10,
       color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
@@ -12847,9 +12872,11 @@ function ShareMenu({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: rowLabelStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: iconChipStyle
   }, /*#__PURE__*/React.createElement(Users, {
-    size: 14
-  }), "Share live score"), /*#__PURE__*/React.createElement("div", {
+    size: 12
+  })), "Share live score"), /*#__PURE__*/React.createElement("div", {
     style: rowSubStyle
   }, "Read-only \u2014 anyone with the link can watch, not edit."), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12862,9 +12889,13 @@ function ShareMenu({
     disabled: busy,
     style: {
       flex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       background: COLORS.turfFixed,
       border: "none",
-      borderRadius: 8,
+      borderRadius: 10,
       color: "#fff",
       fontFamily: "'Inter'",
       fontWeight: 600,
@@ -12872,15 +12903,21 @@ function ShareMenu({
       padding: "8px 6px",
       cursor: busy ? "default" : "pointer"
     }
-  }, "WhatsApp"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(MessageCircle, {
+    size: 14
+  }), "WhatsApp"), /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleCopyLink,
     disabled: busy,
     style: {
       flex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       background: "rgba(242,236,217,0.1)",
       border: "1px solid rgba(242,236,217,0.3)",
-      borderRadius: 8,
+      borderRadius: 10,
       color: COLORS.creamFixed,
       fontFamily: "'Inter'",
       fontWeight: 600,
@@ -12888,7 +12925,9 @@ function ShareMenu({
       padding: "8px 6px",
       cursor: busy ? "default" : "pointer"
     }
-  }, copiedWhich === "link" ? "Copied!" : "Copy link"))), error && /*#__PURE__*/React.createElement("div", {
+  }, copiedWhich === "link" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+    size: 14
+  }), "Copied!") : "Copy link"))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 2px",
       fontSize: 11.5,
