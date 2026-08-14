@@ -23599,11 +23599,12 @@ function MatchStatsPanel({
     }, "(", b.balls, ")")));
   }), liveInn.bowlerName && /*#__PURE__*/React.createElement("div", {
     style: {
+      marginTop: 8,
+      paddingTop: 8,
+      borderTop: `1px solid ${COLORS.creamDark}`,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: "3px 0",
-      marginTop: 3,
       fontFamily: "'Inter'"
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -23621,7 +23622,9 @@ function MatchStatsPanel({
     }
   }, liveInn.bowlers[liveInn.bowlerName] ? `${oversLabel(liveInn.bowlers[liveInn.bowlerName].ballsBowled, liveInn.ballsPerOver)}-${liveInn.bowlers[liveInn.bowlerName].runs}-${liveInn.bowlers[liveInn.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 12,
+      paddingTop: 10,
+      borderTop: `1px solid ${COLORS.creamDark}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -23633,7 +23636,7 @@ function MatchStatsPanel({
       marginBottom: 8,
       textTransform: "uppercase"
     }
-  }, "This Over"), /*#__PURE__*/React.createElement(OversStrip, {
+  }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
     overs: liveInn.overs,
     ballsPerOver: liveInn.ballsPerOver
   })))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
@@ -23714,7 +23717,7 @@ function MatchStatsPanel({
     style: {
       background: COLORS.surface,
       borderRadius: 16,
-      marginBottom: chartsOpen ? 0 : 14,
+      marginBottom: 14,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)",
       overflow: "hidden"
     }
