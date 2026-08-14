@@ -13651,6 +13651,12 @@ function UpcomingFixtureCard({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [pollCheckBusy, setPollCheckBusy] = useState(false);
+  // Set right before opening the poll modal, only if a still-active poll already exists for this
+  // exact fixture -- without this, "Send poll" always opened straight to a fresh create form
+  // regardless of whether one had already gone out for this fixture, an easy way to accidentally
+  // send a duplicate. Opens to that existing poll's results instead when one's found.
+  const [existingPollCode, setExistingPollCode] = useState(null);
   const [weather, setWeather] = useState(null);
   const friendlyDateTime = formatFixtureDateTime(f.date || "");
   const fixtureDateStr = ISO_DATETIME_RE.test(f.date || "") ? f.date.split("T")[0] : null;
@@ -13824,8 +13830,17 @@ function UpcomingFixtureCard({
     }
   }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), pollTeam && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => setPollModalOpen(true),
+    onClick: async () => {
+      if (pollCheckBusy) return;
+      setPollCheckBusy(true);
+      const pointers = await loadTeamPolls(pollClub.id, pollTeam.id);
+      const existing = pointers.find(p => p.fixtureId === f.id && (expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now()));
+      setPollCheckBusy(false);
+      setExistingPollCode(existing ? existing.code : null);
+      setPollModalOpen(true);
+    },
     className: "cs-btn",
+    disabled: pollCheckBusy,
     "aria-label": "Send availability poll",
     style: {
       display: "flex",
@@ -13837,7 +13852,8 @@ function UpcomingFixtureCard({
       background: COLORS.creamDark,
       border: "none",
       borderRadius: 8,
-      cursor: "pointer",
+      cursor: pollCheckBusy ? "default" : "pointer",
+      opacity: pollCheckBusy ? 0.6 : 1,
       color: COLORS.turf
     }
   }, /*#__PURE__*/React.createElement(Hand, {
@@ -13902,7 +13918,8 @@ function UpcomingFixtureCard({
     clubId: pollClub.id,
     clubName: pollClub.name,
     team: pollTeam,
-    fixtureContext: {
+    initialCode: existingPollCode || undefined,
+    fixtureContext: existingPollCode ? undefined : {
       tournamentId: t.id,
       fixtureId: f.id,
       question: `Available for ${f.teamA} vs ${f.teamB}?`,
@@ -20178,7 +20195,7 @@ function AvailabilityPollModal({
       flex: 1
     }
   }, creating ? "\u2026" : "Create & get link"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setView("list"),
+    onClick: () => fixtureContext ? onClose() : setView("list"),
     style: {
       flex: 1
     }
@@ -20244,6 +20261,10 @@ function AvailabilityPollModal({
     }
   }, "View responses"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => {
+      if (fixtureContext) {
+        onClose();
+        return;
+      }
       setCreatedCode(null);
       setCreatedAt(null);
       setQuestion(`Available for ${team.name}'s next match?`);
