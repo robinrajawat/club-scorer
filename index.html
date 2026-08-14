@@ -13872,32 +13872,39 @@ function PollSummaryCard({
   const [summary, setSummary] = useState(null); // null while loading, [] once loaded with nothing pending
   useEffect(() => {
     let cancelled = false;
+    // Two parallel rounds rather than one round trip after another -- someone in several clubs
+    // with several teams each could otherwise be waiting on a long chain of sequential awaits
+    // before this card ever appears, when every team's pointer fetch (round 1) and every active
+    // poll's full-doc fetch (round 2) has no dependency on any of the others in its own round.
     async function load() {
+      const teamRefs = (clubs || []).flatMap(club => (clubTeamsById[club.id] || []).map(team => ({
+        clubId: club.id,
+        team
+      })));
+      const pointerLists = await Promise.all(teamRefs.map(ref => loadTeamPolls(ref.clubId, ref.team.id)));
+      const activeRefs = teamRefs.flatMap((ref, i) => (pointerLists[i] || []).filter(p => {
+        const ms = expiresAtMillis(p.expiresAt);
+        return ms == null || ms > Date.now();
+      }).map(p => ({
+        team: ref.team,
+        code: p.code
+      })));
+      const fullPolls = await Promise.all(activeRefs.map(ref => loadPollByCode(ref.code)));
       const items = [];
-      for (const club of clubs || []) {
-        const teams = clubTeamsById[club.id] || [];
-        for (const team of teams) {
-          const pointers = await loadTeamPolls(club.id, team.id);
-          const active = pointers.filter(p => {
-            const ms = expiresAtMillis(p.expiresAt);
-            return ms == null || ms > Date.now();
+      activeRefs.forEach((ref, i) => {
+        const full = fullPolls[i];
+        if (!full) return;
+        const roster = full.roster || [];
+        const responded = Object.keys(full.responses || {});
+        const pendingCount = roster.filter(name => !responded.includes(name)).length;
+        if (pendingCount > 0) {
+          items.push({
+            code: ref.code,
+            teamName: ref.team.name,
+            pendingCount
           });
-          for (const p of active) {
-            const full = await loadPollByCode(p.code);
-            if (!full) continue;
-            const roster = full.roster || [];
-            const responded = Object.keys(full.responses || {});
-            const pendingCount = roster.filter(name => !responded.includes(name)).length;
-            if (pendingCount > 0) {
-              items.push({
-                code: p.code,
-                teamName: team.name,
-                pendingCount
-              });
-            }
-          }
         }
-      }
+      });
       if (!cancelled) setSummary(items);
     }
     if (clubs && clubs.length > 0) {
