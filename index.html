@@ -23485,16 +23485,18 @@ function MatchStatsPanel({
     match: match
   }), chasing && /*#__PURE__*/React.createElement("div", {
     style: {
-      margin: "10px 16px 0",
-      maxWidth: 560 - 32,
-      marginLeft: "auto",
-      marginRight: "auto",
-      padding: "10px 14px",
+      display: "flex",
+      justifyContent: "center",
+      margin: "10px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: "100%",
+      padding: "8px 14px",
       borderRadius: 12,
       background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
       color: "#fff",
-      display: "flex",
-      justifyContent: "space-between",
+      display: "inline-flex",
       alignItems: "center",
       gap: 10,
       fontFamily: "'Inter'"
@@ -23509,7 +23511,7 @@ function MatchStatsPanel({
       fontSize: 11.5,
       opacity: 0.85
     }
-  }, "RRR ", chasing.reqRate)), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, "RRR ", chasing.reqRate))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
