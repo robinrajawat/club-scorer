@@ -13276,7 +13276,7 @@ function MatchPollSummary({
       maybe: vals.filter(r => r.status === "maybe").length
     };
   }
-  return /*#__PURE__*/React.createElement(React.Fragment, null, items.map(item => {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, items.map((item, idx) => {
     const c = counts(item.responses);
     return /*#__PURE__*/React.createElement("button", {
       key: item.code,
@@ -13294,7 +13294,8 @@ function MatchPollSummary({
         border: "none",
         borderTop: `1px solid ${COLORS.creamDark}`,
         padding: "9px 14px",
-        cursor: "pointer"
+        cursor: "pointer",
+        animation: `cs-fadeIn 0.25s ease ${idx * 0.04}s backwards`
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
