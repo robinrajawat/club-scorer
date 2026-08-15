@@ -15269,7 +15269,11 @@ function HomeScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
-  onMoveTeam
+  onMoveTeam,
+  // Personal (non-club, non-federation) tournaments/series -- same "just me" scope as teams
+  // above, now that Cups' own My Tournaments tab isn't reachable on its own either.
+  myTournaments = [],
+  onNewTournament
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -15293,6 +15297,9 @@ function HomeScreen({
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
+  // Your Tournaments -- same reasoning as Your Teams above, for personal (non-club,
+  // non-federation) tournaments and series.
+  const [tournamentsExpanded, setTournamentsExpanded] = useState(true);
   // Merges what used to be a separate "Search players" screen into this one search box: same
   // query, a tab to say which directory it's scoped to. The player directory is a full fetch
   // (unlike the matches list, which is already in memory) -- only load it the first time someone
@@ -15793,7 +15800,155 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  }))))))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }))))))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 18,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Your Tournaments"), myTournaments.length > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft
+    }
+  }, `\u00b7 ${myTournaments.length}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onNewTournament,
+    "aria-label": "New tournament",
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "4px 2px"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 14,
+    strokeWidth: 2.5
+  }), "New"), myTournaments.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setTournamentsExpanded(e => !e),
+    className: "cs-btn",
+    "aria-label": tournamentsExpanded ? "Hide your tournaments" : "Show your tournaments",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 6,
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 15,
+    style: {
+      transform: tournamentsExpanded ? "rotate(180deg)" : "none",
+      transition: "transform 0.15s"
+    }
+  })))), (tournamentsExpanded || myTournaments.length === 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: myTournaments.length > 0 ? 10 : 14
+    }
+  }, myTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "20px 10px 6px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "No personal tournaments yet.", /*#__PURE__*/React.createElement("br", null), "Group matches together for a running points table.")) : myTournaments.map((t, i) => /*#__PURE__*/React.createElement("button", {
+    key: t.id,
+    type: "button",
+    onClick: () => onOpenTournament(t),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 12,
+      padding: "12px 12px",
+      cursor: "pointer",
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
+      marginBottom: i === myTournaments.length - 1 ? 0 : 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0,
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, t.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${(t.teams || []).length} teams`)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5,
+      color: TOURNAMENT_STATUS_COLORS[tournamentStatus(t)],
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      flexShrink: 0,
+      marginLeft: 8
+    }
+  }, TOURNAMENT_STATUS_LABELS[tournamentStatus(t)]))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -17826,10 +17981,7 @@ function TournamentsScreen({
       gap: 6,
       marginBottom: 14
     }
-  }, [{
-    key: "mine",
-    label: "My Tournaments"
-  }, ...(clubs.length > 0 ? [{
+  }, [...(clubs.length > 0 ? [{
     key: "clubs",
     label: "Clubs"
   }] : []), ...(myFederations.length > 0 ? [{
@@ -17843,8 +17995,7 @@ function TournamentsScreen({
       // Switching into Clubs/Federations with nothing picked yet defaults to the first one --
       // an empty "pick one" state right after tapping the tab would just be an extra, pointless
       // step when there's an obvious first choice sitting right there.
-      if (t.key === "mine") onSelectSource(null);
-      else if (t.key === "clubs" && !activeClubId) onSelectSource(clubs[0].id);
+      if (t.key === "clubs" && !activeClubId) onSelectSource(clubs[0].id);
       else if (t.key === "federations" && !activeFederationId) onSelectFederationSource(myFederations[0].id);
     },
     className: "cs-btn",
@@ -33032,7 +33183,13 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, null, toClubId)
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, null, toClubId),
+    myTournaments: tournaments,
+    onNewTournament: () => {
+      setActiveTournamentClubId(null);
+      setActiveTournamentFederationId(null);
+      setScreen("tournaments");
+    }
   })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
   }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
