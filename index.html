@@ -15259,7 +15259,16 @@ function HomeScreen({
   onGetShareCode,
   onGetViewCode,
   showInstallHint = false,
-  onDismissInstallHint
+  onDismissInstallHint,
+  // Personal (non-club) teams -- squads private to this account, as opposed to clubTeamsById
+  // above, which belongs to whichever clubs this account administers. Club-owned team management
+  // still lives inside that club's own panel (Clubs tab); this is specifically the "just me,
+  // no club" case, which has nowhere else to live once Teams stops being its own top-level tab.
+  teams = [],
+  onNewTeam,
+  onEditTeam,
+  onDeleteTeam,
+  onMoveTeam
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -15274,6 +15283,15 @@ function HomeScreen({
   // busy club can tuck any of them away once they've seen what's there, not just Completed.
   const [inProgressExpanded, setInProgressExpanded] = useState(true);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+  // Your Teams -- personal squads, shown right on Home now that Teams is no longer its own tab
+  // (club-owned teams live inside that club's own panel instead). Defaults open since, unlike
+  // Completed matches, this is the primary place to reach a team at all now -- folding it away by
+  // default would hide the only entry point.
+  const [teamsExpanded, setTeamsExpanded] = useState(true);
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(null); // team object, or null
+  function teamMatchCount(teamId) {
+    return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
+  }
   // Merges what used to be a separate "Search players" screen into this one search box: same
   // query, a tab to say which directory it's scoped to. The player directory is a full fetch
   // (unlike the matches list, which is already in memory) -- only load it the first time someone
@@ -15574,7 +15592,192 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 17
-  }), " Cups")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), " Cups")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 18,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Your Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft
+    }
+  }, `\u00b7 ${teams.length}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onNewTeam,
+    "aria-label": "New team",
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "4px 2px"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 14,
+    strokeWidth: 2.5
+  }), "New"), teams.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setTeamsExpanded(e => !e),
+    className: "cs-btn",
+    "aria-label": teamsExpanded ? "Hide your teams" : "Show your teams",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 6,
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 15,
+    style: {
+      transform: teamsExpanded ? "rotate(180deg)" : "none",
+      transition: "transform 0.15s"
+    }
+  })))), (teamsExpanded || teams.length === 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: teams.length > 0 ? 10 : 14
+    }
+  }, teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "20px 10px 6px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "No personal teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+    key: t.id,
+    style: {
+      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
+      marginBottom: i === teams.length - 1 ? 0 : 6
+    }
+  }, /*#__PURE__*/React.createElement(SwipeableRow, {
+    onDelete: () => onDeleteTeam(t.id),
+    deleteLabel: "Delete"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cs-row",
+    style: {
+      background: COLORS.creamDark,
+      padding: "12px 12px",
+      borderRadius: 12,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: () => onEditTeam(t),
+    onKeyDown: e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onEditTeam(t);
+      }
+    },
+    role: "button",
+    tabIndex: 0,
+    style: {
+      cursor: "pointer",
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7
+    }
+  }, t.color && /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      width: 11,
+      height: 11,
+      borderRadius: "50%",
+      background: t.color,
+      border: `1px solid ${COLORS.creamDark}`,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, t.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), /*#__PURE__*/React.createElement(MoveTeamMenu, {
+    team: t,
+    clubs: clubs,
+    currentClubId: null,
+    onMove: onMoveTeam
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onEditTeam(t),
+    className: "cs-btn",
+    "aria-label": `Edit ${t.name}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 15
+  })))))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -30971,6 +31174,10 @@ function CricketScorer() {
   // later, unrelated entry into the players screen doesn't reopen a stale profile.
   const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
+  // Which screen to return to after saving/cancelling out of team-edit -- entering from Home
+  // (a personal team) should land back on Home, entering from the Teams tab (personal or a
+  // club's own team) should land back there, same as it always did.
+  const [teamEditReturnScreen, setTeamEditReturnScreen] = useState("teams");
   const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -31879,13 +32086,17 @@ function CricketScorer() {
       document.removeEventListener("touchend", onTouchEnd);
     };
   }, []);
-  async function handleSaveTeam(team) {
-    if (activeClubId) {
-      const result = await saveClubTeam(activeClubId, team);
+  // clubId is passed explicitly (rather than read from ambient activeClubId) so this is correct
+  // no matter where it's called from -- the Teams tab passes its own activeClubId, Home always
+  // passes null (personal). Relying on ambient state here would silently misfile a save under
+  // whatever club happened to be last selected elsewhere in the app.
+  async function handleSaveTeam(team, clubId) {
+    if (clubId) {
+      const result = await saveClubTeam(clubId, team);
       if (result.ok) {
         setClubTeamsById(prev => ({
           ...prev,
-          [activeClubId]: [...(prev[activeClubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
+          [clubId]: [...(prev[clubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
         }));
       }
     } else {
@@ -31895,15 +32106,15 @@ function CricketScorer() {
       setTeams(updated);
       await saveTeams(updated);
     }
-    setScreen("teams");
+    setScreen(teamEditReturnScreen);
     setEditingTeam(null);
   }
-  async function handleDeleteTeam(id) {
-    if (activeClubId) {
-      await deleteClubTeam(activeClubId, id);
+  async function handleDeleteTeam(id, clubId) {
+    if (clubId) {
+      await deleteClubTeam(clubId, id);
       setClubTeamsById(prev => ({
         ...prev,
-        [activeClubId]: (prev[activeClubId] || []).filter(t => t.id !== id)
+        [clubId]: (prev[clubId] || []).filter(t => t.id !== id)
       }));
     } else {
       const updated = teams.filter(t => t.id !== id);
@@ -32661,8 +32872,12 @@ function CricketScorer() {
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   // Copies a team into the destination first, then deletes it from the source — so a failed or
   // denied destination write (e.g. rules not yet published) never loses the team.
-  async function handleMoveTeam(team, toClubId) {
-    const fromClubId = activeClubId;
+  // fromClubId is passed explicitly for the same reason clubId is on handleSaveTeam/
+  // handleDeleteTeam above -- reading ambient activeClubId here would silently assume the team
+  // being moved came from wherever activeClubId currently happens to point, which is wrong (and
+  // effectively duplicates the team without ever removing the original) the moment this is
+  // called from anywhere that isn't the Teams tab, e.g. Home's own team list.
+  async function handleMoveTeam(team, fromClubId, toClubId) {
     if (toClubId === fromClubId) return;
     if (toClubId) {
       const result = await saveClubTeam(toClubId, team);
@@ -32808,7 +33023,22 @@ function CricketScorer() {
     onDismissInstallHint: () => {
       setShowInstallHint(false);
       markInstallHintSeen();
-    }
+    },
+    teams: teams,
+    onNewTeam: () => {
+      setActiveClubId(null);
+      setEditingTeam(null);
+      setTeamEditReturnScreen("home");
+      setScreen("team-edit");
+    },
+    onEditTeam: t => {
+      setActiveClubId(null);
+      setEditingTeam(t);
+      setTeamEditReturnScreen("home");
+      setScreen("team-edit");
+    },
+    onDeleteTeam: id => handleDeleteTeam(id, null),
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, null, toClubId)
   })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
   }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -32844,18 +33074,20 @@ function CricketScorer() {
     matches: matches,
     onNew: () => {
       setEditingTeam(null);
+      setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
     onEdit: t => {
       setEditingTeam(t);
+      setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
-    onDelete: handleDeleteTeam,
+    onDelete: id => handleDeleteTeam(id, activeClubId),
     onBack: () => setScreen("home"),
     clubs: clubs,
     activeClubId: activeClubId,
     onSelectSource: setActiveClubId,
-    onMoveTeam: handleMoveTeam,
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, activeClubId, toClubId),
     currentUid: user && user.uid,
     tab: teamsTab,
     onTabChange: setTeamsTab,
@@ -33093,8 +33325,8 @@ function CricketScorer() {
     onUnpublishPlayer: unpublishPlayer,
     onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
-    onSave: handleSaveTeam,
-    onCancel: () => setScreen("teams")
+    onSave: team => handleSaveTeam(team, activeClubId),
+    onCancel: () => setScreen(teamEditReturnScreen)
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
     match: match
   }), matchLoading && /*#__PURE__*/React.createElement("div", {
