@@ -21897,7 +21897,7 @@ function AvailabilityPollModal({
 }
 function TeamsScreen({
   teams,
-  teamsLoading = false,
+  teamsLoaded = true,
   matches,
   onNew,
   onEdit,
@@ -21905,7 +21905,6 @@ function TeamsScreen({
   onBack,
   clubs,
   activeClubId,
-  onSelectSource,
   onMoveTeam,
   currentUid,
   tab,
@@ -22086,9 +22085,6 @@ function TeamsScreen({
       marginBottom: 18
     }
   }, [{
-    key: "teams",
-    label: "Teams"
-  }, {
     key: "clubs",
     label: "Clubs"
   }, {
@@ -22112,18 +22108,7 @@ function TeamsScreen({
       fontWeight: 700,
       fontSize: 13
     }
-  }, t.label))), tab === "teams" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      marginBottom: 20
-    }
-  }, "Save squads once, then pick players from a list during scoring."), /*#__PURE__*/React.createElement(ClubSourceSelector, {
-    clubs: clubs,
-    activeClubId: activeClubId,
-    onSelect: onSelectSource
-  }), activeClub && canManage && /*#__PURE__*/React.createElement("div", {
+  }, t.label))), tab === "clubs" && activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, activeClub && canManage && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
     borderRadius: 16,
@@ -22633,7 +22618,7 @@ function TeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), activeClubName ? ` New Team in ${activeClubName}` : " New Team"), !canManage && /*#__PURE__*/React.createElement("div", {
+  }), ` New Team in ${activeClubName}`), !canManage && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -22641,7 +22626,7 @@ function TeamsScreen({
       textAlign: "center",
       marginBottom: 20
     }
-  }, `Only the owner of "${activeClubName}" can add or edit teams.`), teamsLoading && teams.length === 0 && !activeClubId ? /*#__PURE__*/React.createElement(LoadingNote, {
+  }, `Only the owner of "${activeClubName}" can add or edit teams.`), !teamsLoaded ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading your teams\u2026",
     size: 26,
     style: {
@@ -22718,7 +22703,7 @@ function TeamsScreen({
     clubs: clubs,
     currentClubId: activeClubId,
     onMove: onMoveTeam
-  }), activeClubId && canManage && /*#__PURE__*/React.createElement("button", {
+  }), canManage && /*#__PURE__*/React.createElement("button", {
     onClick: () => setPollingTeam(t),
     className: "cs-btn",
     style: {
@@ -22764,12 +22749,7 @@ function TeamsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, activeClubName ? `No teams in ${activeClubName} yet.` : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), activeClubName ? "Add one and every member can use it." : "Add one to reuse its line-up in future matches.", !activeClubName && clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 10,
-      fontSize: 12
-    }
-  }, "Looking for your club's team? Switch to a club above \u2014 My Teams only holds squads private to you.")))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, `No teams in ${activeClubName} yet.`, /*#__PURE__*/React.createElement("br", null), "Add one and every member can use it."))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -31137,15 +31117,13 @@ function CricketScorer() {
   // TIMING half of a fix for, without ever getting the visual half.
   const [teamsLoading, setTeamsLoading] = useState(true);
   const [clubs, setClubs] = useState([]);
-  const [activeClubId, setActiveClubId] = useState(null); // null = "My Teams" (personal, private)
-  // Clubs & Federations administration used to be its own screen with its own independent club
-  // selection — now folded into Teams as two more tabs alongside "Teams" itself, so activeClubId
-  // (Teams' own roster-source selector) and activeClubAdminId (which club's admin panel is
-  // expanded, within the Clubs tab) stay two genuinely separate selections, same as before, just
-  // no longer needing a separate return-destination to track (teamsTab controls which tab Teams
-  // opens on, so Account can deep-link straight to the Clubs tab without a whole separate screen).
+  // Single "which club" selector for the Clubs tab -- used to be two separate ones (this one for
+  // Teams' own roster-source selector, another for which club's admin panel is expanded) back
+  // when Teams was its own tab with its own personal-vs-club choice. Now that personal teams live
+  // on Home instead, there's only one remaining question ("which club am I looking at"), so the
+  // two collapsed into this single selector.
   const [activeClubAdminId, setActiveClubAdminId] = useState(null);
-  const [teamsTab, setTeamsTab] = useState("teams"); // teams | clubs | federations
+  const [teamsTab, setTeamsTab] = useState("clubs"); // clubs | federations
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
@@ -31522,7 +31500,7 @@ function CricketScorer() {
       setAuthChecked(true);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
-        setActiveClubId(null); // clubs are signed-in-only; drop out of one if signing out
+        setActiveClubAdminId(null); // clubs are signed-in-only; drop out of one if signing out
         setActiveTournamentClubId(null);
         Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
           setMatches(idx);
@@ -31637,7 +31615,7 @@ function CricketScorer() {
     setTeams(await loadTeams());
     setClubs([]);
     setClubTeamsById({});
-    setActiveClubId(null);
+    setActiveClubAdminId(null);
     setScreen("home");
   }
   async function handleSaveRules(r) {
@@ -32237,7 +32215,6 @@ function CricketScorer() {
       delete next[clubId];
       return next;
     });
-    if (activeClubId === clubId) setActiveClubId(null);
     if (activeClubAdminId === clubId) setActiveClubAdminId(null);
   }
   async function handleDeleteClub(clubId) {
@@ -32250,7 +32227,6 @@ function CricketScorer() {
         delete next[clubId];
         return next;
       });
-      if (activeClubId === clubId) setActiveClubId(null);
       if (activeClubAdminId === clubId) setActiveClubAdminId(null);
     }
     return result;
@@ -32884,7 +32860,8 @@ function CricketScorer() {
     });
     setScreen("setup");
   }
-  const activeTeams = activeClubId ? clubTeamsById[activeClubId] || [] : teams;
+  const activeTeams = clubTeamsById[activeClubAdminId] || [];
+  const activeTeamsLoaded = Array.isArray(clubTeamsById[activeClubAdminId]);
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   // Copies a team into the destination first, then deletes it from the source — so a failed or
   // denied destination write (e.g. rules not yet published) never loses the team.
@@ -33043,13 +33020,13 @@ function CricketScorer() {
     teams: teams,
     teamsLoading: teamsLoading,
     onNewTeam: () => {
-      setActiveClubId(null);
+      setActiveClubAdminId(null);
       setEditingTeam(null);
       setTeamEditReturnScreen("home");
       setScreen("team-edit");
     },
     onEditTeam: t => {
-      setActiveClubId(null);
+      setActiveClubAdminId(null);
       setEditingTeam(t);
       setTeamEditReturnScreen("home");
       setScreen("team-edit");
@@ -33071,7 +33048,7 @@ function CricketScorer() {
     teams: allTeamsForSetup,
     rules: rules,
     presetTournament: presetTournament,
-    clubUmpires: (activeClubId && (clubs.find(c => c.id === activeClubId) || {}).umpires) || []
+    clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || []
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
@@ -33087,7 +33064,7 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
     teams: activeTeams,
-    teamsLoading: teamsLoading,
+    teamsLoaded: activeTeamsLoaded,
     matches: matches,
     onNew: () => {
       setEditingTeam(null);
@@ -33099,12 +33076,11 @@ function CricketScorer() {
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
-    onDelete: id => handleDeleteTeam(id, activeClubId),
+    onDelete: id => handleDeleteTeam(id, activeClubAdminId),
     onBack: () => setScreen("home"),
     clubs: clubs,
-    activeClubId: activeClubId,
-    onSelectSource: setActiveClubId,
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, activeClubId, toClubId),
+    activeClubId: activeClubAdminId,
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, activeClubAdminId, toClubId),
     currentUid: user && user.uid,
     tab: teamsTab,
     onTabChange: setTeamsTab,
@@ -33230,7 +33206,8 @@ function CricketScorer() {
     profile: profile,
     myPlayer: myPlayer,
     onOpenClub: clubId => {
-      setActiveClubId(clubId);
+      setActiveClubAdminId(clubId);
+      setTeamsTab("clubs");
       setScreen("teams");
     },
     isBetaTester: isBetaTester,
@@ -33336,13 +33313,13 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
-    clubId: activeClubId,
+    clubId: activeClubAdminId,
     clubs: clubs,
     onPublishPlayer: publishPlayer,
     onUnpublishPlayer: unpublishPlayer,
     onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
-    onSave: team => handleSaveTeam(team, activeClubId),
+    onSave: team => handleSaveTeam(team, activeClubAdminId),
     onCancel: () => setScreen(teamEditReturnScreen)
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
     match: match
