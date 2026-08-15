@@ -43,6 +43,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -653,6 +654,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
 // ---------- Feedback & error reporting ----------
 // One write-only collection for both: a person's own message ("feedback") and an
 // automatically-captured crash ("error"). Write-only by design (see firestore.rules — create is
@@ -2391,6 +2393,99 @@ async function updateClubDescription(clubId, description) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the club owner can edit the description." : e.message || "Couldn't update the description."
+    };
+  }
+}
+// Owner-only. Stored alongside lat/lng (from the same Nominatim search as the venue field, see
+// searchAddress) so this club's ground can be offered as a ready-made suggestion when setting a
+// fixture's venue, rather than every fixture re-searching the same address from scratch.
+async function updateClubAddress(clubId, address, lat, lng) {
+  try {
+    await db.collection("clubs").doc(clubId).update({
+      address: (address || "").trim(),
+      addressLat: lat != null ? lat : null,
+      addressLng: lng != null ? lng : null
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can edit the address." : e.message || "Couldn't update the address."
+    };
+  }
+}
+// Downscales/re-encodes an image client-side before it ever leaves the device -- a phone photo can
+// easily be 4000px/several MB, and a logo only ever renders at a few dozen px on screen, so
+// uploading the original wastes the person's data and inflates Storage costs for no visible
+// benefit. Caps the longest edge at maxSize and re-encodes as JPEG at a fixed quality, which is
+// more than enough fidelity for a small circular logo and keeps the output predictably small
+// regardless of the source format (HEIC exports from iOS aside -- the browser's own <img> decoder
+// handles whatever format the file actually is, this only touches the canvas/output stage).
+function resizeImageToBlob(file, maxSize) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Couldn't process that image.")), "image/jpeg", 0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That doesn't look like a valid image."));
+    };
+    img.src = url;
+  });
+}
+// Owner-only (matched by storage.rules, same trust boundary as the Firestore update right after --
+// both keyed on the caller being this club's ownerUid). Deterministic path (no random filename)
+// so re-uploading a new logo simply overwrites the old object instead of leaving orphaned files
+// behind in Storage with nothing left pointing at them.
+async function uploadClubLogo(clubId, file) {
+  try {
+    const blob = await resizeImageToBlob(file, 512);
+    const ref = storage.ref().child(`club-logos/${clubId}.jpg`);
+    await ref.put(blob, {
+      contentType: "image/jpeg"
+    });
+    const logoURL = await ref.getDownloadURL();
+    await db.collection("clubs").doc(clubId).update({
+      logoURL
+    });
+    return {
+      ok: true,
+      logoURL
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "storage/unauthorized" || e.code === "permission-denied" ? "Only the club owner can change the logo." : e.message || "Couldn't upload the logo."
+    };
+  }
+}
+async function removeClubLogo(clubId) {
+  try {
+    await storage.ref().child(`club-logos/${clubId}.jpg`).delete().catch(e => {
+      if (e.code !== "storage/object-not-found") throw e; // already gone -- fine, just clear the field below
+    });
+    await db.collection("clubs").doc(clubId).update({
+      logoURL: firebase.firestore.FieldValue.delete()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the club owner can remove the logo." : e.message || "Couldn't remove the logo."
     };
   }
 }
@@ -10107,6 +10202,9 @@ function ClubPanel({
   onDelete,
   onRename,
   onUpdateDescription,
+  onUpdateAddress,
+  onUploadLogo,
+  onRemoveLogo,
   federationsById = {},
   onLeaveFederation,
   onRemoveMember,
@@ -10142,6 +10240,59 @@ function ClubPanel({
   const [descEditing, setDescEditing] = useState(false);
   const [descText, setDescText] = useState("");
   const [descBusy, setDescBusy] = useState(false);
+  const [addressText, setAddressText] = useState("");
+  const [addressCoords, setAddressCoords] = useState(null); // {lat,lng} from a picked suggestion, cleared on further hand-editing -- same "coords must match the exact text that produced them" reasoning as VenueEditModal
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [addressSearching, setAddressSearching] = useState(false);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState("");
+  // Debounced address search for the club-details form, identical in shape to VenueEditModal's own
+  // (same Nominatim endpoint, same 400ms pause-before-searching, same policy reasoning) -- not
+  // extracted into one shared component since the two forms differ in everything around the search
+  // itself (inline vs modal, what "save" does), and duplicating just this one effect is simpler
+  // than threading a shared hook through both call shapes.
+  useEffect(() => {
+    if (!descEditing || addressCoords) return;
+    const q = addressText.trim();
+    if (q.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+    setAddressSearching(true);
+    const handle = setTimeout(async () => {
+      const results = await searchAddress(q);
+      setAddressSuggestions(results);
+      setAddressSearching(false);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [addressText, addressCoords, descEditing]);
+  function pickAddressSuggestion(s) {
+    setAddressText(s.label);
+    setAddressCoords({
+      lat: s.lat,
+      lng: s.lng
+    });
+    setAddressSuggestions([]);
+  }
+  async function handleLogoPick(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // let picking the same file again re-fire onChange
+    if (!file || !activeClub) return;
+    setLogoBusy(true);
+    setLogoError("");
+    const result = await onUploadLogo(activeClub.id, file);
+    setLogoBusy(false);
+    if (!result.ok) setLogoError(result.error || "Couldn't upload the logo.");
+  }
+  async function handleLogoRemove() {
+    if (!activeClub || logoBusy) return;
+    setLogoBusy(true);
+    setLogoError("");
+    const result = await onRemoveLogo(activeClub.id);
+    setLogoBusy(false);
+    if (!result.ok) setLogoError(result.error || "Couldn't remove the logo.");
+  }
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberBusyUid, setMemberBusyUid] = useState(null);
   const [confirmRemoveMember, setConfirmRemoveMember] = useState(null); // { uid, name } | null
@@ -10290,12 +10441,18 @@ function ClubPanel({
   }
   function startDescEdit() {
     setDescText(activeClub.description || "");
+    setAddressText(activeClub.address || "");
+    setAddressCoords(activeClub.addressLat != null && activeClub.addressLng != null ? {
+      lat: activeClub.addressLat,
+      lng: activeClub.addressLng
+    } : null);
     setDescEditing(true);
   }
-  // A single "Edit club details" entry point covering both the name and description —
-  // previously these were two separate pencil buttons in Manage, which made a simple identity
-  // edit feel like two different tasks. Reuses the existing rename/description state and submit
-  // logic rather than duplicating it, just drives both together.
+  // A single "Edit club details" entry point covering name, description, and address — previously
+  // name/description were two separate pencil buttons in Manage, which made a simple identity edit
+  // feel like two different tasks; address joined the same form for the same reason. Reuses the
+  // existing rename/description state and submit logic rather than duplicating it, just drives all
+  // three together.
   function startEditDetails() {
     startRename();
     startDescEdit();
@@ -10303,26 +10460,36 @@ function ClubPanel({
   function cancelEditDetails() {
     setRenaming(false);
     setDescEditing(false);
+    setAddressSuggestions([]);
   }
   async function submitEditDetails() {
-    if (!renameText.trim() || renameBusy || descBusy) return;
+    if (!renameText.trim() || renameBusy || descBusy || addressBusy) return;
     const nameChanged = renameText.trim() !== activeClub.name;
     const descChanged = descText.trim() !== (activeClub.description || "");
+    const addressChanged = addressText.trim() !== (activeClub.address || "");
     setRenameBusy(nameChanged);
     setDescBusy(descChanged);
-    const [renameResult, descResult] = await Promise.all([nameChanged ? onRename(activeClub.id, renameText.trim()) : Promise.resolve({
+    setAddressBusy(addressChanged);
+    const [renameResult, descResult, addressResult] = await Promise.all([nameChanged ? onRename(activeClub.id, renameText.trim()) : Promise.resolve({
       ok: true
     }), descChanged ? onUpdateDescription(activeClub.id, descText.trim()) : Promise.resolve({
+      ok: true
+    }), addressChanged ? onUpdateAddress(activeClub.id, addressText.trim(), addressCoords ? addressCoords.lat : null, addressCoords ? addressCoords.lng : null) : Promise.resolve({
       ok: true
     })]);
     setRenameBusy(false);
     setDescBusy(false);
+    setAddressBusy(false);
     if (!renameResult.ok) {
       setError(renameResult.error || "Couldn't rename the club.");
       return;
     }
     if (!descResult.ok) {
       setError(descResult.error || "Couldn't update the description.");
+      return;
+    }
+    if (!addressResult.ok) {
+      setError(addressResult.error || "Couldn't update the address.");
       return;
     }
     setRenaming(false);
@@ -10471,7 +10638,40 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 10,
       marginBottom: 8
+    }
+  }, activeClub.logoURL ? /*#__PURE__*/React.createElement("img", {
+    src: activeClub.logoURL,
+    alt: "",
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: "50%",
+      objectFit: "cover",
+      flexShrink: 0
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: "50%",
+      background: playerAvatarColor(activeClub.name),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 14,
+      flexShrink: 0
+    }
+  }, activeClub.name.charAt(0).toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0,
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10547,13 +10747,19 @@ function ClubPanel({
       fontWeight: 700,
       fontSize: 11
     }
-  }, manageOpen ? "Done" : "Manage"))), activeClub.description && /*#__PURE__*/React.createElement("div", {
+  }, manageOpen ? "Done" : "Manage")))), activeClub.description && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.inkSoft,
       fontSize: 12,
       marginBottom: 8
     }
-  }, activeClub.description), /*#__PURE__*/React.createElement("div", {
+  }, activeClub.description), activeClub.address && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 11.5,
+      marginBottom: 8
+    }
+  }, "\uD83D\uDCCD ", activeClub.address), /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.inkSoft,
       marginBottom: 8,
@@ -10600,7 +10806,89 @@ function ClubPanel({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Manage club"), onRename && (renaming || descEditing) ? /*#__PURE__*/React.createElement("div", {
+  }, "Manage club"), onRename && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14
+    }
+  }, activeClub.logoURL ? /*#__PURE__*/React.createElement("img", {
+    src: activeClub.logoURL,
+    alt: "",
+    style: {
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      objectFit: "cover",
+      flexShrink: 0
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      background: playerAvatarColor(activeClub.name),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 15,
+      flexShrink: 0
+    }
+  }, activeClub.name.charAt(0).toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      cursor: logoBusy ? "default" : "pointer",
+      opacity: logoBusy ? 0.6 : 1,
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5
+    }
+  }, logoBusy ? "Uploading\u2026" : activeClub.logoURL ? "Change logo" : "Add logo", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    onChange: handleLogoPick,
+    disabled: logoBusy,
+    style: {
+      display: "none"
+    }
+  })), activeClub.logoURL && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: handleLogoRemove,
+    disabled: logoBusy,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      cursor: logoBusy ? "default" : "pointer",
+      opacity: logoBusy ? 0.6 : 1,
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5
+    }
+  }, "Remove"))), logoError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.live,
+      marginBottom: 10
+    }
+  }, logoError), onRename && (renaming || descEditing) ? /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -10626,21 +10914,67 @@ function ClubPanel({
     style: {
       marginBottom: 8
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement(TextField, {
+    value: addressText,
+    onChange: v => {
+      setAddressText(v);
+      setAddressCoords(null);
+    },
+    placeholder: "Home ground address (optional)",
+    autoCapitalize: "words",
+    autoCorrect: "off",
+    autoComplete: "off",
+    spellCheck: false,
+    style: {
+      marginBottom: addressCoords || addressSuggestions.length > 0 ? 5 : 8
+    }
+  }), addressCoords && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.turf,
+      marginBottom: 8
+    }
+  }, "\u2713 Address verified \u2014 this ground can be picked when setting a fixture's venue"), addressSuggestions.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 8,
+      border: `1px solid ${COLORS.cardDivider}`,
+      borderRadius: 10,
+      overflow: "hidden"
+    }
+  }, addressSuggestions.map((s, idx) => /*#__PURE__*/React.createElement("button", {
+    key: idx,
+    type: "button",
+    onClick: () => pickAddressSuggestion(s),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderBottom: idx < addressSuggestions.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
+      padding: "8px 10px",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ink
+    }
+  }, s.label))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
     }
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: submitEditDetails,
-    disabled: renameBusy || descBusy || !renameText.trim(),
+    disabled: renameBusy || descBusy || addressBusy || !renameText.trim(),
     style: {
       flexShrink: 0,
       padding: "0 14px",
       minHeight: 38,
       fontSize: 12.5
     }
-  }, renameBusy || descBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
+  }, renameBusy || descBusy || addressBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
     onClick: cancelEditDetails,
     style: {
       background: "none",
@@ -13901,6 +14235,7 @@ function VenueEditModal({
   value,
   initialLat,
   initialLng,
+  clubs = [],
   onSave,
   onClose
 }) {
@@ -13917,24 +14252,41 @@ function VenueEditModal({
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Most fixtures actually happen at a ground the person's own club already has an address for
+  // (see updateClubAddress) -- surfacing those first, before any free-text search, means the
+  // common case is a single tap instead of retyping/re-searching an address that's already on
+  // file. Shown with no query needed (an empty venue field lists every club with a saved address)
+  // and narrowed by name or address text once typing starts; only clubs with verified coordinates
+  // count, since an unverified address string wouldn't give the weather card anything usable
+  // anyway. Falls through to the existing free-text Nominatim search below regardless -- this is a
+  // shortcut in front of that, not a replacement for it.
+  const q = venue.trim().toLowerCase();
+  const clubMatches = coords ? [] : clubs.filter(c => c.address && c.addressLat != null && c.addressLng != null).filter(c => !q || c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q));
   // Debounced address search -- one Nominatim request per pause in typing, not per keystroke, both
   // to stay comfortably under their 1 request/second usage policy and because there's no reason to
   // search on every character.
   useEffect(() => {
     if (coords) return; // just picked a suggestion -- don't immediately re-search its own label
-    const q = venue.trim();
-    if (q.length < 3) {
+    if (venue.trim().length < 3) {
       setSuggestions([]);
       return;
     }
     setSearching(true);
     const handle = setTimeout(async () => {
-      const results = await searchAddress(q);
+      const results = await searchAddress(venue.trim());
       setSuggestions(results);
       setSearching(false);
     }, 400);
     return () => clearTimeout(handle);
   }, [venue, coords]);
+  function pickClub(c) {
+    setVenueValue(c.address);
+    setCoords({
+      lat: c.addressLat,
+      lng: c.addressLng
+    });
+    setSuggestions([]);
+  }
   function pickSuggestion(s) {
     setVenueValue(s.label);
     setCoords({
@@ -13972,7 +14324,7 @@ function VenueEditModal({
     },
     placeholder: "e.g. Riverside Ground",
     onKeyDown: e => {
-      if (e.key === "Enter" && suggestions.length === 0) save();
+      if (e.key === "Enter" && suggestions.length === 0 && clubMatches.length === 0) save();
     }
   }), coords && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13981,7 +14333,67 @@ function VenueEditModal({
       color: COLORS.turf,
       marginTop: 5
     }
-  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), !coords && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
+  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), clubMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Your clubs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      border: `1px solid ${COLORS.cardDivider}`,
+      borderRadius: 10,
+      overflow: "hidden"
+    }
+  }, clubMatches.map((c, idx) => /*#__PURE__*/React.createElement("button", {
+    key: c.id,
+    type: "button",
+    onClick: () => pickClub(c),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderBottom: idx < clubMatches.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
+      padding: "8px 10px",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ink
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0
+    }
+  }, "\uD83C\uDFDF\uFE0F"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600
+    }
+  }, c.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, c.address)))))), !coords && clubMatches.length === 0 && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -14327,6 +14739,7 @@ function UpcomingFixtureCard({
     value: t.venue || "",
     initialLat: t.venueLat,
     initialLng: t.venueLng,
+    clubs: clubs,
     onSave: (venue, lat, lng) => onEditVenue(t, venue, lat, lng),
     onClose: () => setVenueModalOpen(false)
   }), pollTeamPickerOpen && /*#__PURE__*/React.createElement(Modal, {
@@ -20874,6 +21287,9 @@ function TeamsScreen({
   onDeleteClub,
   onRenameClub,
   onUpdateClubDescription,
+  onUpdateClubAddress,
+  onUploadClubLogo,
+  onRemoveClubLogo,
   onSetClubVisibility,
   onRemoveClubMember,
   onRemoveClubCoOwner,
@@ -21184,6 +21600,9 @@ function TeamsScreen({
     onDelete: onDeleteClub,
     onRename: onRenameClub,
     onUpdateDescription: onUpdateClubDescription,
+    onUpdateAddress: onUpdateClubAddress,
+    onUploadLogo: onUploadClubLogo,
+    onRemoveLogo: onRemoveClubLogo,
     federationsById: federationsById,
     onLeaveFederation: onLeaveFederation,
     onRemoveMember: onRemoveClubMember,
@@ -30543,6 +30962,43 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleUpdateClubAddress(clubId, address, lat, lng) {
+    const trimmed = (address || "").trim();
+    const result = await updateClubAddress(clubId, trimmed, lat, lng);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        address: trimmed,
+        addressLat: lat != null ? lat : null,
+        addressLng: lng != null ? lng : null
+      } : c));
+    }
+    return result;
+  }
+  async function handleUploadClubLogo(clubId, file) {
+    const result = await uploadClubLogo(clubId, file);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => c.id === clubId ? {
+        ...c,
+        logoURL: result.logoURL
+      } : c));
+    }
+    return result;
+  }
+  async function handleRemoveClubLogo(clubId) {
+    const result = await removeClubLogo(clubId);
+    if (result.ok) {
+      setClubs(cs => cs.map(c => {
+        if (c.id !== clubId) return c;
+        const next = {
+          ...c
+        };
+        delete next.logoURL;
+        return next;
+      }));
+    }
+    return result;
+  }
   async function handleAddUmpire(clubId, name) {
     const trimmed = (name || "").trim();
     const result = await addClubUmpire(clubId, trimmed);
@@ -31291,6 +31747,9 @@ function CricketScorer() {
     onDeleteClub: handleDeleteClub,
     onRenameClub: handleRenameClub,
     onUpdateClubDescription: handleUpdateClubDescription,
+    onUpdateClubAddress: handleUpdateClubAddress,
+    onUploadClubLogo: handleUploadClubLogo,
+    onRemoveClubLogo: handleRemoveClubLogo,
     onSetClubVisibility: handleSetClubVisibility,
     onRemoveClubMember: handleRemoveMember,
     onRemoveClubCoOwner: handleRemoveClubCoOwner,
