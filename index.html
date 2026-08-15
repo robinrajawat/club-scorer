@@ -2649,6 +2649,40 @@ async function removePoolPlayer(clubId, playerId) {
     };
   }
 }
+// Splits one CSV line respecting RFC 4180 quoting -- naive comma-split breaks the moment any
+// field is quoted, whether because it genuinely contains a comma (a team name like "Ikast-Brande,
+// Denmark") or because the spreadsheet app that saved it just quotes every field regardless. Only
+// used for the comma-delimited branch below; a tab-separated paste from Excel/Sheets never quotes
+// fields this way, so it's handled by a plain split there.
+function parseCsvLine(line) {
+  const cells = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
 // Parses pasted player rows for the club pool's bulk-add box — accepts tab-separated input
 // (pasted straight from Excel/Sheets/Numbers) or comma-separated (a .csv opened in a text
 // editor), one player per line. Tolerant of a leading numeric "No" index column (dropped) since
@@ -2693,9 +2727,15 @@ function parseBulkPlayers(text) {
   const lines = (text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const rows = [];
   for (const line of lines) {
-    const cells = (line.includes("\t") ? line.split("\t") : line.split(",")).map(c => c.trim().replace(/^\uFEFF/, ""));
+    const cells = (line.includes("\t") ? line.split("\t") : parseCsvLine(line)).map(c => c.trim().replace(/^\uFEFF/, ""));
     if (cells.length === 0 || cells.every(c => !c)) continue;
     if (cells.some(c => HEADER_WORDS.has(c.toLowerCase()))) continue; // header row, not data
+    // A federation export's title row (e.g. Dansk Cricket Forbund's own sheet has "Dansk Cricket
+    // Forbund" alone in the first cell, everything else blank) reads exactly like a bare one-word
+    // name with no role/team when copy-pasted raw -- catch it by name specifically, rather than
+    // by shape, so a genuine single-name row (someone bulk-adding just one player with no role or
+    // team yet) still imports normally instead of getting caught by the same check.
+    if (cells.slice(1).every(c => !c) && /^dansk cricket forbund$/i.test(cells[0])) continue;
     const withoutIndex = /^\d+$/.test(cells[0]) ? cells.slice(1) : cells; // drop leading "No" column
     if (withoutIndex.length === 0 || !withoutIndex[0]) continue;
     const rawName = withoutIndex[0];
