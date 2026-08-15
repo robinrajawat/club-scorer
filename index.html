@@ -2657,12 +2657,16 @@ async function removePoolPlayer(clubId, playerId) {
 // as a free-text team/division label -- U13, U15, U19, Senior, Men, Women, an actual squad name,
 // whatever the club uses -- kept on the pool entry itself so it can be visible and used to filter
 // when picking players onto a real team later; it's a plain label, not a link to one of the app's
-// own Team objects. Also reads a trailing parenthetical on the name -- "Rohit Sharma (C)" or
-// "MS Dhoni (C/WK)" flags captain/keeper the way scorecards commonly write them; anything else in
-// parens (e.g. "Abhinav Sarangi (4190964)") is treated as a registration number instead, since the
-// app has nowhere else to put it. Only Name is required. Role is matched against PLAYER_ROLES with
-// a few extra synonyms — "Wicket Keeper" isn't one of PLAYER_ROLES' three values (keeper is a
-// separate per-team designation set from the roster row itself, see TeamEditScreen's keeper
+// own Team objects. A 4th column is read as an external/registration ID and kept on its own field
+// (externalId) rather than folded into a free-text note. If there's no dedicated ID column, a
+// trailing parenthetical on the name is still checked as a fallback -- "Abhinav Sarangi
+// (4190964)" -- since that's exactly how a raw federation export embeds it in the name itself
+// with no separate column at all. Either way it never stays part of the display name. That same
+// parenthetical is checked first for a captain/keeper marker instead -- "Rohit Sharma (C)" or
+// "MS Dhoni (C/WK)" flags captain/keeper the way scorecards commonly write them -- so a marker
+// there is never mistaken for an ID. Only Name is required. Role is matched against PLAYER_ROLES
+// with a few extra synonyms — "Wicket Keeper" isn't one of PLAYER_ROLES' three values (keeper is
+// a separate per-team designation set from the roster row itself, see TeamEditScreen's keeper
 // picker, not a batting/bowling category), so those rows come back flagged via isKeeperNote
 // instead of silently losing the role -- same treatment for a captain marker via isCaptainNote,
 // since captain is likewise set on the team roster, not stored on the pool entry itself. The
@@ -2685,7 +2689,7 @@ function parseBulkPlayers(text) {
   };
   const CAPTAIN_MARKERS = new Set(["c", "capt", "captain"]);
   const KEEPER_MARKERS = new Set(["wk", "keeper", "wicket keeper", "wicketkeeper"]);
-  const HEADER_WORDS = new Set(["name", "player", "player name", "no", "no.", "role", "player role", "team", "division", "age group", "squad"]);
+  const HEADER_WORDS = new Set(["name", "player", "player name", "no", "no.", "role", "player role", "team", "division", "age group", "squad", "id", "player id", "external id", "reg", "reg no", "reg no.", "registration", "registration no"]);
   const lines = (text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const rows = [];
   for (const line of lines) {
@@ -2697,13 +2701,15 @@ function parseBulkPlayers(text) {
     const rawName = withoutIndex[0];
     const rawRole = withoutIndex[1] || "";
     const rawTeam = withoutIndex[2] || "";
+    const rawId = withoutIndex[3] || "";
     const idMatch = rawName.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
     const name = (idMatch ? idMatch[1] : rawName).trim();
     if (!name) continue;
     const parenParts = idMatch ? idMatch[2].toLowerCase().split(/[\/,&]+/).map(s => s.trim()).filter(Boolean) : [];
     const parenIsCaptain = parenParts.some(p => CAPTAIN_MARKERS.has(p));
     const parenIsKeeper = parenParts.some(p => KEEPER_MARKERS.has(p));
-    const regNo = idMatch && !parenIsCaptain && !parenIsKeeper ? idMatch[2].trim() : "";
+    const parenRegNo = idMatch && !parenIsCaptain && !parenIsKeeper ? idMatch[2].trim() : "";
+    const regNo = rawId.trim() || parenRegNo;
     const roleKey = rawRole.trim().toLowerCase();
     rows.push({
       name,
@@ -22123,7 +22129,7 @@ function TeamsScreen({
     fontFamily: "'Inter'",
     marginBottom: 6
   }
-}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, role, then team/division (e.g. U13, U19, Senior, Men, Women). A leading number column is ignored. Add \u201c(C)\u201d or \u201c(WK)\u201d after a name to flag captain/keeper \u2014 both are set on the team roster once they're added, not stored on the pool entry itself. A federation ID in parens, e.g. \u201cVivek Srivastava (5037351)\u201d, is kept as that player's external ID."), /*#__PURE__*/React.createElement("div", {
+}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, role, team/division (e.g. U13, U19, Senior, Men, Women), then a registration/external ID. A leading number column is ignored. Add \u201c(C)\u201d or \u201c(WK)\u201d after a name to flag captain/keeper \u2014 both are set on the team roster once they're added, not stored on the pool entry itself. No dedicated ID column? An ID in parens on the name, e.g. \u201cVivek Srivastava (5037351)\u201d, still works as a fallback."), /*#__PURE__*/React.createElement("div", {
   style: {
     display: "flex",
     gap: 14,
@@ -22132,7 +22138,7 @@ function TeamsScreen({
   }
 }, /*#__PURE__*/React.createElement("button", {
   type: "button",
-  onClick: () => downloadCSV("player-pool-template", ["Name", "Role", "Team"], [["Virat Kohli (C)", "Batsman", "Men"], ["MS Dhoni (WK)", "Batsman", "Senior"], ["Bumrah", "Bowler", "Men"]]),
+  onClick: () => downloadCSV("player-pool-template", ["Name", "Role", "Team", "ID"], [["Virat Kohli (C)", "Batsman", "Men", "1234567"], ["MS Dhoni (WK)", "Batsman", "Senior", "2345678"], ["Bumrah", "Bowler", "Men", ""]]),
   style: {
     background: "none",
     border: "none",
@@ -22176,7 +22182,7 @@ function TeamsScreen({
 })), /*#__PURE__*/React.createElement("textarea", {
   value: bulkText,
   onChange: e => setBulkText(e.target.value),
-  placeholder: "Virat Kohli (C)\tBatsman\tMen\nMS Dhoni (WK)\tBatsman\tSenior\nBumrah\tBowler\tMen",
+  placeholder: "Virat Kohli (C)\tBatsman\tMen\t1234567\nMS Dhoni (WK)\tBatsman\tSenior\t2345678\nBumrah\tBowler\tMen",
   rows: 5,
   style: {
     width: "100%",
