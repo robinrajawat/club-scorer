@@ -5325,6 +5325,12 @@ function pollExpiryDateLabel(createdAt) {
 // all of those). Prefers verified coordinates (from a picked address suggestion -- see
 // VenueEditModal/updateClubAddress) since a coordinate pair is unambiguous; a plain venue string
 // still works as a text search when nothing's been verified, just less precisely.
+// Club logo upload is fully built (uploadClubLogo/removeClubLogo/resizeImageToBlob below, plus
+// storage.rules in the repo) but switched off here: Firebase Storage now requires the Blaze
+// (pay-as-you-go) plan as of Feb 2026 -- this project is on Spark and staying there for now, so
+// every upload would just fail. One flag rather than deleting the feature, so turning it back on
+// later (if the plan ever changes) is flipping this to true, not rebuilding it from scratch.
+const CLUB_LOGO_UPLOAD_ENABLED = false;
 function buildMapsUrl(venue, lat, lng) {
   if (lat != null && lng != null) {
     return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -10654,7 +10660,7 @@ function ClubPanel({
       gap: 10,
       marginBottom: 8
     }
-  }, activeClub.logoURL ? /*#__PURE__*/React.createElement("img", {
+  }, CLUB_LOGO_UPLOAD_ENABLED && (activeClub.logoURL ? /*#__PURE__*/React.createElement("img", {
     src: activeClub.logoURL,
     alt: "",
     style: {
@@ -10679,7 +10685,7 @@ function ClubPanel({
       fontSize: 14,
       flexShrink: 0
     }
-  }, activeClub.name.charAt(0).toUpperCase()), /*#__PURE__*/React.createElement("div", {
+  }, activeClub.name.charAt(0).toUpperCase())), /*#__PURE__*/React.createElement("div", {
     style: {
       minWidth: 0,
       flex: 1
@@ -10817,7 +10823,7 @@ function ClubPanel({
       color: COLORS.pitch,
       marginBottom: 10
     }
-  }, "Manage club"), onRename && /*#__PURE__*/React.createElement("div", {
+  }, "Manage club"), onRename && CLUB_LOGO_UPLOAD_ENABLED && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -10892,7 +10898,7 @@ function ClubPanel({
       fontWeight: 600,
       fontSize: 11.5
     }
-  }, "Remove"))), logoError && /*#__PURE__*/React.createElement("div", {
+  }, "Remove"))), CLUB_LOGO_UPLOAD_ENABLED && logoError && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
