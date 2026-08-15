@@ -2685,27 +2685,40 @@ function parseCsvLine(line) {
 }
 // Parses pasted player rows for the club pool's bulk-add box — accepts tab-separated input
 // (pasted straight from Excel/Sheets/Numbers) or comma-separated (a .csv opened in a text
-// editor), one player per line. Tolerant of a leading numeric "No" index column (dropped) since
-// that's exactly the shape a federation-style affiliated-player export tends to come in (e.g.
-// Dansk Cricket Forbund's "No / Player Name / Player Role / Team" template). A 3rd column is read
-// as a free-text team/division label -- U13, U15, U19, Senior, Men, Women, an actual squad name,
-// whatever the club uses -- kept on the pool entry itself so it can be visible and used to filter
-// when picking players onto a real team later; it's a plain label, not a link to one of the app's
-// own Team objects. A 4th column is read as an external/registration ID and kept on its own field
-// (externalId) rather than folded into a free-text note. If there's no dedicated ID column, a
-// trailing parenthetical on the name is still checked as a fallback -- "Abhinav Sarangi
-// (4190964)" -- since that's exactly how a raw federation export embeds it in the name itself
-// with no separate column at all. Either way it never stays part of the display name. That same
-// parenthetical is checked first for a captain/keeper marker instead -- "Rohit Sharma (C)" or
-// "MS Dhoni (C/WK)" flags captain/keeper the way scorecards commonly write them -- so a marker
-// there is never mistaken for an ID. Only Name is required. Role is matched against PLAYER_ROLES
-// with a few extra synonyms — "Wicket Keeper" isn't one of PLAYER_ROLES' three values (keeper is
-// a separate per-team designation set from the roster row itself, see TeamEditScreen's keeper
-// picker, not a batting/bowling category), so those rows come back flagged via isKeeperNote
-// instead of silently losing the role -- same treatment for a captain marker via isCaptainNote,
-// since captain is likewise set on the team roster, not stored on the pool entry itself. The
-// bulk-add preview surfaces both flags so a person knows to set them once the player's added to a
-// team.
+// editor), one player per line.
+//
+// Column order is detected from a header row when one is present -- "Name", "Role", "Team",
+// "ID" (any subset, any order, case-insensitive, a few synonyms each) -- so a re-arranged
+// template, a subset of columns, or the raw federation shape ("No / Player Name / Player Role /
+// Team") all just work. Detection only trusts a row as a header if its first recognized column
+// is specifically a Name-like label (name/player/player name/no/no.) -- a real player is never
+// named exactly that, so this can't misfire on genuine data the way a "does ANY cell match ANY
+// header word" check would (that used to silently drop a real row if e.g. a team happened to be
+// named "Team" or "ID"). Multiple header rows are allowed mid-paste (e.g. several exports
+// concatenated together, each with its own header) -- each one updates the column mapping used
+// from that point on. With no header at all, columns fall back to the position they'd have in
+// that same federation template: index (if purely numeric, optionally with a trailing period --
+// dropped), Name, Role, Team, ID.
+//
+// A federation export's own title row (e.g. Dansk Cricket Forbund's sheet has "Dansk Cricket
+// Forbund" alone in the first cell, everything else blank) reads exactly like a bare one-word
+// name with no other data when copy-pasted raw -- caught by exact name match rather than by
+// shape, so a genuine single-name row (someone bulk-adding just one player with no role or team
+// yet) still imports normally instead of getting caught by the same check.
+//
+// A trailing parenthetical on either the Name or Role cell is checked for a captain/keeper
+// marker first -- "Rohit Sharma (C)" or "MS Dhoni (C/WK)" flags captain/keeper the way
+// scorecards commonly write them (both are set on the team roster once a player's added, not
+// stored on the pool entry itself, so this only ever produces a preview flag, never a stored
+// field) -- and only falls back to reading it as an external ID (e.g. "Abhinav Sarangi
+// (4190964)") when it isn't one of those markers. An explicit ID column, when present, always
+// wins over anything parenthetical.
+//
+// Only Name is required. Role is matched against PLAYER_ROLES with a few extra synonyms --
+// "Wicket Keeper" isn't one of PLAYER_ROLES' three values (keeper is a separate per-team
+// designation set from the roster row itself, see TeamEditScreen's keeper picker, not a
+// batting/bowling category), so those rows come back flagged via isKeeperNote instead of
+// silently losing the role.
 function parseBulkPlayers(text) {
   const ROLE_SYNONYMS = {
     "batsman": "batsman",
@@ -2723,40 +2736,96 @@ function parseBulkPlayers(text) {
   };
   const CAPTAIN_MARKERS = new Set(["c", "capt", "captain"]);
   const KEEPER_MARKERS = new Set(["wk", "keeper", "wicket keeper", "wicketkeeper"]);
-  const HEADER_WORDS = new Set(["name", "player", "player name", "no", "no.", "role", "player role", "team", "division", "age group", "squad", "id", "player id", "external id", "reg", "reg no", "reg no.", "registration", "registration no"]);
+  const NAME_ALIASES = new Set(["name", "player", "player name"]);
+  const ROLE_ALIASES = new Set(["role", "player role"]);
+  const TEAM_ALIASES = new Set(["team", "division", "age group", "squad"]);
+  const ID_ALIASES = new Set(["id", "player id", "external id", "reg", "reg no", "reg no.", "registration", "registration no"]);
+
+  // Returns {name, role, team, id} column indices if `cells` looks like a header row, else null.
+  // Deliberately excludes "No"/"No." from the Name aliases -- that's the index column, not the
+  // name column, and the federation template's header has both ("No", "Player Name") in the same
+  // row; conflating them would point the name field at the index column instead. Only the Name
+  // column is required to recognize a row as a header at all -- Role/Team/ID are picked up
+  // opportunistically if present, in whatever order they appear, so a re-arranged or reduced
+  // column set still works.
+  function detectHeaderMap(cells) {
+    const lower = cells.map(c => c.trim().toLowerCase());
+    const nameIdx = lower.findIndex(c => NAME_ALIASES.has(c));
+    if (nameIdx === -1) return null;
+    const map = { name: nameIdx };
+    const roleIdx = lower.findIndex(c => ROLE_ALIASES.has(c));
+    if (roleIdx !== -1) map.role = roleIdx;
+    const teamIdx = lower.findIndex(c => TEAM_ALIASES.has(c));
+    if (teamIdx !== -1) map.team = teamIdx;
+    const idIdx = lower.findIndex(c => ID_ALIASES.has(c));
+    if (idIdx !== -1) map.id = idIdx;
+    return map;
+  }
+
+  // Reads a trailing "(...)" off a cell's text, classifying its content as a captain marker, a
+  // keeper marker, or (if neither) a raw ID candidate. Applied to both Name and Role cells so a
+  // marker placed on either one is still caught.
+  function extractParen(raw) {
+    const m = (raw || "").match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+    if (!m) return { text: (raw || "").trim(), isCaptain: false, isKeeper: false, idCandidate: "" };
+    const parts = m[2].toLowerCase().split(/[\/,&]+/).map(s => s.trim()).filter(Boolean);
+    const isCaptain = parts.some(p => CAPTAIN_MARKERS.has(p));
+    const isKeeper = parts.some(p => KEEPER_MARKERS.has(p));
+    return {
+      text: m[1].trim(),
+      isCaptain,
+      isKeeper,
+      idCandidate: !isCaptain && !isKeeper ? m[2].trim() : ""
+    };
+  }
+
   const lines = (text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const rows = [];
+  let columnMap = null;
   for (const line of lines) {
     const cells = (line.includes("\t") ? line.split("\t") : parseCsvLine(line)).map(c => c.trim().replace(/^\uFEFF/, ""));
     if (cells.length === 0 || cells.every(c => !c)) continue;
-    if (cells.some(c => HEADER_WORDS.has(c.toLowerCase()))) continue; // header row, not data
-    // A federation export's title row (e.g. Dansk Cricket Forbund's own sheet has "Dansk Cricket
-    // Forbund" alone in the first cell, everything else blank) reads exactly like a bare one-word
-    // name with no role/team when copy-pasted raw -- catch it by name specifically, rather than
-    // by shape, so a genuine single-name row (someone bulk-adding just one player with no role or
-    // team yet) still imports normally instead of getting caught by the same check.
-    if (cells.slice(1).every(c => !c) && /^dansk cricket forbund$/i.test(cells[0])) continue;
-    const withoutIndex = /^\d+$/.test(cells[0]) ? cells.slice(1) : cells; // drop leading "No" column
-    if (withoutIndex.length === 0 || !withoutIndex[0]) continue;
-    const rawName = withoutIndex[0];
-    const rawRole = withoutIndex[1] || "";
-    const rawTeam = withoutIndex[2] || "";
-    const rawId = withoutIndex[3] || "";
-    const idMatch = rawName.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
-    const name = (idMatch ? idMatch[1] : rawName).trim();
+    if (cells.slice(1).every(c => !c) && /^dansk cricket forbund$/i.test(cells[0])) continue; // title row, not data
+
+    const detectedMap = detectHeaderMap(cells);
+    if (detectedMap) {
+      columnMap = detectedMap;
+      continue; // this line IS the header, not a player
+    }
+
+    let rawName, rawRole, rawTeam, rawId;
+    if (columnMap) {
+      rawName = cells[columnMap.name] || "";
+      rawRole = columnMap.role !== undefined ? cells[columnMap.role] || "" : "";
+      rawTeam = columnMap.team !== undefined ? cells[columnMap.team] || "" : "";
+      rawId = columnMap.id !== undefined ? cells[columnMap.id] || "" : "";
+    } else {
+      // No header seen yet in this paste -- fall back to the federation template's own fixed
+      // column order. A leading index column is dropped whether it's a bare "12" or the "12."
+      // style some spreadsheet exports use for a numbered list.
+      const withoutIndex = /^\d+\.?$/.test(cells[0]) ? cells.slice(1) : cells;
+      if (withoutIndex.length === 0 || !withoutIndex[0]) continue;
+      rawName = withoutIndex[0];
+      rawRole = withoutIndex[1] || "";
+      rawTeam = withoutIndex[2] || "";
+      rawId = withoutIndex[3] || "";
+    }
+    if (!rawName.trim()) continue;
+
+    const nameParsed = extractParen(rawName);
+    const roleParsed = extractParen(rawRole);
+    const name = nameParsed.text;
     if (!name) continue;
-    const parenParts = idMatch ? idMatch[2].toLowerCase().split(/[\/,&]+/).map(s => s.trim()).filter(Boolean) : [];
-    const parenIsCaptain = parenParts.some(p => CAPTAIN_MARKERS.has(p));
-    const parenIsKeeper = parenParts.some(p => KEEPER_MARKERS.has(p));
-    const parenRegNo = idMatch && !parenIsCaptain && !parenIsKeeper ? idMatch[2].trim() : "";
-    const regNo = rawId.trim() || parenRegNo;
-    const roleKey = rawRole.trim().toLowerCase();
+    const isCaptainNote = nameParsed.isCaptain || roleParsed.isCaptain;
+    const isKeeperNoteFromParen = nameParsed.isKeeper || roleParsed.isKeeper;
+    const regNo = rawId.trim() || nameParsed.idCandidate || roleParsed.idCandidate;
+    const roleKey = roleParsed.text.toLowerCase();
     rows.push({
       name,
       role: ROLE_SYNONYMS[roleKey] || "",
       team: rawTeam.trim(),
-      isKeeperNote: /keeper|\bwk\b/.test(roleKey) || parenIsKeeper,
-      isCaptainNote: parenIsCaptain,
+      isKeeperNote: /keeper|\bwk\b/.test(roleKey) || isKeeperNoteFromParen,
+      isCaptainNote,
       regNo,
       _key: uid()
     });
