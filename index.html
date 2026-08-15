@@ -2651,14 +2651,17 @@ async function removePoolPlayer(clubId, playerId) {
 // editor), one player per line. Tolerant of a leading numeric "No" index column and a trailing
 // "Team" column (both dropped — the pool is club-wide, not per-team) since that's exactly the
 // shape a federation-style affiliated-player export tends to come in (e.g. Dansk Cricket
-// Forbund's "No / Player Name / Player Role / Team" template). Also strips a trailing
-// registration number in parens, e.g. "Abhinav Sarangi (4190964)", into its own field, since the
-// app has nowhere else to put it. Only Name is required. Role is matched against PLAYER_ROLES
-// with a few extra synonyms — "Wicket Keeper" isn't one of PLAYER_ROLES' three values (keeper is
-// a separate per-team designation set from the roster row itself, see TeamEditScreen's keeper
-// picker, not a batting/bowling category), so those rows come back flagged via isKeeperNote
-// instead of silently losing the role — the bulk-add preview surfaces that flag so a person can
-// still set them as keeper on whichever team they end up added to.
+// Forbund's "No / Player Name / Player Role / Team" template). Also reads a trailing parenthetical
+// on the name -- "Rohit Sharma (C)" or "MS Dhoni (C/WK)" flags captain/keeper the way scorecards
+// commonly write them; anything else in parens (e.g. "Abhinav Sarangi (4190964)") is treated as a
+// registration number instead, since the app has nowhere else to put it. Only Name is required.
+// Role is matched against PLAYER_ROLES with a few extra synonyms — "Wicket Keeper" isn't one of
+// PLAYER_ROLES' three values (keeper is a separate per-team designation set from the roster row
+// itself, see TeamEditScreen's keeper picker, not a batting/bowling category), so those rows come
+// back flagged via isKeeperNote instead of silently losing the role -- same treatment for a
+// captain marker via isCaptainNote, since captain is likewise set on the team roster, not stored
+// on the pool entry itself. The bulk-add preview surfaces both flags so a person knows to set
+// them once the player's added to a team.
 function parseBulkPlayers(text) {
   const ROLE_SYNONYMS = {
     "batsman": "batsman",
@@ -2674,6 +2677,8 @@ function parseBulkPlayers(text) {
     "keeper": "batsman",
     "wk": "batsman"
   };
+  const CAPTAIN_MARKERS = new Set(["c", "capt", "captain"]);
+  const KEEPER_MARKERS = new Set(["wk", "keeper", "wicket keeper", "wicketkeeper"]);
   const HEADER_WORDS = new Set(["name", "player", "player name", "no", "no.", "role", "player role", "team"]);
   const lines = (text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const rows = [];
@@ -2688,12 +2693,16 @@ function parseBulkPlayers(text) {
     const idMatch = rawName.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
     const name = (idMatch ? idMatch[1] : rawName).trim();
     if (!name) continue;
-    const regNo = idMatch ? idMatch[2].trim() : "";
+    const parenParts = idMatch ? idMatch[2].toLowerCase().split(/[\/,&]+/).map(s => s.trim()).filter(Boolean) : [];
+    const parenIsCaptain = parenParts.some(p => CAPTAIN_MARKERS.has(p));
+    const parenIsKeeper = parenParts.some(p => KEEPER_MARKERS.has(p));
+    const regNo = idMatch && !parenIsCaptain && !parenIsKeeper ? idMatch[2].trim() : "";
     const roleKey = rawRole.trim().toLowerCase();
     rows.push({
       name,
       role: ROLE_SYNONYMS[roleKey] || "",
-      isKeeperNote: /keeper|\bwk\b/.test(roleKey),
+      isKeeperNote: /keeper|\bwk\b/.test(roleKey) || parenIsKeeper,
+      isCaptainNote: parenIsCaptain,
       regNo,
       _key: uid()
     });
@@ -21943,7 +21952,7 @@ function TeamsScreen({
     fontFamily: "'Inter'",
     marginBottom: 6
   }
-}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, then role. A leading number column and a trailing team column, if present, are ignored; \u201cWicket Keeper\u201d maps to Batsman (set keeper on the team roster itself)."), /*#__PURE__*/React.createElement("div", {
+}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, then role. A leading number column and a trailing team column, if present, are ignored. Add \u201c(C)\u201d or \u201c(WK)\u201d after a name to flag captain/keeper \u2014 both are set on the team roster once they're added, not stored on the pool entry itself."), /*#__PURE__*/React.createElement("div", {
   style: {
     display: "flex",
     gap: 14,
@@ -21952,7 +21961,7 @@ function TeamsScreen({
   }
 }, /*#__PURE__*/React.createElement("button", {
   type: "button",
-  onClick: () => downloadCSV("player-pool-template", ["Name", "Role", "Note"], [["Amit Dubey", "All Rounder", ""], ["Abhinav Sarangi", "Wicket Keeper", "Reg #4190964"]]),
+  onClick: () => downloadCSV("player-pool-template", ["Name", "Role", "Note"], [["Virat Kohli (C)", "Batsman", ""], ["MS Dhoni (WK)", "Batsman", ""], ["Bumrah", "Bowler", ""]]),
   style: {
     background: "none",
     border: "none",
@@ -21996,7 +22005,7 @@ function TeamsScreen({
 })), /*#__PURE__*/React.createElement("textarea", {
   value: bulkText,
   onChange: e => setBulkText(e.target.value),
-  placeholder: "Abhinav Sarangi (4190964)\tWicket Keeper\nAmit Dubey\tAll Rounder",
+  placeholder: "Virat Kohli (C)\tBatsman\nMS Dhoni (WK)\tBatsman\nBumrah\tBowler",
   rows: 5,
   style: {
     width: "100%",
@@ -22059,7 +22068,7 @@ function TeamsScreen({
       color: COLORS.inkSoft,
       flexShrink: 0
     }
-  }, r.dup ? "Already in pool" : r.isKeeperNote ? "Batsman \u00b7 set as keeper on team" : (PLAYER_ROLES.find(x => x.value === r.role) || {}).label || "No role detected")))), /*#__PURE__*/React.createElement("div", {
+  }, r.dup ? "Already in pool" : [(PLAYER_ROLES.find(x => x.value === r.role) || {}).label, r.isCaptainNote && "Captain", r.isKeeperNote && "Keeper"].filter(Boolean).join(" \u00b7 ") || "No role detected")))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
