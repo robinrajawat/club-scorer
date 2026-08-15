@@ -5385,6 +5385,31 @@ function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   });
   return out;
 }
+// A match started from a real club-roster team already carries teamAId/teamBId pointing directly
+// at that team (see startNewMatch/selectTeamA in SetupScreen) -- far more reliable for a match
+// specifically than resolvePollTeams' name matching above, which exists because a tournament
+// FIXTURE has no id to match against at all (just two plain name strings). A match does have one,
+// and name matching alone can silently break even though the team itself hasn't changed: the team
+// could have been renamed since the match started, or selectTeamA/selectTeamB append " (A)"/" (B)"
+// to the stored name specifically when both sides happen to be the same team name, which then
+// never matches the real team.name either. Falls back to name matching only when there's truly no
+// id to go on -- an older match saved before these fields existed, or a match between two ad-hoc
+// typed opponent names that were never real club teams to begin with.
+function resolveMatchPollTeams(match, clubs, clubTeamsById) {
+  const out = [];
+  (clubs || []).forEach(club => {
+    (clubTeamsById[club.id] || []).forEach(team => {
+      if (team.id === match.teamAId || team.id === match.teamBId) {
+        out.push({
+          team,
+          club
+        });
+      }
+    });
+  });
+  if (out.length > 0) return out;
+  return resolvePollTeams(match.teamA, match.teamB, clubs, clubTeamsById);
+}
 // Every still-active poll, across every team across every club someone has access to, that still
 // has at least one roster name who hasn't responded -- the Inbox's poll section and its badge
 // count both come from this same list, so what the badge promises is exactly what's waiting there.
@@ -13237,7 +13262,7 @@ function MatchPollSummary({
 }) {
   const [items, setItems] = useState(null); // null = loading, [] = nothing active to show
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
-  const matchingTeams = resolvePollTeams(match.teamA, match.teamB, clubs, clubTeamsById);
+  const matchingTeams = resolveMatchPollTeams(match, clubs, clubTeamsById);
   const teamKey = matchingTeams.map(e => e.team.id).join(",");
   useEffect(() => {
     let cancelled = false;
