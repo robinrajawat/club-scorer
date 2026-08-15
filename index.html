@@ -15473,10 +15473,42 @@ function renderMatchCard(m, i) {
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      justifyContent: "flex-end",
-      marginBottom: 6
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18
     }
-  }, /*#__PURE__*/React.createElement(AuthBar, {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      flexShrink: 0,
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(Circle, {
+    size: 13,
+    color: COLORS.creamFixed,
+    strokeWidth: 2.5,
+    fill: COLORS.ball,
+    style: {
+      color: COLORS.creamFixed
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
@@ -15498,93 +15530,63 @@ function renderMatchCard(m, i) {
     onSynced: onPendingSynced
   })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
     onDismiss: onDismissInstallHint
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      marginBottom: 30
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 56,
-      height: 56,
-      borderRadius: "50%",
-      margin: "0 auto 14px",
-      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
-    }
-  }, /*#__PURE__*/React.createElement(Circle, {
-    size: 26,
-    color: COLORS.creamFixed,
-    strokeWidth: 2.5,
-    fill: COLORS.ball,
-    style: {
-      color: COLORS.creamFixed
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 32,
-      color: COLORS.pitch,
-      letterSpacing: -0.5
-    }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter', sans-serif",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      marginTop: 5
-    }
-  }, "Ball-by-ball scoring for friendly games")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      marginBottom: 28
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
+  }), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
     style: {
-      flex: 1.6,
-      padding: "15px 8px",
-      fontSize: 15,
-      borderRadius: 14
+      display: "flex",
+      width: "100%",
+      padding: "15px",
+      fontSize: 16,
+      borderRadius: 14,
+      marginBottom: 10,
+      boxSizing: "border-box"
     }
   }, /*#__PURE__*/React.createElement(Plus, {
-    size: 18,
+    size: 19,
     strokeWidth: 2.5
-  }), " New Match"), /*#__PURE__*/React.createElement(Btn, {
+  }), " New Match"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onManageTeams,
     style: {
       flex: 1,
-      padding: "15px 6px",
-      fontSize: 13,
-      borderRadius: 14
+      padding: "10px 6px",
+      fontSize: 12.5,
+      borderRadius: 12,
+      boxShadow: "none",
+      border: `0.5px solid ${COLORS.willow}`
     }
   }, /*#__PURE__*/React.createElement(Users, {
-    size: 16
+    size: 15
   }), " Teams"), /*#__PURE__*/React.createElement(Btn, {
     onClick: onOpenTournaments,
     style: {
       flex: 1,
-      padding: "15px 6px",
-      fontSize: 13,
-      borderRadius: 14
+      padding: "10px 6px",
+      fontSize: 12.5,
+      borderRadius: 12,
+      boxShadow: "none",
+      border: `0.5px solid ${COLORS.willow}`
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
-    size: 16
+    size: 15
   }), " Cups"), /*#__PURE__*/React.createElement(Btn, {
     onClick: onOpenClubs,
     style: {
       flex: 1,
-      padding: "15px 6px",
-      fontSize: 13,
-      borderRadius: 14
+      padding: "10px 6px",
+      fontSize: 12.5,
+      borderRadius: 12,
+      boxShadow: "none",
+      border: `0.5px solid ${COLORS.willow}`
     }
   }, /*#__PURE__*/React.createElement(Globe, {
-    size: 16
+    size: 15
   }), " Clubs")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
