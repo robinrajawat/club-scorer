@@ -1120,6 +1120,32 @@ function downloadTextFile(filename, mimeType, text) {
 // for a small app's moderate user count -- not bulk/automated geocoding. Deliberately not setting
 // a custom header: browsers block scripts from overriding User-Agent anyway, and the browser's own
 // Referer already identifies the requesting site, which is what the policy is actually after.
+// Nominatim's raw display_name spells out every administrative layer it knows -- neighbourhood,
+// municipality, region, all the way up to country -- e.g. "4, Kærhusvej, Travbyen, Billund,
+// Billund Municipality, Region of Southern Denmark, 7190, Denmark" for a plain street address.
+// Technically complete, but far more than anyone needs to recognize their own venue in a
+// dropdown, or wants saved as the venue's displayed name afterward. Since addressdetails=1
+// already gives the individual components in the address object, this rebuilds a normal-looking
+// "street number, postcode locality, country" label from those instead -- city/town/village are
+// preferred over municipality/county specifically because Nominatim keeps the actual place name
+// (e.g. "Billund") separate from the larger administrative unit (e.g. "Billund Municipality"),
+// and the place name is what a person actually recognizes. Falls back to the raw display_name
+// when the pieces needed for that don't come back at all (e.g. a landmark/POI result with no
+// street address, or a country whose Nominatim data doesn't populate these fields the same way).
+function formatAddressLabel(r) {
+  const addr = r.address || {};
+  const street = [addr.road, addr.house_number].filter(Boolean).join(" ");
+  const locality = addr.city || addr.town || addr.village || addr.municipality || addr.county;
+  const cityLine = [addr.postcode, locality].filter(Boolean).join(" ");
+  const addressParts = [street, cityLine, addr.country].filter(Boolean);
+  if (addressParts.length < 2) return r.display_name;
+  const simplified = addressParts.join(", ");
+  // r.name is the actual named entity Nominatim matched (a ground, club, business, landmark) when
+  // the search hit one, distinct from the interpolated street address above -- worth leading with
+  // for a venue search specifically, so picking a result shows what's actually there, not just its
+  // street address with nothing to confirm it's the right place.
+  return r.name && r.name !== street ? `${r.name}, ${simplified}` : simplified;
+}
 async function searchAddress(query) {
   const q = (query || "").trim();
   if (q.length < 3) return [];
@@ -1128,7 +1154,7 @@ async function searchAddress(query) {
     if (!res.ok) return [];
     const data = await res.json();
     return (Array.isArray(data) ? data : []).map(r => ({
-      label: r.display_name,
+      label: formatAddressLabel(r),
       lat: parseFloat(r.lat),
       lng: parseFloat(r.lon)
     })).filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng));
