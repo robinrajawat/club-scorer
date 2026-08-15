@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for cricket-scorer.
+//
+// This file is not auto-deployed — paste it into Firebase Console → Storage → Rules → Publish,
+// same as firestore.rules. Kept in the repo for the same reason: a diff history instead of
+// tribal knowledge living only in the console.
+//
+// ---- What's stored here ----
+// Currently just one thing: a club's logo, at club-logos/{clubId}.jpg (see uploadClubLogo/
+// removeClubLogo in index.html). The object name is deterministic — clubId plus a fixed
+// extension, no random suffix — so re-uploading a new logo overwrites the old object rather
+// than leaving orphaned files behind with nothing left pointing at them.
+//
+// ---- The permission model ----
+// Same tier as everywhere else in this app: a club's owner and any co-owner have identical
+// rights, checked here by looking the club up in Firestore and comparing against ownerUid /
+// coOwnerUids — the same two fields firestore.rules' isClubOwner() checks, just re-expressed in
+// Storage rules' own syntax since the two rule languages can't share a function. Logos are
+// public reads by design (same "found by design" reasoning firestore.rules gives for
+// clubDirectory/players — a logo is meant to be seen by anyone looking at the club, not a
+// security boundary), so only the write side is gated.
+//
+// The size/content-type checks are a defensive backstop, not the primary safeguard — the client
+// already downscales/re-encodes to a small JPEG before ever uploading (see resizeImageToBlob in
+// index.html) — but a rule shouldn't rely on client behavior it can't verify.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /club-logos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && (
+          request.auth.uid == firestore.get(/databases/(default)/documents/clubs/$(fileName.split('.')[0])).data.ownerUid
+          || request.auth.uid in firestore.get(/databases/(default)/documents/clubs/$(fileName.split('.')[0])).data.get('coOwnerUids', [])
+        )
+        && (
+          // Delete has no request.resource (there's no new file), so only check
+          // size/content-type on the write paths that actually upload one.
+          request.resource == null
+          || (
+            request.resource.size < 5 * 1024 * 1024
+            && request.resource.contentType.matches('image/.*')
+          )
+        );
+    }
+
+    // Deny everything else by default — no other paths exist in this bucket yet, and any future
+    // one should get its own explicit, reasoned match block rather than falling through to an
+    // open default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
