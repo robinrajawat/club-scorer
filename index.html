@@ -15265,6 +15265,7 @@ function HomeScreen({
   // still lives inside that club's own panel (Clubs tab); this is specifically the "just me,
   // no club" case, which has nowhere else to live once Teams stops being its own top-level tab.
   teams = [],
+  teamsLoading = false,
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
@@ -15677,7 +15678,13 @@ function renderMatchCard(m, i) {
     style: {
       marginTop: teams.length > 0 ? 10 : 14
     }
-  }, teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, teamsLoading && teams.length === 0 ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading your teams\u2026",
+    size: 20,
+    style: {
+      padding: "10px 4px"
+    }
+  }) : teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "20px 10px 6px"
@@ -15689,7 +15696,16 @@ function renderMatchCard(m, i) {
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "No personal teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "No personal teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right",
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.inkSoft,
+      opacity: 0.7,
+      marginBottom: 4
+    }
+  }, "\u2190 swipe to delete"), teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
@@ -15777,7 +15793,7 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  })))))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }))))))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -33025,6 +33041,7 @@ function CricketScorer() {
       markInstallHintSeen();
     },
     teams: teams,
+    teamsLoading: teamsLoading,
     onNewTeam: () => {
       setActiveClubId(null);
       setEditingTeam(null);
