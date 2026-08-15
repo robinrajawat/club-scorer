@@ -14822,7 +14822,7 @@ function UpcomingFixtureCard({
       flexDirection: "column",
       gap: 8
     }
-  }, matchingPollTeams.map(entry => /*#__PURE__*/React.createElement("button", {
+  }, matchingPollTeams.map((entry, idx) => /*#__PURE__*/React.createElement("button", {
     key: entry.team.id,
     type: "button",
     onClick: () => {
@@ -14831,14 +14831,37 @@ function UpcomingFixtureCard({
     },
     className: "cs-btn",
     style: {
-      display: "block",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
       width: "100%",
       textAlign: "left",
       background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 12,
       padding: "10px 12px",
-      cursor: "pointer"
+      cursor: "pointer",
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 28,
+      height: 28,
+      borderRadius: "50%",
+      background: "rgba(74,124,46,0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 13,
+    style: {
+      color: COLORS.turf
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14853,7 +14876,7 @@ function UpcomingFixtureCard({
       fontSize: 11,
       color: COLORS.inkSoft
     }
-  }, entry.club.name))))), pollModalOpen && selectedPollTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, entry.club.name)))))), pollModalOpen && selectedPollTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: selectedPollTeam.club.id,
     clubName: selectedPollTeam.club.name,
     team: selectedPollTeam.team,
