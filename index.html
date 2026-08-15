@@ -5320,6 +5320,17 @@ function pollExpiryDateLabel(createdAt) {
 // between two of someone's own teams (an intra-club game, or managing both clubs in a fixture)
 // legitimately matches twice, and picking one silently would be guessing on their behalf -- the
 // caller decides what to do when there's more than one (show a picker) or none (nothing to show).
+// Opens the venue in the person's own maps app (Google Maps on Android, falls back to Apple Maps
+// or a browser tab elsewhere -- this URL scheme is the one Google documents as working across
+// all of those). Prefers verified coordinates (from a picked address suggestion -- see
+// VenueEditModal/updateClubAddress) since a coordinate pair is unambiguous; a plain venue string
+// still works as a text search when nothing's been verified, just less precisely.
+function buildMapsUrl(venue, lat, lng) {
+  if (lat != null && lng != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue || "")}`;
+}
 function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   const a = (nameA || "").toLowerCase();
   const b = (nameB || "").toLowerCase();
@@ -14575,11 +14586,56 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), onEditVenue ? /*#__PURE__*/React.createElement("button", {
+  }, "vs"), " ", f.teamB)), t.venue ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 2,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("a", {
+    href: buildMapsUrl(t.venue, t.venueLat, t.venueLng),
+    target: "_blank",
+    rel: "noopener noreferrer",
+    className: "cs-btn",
+    "aria-label": `Open ${t.venue} in Maps`,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      minWidth: 0,
+      textDecoration: "none",
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 500,
+      color: COLORS.inkSoft,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, "\uD83D\uDCCD ", t.venue), onEditVenue && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setVenueModalOpen(true),
     className: "cs-btn",
-    "aria-label": "Fixture venue",
+    "aria-label": "Edit venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }))) : onEditVenue && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Add venue",
     style: {
       display: "flex",
       alignItems: "center",
@@ -14594,16 +14650,9 @@ function UpcomingFixtureCard({
       fontFamily: "'Inter'",
       fontSize: 11.5,
       fontWeight: 500,
-      color: t.venue ? COLORS.inkSoft : COLORS.turf
+      color: COLORS.turf
     }
-  }, "\uD83D\uDCCD ", t.venue || "Add venue") : t.venue && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginTop: 1
-    }
-  }, "\uD83D\uDCCD ", t.venue), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCD Add venue"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
