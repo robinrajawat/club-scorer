@@ -10436,9 +10436,6 @@ function ClubPanel({
   onOpenRecords,
   onAddUmpire,
   onRemoveUmpire,
-  onAddPoolPlayers,
-  onUpdatePoolPlayer,
-  onRemovePoolPlayer,
   currentUid
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
@@ -10523,19 +10520,6 @@ function ClubPanel({
   const [newUmpireName, setNewUmpireName] = useState("");
   const [umpireBusy, setUmpireBusy] = useState(false);
   const [umpireError, setUmpireError] = useState("");
-  // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). One
-  // quick-add row for a single name, plus a bulk-paste box for dropping in a whole spreadsheet
-  // column at once (see parseBulkPlayers) with a preview before anything is actually written.
-  const [poolOpen, setPoolOpen] = useState(false);
-  const [newPoolName, setNewPoolName] = useState("");
-  const [newPoolRole, setNewPoolRole] = useState("");
-  const [poolBusy, setPoolBusy] = useState(false);
-  const [poolError, setPoolError] = useState("");
-  const [poolRemoveBusyId, setPoolRemoveBusyId] = useState(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkText, setBulkText] = useState("");
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkError, setBulkError] = useState("");
   const [confirmLeaveFederation, setConfirmLeaveFederation] = useState(null); // federation | null
   const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { code, email } | null
   const [revokeBusyCode, setRevokeBusyCode] = useState(null);
@@ -11481,326 +11465,6 @@ function ClubPanel({
     marginTop: 6
   }
 }, umpireError))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
-  style: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: `1px dashed ${COLORS.willow}`
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between"
-  }
-}, /*#__PURE__*/React.createElement("span", {
-  style: {
-    fontFamily: "'Inter'",
-    fontSize: 10.5,
-    fontWeight: 700,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    color: COLORS.inkSoft
-  }
-}, `Player Pool \u00b7 ${(activeClub.playerPool || []).length}`), /*#__PURE__*/React.createElement("button", {
-  onClick: () => setPoolOpen(o => !o),
-  className: "cs-btn",
-  "aria-label": poolOpen ? "Hide player pool" : "Show player pool",
-  style: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    background: "none",
-    border: "none",
-    color: COLORS.pitch,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11.5,
-    cursor: "pointer",
-    padding: 0
-  }
-}, poolOpen ? "Hide" : "Manage", /*#__PURE__*/React.createElement(ChevronDown, {
-  size: 13,
-  style: {
-    transform: poolOpen ? "rotate(180deg)" : "none",
-    transition: "transform 0.15s"
-  }
-}))), poolOpen && /*#__PURE__*/React.createElement("div", {
-  style: {
-    marginTop: 8
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    fontSize: 11.5,
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    marginBottom: 8
-  }
-}, "Add people once here, then pull them onto any of this club's teams from Team editing \u2014 separate from the cross-club public directory, and no email required."), (activeClub.playerPool || []).length === 0 && /*#__PURE__*/React.createElement("div", {
-  style: {
-    fontSize: 12,
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    fontStyle: "italic",
-    marginBottom: 8
-  }
-}, "No players in the pool yet \u2014 add one below, or paste a whole list in at once."), (activeClub.playerPool || []).map(pl => /*#__PURE__*/React.createElement("div", {
-  key: pl.id,
-  style: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "4px 0",
-    gap: 8
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    minWidth: 0,
-    display: "flex",
-    alignItems: "baseline",
-    gap: 6
-  }
-}, /*#__PURE__*/React.createElement("span", {
-  style: {
-    fontSize: 12.5,
-    color: COLORS.ink,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap"
-  }
-}, pl.name), /*#__PURE__*/React.createElement("span", {
-  style: {
-    fontSize: 10.5,
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    flexShrink: 0
-  }
-}, (PLAYER_ROLES.find(r => r.value === pl.role) || {}).label || "Role not set")), /*#__PURE__*/React.createElement("button", {
-  onClick: async () => {
-    setPoolRemoveBusyId(pl.id);
-    const result = await onRemovePoolPlayer(activeClubId, pl.id);
-    setPoolRemoveBusyId(null);
-    if (!result.ok) setPoolError(result.error);
-  },
-  disabled: poolRemoveBusyId === pl.id,
-  "aria-label": `Remove ${pl.name} from the pool`,
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.inkSoft,
-    cursor: "pointer",
-    fontSize: 16,
-    lineHeight: 1,
-    padding: "2px 6px",
-    flexShrink: 0
-  }
-}, "\u00d7"))), /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    gap: 6,
-    marginTop: 8,
-    flexWrap: "wrap"
-  }
-}, /*#__PURE__*/React.createElement(TextField, {
-  value: newPoolName,
-  onChange: setNewPoolName,
-  placeholder: "Player name",
-  autoCapitalize: "words",
-  autoCorrect: "off",
-  autoComplete: "off",
-  spellCheck: false,
-  style: {
-    flex: 1,
-    minWidth: 120,
-    padding: "8px 10px",
-    fontSize: 13
-  }
-}), PLAYER_ROLES.map(r => /*#__PURE__*/React.createElement("button", {
-  key: r.value,
-  type: "button",
-  onClick: () => setNewPoolRole(newPoolRole === r.value ? "" : r.value),
-  "aria-pressed": newPoolRole === r.value,
-  style: {
-    padding: "4px 10px",
-    borderRadius: 12,
-    border: newPoolRole === r.value ? "none" : `1.5px solid ${COLORS.willow}`,
-    background: newPoolRole === r.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-    color: newPoolRole === r.value ? "#fff" : COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11,
-    cursor: "pointer",
-    flexShrink: 0
-  }
-}, r.label)), /*#__PURE__*/React.createElement(Btn, {
-  onClick: async () => {
-    setPoolBusy(true);
-    setPoolError("");
-    const result = await onAddPoolPlayers(activeClubId, [{
-      name: newPoolName,
-      role: newPoolRole
-    }]);
-    setPoolBusy(false);
-    if (!result.ok) {
-      setPoolError(result.error);
-      return;
-    }
-    setNewPoolName("");
-    setNewPoolRole("");
-  },
-  disabled: poolBusy || !newPoolName.trim(),
-  style: {
-    flexShrink: 0,
-    padding: "0 14px"
-  }
-}, poolBusy ? "\u2026" : "Add")), poolError && /*#__PURE__*/React.createElement("div", {
-  style: {
-    color: COLORS.ball,
-    fontSize: 11.5,
-    fontFamily: "'Inter'",
-    marginTop: 6
-  }
-}, poolError), /*#__PURE__*/React.createElement("button", {
-  type: "button",
-  onClick: () => setBulkOpen(o => !o),
-  className: "cs-btn",
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.pitch,
-    cursor: "pointer",
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11.5,
-    padding: 0,
-    textDecoration: "underline",
-    marginTop: 10
-  }
-}, bulkOpen ? "Hide bulk add" : "Bulk add from a spreadsheet"), bulkOpen && /*#__PURE__*/React.createElement("div", {
-  style: {
-    marginTop: 8
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    fontSize: 11,
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    marginBottom: 6
-  }
-}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, then role. A leading number column and a trailing team column, if present, are ignored; \u201cWicket Keeper\u201d maps to Batsman (set keeper on the team roster itself)."), /*#__PURE__*/React.createElement("textarea", {
-  value: bulkText,
-  onChange: e => setBulkText(e.target.value),
-  placeholder: "Abhinav Sarangi (4190964)\tWicket Keeper\nAmit Dubey\tAll Rounder",
-  rows: 5,
-  style: {
-    width: "100%",
-    boxSizing: "border-box",
-    fontFamily: "'IBM Plex Mono'",
-    fontSize: 12,
-    color: COLORS.ink,
-    background: COLORS.surface,
-    border: `1px solid ${COLORS.willow}`,
-    borderRadius: 8,
-    padding: "8px 10px",
-    resize: "vertical"
-  }
-}), (() => {
-  const rows = bulkText.trim() ? parseBulkPlayers(bulkText) : [];
-  const existingNames = new Set((activeClub.playerPool || []).map(p => p.name.trim().toLowerCase()));
-  const seen = new Set();
-  const withFlags = rows.map(r => {
-    const key = r.name.trim().toLowerCase();
-    const dup = existingNames.has(key) || seen.has(key);
-    seen.add(key);
-    return {
-      ...r,
-      dup
-    };
-  });
-  const toAdd = withFlags.filter(r => !r.dup);
-  return rows.length === 0 ? null : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 8,
-      maxHeight: "40vh",
-      overflowY: "auto",
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 8
-    }
-  }, withFlags.map(r => /*#__PURE__*/React.createElement("div", {
-    key: r._key,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
-      padding: "6px 10px",
-      borderBottom: `1px solid ${COLORS.willow}`,
-      opacity: r.dup ? 0.5 : 1
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, r.name, r.regNo && ` (${r.regNo})`), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      color: COLORS.inkSoft,
-      flexShrink: 0
-    }
-  }, r.dup ? "Already in pool" : r.isKeeperNote ? "Batsman \u00b7 set as keeper on team" : (PLAYER_ROLES.find(x => x.value === r.role) || {}).label || "No role detected")))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "center",
-      marginTop: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: async () => {
-      setBulkBusy(true);
-      setPoolError("");
-      const result = await onAddPoolPlayers(activeClubId, toAdd.map(r => ({
-        name: r.name,
-        role: r.role,
-        note: r.regNo ? `Reg #${r.regNo}` : ""
-      })));
-      setBulkBusy(false);
-      if (!result.ok) {
-        setPoolError(result.error);
-        return;
-      }
-      setBulkText("");
-      setBulkOpen(false);
-    },
-    disabled: bulkBusy || toAdd.length === 0,
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 34,
-      fontSize: 12
-    }
-  }, bulkBusy ? "\u2026" : `Add ${toAdd.length} player${toAdd.length === 1 ? "" : "s"}`), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setBulkText(""),
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer",
-      textDecoration: "underline",
-      padding: 0
-    }
-  }, "Clear")));
-})()))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -21947,6 +21611,20 @@ function TeamsScreen({
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   const [pollingTeam, setPollingTeam] = useState(null); // team object, or null when the modal's closed
+  // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). Lives
+  // here rather than in club settings since building teams is exactly where it's used. One
+  // quick-add row for a single name, plus a bulk-paste/upload box for dropping in a whole
+  // spreadsheet column at once (see parseBulkPlayers) with a preview before anything's written.
+  const [poolOpen, setPoolOpen] = useState(false);
+  const [newPoolName, setNewPoolName] = useState("");
+  const [newPoolRole, setNewPoolRole] = useState("");
+  const [poolBusy, setPoolBusy] = useState(false);
+  const [poolError, setPoolError] = useState("");
+  const [poolRemoveBusyId, setPoolRemoveBusyId] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const poolFileInputRef = useRef(null);
   // Federation co-owner invite redemption -- moved here from the old standalone Clubs &
   // Federations screen along with the rest of the Federations tab content below.
   const [redeemCode, setRedeemCode] = useState("");
@@ -22055,7 +21733,379 @@ function TeamsScreen({
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelectSource
-  }), canManage && /*#__PURE__*/React.createElement(Btn, {
+  }), activeClub && canManage && /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between"
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: COLORS.inkSoft
+  }
+}, `Player Pool \u00b7 ${(activeClub.playerPool || []).length}`), /*#__PURE__*/React.createElement("button", {
+  onClick: () => setPoolOpen(o => !o),
+  className: "cs-btn",
+  "aria-label": poolOpen ? "Hide player pool" : "Show player pool",
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    cursor: "pointer",
+    padding: 0
+  }
+}, poolOpen ? "Hide" : "Manage", /*#__PURE__*/React.createElement(ChevronDown, {
+  size: 13,
+  style: {
+    transform: poolOpen ? "rotate(180deg)" : "none",
+    transition: "transform 0.15s"
+  }
+}))), poolOpen && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 8
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontSize: 11.5,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    marginBottom: 8
+  }
+}, "Add people once here, then pull them onto any of this club's teams from Team editing \u2014 separate from the cross-club public directory, and no email required."), (activeClub.playerPool || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontSize: 12,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    fontStyle: "italic",
+    marginBottom: 8
+  }
+}, "No players in the pool yet \u2014 add one below, or paste a whole list in at once."), (activeClub.playerPool || []).map(pl => /*#__PURE__*/React.createElement("div", {
+  key: pl.id,
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "4px 0",
+    gap: 8
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 6
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 12.5,
+    color: COLORS.ink,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  }
+}, pl.name), /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 10.5,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    flexShrink: 0
+  }
+}, (PLAYER_ROLES.find(r => r.value === pl.role) || {}).label || "Role not set")), /*#__PURE__*/React.createElement("button", {
+  onClick: async () => {
+    setPoolRemoveBusyId(pl.id);
+    const result = await onRemovePoolPlayer(activeClubId, pl.id);
+    setPoolRemoveBusyId(null);
+    if (!result.ok) setPoolError(result.error);
+  },
+  disabled: poolRemoveBusyId === pl.id,
+  "aria-label": `Remove ${pl.name} from the pool`,
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.inkSoft,
+    cursor: "pointer",
+    fontSize: 16,
+    lineHeight: 1,
+    padding: "2px 6px",
+    flexShrink: 0
+  }
+}, "\u00d7"))), /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 6,
+    marginTop: 8,
+    flexWrap: "wrap"
+  }
+}, /*#__PURE__*/React.createElement(TextField, {
+  value: newPoolName,
+  onChange: setNewPoolName,
+  placeholder: "Player name",
+  autoCapitalize: "words",
+  autoCorrect: "off",
+  autoComplete: "off",
+  spellCheck: false,
+  style: {
+    flex: 1,
+    minWidth: 120,
+    padding: "8px 10px",
+    fontSize: 13
+  }
+}), PLAYER_ROLES.map(r => /*#__PURE__*/React.createElement("button", {
+  key: r.value,
+  type: "button",
+  onClick: () => setNewPoolRole(newPoolRole === r.value ? "" : r.value),
+  "aria-pressed": newPoolRole === r.value,
+  style: {
+    padding: "4px 10px",
+    borderRadius: 12,
+    border: newPoolRole === r.value ? "none" : `1.5px solid ${COLORS.willow}`,
+    background: newPoolRole === r.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+    color: newPoolRole === r.value ? "#fff" : COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11,
+    cursor: "pointer",
+    flexShrink: 0
+  }
+}, r.label)), /*#__PURE__*/React.createElement(Btn, {
+  onClick: async () => {
+    setPoolBusy(true);
+    setPoolError("");
+    const result = await onAddPoolPlayers(activeClubId, [{
+      name: newPoolName,
+      role: newPoolRole
+    }]);
+    setPoolBusy(false);
+    if (!result.ok) {
+      setPoolError(result.error);
+      return;
+    }
+    setNewPoolName("");
+    setNewPoolRole("");
+  },
+  disabled: poolBusy || !newPoolName.trim(),
+  style: {
+    flexShrink: 0,
+    padding: "0 14px"
+  }
+}, poolBusy ? "\u2026" : "Add")), poolError && /*#__PURE__*/React.createElement("div", {
+  style: {
+    color: COLORS.ball,
+    fontSize: 11.5,
+    fontFamily: "'Inter'",
+    marginTop: 6
+  }
+}, poolError), /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => setBulkOpen(o => !o),
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    padding: 0,
+    textDecoration: "underline",
+    marginTop: 10
+  }
+}, bulkOpen ? "Hide bulk add" : "Bulk add from a spreadsheet"), bulkOpen && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 8
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontSize: 11,
+    color: COLORS.inkSoft,
+    fontFamily: "'Inter'",
+    marginBottom: 6
+  }
+}, "Paste rows straight from Excel/Sheets (or comma-separated), one player per line \u2014 name, then role. A leading number column and a trailing team column, if present, are ignored; \u201cWicket Keeper\u201d maps to Batsman (set keeper on the team roster itself)."), /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    gap: 14,
+    marginBottom: 8,
+    flexWrap: "wrap"
+  }
+}, /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => downloadCSV("player-pool-template", ["Name", "Role", "Note"], [["Amit Dubey", "All Rounder", ""], ["Abhinav Sarangi", "Wicket Keeper", "Reg #4190964"]]),
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, "Download template (.csv)"), /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => poolFileInputRef.current && poolFileInputRef.current.click(),
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 11.5,
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, "Upload a CSV file"), /*#__PURE__*/React.createElement("input", {
+  type: "file",
+  accept: ".csv,text/csv",
+  ref: poolFileInputRef,
+  style: {
+    display: "none"
+  },
+  onChange: e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setBulkText(String(reader.result || ""));
+    reader.readAsText(file);
+  }
+})), /*#__PURE__*/React.createElement("textarea", {
+  value: bulkText,
+  onChange: e => setBulkText(e.target.value),
+  placeholder: "Abhinav Sarangi (4190964)\tWicket Keeper\nAmit Dubey\tAll Rounder",
+  rows: 5,
+  style: {
+    width: "100%",
+    boxSizing: "border-box",
+    fontFamily: "'IBM Plex Mono'",
+    fontSize: 12,
+    color: COLORS.ink,
+    background: COLORS.surface,
+    border: `1px solid ${COLORS.willow}`,
+    borderRadius: 8,
+    padding: "8px 10px",
+    resize: "vertical"
+  }
+}), (() => {
+  const rows = bulkText.trim() ? parseBulkPlayers(bulkText) : [];
+  const existingNames = new Set((activeClub.playerPool || []).map(p => p.name.trim().toLowerCase()));
+  const seen = new Set();
+  const withFlags = rows.map(r => {
+    const key = r.name.trim().toLowerCase();
+    const dup = existingNames.has(key) || seen.has(key);
+    seen.add(key);
+    return {
+      ...r,
+      dup
+    };
+  });
+  const toAdd = withFlags.filter(r => !r.dup);
+  return rows.length === 0 ? null : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8,
+      maxHeight: "40vh",
+      overflowY: "auto",
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 8
+    }
+  }, withFlags.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r._key,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      padding: "6px 10px",
+      borderBottom: `1px solid ${COLORS.willow}`,
+      opacity: r.dup ? 0.5 : 1
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, r.name, r.regNo && ` (${r.regNo})`), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      color: COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }, r.dup ? "Already in pool" : r.isKeeperNote ? "Batsman \u00b7 set as keeper on team" : (PLAYER_ROLES.find(x => x.value === r.role) || {}).label || "No role detected")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: async () => {
+      setBulkBusy(true);
+      setPoolError("");
+      const result = await onAddPoolPlayers(activeClubId, toAdd.map(r => ({
+        name: r.name,
+        role: r.role,
+        note: r.regNo ? `Reg #${r.regNo}` : ""
+      })));
+      setBulkBusy(false);
+      if (!result.ok) {
+        setPoolError(result.error);
+        return;
+      }
+      setBulkText("");
+      setBulkOpen(false);
+    },
+    disabled: bulkBusy || toAdd.length === 0,
+    style: {
+      flexShrink: 0,
+      padding: "0 14px",
+      minHeight: 34,
+      fontSize: 12
+    }
+  }, bulkBusy ? "\u2026" : `Add ${toAdd.length} player${toAdd.length === 1 ? "" : "s"}`), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setBulkText(""),
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, "Clear")));
+})()))), canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onNew,
     style: {
@@ -22238,9 +22288,6 @@ function TeamsScreen({
     onOpenRecords: onOpenRecords,
     onAddUmpire: onAddUmpire,
     onRemoveUmpire: onRemoveUmpire,
-    onAddPoolPlayers: onAddPoolPlayers,
-    onUpdatePoolPlayer: onUpdatePoolPlayer,
-    onRemovePoolPlayer: onRemovePoolPlayer,
     currentUid: currentUid
   })), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
