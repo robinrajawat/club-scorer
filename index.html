@@ -2574,6 +2574,7 @@ async function addPoolPlayers(clubId, players) {
     role: p.role || "",
     team: (p.team || "").trim(),
     externalId: (p.externalId || "").trim(),
+    status: p.status === "inactive" ? "inactive" : "active",
     battingHand: p.battingHand || "",
     bowlingHand: p.bowlingHand || "",
     email: normalizeEmail(p.email || ""),
@@ -21637,6 +21638,15 @@ function TeamsScreen({
   const [poolBusy, setPoolBusy] = useState(false);
   const [poolError, setPoolError] = useState("");
   const [poolRemoveBusyId, setPoolRemoveBusyId] = useState(null);
+  const [poolStatusBusyId, setPoolStatusBusyId] = useState(null);
+  async function togglePoolStatus(pl) {
+    setPoolStatusBusyId(pl.id);
+    const result = await onUpdatePoolPlayer(activeClubId, pl.id, {
+      status: pl.status === "inactive" ? "active" : "inactive"
+    });
+    setPoolStatusBusyId(null);
+    if (!result.ok) setPoolError(result.error);
+  }
   const [editingPoolId, setEditingPoolId] = useState(null);
   const [editPoolName, setEditPoolName] = useState("");
   const [editPoolRole, setEditPoolRole] = useState("");
@@ -21929,7 +21939,8 @@ function TeamsScreen({
     alignItems: "center",
     justifyContent: "space-between",
     padding: "4px 0",
-    gap: 8
+    gap: 8,
+    opacity: pl.status === "inactive" ? 0.55 : 1
   }
 }, /*#__PURE__*/React.createElement("div", {
   style: {
@@ -21970,6 +21981,23 @@ function TeamsScreen({
     flexShrink: 0
   }
 }, /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => togglePoolStatus(pl),
+  disabled: poolStatusBusyId === pl.id,
+  "aria-label": pl.status === "inactive" ? `Mark ${pl.name} active` : `Mark ${pl.name} inactive`,
+  style: {
+    background: "none",
+    border: `1px solid ${pl.status === "inactive" ? COLORS.willow : COLORS.turf}`,
+    borderRadius: 10,
+    color: pl.status === "inactive" ? COLORS.inkSoft : COLORS.turf,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 10,
+    padding: "2px 8px",
+    flexShrink: 0
+  }
+}, pl.status === "inactive" ? "Inactive" : "Active"), /*#__PURE__*/React.createElement("button", {
   onClick: () => startPoolEdit(pl),
   "aria-label": `Edit ${pl.name}`,
   style: {
@@ -22660,7 +22688,7 @@ function TeamEditScreen({
   }
   // This team's own club's player pool (see the Player Pool section of ClubPanel) -- already
   // present on the clubs prop, unlike publicPlayers above which needs its own async load.
-  const clubPool = clubId ? (clubs.find(c => c.id === clubId) || {}).playerPool || [] : [];
+  const clubPool = clubId ? ((clubs.find(c => c.id === clubId) || {}).playerPool || []).filter(p => p.status !== "inactive") : [];
   const [addError, setAddError] = useState("");
   function addPlayer() {
     const n = newPlayer.trim();
