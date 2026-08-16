@@ -214,11 +214,11 @@ const Hand = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
 }), /*#__PURE__*/React.createElement("path", {
   d: "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
 }));
-// Inbox: for the account menu's quick-access entry to the Inbox screen (polls + requests).
-const InboxIcon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
-  points: "22 12 16 12 14 15 10 15 8 12 2 12"
+// Bell: the Home header's Inbox shortcut (polls + requests), badge-counted for anything pending.
+const Bell = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"
 }), /*#__PURE__*/React.createElement("path", {
-  d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+  d: "M10.3 21a1.94 1.94 0 0 0 3.4 0"
 }));
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
@@ -7917,15 +7917,12 @@ function AuthBar({
   user,
   profile,
   onOpenAccount,
-  onOpenInbox,
-  onOpenSharedLinks,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
   onSignOut,
   themePref,
-  onSetTheme,
-  badgeCount = 0
+  onSetTheme
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -8049,55 +8046,7 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), user ? "Manage account" : "Sign in"), user && onOpenInbox && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    role: "menuitem",
-    className: "cs-btn",
-    onClick: () => go(onOpenInbox),
-    style: {
-      ...menuItemStyle,
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 9
-    }
-  }, /*#__PURE__*/React.createElement(InboxIcon, {
-    size: 15,
-    style: {
-      color: COLORS.pitch
-    }
-  }), "Inbox"), badgeCount > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxSizing: "border-box",
-      flexShrink: 0,
-      minWidth: 18,
-      height: 18,
-      padding: "0 4px",
-      borderRadius: 9,
-      background: COLORS.ballFixed,
-      color: "#fff",
-      fontSize: 11,
-      fontWeight: 700,
-      lineHeight: 1
-    }
-  }, badgeCount > 9 ? "9+" : badgeCount)), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    role: "menuitem",
-    className: "cs-btn",
-    onClick: () => go(onOpenSharedLinks),
-    style: menuItemStyle
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 15,
-    style: {
-      color: COLORS.pitch
-    }
-  }), "Shared Links"), user && /*#__PURE__*/React.createElement("div", {
+  }), user ? "Manage account" : "Sign in"), user && /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), user && /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -8292,31 +8241,7 @@ function AuthBar({
     }
   }, label.charAt(0).toUpperCase()) : /*#__PURE__*/React.createElement(LogIn, {
     size: 14
-  }), label), badgeCount > 0 && /*#__PURE__*/React.createElement("span", {
-    "aria-label": `${badgeCount} pending request${badgeCount === 1 ? "" : "s"}`,
-    style: {
-      position: "absolute",
-      top: -6,
-      right: -6,
-      zIndex: 1,
-      boxSizing: "border-box",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      minWidth: 18,
-      height: 18,
-      padding: "0 4px",
-      borderRadius: 9,
-      background: COLORS.ballFixed,
-      color: "#fff",
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 800,
-      lineHeight: 1,
-      border: "2px solid #fff",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.35)"
-    }
-  }, badgeCount > 9 ? "9+" : badgeCount)), menu);
+  }), label)), menu);
 }
 function RuleChoice({
   label,
@@ -15534,20 +15459,85 @@ function renderMatchCard(m, i) {
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Club Scorer")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 3,
+      right: 3,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 15,
+      height: 15,
+      padding: "0 3px",
+      borderRadius: 8,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9.5,
+      fontWeight: 700,
+      lineHeight: 1,
+      border: `1.5px solid ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenSharedLinks,
+    "aria-label": "Shared Links",
+    className: "cs-btn",
+    style: {
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 19
+  })), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
-    onOpenInbox: onOpenInbox,
-    onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,
     onOpenFeedback: onOpenFeedback,
     onOpenAbout: onOpenAbout,
     onSignOut: onSignOut,
     themePref: themePref,
-    onSetTheme: onSetTheme,
-    badgeCount: inboxBadgeCount
-  })), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+    onSetTheme: onSetTheme
+  }))), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center"
