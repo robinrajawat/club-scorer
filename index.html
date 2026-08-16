@@ -22101,7 +22101,42 @@ function TeamsScreen({
       fontWeight: 700,
       fontSize: 13
     }
-  }, t.label))), tab === "clubs" && activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, activeClub && canManage && /*#__PURE__*/React.createElement("div", {
+  }, t.label))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 12
+    }
+  }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
+    clubs: clubs,
+    activeClubId: activeClubAdminId,
+    onSelect: onSelectClubAdmin,
+    onCreate: onCreateClub,
+    onJoin: onJoinClub,
+    onInvite: onInviteClubMember,
+    onInviteCoOwner: onInviteClubCoOwner,
+    onLeave: onLeaveClub,
+    onDelete: onDeleteClub,
+    onRename: onRenameClub,
+    onUpdateDescription: onUpdateClubDescription,
+    onUpdateAddress: onUpdateClubAddress,
+    onUploadLogo: onUploadClubLogo,
+    onRemoveLogo: onRemoveClubLogo,
+    federationsById: federationsById,
+    onLeaveFederation: onLeaveFederation,
+    onRemoveMember: onRemoveClubMember,
+    onRemoveCoOwner: onRemoveClubCoOwner,
+    onRevokeInvite: onRevokeClubInvite,
+    onRefreshMyMemberName: onRefreshMyMemberName,
+    onSetVisibility: onSetClubVisibility,
+    onSearchPublicFederations: onSearchPublicFederations,
+    onRequestFederationAffiliation: onRequestFederationAffiliation,
+    onOpenRecords: onOpenRecords,
+    onAddUmpire: onAddUmpire,
+    onRemoveUmpire: onRemoveUmpire,
+    currentUid: currentUid
+  })), tab === "clubs" && activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, activeClub && canManage && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
     borderRadius: 16,
@@ -22630,42 +22665,7 @@ function TeamsScreen({
   }
 }, "Manage teams", /*#__PURE__*/React.createElement(ChevronRight, {
   size: 14
-})))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 12
-    }
-  }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
-    clubs: clubs,
-    activeClubId: activeClubAdminId,
-    onSelect: onSelectClubAdmin,
-    onCreate: onCreateClub,
-    onJoin: onJoinClub,
-    onInvite: onInviteClubMember,
-    onInviteCoOwner: onInviteClubCoOwner,
-    onLeave: onLeaveClub,
-    onDelete: onDeleteClub,
-    onRename: onRenameClub,
-    onUpdateDescription: onUpdateClubDescription,
-    onUpdateAddress: onUpdateClubAddress,
-    onUploadLogo: onUploadClubLogo,
-    onRemoveLogo: onRemoveClubLogo,
-    federationsById: federationsById,
-    onLeaveFederation: onLeaveFederation,
-    onRemoveMember: onRemoveClubMember,
-    onRemoveCoOwner: onRemoveClubCoOwner,
-    onRevokeInvite: onRevokeClubInvite,
-    onRefreshMyMemberName: onRefreshMyMemberName,
-    onSetVisibility: onSetClubVisibility,
-    onSearchPublicFederations: onSearchPublicFederations,
-    onRequestFederationAffiliation: onRequestFederationAffiliation,
-    onOpenRecords: onOpenRecords,
-    onAddUmpire: onAddUmpire,
-    onRemoveUmpire: onRemoveUmpire,
-    currentUid: currentUid
-  })), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
+})))), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
     clubs: clubs,
     currentUid: currentUid,
