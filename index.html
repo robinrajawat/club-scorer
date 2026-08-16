@@ -15962,6 +15962,7 @@ function MyTeamsScreen({
   clubs = [],
   activeClubId = null,
   onSelectClub,
+  currentUid,
   onBack,
   onNewTeam,
   onEditTeam,
@@ -15977,6 +15978,17 @@ function MyTeamsScreen({
     const club = clubs.find(c => c.id === t._clubId);
     return club ? club.name : "Club";
   }
+  // A personal team is always editable by whoever's looking at it; a club team only by that
+  // club's owner/co-owner -- matches firestore.rules (allow write: if isClubOwner(...)), which
+  // silently rejects anyone else's write. Without this check the merged list would offer New/
+  // Edit/Delete/Move to any plain club member and let them hit that rejection after filling out
+  // a whole team, instead of never showing the controls in the first place.
+  function canManageTeam(t) {
+    if (!t._clubId) return true;
+    return isClubOwner(clubs.find(c => c.id === t._clubId), currentUid);
+  }
+  const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
+  const canManageActive = !activeClub || isClubOwner(activeClub, currentUid);
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
@@ -16050,7 +16062,7 @@ function MyTeamsScreen({
       alignItems: "center",
       gap: 4
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, canManageActive && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -16112,7 +16124,7 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "right",
       fontFamily: "'Inter'",
@@ -16128,7 +16140,7 @@ function MyTeamsScreen({
       marginBottom: i === teams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => onDeleteTeam(t.id, t._clubId || null),
+    onDelete: canManageTeam(t) ? () => onDeleteTeam(t.id, t._clubId || null) : undefined,
     deleteLabel: "Delete"
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
@@ -16141,17 +16153,17 @@ function MyTeamsScreen({
       justifyContent: "space-between"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => onEditTeam(t),
-    onKeyDown: e => {
+    onClick: canManageTeam(t) ? () => onEditTeam(t) : undefined,
+    onKeyDown: canManageTeam(t) ? e => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onEditTeam(t);
       }
-    },
-    role: "button",
-    tabIndex: 0,
+    } : undefined,
+    role: canManageTeam(t) ? "button" : undefined,
+    tabIndex: canManageTeam(t) ? 0 : undefined,
     style: {
-      cursor: "pointer",
+      cursor: canManageTeam(t) ? "pointer" : "default",
       flex: 1,
       minWidth: 0
     }
@@ -16188,12 +16200,12 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played", !activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, " \u00b7 ", sourceLabel(t)))), /*#__PURE__*/React.createElement(MoveTeamMenu, {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played", !activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, " \u00b7 ", sourceLabel(t)))), canManageTeam(t) && /*#__PURE__*/React.createElement(MoveTeamMenu, {
     team: t,
     clubs: clubs,
     currentClubId: t._clubId || null,
     onMove: onMoveTeam
-  }), /*#__PURE__*/React.createElement("button", {
+  }), canManageTeam(t) && /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -22676,7 +22688,7 @@ function TeamsScreen({
     color: COLORS.inkSoft,
     lineHeight: 1.5
   }
-}, `Add, edit, or delete ${activeClubName}'s teams from the Teams screen.`), onManageTeams && /*#__PURE__*/React.createElement(Btn, {
+}, canManage ? `Add, edit, or delete ${activeClubName}'s teams from the Teams screen.` : `View ${activeClubName}'s teams from the Teams screen.`), onManageTeams && /*#__PURE__*/React.createElement(Btn, {
   onClick: onManageTeams,
   style: {
     flexShrink: 0,
@@ -22687,7 +22699,7 @@ function TeamsScreen({
     fontSize: 12.5,
     borderRadius: 12
   }
-}, "Manage teams", /*#__PURE__*/React.createElement(ChevronRight, {
+}, canManage ? "Manage teams" : "View teams", /*#__PURE__*/React.createElement(ChevronRight, {
   size: 14
 })))), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,
@@ -32978,6 +32990,7 @@ function CricketScorer() {
     clubs: clubs,
     activeClubId: activeClubAdminId,
     onSelectClub: setActiveClubAdminId,
+    currentUid: user && user.uid,
     onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
