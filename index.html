@@ -8282,7 +8282,6 @@ function AccountScreen({
   onExportData,
   onImportData,
   onDeleteAccount,
-  onOpenSharedLinks,
   onBack,
   redirectError,
   linkStatus,
@@ -9144,56 +9143,7 @@ function AccountScreen({
       fontFamily: "'Inter'",
       fontSize: 12
     }
-  }, "Forgot password?")) : null))), /*#__PURE__*/React.createElement("div", {
-  style: {
-    background: COLORS.surface,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-  }
-},
-  /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "Manage"),
-  /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenSharedLinks,
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      padding: 0,
-      fontFamily: "'Inter'"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Shared Links"), /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 18,
-    style: {
-      color: COLORS.inkSoft
-    }
-  }))
-), user && /*#__PURE__*/React.createElement("div", {
+  }, "Forgot password?")) : null))), user && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
     borderRadius: 16,
@@ -10173,7 +10123,7 @@ function SharedLinksScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Account"), /*#__PURE__*/React.createElement("div", {
+  }), " Inbox"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -13017,6 +12967,7 @@ function InboxScreen({
   onCancel,
   onCompleteJoin,
   pollItems = [],
+  onOpenSharedLinks,
   onBack
 }) {
   const [busyId, setBusyId] = useState(null);
@@ -13125,7 +13076,7 @@ function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Account"), /*#__PURE__*/React.createElement("div", {
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -13320,7 +13271,35 @@ function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, busyId === r.id ? "\u2026" : "Cancel request")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, busyId === r.id ? "\u2026" : "Cancel request")))), onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenSharedLinks,
+    className: "cs-btn",
+    style: {
+      ...cardStyle,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      textAlign: "left",
+      border: "none",
+      cursor: "pointer",
+      marginTop: isEmpty ? 0 : 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Shared Links"), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 18,
+    style: {
+      color: COLORS.inkSoft
+    }
+  })), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,
@@ -30914,7 +30893,7 @@ const SCREEN_DEPTH = {
   players: 1,
   "team-edit": 2,
   "shared-links": 2,
-  "inbox": 2,
+  "inbox": 1,
   "tournament-detail": 2
 };
 function CricketScorer() {
@@ -33064,7 +33043,6 @@ function CricketScorer() {
     onExportData: handleExportData,
     onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
-    onOpenSharedLinks: () => setScreen("shared-links"),
     onBack: () => setScreen("home"),
     redirectError: authError,
     linkStatus: linkStatus,
@@ -33101,7 +33079,8 @@ function CricketScorer() {
     onCancel: handleCancelFederationRequest,
     onCompleteJoin: handleCompleteAcceptedFederationRequest,
     pollItems: pendingPollItems,
-    onBack: () => setScreen("account")
+    onOpenSharedLinks: () => setScreen("shared-links"),
+    onBack: () => setScreen("home")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
     direction: navDirection
@@ -33109,7 +33088,7 @@ function CricketScorer() {
     matches: matches,
     onRevokeShareCode: handleRevokeShareCode,
     onRevokeViewCode: handleRevokeViewCode,
-    onBack: () => setScreen("account")
+    onBack: () => setScreen("inbox")
   })), screen === "players" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "players",
     direction: navDirection
