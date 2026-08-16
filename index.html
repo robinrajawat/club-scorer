@@ -17882,7 +17882,15 @@ function TournamentsScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement(React.Fragment, null, (clubs.length + myFederations.length > 2) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 6
+    }
+  }, "\u2192 swipe to see more"), /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
@@ -17941,7 +17949,7 @@ function TournamentsScreen({
       whiteSpace: "nowrap",
       flexShrink: 0
     }
-  }, f.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, f.name)))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
