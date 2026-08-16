@@ -9720,9 +9720,10 @@ function highlightMatch(text, query) {
 }
 function HelpScreen({
   onBack,
-  onReplayTour
+  onReplayTour,
+  initialQuery = ""
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const q = query.trim().toLowerCase();
   // Matches against both the question and the answer text -- someone searching "DLS" or "9-a-side"
   // is often describing what they want to know, not quoting the exact question wording back, so
@@ -15230,6 +15231,8 @@ function HomeScreen({
   onDelete,
   onManageTeams,
   onOpenClubs,
+  onOpenClub,
+  onOpenFederation,
   user,
   profile,
   onOpenAccount,
@@ -15255,6 +15258,7 @@ function HomeScreen({
   onStartFixture,
   onEditVenue,
   clubs = [],
+  federationsById = {},
   clubTeamsById = {},
   onGetShareCode,
   onGetViewCode,
@@ -15274,16 +15278,19 @@ function HomeScreen({
   // busy club can tuck any of them away once they've seen what's there, not just Completed.
   const [inProgressExpanded, setInProgressExpanded] = useState(true);
   const [upcomingExpanded, setUpcomingExpanded] = useState(true);
-  // Merges what used to be a separate "Search players" screen into this one search box: same
-  // query, a tab to say which directory it's scoped to. The player directory is a full fetch
-  // (unlike the matches list, which is already in memory) -- only load it the first time someone
-  // actually switches to the Players tab, not on every Home visit.
-  const [searchTab, setSearchTab] = useState("matches"); // "matches" | "players"
+  // Merges what used to be separate destinations (a "Search players" screen, plus Cups/Clubs/
+  // Federations/Help each living behind their own tap) into one search box: type once, see
+  // matches, players, tournaments/series, clubs, federations, and FAQ entries all filtered by the
+  // same query, with a chip row to narrow down to just one kind of result. "All" only ever
+  // searches data already sitting in memory (matches, tournaments, clubs, and the static FAQ
+  // content) -- the public player directory is a real network fetch, so it's loaded lazily and
+  // only once someone deliberately picks the Players chip, same as before this was unified.
+  const [searchScope, setSearchScope] = useState("all"); // all | matches | players | cups | clubs | federations | help
   const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
   const [playersLoading, setPlayersLoading] = useState(false);
   const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
   useEffect(() => {
-    if (searchTab !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
+    if (searchScope !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
     let cancelled = false;
     setPlayersLoading(true);
     onLoadPublicPlayers().then(list => {
@@ -15294,7 +15301,7 @@ function HomeScreen({
     return () => {
       cancelled = true;
     };
-  }, [searchTab, publicPlayers, hasPlayerSearch]);
+  }, [searchScope, publicPlayers, hasPlayerSearch]);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -15337,6 +15344,23 @@ function HomeScreen({
   const UPCOMING_HOME_LIMIT = 4;
   const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
   const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
+  // Cups (tournaments + series), clubs, federations, and Help/FAQ entries -- all already sitting
+  // in memory (tournaments/clubs are loaded right after sign-in for other reasons; HELP_SECTIONS
+  // is static), so unlike Players these cost nothing to search and only ever show while there's a
+  // query, same "no browse mode" reasoning as filteredUpcoming above.
+  const filteredTournaments = q ? tournaments.filter(t => t.name.toLowerCase().includes(q)) : [];
+  const filteredClubsList = q ? clubs.filter(c => c.name.toLowerCase().includes(q)) : [];
+  const allFederations = Object.values(federationsById);
+  const filteredFederationsList = q ? allFederations.filter(f => f.name.toLowerCase().includes(q)) : [];
+  // Matches against both the question and the answer text, same reasoning as HelpScreen's own
+  // search -- kept each entry tagged with its section title so a result out of context ("Set at
+  // match creation, under Customize") still makes sense on its own.
+  const filteredHelpEntries = q ? HELP_SECTIONS.flatMap(section => section.entries.filter(e => e.q.toLowerCase().includes(q) || e.a.toLowerCase().includes(q)).map(e => ({ ...e,
+    section: section.title
+  }))) : [];
+  // Cap per category when showing everything at once under "All" -- a glance, not a duplicate of
+  // what picking that category's own chip shows uncapped.
+  const ALL_SCOPE_CAP = 3;
   // In progress first (the ones someone likely opened this screen to resume), completed second and
   // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
   // result set is already short and specific, so splitting it into two labeled groups (one likely
@@ -15462,6 +15486,90 @@ function renderMatchCard(m, i) {
     clubs: clubs,
     clubTeamsById: clubTeamsById
   })));
+  }
+  // Shared row style for the four new search categories below -- same look as the player search
+  // results just above, so a mixed set of result kinds still reads as one consistent list style
+  // rather than four differently-designed rows bolted together.
+  function searchResultRow(key, onClick, primary, secondary) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: key,
+      type: "button",
+      onClick: onClick,
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 2,
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: "none",
+        background: COLORS.surface,
+        cursor: "pointer",
+        textAlign: "left",
+        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14,
+        color: COLORS.ink
+      }
+    }, primary), secondary && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft
+      }
+    }, secondary));
+  }
+  function renderCupRow(t) {
+    return searchResultRow(t.id, () => onOpenTournament(t), t.name, t.kind === "series" ? "Series" : "Tournament");
+  }
+  function renderClubRow(c) {
+    return searchResultRow(c.id, () => onOpenClub(c.id), c.name, "Club");
+  }
+  function renderFederationRow(f) {
+    return searchResultRow(f.id, () => onOpenFederation(), f.name, "Federation");
+  }
+  function renderHelpRow(e) {
+    return searchResultRow(e.q, () => onOpenHelp(query), e.q, e.section);
+  }
+  // "See all N" link under an All-scope category preview -- switches straight to that category's
+  // own chip instead of just being a label, so narrowing down is one tap from the preview itself.
+  function seeAllLink(scope, count) {
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setSearchScope(scope),
+      className: "cs-btn",
+      style: {
+        display: "block",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "6px 2px",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12,
+        color: COLORS.turf,
+        textDecoration: "underline"
+      }
+    }, `See all ${count}`);
+  }
+  function categorySectionLabel(text) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
+      }
+    }, text);
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15618,55 +15726,62 @@ function renderMatchCard(m, i) {
     size: 15
   }), " Clubs")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4,
-      background: COLORS.creamDark,
-      borderRadius: 12,
-      padding: 3,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setSearchTab("matches"),
-    className: "cs-btn",
-    style: {
-      flex: 1,
-      padding: "8px 0",
-      borderRadius: 9,
-      border: "none",
-      background: searchTab === "matches" ? COLORS.pitch : "transparent",
-      color: searchTab === "matches" ? "#fff" : COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 12.5,
-      cursor: "pointer"
-    }
-  }, "Matches"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setSearchTab("players"),
-    className: "cs-btn",
-    style: {
-      flex: 1,
-      padding: "8px 0",
-      borderRadius: 9,
-      border: "none",
-      background: searchTab === "players" ? COLORS.pitch : "transparent",
-      color: searchTab === "players" ? "#fff" : COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 12.5,
-      cursor: "pointer"
-    }
-  }, "Players")), (searchTab === "players" || matches.length > 0 || sortedUpcomingFixtures.length > 0) ? /*#__PURE__*/React.createElement(TextField, {
+  }), /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
-    placeholder: searchTab === "players" ? "Search public players by name" : "Search your matches & fixtures",
+    placeholder: "Search everything\u2026",
     style: {
+      marginBottom: 10
+    }
+  }), q && /*#__PURE__*/React.createElement("div", {
+    className: "cs-no-scrollbar",
+    style: {
+      display: "flex",
+      gap: 6,
+      overflowX: "auto",
+      paddingBottom: 4,
       marginBottom: 14
     }
-  }) : null, searchTab === "matches" && (matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, [{
+    key: "all",
+    label: "All"
+  }, {
+    key: "matches",
+    label: "Matches"
+  }, ...(hasPlayerSearch ? [{
+    key: "players",
+    label: "Players"
+  }] : []), {
+    key: "cups",
+    label: "Cups"
+  }, {
+    key: "clubs",
+    label: "Clubs"
+  }, {
+    key: "federations",
+    label: "Federations"
+  }, {
+    key: "help",
+    label: "Help"
+  }].map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.key,
+    type: "button",
+    onClick: () => setSearchScope(t.key),
+    className: "cs-btn",
+    style: {
+      flexShrink: 0,
+      padding: "7px 13px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: searchScope === t.key ? COLORS.pitch : COLORS.creamDark,
+      color: searchScope === t.key ? "#fff" : COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 12.5,
+      whiteSpace: "nowrap"
+    }
+  }, t.label))), (searchScope === "matches" || (searchScope === "all" && !q)) && (matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -15875,7 +15990,7 @@ function renderMatchCard(m, i) {
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here."))), searchTab === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here."))), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading players\u2026"
   }) : filteredPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15930,7 +16045,141 @@ function renderMatchCard(m, i) {
       fontSize: 11.5,
       color: COLORS.inkSoft
     }
-  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))))), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? "No tournaments or series match that search." : "Type to search tournaments & series.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredTournaments.map(renderCupRow))), searchScope === "clubs" && /*#__PURE__*/React.createElement("div", null, filteredClubsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? "No clubs match that search." : "Type to search your clubs.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredClubsList.map(renderClubRow))), searchScope === "federations" && /*#__PURE__*/React.createElement("div", null, filteredFederationsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? "No federations match that search." : "Type to search your federations.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredFederationsList.map(renderFederationRow))), searchScope === "help" && /*#__PURE__*/React.createElement("div", null, filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? "No Help & FAQ entries match that search." : "Type to search Help & FAQ.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredTournaments.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Matches"), filteredMatches.slice(0, ALL_SCOPE_CAP).map((m, i) => renderMatchCard(m, i)), filteredUpcoming.slice(0, ALL_SCOPE_CAP).map(({
+    tournament: t,
+    fixture: f
+  }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
+    key: f.id,
+    tournament: t,
+    fixture: f,
+    index: i,
+    onOpenTournament: onOpenTournament,
+    onScheduleFixture: onScheduleFixture,
+    onStartFixture: onStartFixture,
+    onEditVenue: onEditVenue,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
+  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Cups"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredTournaments.slice(0, ALL_SCOPE_CAP).map(renderCupRow)), filteredTournaments.length > ALL_SCOPE_CAP && seeAllLink("cups", filteredTournaments.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Clubs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredClubsList.slice(0, ALL_SCOPE_CAP).map(renderClubRow)), filteredClubsList.length > ALL_SCOPE_CAP && seeAllLink("clubs", filteredClubsList.length)), filteredFederationsList.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Federations"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredFederationsList.slice(0, ALL_SCOPE_CAP).map(renderFederationRow)), filteredFederationsList.length > ALL_SCOPE_CAP && seeAllLink("federations", filteredFederationsList.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Help & FAQ"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredHelpEntries.slice(0, ALL_SCOPE_CAP).map(renderHelpRow)), filteredHelpEntries.length > ALL_SCOPE_CAP && seeAllLink("help", filteredHelpEntries.length)), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, "Looking for a player? Switch to the Players tab above."))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -31219,6 +31468,10 @@ function CricketScorer() {
   // two collapsed into this single selector.
   const [activeClubAdminId, setActiveClubAdminId] = useState(null);
   const [teamsTab, setTeamsTab] = useState("clubs"); // clubs | federations
+  // Seeds the Help screen's own search box when someone taps a Help result from Home's global
+  // search -- so the same query carries over instead of landing on an unfiltered FAQ list they'd
+  // have to re-type into.
+  const [helpInitialQuery, setHelpInitialQuery] = useState("");
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
@@ -33162,12 +33415,25 @@ function CricketScorer() {
       setScreen("my-teams");
     },
     onOpenClubs: () => setScreen("teams"),
+    onOpenClub: clubId => {
+      setActiveClubAdminId(clubId);
+      setTeamsTab("clubs");
+      setScreen("teams");
+    },
+    onOpenFederation: () => {
+      setActiveClubAdminId(null);
+      setTeamsTab("federations");
+      setScreen("teams");
+    },
     user: user,
     profile: profile,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenHelp: () => setScreen("help"),
+    onOpenHelp: (q) => {
+      setHelpInitialQuery(q || "");
+      setScreen("help");
+    },
     onOpenFeedback: () => setScreen("feedback"),
     onOpenAbout: () => setScreen("about"),
     onSignOut: signOutUser,
@@ -33200,6 +33466,7 @@ function CricketScorer() {
     onStartFixture: handleStartFixtureMatch,
     onEditVenue: handleEditVenueFromHome,
     clubs: clubs,
+    federationsById: federationsById,
     clubTeamsById: clubTeamsById,
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
@@ -33425,6 +33692,7 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HelpScreen, {
     onBack: () => setScreen("home"),
+    initialQuery: helpInitialQuery,
     onReplayTour: () => {
       setShowTour(true);
       setScreen("home");
