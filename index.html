@@ -8408,7 +8408,15 @@ function AccountScreen({
     setActionError("");
     const result = await onSignOut();
     setBusy(false);
-    if (result && result.ok === false && result.error) setActionError(result.error);
+    if (result && result.ok === false && result.error) {
+      setActionError(result.error);
+    } else {
+      // Unlike signing out from Home's account menu (which just re-renders Home in signed-out
+      // mode -- nothing to escape to, since Home already works fine without an account), staying
+      // put here leaves someone looking at a now-mostly-empty settings page with a sign-in prompt
+      // instead of landing back where they'd actually expect after ending a session.
+      onBack();
+    }
   }
   async function handleLinkPassword() {
     if (linkBusy || !linkPassword) return;
