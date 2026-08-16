@@ -1088,8 +1088,10 @@ function icsLocalDateTime(iso) {
 }
 // One VEVENT block for a fixture — shared by buildTournamentICS (a whole schedule, looped) and
 // buildFixtureICS (a single fixture, for the Home screen's per-card "add to calendar") so the
-// event shape can't drift between the two.
-function fixtureIcsEvent(f, stamp, contextName) {
+// event shape can't drift between the two. venue/lat/lng are optional -- a tournament's venue
+// (see t.venue/venueLat/venueLng, the same fields the in-app Maps link already uses) so the
+// exported event actually carries a location instead of just team names and a time.
+function fixtureIcsEvent(f, stamp, contextName, venue, lat, lng) {
   const start = icsLocalDateTime(f.date);
   // Two-hour placeholder duration — the app has no fixed match length independent of overs/
   // format, and this is just meant to block a calendar slot, not predict a finish time exactly.
@@ -1097,7 +1099,13 @@ function fixtureIcsEvent(f, stamp, contextName) {
   const startDate = new Date(`${datePart}T${timePart}:00`);
   const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
   const end = icsLocalDateTime(`${endDate.getFullYear()}-${pad2(endDate.getMonth() + 1)}-${pad2(endDate.getDate())}T${pad2(endDate.getHours())}:${pad2(endDate.getMinutes())}`);
-  return ["BEGIN:VEVENT", `UID:${f.id}@cricket-scorer`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(`${f.teamA} vs ${f.teamB}`)}`, `DESCRIPTION:${icsEscape(`${contextName} fixture`)}`, "END:VEVENT"];
+  const lines = ["BEGIN:VEVENT", `UID:${f.id}@cricket-scorer`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(`${f.teamA} vs ${f.teamB}`)}`, `DESCRIPTION:${icsEscape(`${contextName} fixture`)}`];
+  if (venue) lines.push(`LOCATION:${icsEscape(venue)}`);
+  // GEO is a separate, standard ICS property some calendar apps use to offer their own "open in
+  // maps" action -- worth including whenever we have coordinates, venue text or not.
+  if (lat != null && lng != null) lines.push(`GEO:${lat};${lng}`);
+  lines.push("END:VEVENT");
+  return lines;
 }
 function buildTournamentICS(tournament) {
   const now = new Date();
@@ -1105,17 +1113,17 @@ function buildTournamentICS(tournament) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN"];
   (tournament.fixtures || []).forEach(f => {
     if (!ISO_DATETIME_RE.test(f.date || "")) return; // skip fixtures with no scheduled time
-    lines.push(...fixtureIcsEvent(f, stamp, tournament.name));
+    lines.push(...fixtureIcsEvent(f, stamp, tournament.name, tournament.venue, tournament.venueLat, tournament.venueLng));
   });
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
 }
 // Single-fixture variant — same event shape as buildTournamentICS's loop, just one VEVENT, for
 // adding just this one game to a calendar without pulling in the tournament's whole schedule.
-function buildFixtureICS(fixture, contextName) {
+function buildFixtureICS(fixture, contextName, venue, lat, lng) {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN", ...fixtureIcsEvent(fixture, stamp, contextName), "END:VCALENDAR"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN", ...fixtureIcsEvent(fixture, stamp, contextName, venue, lat, lng), "END:VCALENDAR"];
   return lines.join("\r\n");
 }
 function downloadTextFile(filename, mimeType, text) {
@@ -15059,7 +15067,7 @@ function UpcomingFixtureCard({
     size: 14
   })), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name)),
+    onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name, t.venue, t.venueLat, t.venueLng)),
     className: "cs-btn",
     "aria-label": "Add to calendar",
     style: {
