@@ -15726,14 +15726,45 @@ function renderMatchCard(m, i) {
     size: 15
   }), " Clubs")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), /*#__PURE__*/React.createElement(TextField, {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
     placeholder: "Search everything\u2026",
     style: {
-      marginBottom: 10
+      paddingRight: query ? 38 : 14
     }
-  }), q && /*#__PURE__*/React.createElement("div", {
+  }), query && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setQuery("");
+      setSearchScope("all");
+    },
+    "aria-label": "Clear search",
+    className: "cs-btn",
+    style: {
+      position: "absolute",
+      right: 8,
+      top: "50%",
+      transform: "translateY(-50%)",
+      width: 26,
+      height: 26,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: COLORS.inkSoft,
+      borderRadius: "50%",
+      fontSize: 20,
+      lineHeight: 1
+    }
+  }, "\u00d7")), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
