@@ -255,6 +255,12 @@ const Globe = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 }), /*#__PURE__*/React.createElement("path", {
   d: "M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"
 }));
+// Shield: a club/team crest is the more universal "club" symbol than Globe (which reads as
+// public/worldwide, already doing that job on the visibility badges elsewhere) -- used for the
+// Home screen's own Clubs button specifically.
+const Shield = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+}));
 const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "12",
   y1: "5",
@@ -1113,7 +1119,12 @@ function buildTournamentICS(tournament) {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN"];
   (tournament.fixtures || []).forEach(f => {
     if (!ISO_DATETIME_RE.test(f.date || "")) return; // skip fixtures with no scheduled time
-    lines.push(...fixtureIcsEvent(f, stamp, tournament.name, tournament.venue, tournament.venueLat, tournament.venueLng));
+    // A fixture's own venue overrides the tournament's default -- same fallback UpcomingFixtureCard
+    // uses, so exporting the whole schedule doesn't flatten every match back onto one ground.
+    const venue = f.venue || tournament.venue;
+    const venueLat = f.venue ? f.venueLat : tournament.venueLat;
+    const venueLng = f.venue ? f.venueLng : tournament.venueLng;
+    lines.push(...fixtureIcsEvent(f, stamp, tournament.name, venue, venueLat, venueLng));
   });
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
@@ -14812,6 +14823,12 @@ function UpcomingFixtureCard({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // A fixture's own venue overrides the tournament's default -- matches can be held across
+  // multiple grounds regardless of who's organizing it, so the tournament's venue is only a
+  // starting point every fixture inherits until it's given one of its own.
+  const venue = f.venue || t.venue;
+  const venueLat = f.venue ? f.venueLat : t.venueLat;
+  const venueLng = f.venue ? f.venueLng : t.venueLng;
   const [pollModalOpen, setPollModalOpen] = useState(false);
   const [pollCheckBusy, setPollCheckBusy] = useState(false);
   // Set right before opening the poll modal, only if a still-active poll already exists for this
@@ -14848,7 +14865,7 @@ function UpcomingFixtureCard({
   // scheduled date, or a venue with no verified coordinates) there's simply nothing to show, so
   // this quietly does nothing rather than showing a permanent "no forecast yet" placeholder.
   useEffect(() => {
-    if (!fixtureDateStr || t.venueLat == null || t.venueLng == null) {
+    if (!fixtureDateStr || venueLat == null || venueLng == null) {
       setWeather(null);
       return;
     }
@@ -14858,13 +14875,13 @@ function UpcomingFixtureCard({
       return;
     }
     let cancelled = false;
-    fetchFixtureWeather(t.venueLat, t.venueLng, fixtureDateStr).then(result => {
+    fetchFixtureWeather(venueLat, venueLng, fixtureDateStr).then(result => {
       if (!cancelled) setWeather(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [fixtureDateStr, t.venueLat, t.venueLng]);
+  }, [fixtureDateStr, venueLat, venueLng]);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -14914,7 +14931,7 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), t.venue ? /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB)), venue ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -14923,11 +14940,11 @@ function UpcomingFixtureCard({
       minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("a", {
-    href: buildMapsUrl(t.venue, t.venueLat, t.venueLng),
+    href: buildMapsUrl(venue, venueLat, venueLng),
     target: "_blank",
     rel: "noopener noreferrer",
     className: "cs-btn",
-    "aria-label": `Open ${t.venue} in Maps`,
+    "aria-label": `Open ${venue} in Maps`,
     style: {
       display: "flex",
       alignItems: "center",
@@ -14942,7 +14959,7 @@ function UpcomingFixtureCard({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, "\uD83D\uDCCD ", t.venue), onEditVenue && /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDCCD ", venue), onEditVenue && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setVenueModalOpen(true),
     className: "cs-btn",
@@ -15067,7 +15084,7 @@ function UpcomingFixtureCard({
     size: 14
   })), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name, t.venue, t.venueLat, t.venueLng)),
+    onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name, venue, venueLat, venueLng)),
     className: "cs-btn",
     "aria-label": "Add to calendar",
     style: {
@@ -15116,11 +15133,11 @@ function UpcomingFixtureCard({
     } : null,
     onClose: () => setPickerOpen(false)
   }), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
-    value: t.venue || "",
-    initialLat: t.venueLat,
-    initialLng: t.venueLng,
+    value: venue || "",
+    initialLat: venueLat,
+    initialLng: venueLng,
     clubs: clubs,
-    onSave: (venue, lat, lng) => onEditVenue(t, venue, lat, lng),
+    onSave: (newVenue, newLat, newLng) => onEditVenue(t, f, newVenue, newLat, newLng),
     onClose: () => setVenueModalOpen(false)
   }), pollTeamPickerOpen && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setPollTeamPickerOpen(false)
@@ -15603,7 +15620,7 @@ function renderMatchCard(m, i) {
       boxShadow: "none",
       border: `0.5px solid ${COLORS.willow}`
     }
-  }, /*#__PURE__*/React.createElement(Globe, {
+  }, /*#__PURE__*/React.createElement(Shield, {
     size: 15
   }), " Clubs")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
@@ -31824,6 +31841,9 @@ function CricketScorer() {
   // and leave the fixture stuck showing as upcoming even after it's been played. Also backfills
   // defaultRules/venue onto the tournament, but only if it doesn't already have them -- the first
   // fixture scored for a tournament silently becomes its default going forward, same as before.
+  // Separately backfills the fixture's own venue too (same only-if-unset rule), since a typed-in-
+  // setup venue is the most direct signal of where that specific fixture is actually happening --
+  // matches aren't always all at the tournament's default ground.
   async function linkFixtureToMatch(tournamentId, fixtureId, matchId, fallbackRules, fallbackVenue) {
     const personalIdx = tournaments.findIndex(t => t.id === tournamentId);
     if (personalIdx !== -1) {
@@ -31834,7 +31854,8 @@ function CricketScorer() {
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
-          matchId
+          matchId,
+          venue: f.venue || fallbackVenue || null
         } : f)
       };
       const updatedList = tournaments.map((x, i) => i === personalIdx ? updatedT : x);
@@ -31851,7 +31872,8 @@ function CricketScorer() {
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
-          matchId
+          matchId,
+          venue: f.venue || fallbackVenue || null
         } : f)
       };
       const result = await saveClubTournament(clubId, updatedT);
@@ -31872,7 +31894,8 @@ function CricketScorer() {
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
-          matchId
+          matchId,
+          venue: f.venue || fallbackVenue || null
         } : f)
       };
       const result = await saveFederationTournament(fedId, updatedT);
@@ -32857,19 +32880,24 @@ function CricketScorer() {
     };
     return saveTournamentFromHome(tournament, updated);
   }
-  // Venue currently has no dedicated edit UI anywhere else in the app -- it's only ever set as a
-  // side effect of scoring a tournament's first fixture (see linkFixtureToMatch's fallbackVenue
-  // backfill). This is the first place it becomes directly editable, surfaced right on the Upcoming
-  // card since that's where someone would actually want to fix a wrong or missing ground.
+  // Each fixture carries its own optional venue that overrides the tournament's default (see
+  // UpcomingFixtureCard's venue/venueLat/venueLng) -- matches in a tournament aren't always all
+  // at the same ground, regardless of who's organizing it. The tournament's own venue field is
+  // still what a fixture without an override falls back to, and still gets backfilled as a side
+  // effect of scoring a tournament's first fixture (see linkFixtureToMatch's fallbackVenue), but
+  // this is the only place a fixture's own venue is directly editable.
   // lat/lng are only present when VenueEditModal's address search actually matched a real address
   // (see coords in that component) -- null for a hand-typed venue with no match, which is fine to
   // save as free text, it just means no weather forecast can be looked up for it.
-  async function handleEditVenueFromHome(tournament, venue, lat, lng) {
+  async function handleEditVenueFromHome(tournament, fixture, venue, lat, lng) {
     const updated = {
       ...tournament,
-      venue: venue || null,
-      venueLat: lat != null ? lat : null,
-      venueLng: lng != null ? lng : null
+      fixtures: (tournament.fixtures || []).map(f => f.id === fixture.id ? {
+        ...f,
+        venue: venue || null,
+        venueLat: lat != null ? lat : null,
+        venueLng: lng != null ? lng : null
+      } : f)
     };
     return saveTournamentFromHome(tournament, updated);
   }
@@ -32883,6 +32911,13 @@ function CricketScorer() {
   function handleStartFixtureMatch(t, fixture) {
     setPresetTournament({
       ...t,
+      // Same fixture-overrides-tournament fallback as UpcomingFixtureCard/buildTournamentICS --
+      // without this, starting a match from a fixture that has its own venue override would show
+      // the tournament's default venue in setup instead of the ground this fixture actually got
+      // scheduled at.
+      venue: fixture.venue || t.venue,
+      venueLat: fixture.venue ? fixture.venueLat : t.venueLat,
+      venueLng: fixture.venue ? fixture.venueLng : t.venueLng,
       fixtureId: fixture.id,
       fixtureTeamA: fixture.teamA,
       fixtureTeamB: fixture.teamB
