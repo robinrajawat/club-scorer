@@ -15260,6 +15260,8 @@ function HomeScreen({
   clubs = [],
   federationsById = {},
   clubTeamsById = {},
+  teams = [],
+  onOpenTeam,
   onGetShareCode,
   onGetViewCode,
   showInstallHint = false,
@@ -15285,7 +15287,8 @@ function HomeScreen({
   // searches data already sitting in memory (matches, tournaments, clubs, and the static FAQ
   // content) -- the public player directory is a real network fetch, so it's loaded lazily and
   // only once someone deliberately picks the Players chip, same as before this was unified.
-  const [searchScope, setSearchScope] = useState("all"); // all | matches | players | cups | clubs | federations | help
+  const [searchScope, setSearchScope] = useState("all"); // all | matches | teams | players | cups | clubs | federations | help
+  const [showSearchInfo, setShowSearchInfo] = useState(false);
   const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
   const [playersLoading, setPlayersLoading] = useState(false);
   const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
@@ -15344,11 +15347,15 @@ function HomeScreen({
   const UPCOMING_HOME_LIMIT = 4;
   const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
   const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
-  // Cups (tournaments + series), clubs, federations, and Help/FAQ entries -- all already sitting
-  // in memory (tournaments/clubs are loaded right after sign-in for other reasons; HELP_SECTIONS
-  // is static), so unlike Players these cost nothing to search and only ever show while there's a
-  // query, same "no browse mode" reasoning as filteredUpcoming above.
+  // Cups (tournaments + series), teams, clubs, federations, and Help/FAQ entries -- all already
+  // sitting in memory (tournaments/teams/clubs are loaded right after sign-in for other reasons;
+  // HELP_SECTIONS is static), so unlike Players these cost nothing to search and only ever show
+  // while there's a query, same "no browse mode" reasoning as filteredUpcoming above.
   const filteredTournaments = q ? tournaments.filter(t => t.name.toLowerCase().includes(q)) : [];
+  // teams is the same merged, source-tagged list (personal + every club's) the Teams screen
+  // itself shows -- see allTeamsFlat -- so a search here finds a team no matter which club it
+  // belongs to, not just personal ones.
+  const filteredTeamsList = q ? teams.filter(t => t.name.toLowerCase().includes(q)) : [];
   const filteredClubsList = q ? clubs.filter(c => c.name.toLowerCase().includes(q)) : [];
   const allFederations = Object.values(federationsById);
   const filteredFederationsList = q ? allFederations.filter(f => f.name.toLowerCase().includes(q)) : [];
@@ -15526,6 +15533,10 @@ function renderMatchCard(m, i) {
   }
   function renderCupRow(t) {
     return searchResultRow(t.id, () => onOpenTournament(t), t.name, t.kind === "series" ? "Series" : "Tournament");
+  }
+  function renderTeamRow(t) {
+    const club = t._clubId ? clubs.find(c => c.id === t._clubId) : null;
+    return searchResultRow(t.id, () => onOpenTeam(t), t.name, club ? club.name : "Personal");
   }
   function renderClubRow(c) {
     return searchResultRow(c.id, () => onOpenClub(c.id), c.name, "Club");
@@ -15728,8 +15739,15 @@ function renderMatchCard(m, i) {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
-      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
       marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: query,
@@ -15764,7 +15782,39 @@ function renderMatchCard(m, i) {
       fontSize: 20,
       lineHeight: 1
     }
-  }, "\u00d7")), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
+  }, "\u00d7")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowSearchInfo(v => !v),
+    "aria-label": showSearchInfo ? "Hide info" : "What does this search?",
+    "aria-expanded": showSearchInfo,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 26,
+      height: 26,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 18
+  }))), showSearchInfo && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 14,
+      lineHeight: 1.5,
+      background: COLORS.surface,
+      borderRadius: 12,
+      padding: "10px 12px"
+    }
+  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it's a public directory fetched fresh, so pick that chip on purpose rather than every search reaching out for it."), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
@@ -15779,6 +15829,9 @@ function renderMatchCard(m, i) {
   }, {
     key: "matches",
     label: "Matches"
+  }, {
+    key: "teams",
+    label: "Teams"
   }, ...(hasPlayerSearch ? [{
     key: "players",
     label: "Players"
@@ -16091,7 +16144,22 @@ function renderMatchCard(m, i) {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredTournaments.map(renderCupRow))), searchScope === "clubs" && /*#__PURE__*/React.createElement("div", null, filteredClubsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredTournaments.map(renderCupRow))), searchScope === "teams" && /*#__PURE__*/React.createElement("div", null, filteredTeamsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? "No teams match that search." : "Type to search your teams.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredTeamsList.map(renderTeamRow))), searchScope === "clubs" && /*#__PURE__*/React.createElement("div", null, filteredClubsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -16136,7 +16204,7 @@ function renderMatchCard(m, i) {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredTournaments.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -16173,7 +16241,17 @@ function renderMatchCard(m, i) {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredTournaments.slice(0, ALL_SCOPE_CAP).map(renderCupRow)), filteredTournaments.length > ALL_SCOPE_CAP && seeAllLink("cups", filteredTournaments.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, filteredTournaments.slice(0, ALL_SCOPE_CAP).map(renderCupRow)), filteredTournaments.length > ALL_SCOPE_CAP && seeAllLink("cups", filteredTournaments.length)), filteredTeamsList.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Teams"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
@@ -33501,6 +33579,11 @@ function CricketScorer() {
     clubs: clubs,
     federationsById: federationsById,
     clubTeamsById: clubTeamsById,
+    teams: allTeamsFlat,
+    onOpenTeam: t => {
+      setActiveClubAdminId(t._clubId || null);
+      setScreen("my-teams");
+    },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
     showInstallHint: showInstallHint && !showTour,
