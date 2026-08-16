@@ -17868,6 +17868,7 @@ function TournamentsScreen({
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | upcoming | ongoing | completed
   const [useGroups, setUseGroups] = useState(false);
@@ -18021,30 +18022,45 @@ function TournamentsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Cups"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, "Cups"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowInfo(v => !v),
+    "aria-label": showInfo ? "Hide info" : "What's this screen for?",
+    "aria-expanded": showInfo,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 17
+  })), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing\u2026",
     size: 14,
     style: {
       fontSize: 11.5
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  })), showInfo && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      letterSpacing: 0.3,
-      color: COLORS.inkSoft,
-      marginBottom: 10
-    }
-  }, "Tournaments & series"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 12.5,
       color: COLORS.inkSoft,
       marginBottom: 16,
-      lineHeight: 1.5
+      lineHeight: 1.5,
+      background: COLORS.surface,
+      borderRadius: 12,
+      padding: "10px 12px"
     }
-  }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement(React.Fragment, null, (clubs.length + myFederations.length > 2) && /*#__PURE__*/React.createElement("div", {
+  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement(React.Fragment, null, (clubs.length + myFederations.length > 2) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -22124,6 +22140,7 @@ function TeamsScreen({
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
+  const [showInfo, setShowInfo] = useState(false);
   // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). Lives
   // here rather than in club settings since building teams is exactly where it's used. One
   // quick-add row for a single name, plus a bulk-paste/upload box for dropping in a whole
@@ -22229,12 +22246,7 @@ function TeamsScreen({
       gap: 8,
       marginBottom: 4
     }
-  }, tab === "federations" ? /*#__PURE__*/React.createElement(Globe, {
-    size: 23,
-    style: {
-      color: COLORS.pitch
-    }
-  }) : /*#__PURE__*/React.createElement(Shield, {
+  }, /*#__PURE__*/React.createElement(Shield, {
     size: 23,
     style: {
       color: COLORS.pitch
@@ -22245,19 +22257,43 @@ function TeamsScreen({
       fontSize: 26,
       color: COLORS.pitch
     }
-  }, tab === "clubs" ? "Clubs" : "Federations"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, "Clubs"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShowInfo(v => !v),
+    "aria-label": showInfo ? "Hide info" : "What's this screen for?",
+    "aria-expanded": showInfo,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 17
+  })), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing\u2026",
     size: 14,
     style: {
       fontSize: 11.5
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  })), showInfo && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 12.5,
       color: COLORS.inkSoft,
       marginBottom: 16,
-      lineHeight: 1.5
+      lineHeight: 1.5,
+      background: COLORS.surface,
+      borderRadius: 12,
+      padding: "10px 12px"
     }
   }, tab === "clubs" ? "Create or join a club to share rosters, tournaments, and records with its members \u2014 manage a club's teams from the Teams screen." : "Create or join a federation to link multiple clubs together for shared tournaments and records."), /*#__PURE__*/React.createElement("div", {
     style: {
