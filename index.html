@@ -17626,7 +17626,31 @@ function SetupScreen({
     captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
     keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
     numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
-  })), /*#__PURE__*/React.createElement(Field, {
+  })), strikerA.trim() && nonStrikerA.trim() && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      const s = strikerA;
+      setStrikerA(nonStrikerA);
+      setNonStrikerA(s);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: "4px 2px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 13
+  }), "Swap ends"), /*#__PURE__*/React.createElement(Field, {
     label: `Bowler (${(teamAIsBattingFirst ? teamBName : teamAName) || (teamAIsBattingFirst ? "Team B" : "Team A")})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: teamAIsBattingFirst ? teamBRoster : teamARoster,
