@@ -8283,9 +8283,6 @@ function AccountScreen({
   onImportData,
   onDeleteAccount,
   onOpenSharedLinks,
-  onOpenInbox,
-  inboxBadgeCount = 0,
-  onOpenClubAdmin,
   onBack,
   redirectError,
   linkStatus,
@@ -9167,102 +9164,6 @@ function AccountScreen({
       marginBottom: 10
     }
   }, "Manage"),
-  user && /*#__PURE__*/React.createElement(React.Fragment, null,
-    /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: onOpenClubAdmin,
-      className: "cs-btn",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-        fontFamily: "'Inter'"
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase"
-      }
-    }, "Clubs & Federations"), /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 18,
-      style: {
-        color: COLORS.inkSoft
-      }
-    })),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 1,
-        background: COLORS.cardDivider,
-        margin: "14px 0"
-      }
-    }),
-    /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: onOpenInbox,
-      className: "cs-btn",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        width: "100%",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-        fontFamily: "'Inter'"
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase"
-      }
-    }, "Inbox", inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        boxSizing: "border-box",
-        flexShrink: 0,
-        minWidth: 18,
-        height: 18,
-        padding: "0 4px",
-        borderRadius: 9,
-        background: COLORS.ballFixed,
-        color: "#fff",
-        fontSize: 11,
-        fontWeight: 700,
-        lineHeight: 1,
-        textTransform: "none",
-        letterSpacing: "normal"
-      }
-    }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 18,
-      style: {
-        color: COLORS.inkSoft
-      }
-    })),
-    /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 1,
-        background: COLORS.cardDivider,
-        margin: "14px 0"
-      }
-    })
-  ),
   /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onOpenSharedLinks,
@@ -33164,12 +33065,6 @@ function CricketScorer() {
     onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenInbox: () => setScreen("inbox"),
-    inboxBadgeCount: federationRequestsNeedingAction.length + pendingPollItems.length,
-    onOpenClubAdmin: () => {
-      setTeamsTab("clubs");
-      setScreen("teams");
-    },
     onBack: () => setScreen("home"),
     redirectError: authError,
     linkStatus: linkStatus,
