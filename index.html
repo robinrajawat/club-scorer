@@ -16043,7 +16043,31 @@ function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Home"), clubs.length > 0 && /*#__PURE__*/React.createElement(ClubSourceSelector, {
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 22,
+    style: {
+      color: COLORS.pitch
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch
+    }
+  }, "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Refreshing\u2026",
+    size: 14,
+    style: {
+      fontSize: 11.5
+    }
+  })), clubs.length > 0 && /*#__PURE__*/React.createElement(ClubSourceSelector, {
     clubs: clubs,
     activeClubId: activeClubId,
     onSelect: onSelectClub,
@@ -17986,7 +18010,12 @@ function TournamentsScreen({
       gap: 8,
       marginBottom: 4
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 22,
+    style: {
+      color: COLORS.pitch
+    }
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -22191,13 +22220,23 @@ function TeamsScreen({
       gap: 8,
       marginBottom: 4
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, tab === "federations" ? /*#__PURE__*/React.createElement(Globe, {
+    size: 23,
+    style: {
+      color: COLORS.pitch
+    }
+  }) : /*#__PURE__*/React.createElement(Shield, {
+    size: 23,
+    style: {
+      color: COLORS.pitch
+    }
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 26,
       color: COLORS.pitch
     }
-  }, tab === "clubs" ? "Clubs" : tab === "federations" ? "Federations" : "Teams"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, tab === "clubs" ? "Clubs" : "Federations"), (clubsLoading || federationsLoading) && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing\u2026",
     size: 14,
     style: {
