@@ -43,7 +43,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -682,7 +681,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-const storage = firebase.storage();
+// No firebase.storage() here -- club logos now live in Firestore as base64 (see uploadClubLogo),
+// and nothing else in this app ever touched Storage, so there's nothing left to initialize.
 // ---------- Feedback & error reporting ----------
 // One write-only collection for both: a person's own message ("feedback") and an
 // automatically-captured crash ("error"). Write-only by design (see firestore.rules — create is
