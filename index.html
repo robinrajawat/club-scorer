@@ -14245,6 +14245,40 @@ function AuthActionScreen({
   }, "Continue to Club Scorer"));
 }
 
+// The real app icon (icon-512.png etc, used for the favicon/home-screen/app-switcher) carries a
+// deliberate safe-zone margin around the ball -- content only fills the center ~75% of the
+// canvas, standard practice for maskable icons. Rendered at true size that's invisible, but at
+// the small sizes the in-app mark needs (login splash, home header) that margin reads as the
+// ball just floating small in empty space. Cropping to the content box and scaling it back up to
+// fill the circle here is what makes this the same mark as the installed icon instead of a
+// smaller, oddly-padded copy of it.
+function AppMark({
+  size
+}) {
+  const scale = 192 / 144; // inverse of the ~75%-of-canvas content box shared by every icon export
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      overflow: "hidden",
+      flexShrink: 0,
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "./icons/icon-512.png",
+    alt: "",
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      width: size * scale,
+      height: size * scale,
+      transform: "translate(-50%, -50%)"
+    }
+  }));
+}
 function WelcomeScreen({
   onSignIn,
   onSkip
@@ -14319,18 +14353,10 @@ function WelcomeScreen({
       height: 64,
       borderRadius: "50%",
       margin: "0 auto 16px",
-      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
       boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
     }
-  }, /*#__PURE__*/React.createElement(Circle, {
-    size: 30,
-    fill: COLORS.ball,
-    style: {
-      color: COLORS.creamFixed
-    }
+  }, /*#__PURE__*/React.createElement(AppMark, {
+    size: 64
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
@@ -15499,26 +15525,9 @@ function renderMatchCard(m, i) {
       alignItems: "center",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 26,
-      height: 26,
-      borderRadius: "50%",
-      flexShrink: 0,
-      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(Circle, {
-    size: 13,
-    color: COLORS.creamFixed,
-    strokeWidth: 2.5,
-    fill: COLORS.ball,
-    style: {
-      color: COLORS.creamFixed
-    }
-  })), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(AppMark, {
+    size: 26
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
