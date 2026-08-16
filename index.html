@@ -8097,7 +8097,9 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), "Shared Links"), user && /*#__PURE__*/React.createElement("button", {
+  }), "Shared Links"), user && /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), user && /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
     className: "cs-btn",
