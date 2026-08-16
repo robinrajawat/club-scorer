@@ -15739,24 +15739,17 @@ function renderMatchCard(m, i) {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
       position: "relative",
-      flex: 1
+      marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: query,
     onChange: setQuery,
     placeholder: "Search everything\u2026",
     style: {
-      paddingRight: query ? 38 : 14
+      paddingRight: 38
     }
-  }), query && /*#__PURE__*/React.createElement("button", {
+  }), query ? /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       setQuery("");
@@ -15782,19 +15775,22 @@ function renderMatchCard(m, i) {
       fontSize: 20,
       lineHeight: 1
     }
-  }, "\u00d7")), /*#__PURE__*/React.createElement("button", {
+  }, "\u00d7") : /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setShowSearchInfo(v => !v),
     "aria-label": showSearchInfo ? "Hide info" : "What does this search?",
     "aria-expanded": showSearchInfo,
     className: "cs-btn",
     style: {
+      position: "absolute",
+      right: 8,
+      top: "50%",
+      transform: "translateY(-50%)",
+      width: 26,
+      height: 26,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      width: 26,
-      height: 26,
-      flexShrink: 0,
       background: "none",
       border: "none",
       cursor: "pointer",
