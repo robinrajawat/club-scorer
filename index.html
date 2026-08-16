@@ -15944,6 +15944,8 @@ function MyTeamsScreen({
   teamsLoading = false,
   matches,
   clubs = [],
+  activeClubId = null,
+  onSelectClub,
   onBack,
   onNewTeam,
   onEditTeam,
@@ -15951,6 +15953,14 @@ function MyTeamsScreen({
   onMoveTeam
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
+  // Source label shown on each row when the list is the merged, all-sources view (no chip
+  // picked) -- lets "My Teams" sit alongside every club's roster without them being confused for
+  // one another, the same tagging Cups already does on its merged list.
+  function sourceLabel(t) {
+    if (!t._clubId) return "Personal";
+    const club = clubs.find(c => c.id === t._clubId);
+    return club ? club.name : "Club";
+  }
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
@@ -15979,7 +15989,11 @@ function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }), " Home"), clubs.length > 0 && /*#__PURE__*/React.createElement(ClubSourceSelector, {
+    clubs: clubs,
+    activeClubId: activeClubId,
+    onSelect: onSelectClub
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -16008,7 +16022,7 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Your Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, activeClubId ? (clubs.find(c => c.id === activeClubId) || {}).name || "Club Teams" : "All Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -16082,7 +16096,7 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "No personal teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "right",
       fontFamily: "'Inter'",
@@ -16098,7 +16112,7 @@ function MyTeamsScreen({
       marginBottom: i === teams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => onDeleteTeam(t.id),
+    onDelete: () => onDeleteTeam(t.id, t._clubId || null),
     deleteLabel: "Delete"
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
@@ -16158,10 +16172,10 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), /*#__PURE__*/React.createElement(MoveTeamMenu, {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played", !activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, " \u00b7 ", sourceLabel(t)))), /*#__PURE__*/React.createElement(MoveTeamMenu, {
     team: t,
     clubs: clubs,
-    currentClubId: null,
+    currentClubId: t._clubId || null,
     onMove: onMoveTeam
   }), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
@@ -16180,189 +16194,6 @@ function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
   })))))))))
-))
-}
-function MyTournamentsScreen({
-  myTournaments = [],
-  onBack,
-  onOpenTournament,
-  onNewTournament
-}) {
-  const [tournamentsExpanded, setTournamentsExpanded] = useState(true);
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "20px 16px 60px",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 18,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Your Tournaments"), myTournaments.length > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft
-    }
-  }, `\u00b7 ${myTournaments.length}`)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onNewTournament,
-    "aria-label": "New tournament",
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: "pointer",
-      padding: "4px 2px"
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 14,
-    strokeWidth: 2.5
-  }), "New"), myTournaments.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setTournamentsExpanded(e => !e),
-    className: "cs-btn",
-    "aria-label": tournamentsExpanded ? "Hide your tournaments" : "Show your tournaments",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 6,
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement(ChevronDown, {
-    size: 15,
-    style: {
-      transform: tournamentsExpanded ? "rotate(180deg)" : "none",
-      transition: "transform 0.15s"
-    }
-  })))), (tournamentsExpanded || myTournaments.length === 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: myTournaments.length > 0 ? 10 : 14
-    }
-  }, myTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "20px 10px 6px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, "No personal tournaments yet.", /*#__PURE__*/React.createElement("br", null), "Group matches together for a running points table.")) : myTournaments.map((t, i) => /*#__PURE__*/React.createElement("button", {
-    key: t.id,
-    type: "button",
-    onClick: () => onOpenTournament(t),
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.creamDark,
-      border: "none",
-      borderRadius: 12,
-      padding: "12px 12px",
-      cursor: "pointer",
-      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
-      marginBottom: i === myTournaments.length - 1 ? 0 : 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      minWidth: 0,
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, t.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginTop: 1
-    }
-  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${(t.teams || []).length} teams`)), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 10.5,
-      color: TOURNAMENT_STATUS_COLORS[tournamentStatus(t)],
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      flexShrink: 0,
-      marginLeft: 8
-    }
-  }, TOURNAMENT_STATUS_LABELS[tournamentStatus(t)])))))
 ))
 }
 function TeamChips({
@@ -31519,7 +31350,7 @@ function CricketScorer() {
     // Throttled to once per 15s here specifically -- someone bouncing Home/Teams/Tournaments back
     // and forth shouldn't re-run a multi-collection fetch on every single tap; a deliberate refresh
     // trigger elsewhere (after creating a club, joining one, etc.) still always runs regardless.
-    if ((next === "teams" || next === "tournaments") && Date.now() - lastClubsRefreshRef.current > 15000) {
+    if ((next === "teams" || next === "tournaments" || next === "my-teams") && Date.now() - lastClubsRefreshRef.current > 15000) {
       lastClubsRefreshRef.current = Date.now();
       refreshClubs();
     }
@@ -33083,6 +32914,15 @@ function CricketScorer() {
   const activeTeams = clubTeamsById[activeClubAdminId] || [];
   const activeTeamsLoaded = Array.isArray(clubTeamsById[activeClubAdminId]);
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
+  // Merged Teams view (mirrors allTournamentsFlat below): personal teams plus every club's,
+  // each tagged with its source, so the Teams screen can show one combined list by default with
+  // "My Teams"/per-club chips narrowing it down, the same pattern Cups already uses.
+  const allTeamsFlat = [...teams.map(t => ({ ...t,
+    _clubId: null
+  })), ...Object.entries(clubTeamsById).flatMap(([cid, list]) => (list || []).map(t => ({ ...t,
+    _clubId: cid
+  })))].sort((a, b) => a.name.localeCompare(b.name));
+  const teamsForTeamsScreen = activeClubAdminId ? clubTeamsById[activeClubAdminId] || [] : allTeamsFlat;
   // Copies a team into the destination first, then deletes it from the source — so a failed or
   // denied destination write (e.g. rules not yet published) never loses the team.
   // fromClubId is passed explicitly for the same reason clubId is on handleSaveTeam/
@@ -33196,7 +33036,10 @@ function CricketScorer() {
     onNew: () => setScreen("setup"),
     onOpen: openMatch,
     onDelete: handleDelete,
-    onManageTeams: () => setScreen("my-teams"),
+    onManageTeams: () => {
+      setActiveClubAdminId(null);
+      setScreen("my-teams");
+    },
     onOpenClubs: () => setScreen("teams"),
     user: user,
     profile: profile,
@@ -33209,7 +33052,11 @@ function CricketScorer() {
     themePref: themePref,
     onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
-    onOpenTournaments: () => setScreen("my-tournaments"),
+    onOpenTournaments: () => {
+      setActiveTournamentClubId(null);
+      setActiveTournamentFederationId(null);
+      setScreen("tournaments");
+    },
     onOpenPlayer: player => {
       setPlayersInitialSelected(player);
       setScreen("players");
@@ -33269,25 +33116,26 @@ function CricketScorer() {
     navKey: "my-teams",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(MyTeamsScreen, {
-    teams: teams,
+    teams: teamsForTeamsScreen,
     teamsLoading: teamsLoading,
     matches: matches,
     clubs: clubs,
+    activeClubId: activeClubAdminId,
+    onSelectClub: setActiveClubAdminId,
     onBack: () => setScreen("home"),
     onNewTeam: () => {
-      setActiveClubAdminId(null);
       setEditingTeam(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
-      setActiveClubAdminId(null);
+      setActiveClubAdminId(t._clubId || null);
       setEditingTeam(t);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
-    onDeleteTeam: id => handleDeleteTeam(id, null),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, null, toClubId)
+    onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId)
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
@@ -33355,25 +33203,6 @@ function CricketScorer() {
     onAddPoolPlayers: handleAddPoolPlayers,
     onUpdatePoolPlayer: handleUpdatePoolPlayer,
     onRemovePoolPlayer: handleRemovePoolPlayer
-  })), screen === "my-tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "my-tournaments",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(MyTournamentsScreen, {
-    myTournaments: tournaments,
-    onBack: () => setScreen("home"),
-    onOpenTournament: t => {
-      setViewingTournament(t);
-      setViewingTournamentClubId(t._clubId || null);
-      setViewingTournamentFederationId(t._federationId || null);
-      setTournamentDetailReturnScreen("my-tournaments");
-      setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
-    },
-    onNewTournament: () => {
-      setActiveTournamentClubId(null);
-      setActiveTournamentFederationId(null);
-      setTournamentDetailReturnScreen("my-tournaments");
-      setScreen("tournaments");
-    }
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
