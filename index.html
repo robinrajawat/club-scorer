@@ -17706,11 +17706,6 @@ function TournamentsScreen({
   const [busy, setBusy] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | upcoming | ongoing | completed
-  // Which source tab is showing -- mirrors the same tab bar TeamsScreen already uses to switch
-  // between My Teams/Clubs/Federations, for consistency across the two screens doing an
-  // analogous job (picking whose tournaments/teams to browse). Defaults to whichever source was
-  // already active coming into this screen, rather than always resetting to "mine".
-  const [sourceTab, setSourceTab] = useState(activeFederationId ? "federations" : activeClubId ? "clubs" : "mine");
   const [useGroups, setUseGroups] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
   const [advancePerGroup, setAdvancePerGroup] = useState(2);
@@ -17872,59 +17867,33 @@ function TournamentsScreen({
       lineHeight: 1.5
     }
   }, "Group matches together for a running points table \u2014 tag a match with a tournament from its setup screen."), (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 14
-    }
-  }, [...(clubs.length > 0 ? [{
-    key: "clubs",
-    label: "Clubs"
-  }] : []), ...(myFederations.length > 0 ? [{
-    key: "federations",
-    label: "Federations"
-  }] : [])].map(t => /*#__PURE__*/React.createElement("button", {
-    key: t.key,
-    type: "button",
-    onClick: () => {
-      setSourceTab(t.key);
-      // Switching into Clubs/Federations with nothing picked yet defaults to the first one --
-      // an empty "pick one" state right after tapping the tab would just be an extra, pointless
-      // step when there's an obvious first choice sitting right there.
-      if (t.key === "clubs" && !activeClubId) onSelectSource(clubs[0].id);
-      else if (t.key === "federations" && !activeFederationId) onSelectFederationSource(myFederations[0].id);
-    },
-    className: "cs-btn",
-    style: {
-      flex: 1,
-      padding: "9px 8px",
-      borderRadius: 12,
-      border: "none",
-      cursor: "pointer",
-      background: sourceTab === t.key ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: sourceTab === t.key ? "#fff" : COLORS.inkSoft,
-      boxShadow: sourceTab === t.key ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13
-    }
-  }, t.label))), sourceTab === "clubs" && clubs.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
       gap: 8,
       overflowX: "auto",
       paddingBottom: 4,
-      flex: 1
+      marginBottom: 16
     }
-  }, clubs.map(c => /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onSelectSource(null);
+      onSelectFederationSource(null);
+    },
+    style: {
+      padding: "7px 13px",
+      borderRadius: 20,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      border: !activeClubId && !activeFederationId ? "none" : `1px solid ${COLORS.willow}`,
+      background: !activeClubId && !activeFederationId ? COLORS.pitchFixed : COLORS.surface,
+      color: !activeClubId && !activeFederationId ? "#fff" : COLORS.inkSoft,
+      whiteSpace: "nowrap",
+      flexShrink: 0
+    }
+  }, "All"), clubs.map(c => /*#__PURE__*/React.createElement("button", {
     key: c.id,
     onClick: () => onSelectSource(c.id),
     style: {
@@ -17937,25 +17906,10 @@ function TournamentsScreen({
       border: activeClubId === c.id ? "none" : `1px solid ${COLORS.willow}`,
       background: activeClubId === c.id ? COLORS.pitchFixed : COLORS.surface,
       color: activeClubId === c.id ? "#fff" : COLORS.inkSoft,
-      whiteSpace: "nowrap"
+      whiteSpace: "nowrap",
+      flexShrink: 0
     }
-  }, c.name)))), sourceTab === "federations" && myFederations.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
-    style: {
-      display: "flex",
-      gap: 8,
-      overflowX: "auto",
-      paddingBottom: 4,
-      flex: 1
-    }
-  }, myFederations.map(f => /*#__PURE__*/React.createElement("button", {
+  }, c.name)), myFederations.map(f => /*#__PURE__*/React.createElement("button", {
     key: f.id,
     onClick: () => onSelectFederationSource(f.id),
     style: {
@@ -17968,9 +17922,10 @@ function TournamentsScreen({
       border: activeFederationId === f.id ? "none" : `1px dashed ${COLORS.gold}`,
       background: activeFederationId === f.id ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
       color: activeFederationId === f.id ? "#2e1c04" : COLORS.inkSoft,
-      whiteSpace: "nowrap"
+      whiteSpace: "nowrap",
+      flexShrink: 0
     }
-  }, f.name)))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, f.name))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
     disabled: totalTeamOptions < 2,
@@ -21943,16 +21898,10 @@ function AvailabilityPollModal({
   }));
 }
 function TeamsScreen({
-  teams,
-  teamsLoaded = true,
-  matches,
-  onNew,
-  onEdit,
-  onDelete,
+  onManageTeams,
   onBack,
   clubs,
   activeClubId,
-  onMoveTeam,
   currentUid,
   tab,
   onTabChange,
@@ -22001,9 +21950,6 @@ function TeamsScreen({
   onUpdatePoolPlayer,
   onRemovePoolPlayer
 }) {
-  function matchCount(teamId) {
-    return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
-  }
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
@@ -22652,151 +22598,39 @@ function TeamsScreen({
       padding: 0
     }
   }, "Clear")));
-})()))), canManage && /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    onClick: onNew,
-    style: {
-      width: "100%",
-      padding: "14px",
-      fontSize: 15,
-      marginBottom: 20,
-      borderRadius: 14
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 18,
-    strokeWidth: 2.5
-  }), ` New Team in ${activeClubName}`), !canManage && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      textAlign: "center",
-      marginBottom: 20
-    }
-  }, `Only the owner of "${activeClubName}" can add or edit teams.`), !teamsLoaded ? /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading your teams\u2026",
-    size: 26,
-    style: {
-      background: COLORS.surface,
-      borderRadius: 12,
-      padding: "10px 14px",
-      marginBottom: 16,
-      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
-    }
-  }) : teams.length > 0 ? teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
-    key: t.id,
-    style: {
-      animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
-    }
-  }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: canManage ? () => onDelete(t.id) : undefined,
-    deleteLabel: "Delete"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cs-row",
-    style: {
-      background: COLORS.surface,
-      padding: "14px 14px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    onClick: canManage ? () => onEdit(t) : undefined,
-    onKeyDown: canManage ? e => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onEdit(t);
-      }
-    } : undefined,
-    role: canManage ? "button" : undefined,
-    tabIndex: canManage ? 0 : undefined,
-    style: {
-      cursor: canManage ? "pointer" : "default",
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 7
-    }
-  }, t.color && /*#__PURE__*/React.createElement("span", {
-    "aria-hidden": "true",
-    style: {
-      width: 12,
-      height: 12,
-      borderRadius: "50%",
-      background: t.color,
-      border: `1px solid ${COLORS.creamDark}`,
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 14.5,
-      color: COLORS.ink
-    }
-  }, t.name)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 1
-    }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", matchCount(t.id), " match", matchCount(t.id) === 1 ? "" : "es", " played", (t.captain || t.keeper) && " · ", t.captain && `C: ${t.captain}`, t.captain && t.keeper && "  ·  ", t.keeper && `WK: ${t.keeper}`)), canManage && /*#__PURE__*/React.createElement(MoveTeamMenu, {
-    team: t,
-    clubs: clubs,
-    currentClubId: activeClubId,
-    onMove: onMoveTeam
-  }), canManage && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setPollingTeam(t),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex"
-    },
-    "aria-label": "Poll availability"
-  }, /*#__PURE__*/React.createElement(CalendarClock, {
-    size: 16
-  })), canManage && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onEdit(t),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex"
-    },
-    "aria-label": "Edit team"
-  }, /*#__PURE__*/React.createElement(Pencil, {
-    size: 16
-  })))))) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, `No teams in ${activeClubName} yet.`, /*#__PURE__*/React.createElement("br", null), "Add one and every member can use it."))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+})()))), /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 12.5,
+    color: COLORS.inkSoft,
+    lineHeight: 1.5
+  }
+}, `Add, edit, or delete ${activeClubName}'s teams from the Teams screen.`), onManageTeams && /*#__PURE__*/React.createElement(Btn, {
+  onClick: onManageTeams,
+  style: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "10px 16px",
+    fontSize: 12.5,
+    borderRadius: 12
+  }
+}, "Manage teams", /*#__PURE__*/React.createElement(ChevronRight, {
+  size: 14
+})))), tab === "clubs" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -32911,8 +32745,6 @@ function CricketScorer() {
     });
     setScreen("setup");
   }
-  const activeTeams = clubTeamsById[activeClubAdminId] || [];
-  const activeTeamsLoaded = Array.isArray(clubTeamsById[activeClubAdminId]);
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   // Merged Teams view (mirrors allTournamentsFlat below): personal teams plus every club's,
   // each tagged with its source, so the Teams screen can show one combined list by default with
@@ -33140,24 +32972,10 @@ function CricketScorer() {
     navKey: "teams",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
-    teams: activeTeams,
-    teamsLoaded: activeTeamsLoaded,
-    matches: matches,
-    onNew: () => {
-      setEditingTeam(null);
-      setTeamEditReturnScreen("teams");
-      setScreen("team-edit");
-    },
-    onEdit: t => {
-      setEditingTeam(t);
-      setTeamEditReturnScreen("teams");
-      setScreen("team-edit");
-    },
-    onDelete: id => handleDeleteTeam(id, activeClubAdminId),
+    onManageTeams: () => setScreen("my-teams"),
     onBack: () => setScreen("home"),
     clubs: clubs,
     activeClubId: activeClubAdminId,
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, activeClubAdminId, toClubId),
     currentUid: user && user.uid,
     tab: teamsTab,
     onTabChange: setTeamsTab,
