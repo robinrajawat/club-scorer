@@ -10158,7 +10158,7 @@ function SharedLinksScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }), " Account"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -31011,7 +31011,7 @@ const SCREEN_DEPTH = {
   tournaments: 1,
   players: 1,
   "team-edit": 2,
-  "shared-links": 1,
+  "shared-links": 2,
   "inbox": 1,
   "tournament-detail": 2
 };
@@ -33231,7 +33231,7 @@ function CricketScorer() {
     matches: matches,
     onRevokeShareCode: handleRevokeShareCode,
     onRevokeViewCode: handleRevokeViewCode,
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("account")
   })), screen === "players" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "players",
     direction: navDirection
