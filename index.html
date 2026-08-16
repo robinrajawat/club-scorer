@@ -7917,6 +7917,7 @@ function AuthBar({
   user,
   profile,
   onOpenAccount,
+  onOpenSharedLinks,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
@@ -8046,7 +8047,18 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), user ? "Manage account" : "Sign in"), user && /*#__PURE__*/React.createElement("div", {
+  }), user ? "Manage account" : "Sign in"), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    role: "menuitem",
+    className: "cs-btn",
+    onClick: () => go(onOpenSharedLinks),
+    style: menuItemStyle
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
+  }), "Shared Links"), user && /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), user && /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -15507,30 +15519,11 @@ function renderMatchCard(m, i) {
       lineHeight: 1,
       border: `1.5px solid ${COLORS.creamFixed}`
     }
-  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onOpenSharedLinks,
-    "aria-label": "Shared Links",
-    className: "cs-btn",
-    style: {
-      width: 36,
-      height: 36,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "none",
-      border: "none",
-      borderRadius: "50%",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 19
-  })), /*#__PURE__*/React.createElement(AuthBar, {
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
+    onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,
     onOpenFeedback: onOpenFeedback,
     onOpenAbout: onOpenAbout,
