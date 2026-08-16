@@ -8976,7 +8976,7 @@ function AccountScreen({
     }
   }, dummyStatus), showWipeConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Wipe dummy data?",
-    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (reused next time) but ends up empty \u2014 you can delete it yourself from Clubs & Federations if you don't want to keep it.",
+    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (reused next time) but ends up empty \u2014 you can delete it yourself from Home \u2192 Clubs if you don't want to keep it.",
     confirmLabel: "Wipe",
     variant: "danger",
     busy: dummyBusy,
@@ -9345,7 +9345,7 @@ function AccountScreen({
     style: {
       marginTop: 6
     }
-  }, "If you'd rather avoid that, add a co-owner from Clubs & Federations first \u2014 co-owners have identical rights, so any of them can take over.")), /*#__PURE__*/React.createElement("div", {
+  }, "If you'd rather avoid that, add a co-owner from Home \u2192 Clubs first \u2014 co-owners have identical rights, so any of them can take over.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -9466,7 +9466,7 @@ const HELP_SECTIONS = [{
     a: "The Account screen, under \u201cYour player profile\u201d \u2014 it shows up automatically the moment any club adds you to a roster using the exact email you're signed in with, no separate setup needed. It's view-only there: whichever club added you first is the one that can edit your name, age, role, or batting/bowling hand, the same as for any borrowed player."
   }, {
     q: "How do availability polls work, and does someone need an account to respond?",
-    a: "No account needed to respond \u2014 only the link, the same distribution model as \u201cShare live score.\u201d On a club team's row (Teams \u2192 Clubs tab), the owner/co-owner sends a poll (a question, optionally tied to a fixture date) and gets a link back; anyone with it picks their name off the roster or types their own, then answers Yes/No/Maybe with an optional note, and can see who else has answered. Only club owners/co-owners can send one or see the short history of a team's past polls \u2014 it's a club-team feature only, not offered for a personal team, since there's nobody else to poll there."
+    a: "No account needed to respond \u2014 only the link, the same distribution model as \u201cShare live score.\u201d On a club team's row (Home \u2192 Teams), the owner/co-owner sends a poll (a question, optionally tied to a fixture date) and gets a link back; anyone with it picks their name off the roster or types their own, then answers Yes/No/Maybe with an optional note, and can see who else has answered. Only club owners/co-owners can send one or see the short history of a team's past polls \u2014 it's a club-team feature only, not offered for a personal team, since there's nobody else to poll there."
   }]
 }, {
   title: "Tournaments & series",
@@ -15966,6 +15966,10 @@ function MyTeamsScreen({
   onTogglePinClub
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
+  // Team to show the availability-poll modal for, or null when it's closed -- club teams only
+  // (see canManageTeam below and the modal's own team-scoping), matching how sending a poll has
+  // always been club-only: there's nobody else to poll for a personal team.
+  const [pollingTeam, setPollingTeam] = useState(null);
   // Source label shown on each row when the list is the merged, all-sources view (no chip
   // picked) -- lets "My Teams" sit alongside every club's roster without them being confused for
   // one another, the same tagging Cups already does on its merged list.
@@ -16203,7 +16207,23 @@ function MyTeamsScreen({
     clubs: clubs,
     currentClubId: t._clubId || null,
     onMove: onMoveTeam
-  }), canManageTeam(t) && /*#__PURE__*/React.createElement("button", {
+  }), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPollingTeam(t),
+    className: "cs-btn",
+    "aria-label": `Poll availability for ${t.name}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 15
+  })), canManageTeam(t) && /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -16220,7 +16240,12 @@ function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
   })))))))))
-))
+), pollingTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+    clubId: pollingTeam._clubId,
+    clubName: sourceLabel(pollingTeam),
+    team: pollingTeam,
+    onClose: () => setPollingTeam(null)
+  }))
 }
 function TeamChips({
   teams,
@@ -21976,7 +22001,6 @@ function TeamsScreen({
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
-  const [pollingTeam, setPollingTeam] = useState(null); // team object, or null when the modal's closed
   // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). Lives
   // here rather than in club settings since building teams is exactly where it's used. One
   // quick-add row for a single name, plus a bulk-paste/upload box for dropping in a whole
@@ -22772,12 +22796,7 @@ function TeamsScreen({
       fontWeight: 600,
       marginTop: 8
     }
-  }, "You're now a co-owner of \"", redeemSuccess, "\"."))), pollingTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: activeClubId,
-    clubName: activeClubName,
-    team: pollingTeam,
-    onClose: () => setPollingTeam(null)
-  }));
+  }, "You're now a co-owner of \"", redeemSuccess, "\"."))));
 }
 function TeamEditScreen({
   team,
