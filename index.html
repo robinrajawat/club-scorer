@@ -11062,7 +11062,7 @@ function ClubPanel({
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
-      background: manageOpen ? COLORS.pitchFixed : "rgba(255,255,255,0.7)",
+      background: manageOpen ? COLORS.pitchFixed : `color-mix(in srgb, ${COLORS.surface} 70%, transparent)`,
       border: "none",
       borderRadius: 10,
       color: manageOpen ? "#fff" : COLORS.pitch,
@@ -12373,7 +12373,7 @@ function FederationsPanel({
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
-      background: manageOpenId === f.id ? COLORS.pitchFixed : "rgba(255,255,255,0.7)",
+      background: manageOpenId === f.id ? COLORS.pitchFixed : `color-mix(in srgb, ${COLORS.surface} 70%, transparent)`,
       border: "none",
       borderRadius: 10,
       color: manageOpenId === f.id ? "#fff" : COLORS.pitch,
@@ -20026,6 +20026,7 @@ function StandingsTable({
 function TournamentDetailScreen({
   tournament,
   onBack,
+  backLabel = "Cups",
   onStartMatch,
   onStartFixtureMatch,
   onUpdateTournament,
@@ -20155,7 +20156,7 @@ function TournamentDetailScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Tournaments"), /*#__PURE__*/React.createElement("div", {
+  }), " " + backLabel), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -21105,7 +21106,7 @@ function RecordsScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Tournaments"), /*#__PURE__*/React.createElement("div", {
+  }), " Cups"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -21613,6 +21614,7 @@ function RecordsScreen({
 function SeriesDetailScreen({
   series,
   onBack,
+  backLabel = "Cups",
   onStartFixtureMatch,
   onUpdateSeries,
   onOpenMatch,
@@ -21725,7 +21727,7 @@ function SeriesDetailScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " Series"), /*#__PURE__*/React.createElement("div", {
+  }), " " + backLabel), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 22,
@@ -33665,6 +33667,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(SeriesDetailScreen, {
     series: viewingTournament,
     onBack: () => setScreen(tournamentDetailReturnScreen),
+    backLabel: tournamentDetailReturnScreen === "home" ? "Home" : "Cups",
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateSeries: handleUpdateTournament,
     onOpenMatch: id => {
@@ -33678,6 +33681,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(TournamentDetailScreen, {
     tournament: viewingTournament,
     onBack: () => setScreen(tournamentDetailReturnScreen),
+    backLabel: tournamentDetailReturnScreen === "home" ? "Home" : "Cups",
     onStartMatch: handleStartMatchInTournament,
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateTournament: handleUpdateTournament,
