@@ -16310,53 +16310,19 @@ function PlayingXIPicker({
 }) {
   const count = selected.length;
   const atLimit = count >= required;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "baseline",
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft
-    }
-  }, label), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      fontWeight: 700,
-      color: count === required ? COLORS.turf : COLORS.inkSoft
-    }
-  }, count, "/", required, " selected")), onNumberChange && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginBottom: 8
-    }
-  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginBottom: 8
-    }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / keeper for this match."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, squad.map(p => {
-    const name = p.name;
+  // A search box only earns its space once the squad is big enough that scanning the whole pool
+  // by eye stops being realistic -- a 12-15 player squad is still a quick scroll, but a 30-40
+  // player one (common for a club-wide "everyone who's ever played" roster) turns into real work
+  // without a way to narrow it down.
+  const [search, setSearch] = useState("");
+  const showSearch = squad.length > 15;
+  const q = search.trim().toLowerCase();
+  const poolNames = squad.map(p => p.name).filter(name => !selected.includes(name) && (!q || name.toLowerCase().includes(q)));
+  // One pill renderer shared by both the Selected section and the searchable pool below --
+  // branches on checked/disabled internally, so the same function produces the compact "tap to
+  // add" pill or the fuller selected pill (with number/captain/keeper controls) depending on
+  // which list it's called from.
+  function renderPill(name) {
     const checked = selected.includes(name);
     const disabled = !checked && atLimit;
     // Once a player is in the XI, their pill grows two extra tap targets for captain/keeper —
@@ -16520,7 +16486,76 @@ function PlayingXIPicker({
         justifyContent: "center"
       }
     }, "WK"));
-  })));
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      fontWeight: 700,
+      color: count === required ? COLORS.turf : COLORS.inkSoft
+    }
+  }, count, "/", required, " selected")), onNumberChange && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginBottom: 8
+    }
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / keeper for this match."), count > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: showSearch || poolNames.length > 0 ? 14 : 0,
+      paddingBottom: showSearch || poolNames.length > 0 ? 12 : 0,
+      borderBottom: showSearch || poolNames.length > 0 ? `1px solid ${COLORS.creamDark}` : "none"
+    }
+  }, selected.map(renderPill)), showSearch && /*#__PURE__*/React.createElement(TextField, {
+    value: search,
+    onChange: setSearch,
+    placeholder: `Search ${squad.length} players\u2026`,
+    style: {
+      marginBottom: 10
+    }
+  }), poolNames.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      fontStyle: "italic"
+    }
+  }, q ? `No one matching "${search}".` : atLimit ? "Everyone else is already in." : "No more players in this squad.") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, poolNames.map(renderPill)));
 }
 function SetupScreen({
   onStart,
@@ -31221,7 +31256,17 @@ function CricketScorer() {
   // instead of writing anything.
   const clubsRefreshGenRef = useRef(0);
   const lastClubsRefreshRef = useRef(0); // epoch ms of the last refreshClubs call that actually ran
-  function setScreen(next) {
+  // A ref (not state) so the popstate handler below can flip it synchronously without waiting on
+  // a re-render -- it needs to be true *before* setScreen's own pushState call would otherwise
+  // fire, to stop a swipe-back/hardware-back gesture from re-pushing the very entry the browser
+  // just popped (which would trap the person needing to swipe back twice for one screen).
+  const suppressHistoryPushRef = useRef(false);
+  // Core of screen navigation, minus the history bookkeeping -- split out so both setScreen
+  // (forward taps, and the "Back" buttons) and the popstate handler below (native swipe-back /
+  // hardware back / browser back button) can share the same direction-detection, scroll-reset,
+  // and background-refresh logic without the latter also pushing a redundant history entry for
+  // a navigation the browser already performed on its own.
+  function applyScreenTransition(next) {
     setScreenRaw(current => {
       const from = SCREEN_DEPTH[current] ?? 0;
       const to = SCREEN_DEPTH[next] ?? 0;
@@ -31249,6 +31294,37 @@ function CricketScorer() {
       refreshClubs();
     }
   }
+  // Every top-level navigation (every "Back" button, every onOpenX prop) funnels through this,
+  // so pushing one history entry per screen here is what makes native swipe-back / hardware back
+  // / the browser's own back button actually walk the app's own screen stack backwards, instead
+  // of leaving the OS gesture with nothing of ours to act on and falling through to unpredictable
+  // default browser behavior (see the popstate listener below for the other half of this).
+  function setScreen(next) {
+    applyScreenTransition(next);
+    if (!suppressHistoryPushRef.current) {
+      window.history.pushState({
+        screen: next
+      }, "");
+    }
+  }
+  // Seeds the current history entry with the starting screen (so the very first swipe-back has
+  // a real {screen} to fall back to instead of landing on whatever a later replaceState call
+  // elsewhere leaves behind — see the auth-action/follow-code URL cleanups, which replace state
+  // with null/{} since they're not tracking screens themselves), then listens for the browser
+  // popping an entry (swipe-back, hardware back, the browser's own Back button) and mirrors it
+  // into React state without re-pushing.
+  useEffect(() => {
+    window.history.replaceState({
+      screen
+    }, "");
+    function handlePopState(e) {
+      suppressHistoryPushRef.current = true;
+      applyScreenTransition(e.state && e.state.screen ? e.state.screen : "home");
+      suppressHistoryPushRef.current = false;
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   // Loads every club the user belongs to, then eagerly loads each club's teams too — so the
   // match-setup picker can offer a teammate's club rosters alongside your own without an extra
   // round trip the moment you pick "New Match".
