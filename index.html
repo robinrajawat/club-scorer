@@ -10469,7 +10469,9 @@ function FeedbackInboxScreen({
         display: "flex",
         alignItems: "center",
         gap: 8,
-        flexWrap: "wrap"
+        flexWrap: "wrap",
+        opacity: busyId === it.id || priorityBusyId === it.id ? 0.55 : 1,
+        transition: "opacity 0.15s"
       }
     }, /*#__PURE__*/React.createElement("select", {
       value: priority,
