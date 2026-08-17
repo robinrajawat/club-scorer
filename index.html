@@ -9741,7 +9741,7 @@ function AccountScreen({
   style: {
     background: "rgba(184,137,43,0.08)",
     borderRadius: 16,
-    padding: 18,
+    padding: "6px 6px",
     marginTop: 14,
     border: `1.5px solid rgba(184,137,43,0.3)`
   }
@@ -9753,50 +9753,71 @@ function AccountScreen({
     letterSpacing: 1,
     color: COLORS.gold,
     textTransform: "uppercase",
-    marginBottom: 10
+    padding: "8px 10px 6px"
   }
-}, "Admin"), /*#__PURE__*/React.createElement("button", {
+}, "Admin"), [{
+  icon: InboxIcon,
+  label: "Feedback Inbox",
+  onClick: onOpenFeedbackInbox
+}, {
+  icon: Users,
+  label: "Beta Testers",
+  onClick: onOpenBetaTesters
+}].map((item, i, arr) => /*#__PURE__*/React.createElement(React.Fragment, {
+  key: item.label
+}, /*#__PURE__*/React.createElement("button", {
   type: "button",
-  onClick: onOpenFeedbackInbox,
+  onClick: item.onClick,
   className: "cs-btn",
   style: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    padding: "10px 14px",
+    gap: 10,
+    width: "100%",
+    padding: "9px 10px",
     borderRadius: 10,
-    border: `1.5px solid ${COLORS.gold}`,
+    border: "none",
     background: "none",
-    color: COLORS.pitch,
-    fontFamily: "'Inter'",
-    fontWeight: 700,
-    fontSize: 13,
-    cursor: "pointer"
-  }
-}, /*#__PURE__*/React.createElement(InboxIcon, {
-  size: 16
-}), "Feedback Inbox"), /*#__PURE__*/React.createElement("button", {
-  type: "button",
-  onClick: onOpenBetaTesters,
-  className: "cs-btn",
-  style: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: `1.5px solid ${COLORS.gold}`,
-    background: "none",
-    color: COLORS.pitch,
-    fontFamily: "'Inter'",
-    fontWeight: 700,
-    fontSize: 13,
     cursor: "pointer",
-    marginTop: 8
+    textAlign: "left"
   }
-}, /*#__PURE__*/React.createElement(Users, {
-  size: 16
-}), "Beta Testers")), user && /*#__PURE__*/React.createElement("div", {
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    background: "rgba(184,137,43,0.15)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
+  }
+}, /*#__PURE__*/React.createElement(item.icon, {
+  size: 15,
+  style: {
+    color: COLORS.gold
+  }
+})), /*#__PURE__*/React.createElement("span", {
+  style: {
+    flex: 1,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 13.5,
+    color: COLORS.ink
+  }
+}, item.label), /*#__PURE__*/React.createElement(ChevronRight, {
+  size: 15,
+  style: {
+    color: COLORS.inkSoft,
+    flexShrink: 0
+  }
+})), i < arr.length - 1 && /*#__PURE__*/React.createElement("div", {
+  style: {
+    height: 1,
+    background: "rgba(184,137,43,0.2)",
+    margin: "0 10px"
+  }
+})))), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.05)",
       borderRadius: 16,
