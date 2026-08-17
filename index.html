@@ -815,6 +815,7 @@ function buildClaudeFixPrompt(item) {
   if (item.url) lines.push(`Page: ${item.url}`);
   if (item.userAgent) lines.push(`Browser: ${item.userAgent}`);
   if (item.createdAt) lines.push(`Reported: ${new Date(item.createdAt).toLocaleString()}`);
+  if (item.resolutionNote && item.resolutionNote.trim()) lines.push("", `My own note on this so far: "${item.resolutionNote.trim()}"`);
   lines.push("", "Please investigate index.html and fix the underlying issue.");
   return lines.join("\n");
 }
@@ -10416,7 +10417,7 @@ function FeedbackInboxScreen({
         fontSize: 11.5,
         cursor: "pointer"
       }
-    }, copiedId === it.id ? "Copied!" : "Copy prompt for Claude"), /*#__PURE__*/React.createElement("button", {
+    }, copiedId === it.id ? "Copied!" : "Copy prompt"), /*#__PURE__*/React.createElement("button", {
       onClick: () => setConfirmDeleteItem({
         id: it.id
       }),
