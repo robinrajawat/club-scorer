@@ -8310,12 +8310,19 @@ function AuthBar({
     onClick: handleSignOut,
     disabled: signingOut,
     style: {
+      // Neutral, not COLORS.ball -- signing out is benign and fully reversible (sign back in any
+      // time, nothing is lost), unlike the red-styled actions elsewhere in this app that actually
+      // are destructive/irreversible. The full Account screen's own Sign Out button already uses
+      // Btn's neutral "default" variant for exactly this reason; this dropdown was the one place
+      // still treating it as if it needed a warning color.
       ...menuItemStyle,
-      color: COLORS.ball,
       cursor: signingOut ? "default" : "pointer"
     }
   }, /*#__PURE__*/React.createElement(LogOut, {
-    size: 15
+    size: 15,
+    style: {
+      color: COLORS.pitch
+    }
   }), signingOut ? "Signing out\u2026" : "Sign out"), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
@@ -8414,7 +8421,7 @@ function AuthBar({
   }, "Free, no ads, no locked features. A tip is appreciated, never expected."), /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
-    className: "cs-btn cs-shine",
+    className: "cs-btn",
     onClick: () => go(() => window.open("https://ko-fi.com/robinrajawat", "_blank", "noopener,noreferrer")),
     style: {
       display: "flex",
@@ -8426,14 +8433,18 @@ function AuthBar({
       minHeight: 40,
       padding: "0 12px",
       borderRadius: 10,
-      border: "none",
-      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      color: "#2e1c04",
+      // Outlined, not filled -- a solid gold-gradient CTA with a glossy shine sitting directly
+      // under "a tip is appreciated, never expected" read as a commercial upsell button
+      // contradicting its own copy. Gold stays as an accent (border/icon/text) rather than
+      // disappearing into a plain gray button, which would undersell that tipping is genuinely
+      // welcomed -- just not pushed.
+      background: "none",
+      border: `1.5px solid ${COLORS.gold}`,
+      color: COLORS.gold,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13,
-      cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(184,137,43,0.3)"
+      cursor: "pointer"
     }
   }, /*#__PURE__*/React.createElement("svg", {
     width: 15,
@@ -10818,7 +10829,7 @@ function AboutScreen({
   }, "Club Scorer stays free, with no ads and no locked features. If it's useful for your club, a tip is appreciated but never expected."), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => window.open("https://ko-fi.com/robinrajawat", "_blank", "noopener,noreferrer"),
-    className: "cs-btn cs-shine",
+    className: "cs-btn",
     style: {
       display: "flex",
       alignItems: "center",
@@ -10828,14 +10839,13 @@ function AboutScreen({
       minHeight: 42,
       padding: "0 14px",
       borderRadius: 10,
-      border: "none",
-      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      color: "#2e1c04",
+      background: "none",
+      border: `1.5px solid ${COLORS.gold}`,
+      color: COLORS.gold,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13.5,
-      cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(184,137,43,0.3)"
+      cursor: "pointer"
     }
   }, /*#__PURE__*/React.createElement("svg", {
     width: 16,
