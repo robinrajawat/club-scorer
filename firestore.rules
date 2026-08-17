@@ -752,7 +752,7 @@ service cloud.firestore {
         && request.resource.data.message.size() < 6000;
       allow read: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com';
       allow update: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolutionNote']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolutionNote', 'priority']);
       allow delete: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com';
     }
   }

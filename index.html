@@ -791,6 +791,24 @@ async function updateFeedbackStatus(feedbackId, status, resolutionNote) {
     };
   }
 }
+// Admin-only. Separate from updateFeedbackStatus (rather than bundled into one call) since
+// priority and status are independently tappable fields in the inbox now -- changing one
+// shouldn't require also resending the other.
+async function updateFeedbackPriority(feedbackId, priority) {
+  try {
+    await db.collection("feedback").doc(feedbackId).update({
+      priority
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "Only the admin account can do that." : e.message || "Couldn't update that."
+    };
+  }
+}
 // Admin-only. Permanent -- no undo, matching the ConfirmModal pattern used for every other
 // irreversible action in this app.
 async function deleteFeedback(feedbackId) {
@@ -10145,6 +10163,7 @@ function FeedbackInboxScreen({
   const [expandedId, setExpandedId] = useState(null);
   const [noteDraftById, setNoteDraftById] = useState({});
   const [busyId, setBusyId] = useState(null);
+  const [priorityBusyId, setPriorityBusyId] = useState(null);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(null); // { id } | null
   const [deleteBusyId, setDeleteBusyId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -10167,6 +10186,26 @@ function FeedbackInboxScreen({
         ...x,
         status,
         resolutionNote: noteDraftById[item.id] !== undefined ? noteDraftById[item.id] : x.resolutionNote || ""
+      } : x));
+    }
+  }
+  // Note-saving no longer piggybacks on a status click now that status is a plain select rather
+  // than a row of buttons you'd naturally tap through -- this is the explicit "persist my draft"
+  // action instead (re-sends the current status unchanged alongside it, since updateFeedbackStatus
+  // still writes both fields together).
+  async function handleSaveNote(item) {
+    const draft = noteDraftById[item.id];
+    if (draft === undefined) return;
+    await handleSetStatus(item, item.status || "open");
+  }
+  async function handleSetPriority(item, priority) {
+    setPriorityBusyId(item.id);
+    const result = await updateFeedbackPriority(item.id, priority);
+    setPriorityBusyId(null);
+    if (result.ok) {
+      setItems(list => list.map(x => x.id === item.id ? {
+        ...x,
+        priority
       } : x));
     }
   }
@@ -10204,6 +10243,11 @@ function FeedbackInboxScreen({
     planned: COLORS.gold,
     fixed: COLORS.pitch,
     wontfix: COLORS.inkSoft
+  };
+  const priorityColor = {
+    low: COLORS.inkSoft,
+    medium: COLORS.gold,
+    high: COLORS.ball
   };
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10294,6 +10338,7 @@ function FeedbackInboxScreen({
   }, "Nothing here.") : visible.map(it => {
     const isOpen = expandedId === it.id;
     const status = it.status || "open";
+    const priority = it.priority || "medium";
     return /*#__PURE__*/React.createElement("div", {
       key: it.id,
       style: {
@@ -10336,9 +10381,16 @@ function FeedbackInboxScreen({
         textOverflow: "ellipsis",
         whiteSpace: isOpen ? "pre-wrap" : "nowrap"
       }
-    }, it.message)), /*#__PURE__*/React.createElement("span", {
+    }, it.message)), /*#__PURE__*/React.createElement("div", {
       style: {
         flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 2
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
         fontFamily: "'Inter'",
         fontSize: 10.5,
         fontWeight: 700,
@@ -10346,7 +10398,16 @@ function FeedbackInboxScreen({
         letterSpacing: 0.4,
         color: statusColor[status] || COLORS.inkSoft
       }
-    }, status)), isOpen && /*#__PURE__*/React.createElement("div", {
+    }, status), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 9.5,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+        color: priorityColor[priority] || COLORS.inkSoft
+      }
+    }, priority))), isOpen && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 10,
         paddingTop: 10,
@@ -10386,31 +10447,67 @@ function FeedbackInboxScreen({
         border: `1.5px solid ${COLORS.creamDark}`,
         background: COLORS.cream,
         resize: "vertical",
-        marginBottom: 8
+        marginBottom: 6
       }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 6,
-        flexWrap: "wrap"
-      }
-    }, ["open", "planned", "fixed", "wontfix"].map(s => /*#__PURE__*/React.createElement("button", {
-      key: s,
-      onClick: () => handleSetStatus(it, s),
+    }), noteDraftById[it.id] !== undefined && noteDraftById[it.id] !== (it.resolutionNote || "") && /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleSaveNote(it),
       disabled: busyId === it.id,
       className: "cs-btn",
       style: {
-        padding: "5px 10px",
-        borderRadius: 8,
-        border: `1px solid ${COLORS.willow}`,
-        background: status === s ? COLORS.pitch : COLORS.surface,
-        color: status === s ? COLORS.cream : COLORS.pitch,
+        background: "none",
+        border: "none",
+        color: COLORS.gold,
         fontFamily: "'Inter'",
         fontWeight: 600,
         fontSize: 11.5,
+        cursor: "pointer",
+        padding: "0 0 8px",
+        display: "block"
+      }
+    }, busyId === it.id ? "Saving\u2026" : "Save note"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("select", {
+      value: priority,
+      onChange: e => handleSetPriority(it, e.target.value),
+      disabled: priorityBusyId === it.id,
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 11.5,
+        padding: "5px 6px",
+        borderRadius: 8,
+        border: `1px solid ${priorityColor[priority] || COLORS.willow}`,
+        color: priorityColor[priority] || COLORS.pitch,
+        background: COLORS.surface,
         cursor: "pointer"
       }
-    }, busyId === it.id ? "\u2026" : s)), /*#__PURE__*/React.createElement("button", {
+    }, ["low", "medium", "high"].map(p => /*#__PURE__*/React.createElement("option", {
+      key: p,
+      value: p
+    }, p))), /*#__PURE__*/React.createElement("select", {
+      value: status,
+      onChange: e => handleSetStatus(it, e.target.value),
+      disabled: busyId === it.id,
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 11.5,
+        padding: "5px 6px",
+        borderRadius: 8,
+        border: `1px solid ${statusColor[status] || COLORS.willow}`,
+        color: statusColor[status] || COLORS.pitch,
+        background: COLORS.surface,
+        cursor: "pointer"
+      }
+    }, ["open", "planned", "fixed", "wontfix"].map(s => /*#__PURE__*/React.createElement("option", {
+      key: s,
+      value: s
+    }, s))), /*#__PURE__*/React.createElement("button", {
       onClick: () => handleCopyPrompt(it),
       className: "cs-btn",
       style: {
