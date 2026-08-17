@@ -51,19 +51,6 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Beta tester flag. Deliberately its OWN top-level collection rather than
-    // living under /users/{uid} — the rule above grants the signed-in owner
-    // full write access to their own subtree, which would let anyone flip
-    // their own beta flag on from the browser console. Read-only from the
-    // client; only edited via the Firebase Console (or an admin script),
-    // which bypasses these rules entirely.
-    // ---------------------------------------------------------------------
-    match /betaTesters/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false;
-    }
-
-    // ---------------------------------------------------------------------
     // Full-access co-scoring. Knowledge of the 8-character code IS the credential — this is
     // intentional (it's how a teammate resumes scoring on another phone with no account needed)
     // and is unchanged from before. What changed is that this code is no longer also accepted as
@@ -187,15 +174,53 @@ service cloud.firestore {
       return request.auth.uid == club.ownerUid || request.auth.uid in club.get('coOwnerUids', []);
     }
 
-    // App-wide admin check for /feedback triage -- hardcoded email kept as a bootstrap fallback
-    // (so this account can never get locked out), ORed with a data-driven /admins/{uid} doc so
-    // additional admins can be added/removed without a code + rules redeploy. See index.html's
-    // isFeedbackAdmin/checkIsCollectionAdmin for the client-side mirror of this same check.
-    function isFeedbackAdminAuth() {
+    // App-wide admin check -- hardcoded email kept as a bootstrap fallback (so this account can
+    // never get locked out), ORed with a data-driven /admins/{uid} doc so additional admins can be
+    // added/removed without a code + rules redeploy. Originally named isFeedbackAdminAuth when it
+    // only gated /feedback triage; renamed once it also started gating beta tester management
+    // below -- "app admin" is what it actually checks. See index.html's isFeedbackAdmin/
+    // checkIsCollectionAdmin for the client-side mirror of this same check.
+    function isAppAdminAuth() {
       return request.auth != null && (
         request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com' ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
+    }
+
+    // ---------------------------------------------------------------------
+    // Beta tester flag. Deliberately its OWN top-level collection rather than
+    // living under /users/{uid} — the rule above grants the signed-in owner
+    // full write access to their own subtree, which would let anyone flip
+    // their own beta flag on from the browser console. Read-only to the
+    // owner themselves (their own status); an app admin can additionally
+    // read, list, and write any entry -- granting/revoking beta access from
+    // the in-app Beta Testers admin screen instead of only via the Firebase
+    // Console/an admin script (both of which still work too, unchanged).
+    // ---------------------------------------------------------------------
+    match /betaTesters/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAppAdminAuth());
+      allow list: if isAppAdminAuth();
+      allow write: if isAppAdminAuth();
+    }
+
+    // ---------------------------------------------------------------------
+    // Beta access requests -- the companion to /betaTesters above. The client has no way to look
+    // up a UID from an email (that's an Admin-SDK-only operation; this app has no server), so
+    // there's no way to build a normal "type an email, grant beta access" admin control. This is
+    // the workaround: a signed-in person requests for THEMSELVES (their own uid/email are already
+    // known and provable via their own auth session, so no lookup is needed), and the admin
+    // reviews/approves real pending requests instead of guessing at UIDs. Doc id is the
+    // requester's own uid, so create/update rules can enforce "only your own request, and it must
+    // actually claim your own uid" without any extra bookkeeping.
+    // ---------------------------------------------------------------------
+    match /betaRequests/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAppAdminAuth());
+      allow list: if isAppAdminAuth();
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 0;
+      allow delete: if isAppAdminAuth();
     }
 
     match /clubs/{clubId} {
@@ -761,14 +786,14 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
         && request.resource.data.message.size() < 6000;
-      allow read: if isFeedbackAdminAuth();
-      allow update: if isFeedbackAdminAuth()
+      allow read: if isAppAdminAuth();
+      allow update: if isAppAdminAuth()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolutionNote', 'priority']);
-      allow delete: if isFeedbackAdminAuth();
+      allow delete: if isAppAdminAuth();
     }
 
     // Existence-only admin registry -- a doc at /admins/{uid} means that uid is an admin, checked
-    // by isFeedbackAdminAuth() above. A user may only read their OWN doc (existence, no field
+    // by isAppAdminAuth() above. A user may only read their OWN doc (existence, no field
     // values needed), never list the collection, so this can't be used to enumerate who else is
     // an admin. No client write path at all -- adding/removing an admin is a Firebase Console (or
     // Admin SDK) action, the same trust tier as reviewing /feedback itself in the console before
