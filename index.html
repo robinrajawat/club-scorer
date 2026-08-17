@@ -33093,6 +33093,16 @@ function CricketScorer() {
       setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
     }
   }, [user]);
+  // Feedback Inbox is the one screen gated by a boolean (isAdmin) rather than always rendering
+  // and letting the screen itself handle "you can't see this" -- so unlike every other screen,
+  // nothing falls back if isAdmin flips false while it's open (sign out, or the async
+  // /admins/{uid} check resolving false after an optimistic true). Without this, that leaves a
+  // blank screen instead of landing somewhere real.
+  useEffect(() => {
+    if (screen === "feedback-inbox" && !isAdmin) {
+      setScreen("home");
+    }
+  }, [isAdmin, screen]);
   // Offline outbox: retry queued writes whenever the browser tells us we're back online, and on a
   // slow poll as a safety net for platforms where the 'online' event doesn't fire reliably. The
   // poll also keeps the visible pending count in sync with reality (e.g. after a match screen's
