@@ -739,12 +739,21 @@ service cloud.firestore {
     // shape validation only: a non-empty, size-capped message and a known kind, so this can't be
     // used to dump arbitrary large blobs.
     // ---------------------------------------------------------------------
+    // Read/update are opened up to exactly one signed-in email (the app's owner) so feedback and
+    // auto-captured error reports can be triaged in-app instead of only via the Firebase Console.
+    // Everyone else keeps create-only, write-only access -- see the comment above submitFeedback
+    // in index.html for why that stays the default (no way for a submitter, or anyone else, to
+    // browse other people's reports). Update is limited to exactly the two admin-set fields so the
+    // admin account can never alter what was actually reported.
     match /feedback/{feedbackId} {
       allow create: if request.resource.data.kind in ['feedback', 'error']
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
         && request.resource.data.message.size() < 6000;
-      allow read, update, delete: if false;
+      allow read: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com';
+      allow update: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolutionNote']);
+      allow delete: if false;
     }
   }
 }
