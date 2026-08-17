@@ -28966,6 +28966,84 @@ function FollowScreen({
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
   const [tab, setTab] = useState(0);
+  // Boundary/wicket pops and milestone toasts for the person following along, not just the
+  // scorer -- same BallCelebration/MilestoneToast components MatchScreen uses, but there's no
+  // direct "a six just happened" event here to hang off of the way handleRun/celebrateWicket have
+  // on the scoring side. This is inferred instead, by diffing each new Firestore snapshot against
+  // the previous one:
+  //   - Boundary/wicket: exactly one new ball landed since last snapshot (ballCount went up by
+  //     exactly 1, not more), and that ball is kind 'wicket', or kind 'run'/'noball' with runs
+  //     4 or 6 -- the same two conditions handleRun/handleExtra actually celebrate on the scoring
+  //     side (a bye/legbye reaching the boundary is deliberately NOT a celebration there either).
+  //   - Milestones: inn.toastMilestones (already synced -- packMatchForFirestore only special-
+  //     cases .overs, everything else on the inning object passes through untouched) grew since
+  //     last snapshot; the new entries get queued the same two-effect way MatchScreen's own
+  //     milestoneQueue does below, for the same reason documented there (a stuck-toast bug from
+  //     collapsing the promote-next and schedule-dismiss effects into one).
+  // Both deliberately skip entirely (no celebration, scorecard still updates correctly) on the
+  // FIRST snapshot after mount (nothing to diff against yet -- would otherwise replay a whole
+  // match's history of fours/sixes/milestones the moment someone opens the link) and on any gap
+  // bigger than one new ball (a follower's connection blipped, or they just joined mid-over) --
+  // ambiguous which ball to celebrate, and celebrating a whole stack at once would look broken
+  // rather than exciting.
+  const [celebration, setCelebration] = useState(null);
+  const [milestoneToast, setMilestoneToast] = useState(null);
+  const [milestoneQueue, setMilestoneQueue] = useState([]);
+  const prevBallCountRef = useRef(null);
+  const prevMilestoneCountRef = useRef(null);
+  const prevInningIdxRef = useRef(null);
+  useEffect(() => {
+    if (milestoneToast || milestoneQueue.length === 0) return;
+    const [next, ...rest] = milestoneQueue;
+    setMilestoneToast({
+      milestone: next,
+      key: Date.now()
+    });
+    setMilestoneQueue(rest);
+  }, [milestoneToast, milestoneQueue]);
+  useEffect(() => {
+    if (!milestoneToast) return;
+    const key = milestoneToast.key;
+    const timer = setTimeout(() => {
+      setMilestoneToast(t => t && t.key === key ? null : t);
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [milestoneToast]);
+  useEffect(() => {
+    if (!match || !match.innings) return;
+    const inningIdx = match.currentInningIndex != null ? match.currentInningIndex : match.innings.length - 1;
+    const inn = match.innings[inningIdx];
+    if (!inn) return;
+    const ballCount = (inn.overs || []).reduce((s, o) => s + (Array.isArray(o) ? o.length : 0), 0);
+    const milestoneCount = (inn.toastMilestones || []).length;
+    const sameInning = prevInningIdxRef.current === inningIdx;
+    if (sameInning && prevBallCountRef.current != null && ballCount === prevBallCountRef.current + 1) {
+      const overs = inn.overs || [];
+      const lastBall = (overs[overs.length - 1] || [])[(overs[overs.length - 1] || []).length - 1];
+      if (lastBall && lastBall.kind === "wicket") {
+        const key = Date.now();
+        setCelebration({
+          type: "wicket",
+          key
+        });
+        setTimeout(() => setCelebration(c => c && c.key === key ? null : c), 1000);
+      } else if (lastBall && (lastBall.kind === "run" || lastBall.kind === "noball") && (lastBall.runs === 4 || lastBall.runs === 6)) {
+        const key = Date.now();
+        setCelebration({
+          type: lastBall.runs,
+          key
+        });
+        setTimeout(() => setCelebration(c => c && c.key === key ? null : c), 1000);
+      }
+    }
+    if (sameInning && prevMilestoneCountRef.current != null && milestoneCount > prevMilestoneCountRef.current) {
+      const newOnes = (inn.toastMilestones || []).slice(prevMilestoneCountRef.current);
+      setMilestoneQueue(q => [...q, ...newOnes]);
+    }
+    prevBallCountRef.current = ballCount;
+    prevMilestoneCountRef.current = milestoneCount;
+    prevInningIdxRef.current = inningIdx;
+  }, [match]);
   useEffect(() => {
     if (!code) {
       setStatus("not-found");
@@ -29067,7 +29145,11 @@ function FollowScreen({
   const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
   return /*#__PURE__*/React.createElement("div", {
     style: wrapStyle
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(BallCelebration, {
+    celebration: celebration
+  }), /*#__PURE__*/React.createElement(MilestoneToast, {
+    toast: milestoneToast
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "sticky",
       top: 0,
