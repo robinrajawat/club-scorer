@@ -10473,43 +10473,43 @@ function FeedbackInboxScreen({
         opacity: busyId === it.id || priorityBusyId === it.id ? 0.55 : 1,
         transition: "opacity 0.15s"
       }
-    }, /*#__PURE__*/React.createElement("select", {
-      value: priority,
-      onChange: e => handleSetPriority(it, e.target.value),
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleSetPriority(it, ["low", "medium", "high"][(["low", "medium", "high"].indexOf(priority) + 1) % 3]),
       disabled: priorityBusyId === it.id,
+      className: "cs-btn",
+      title: "Tap to cycle priority",
       style: {
         fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 11.5,
-        padding: "5px 6px",
-        borderRadius: 8,
-        border: `1px solid ${priorityColor[priority] || COLORS.willow}`,
-        color: priorityColor[priority] || COLORS.pitch,
-        background: COLORS.surface,
+        fontWeight: 700,
+        fontSize: 11,
+        textTransform: "uppercase",
+        letterSpacing: 0.3,
+        padding: "6px 12px",
+        borderRadius: 999,
+        border: "none",
+        background: priorityColor[priority] || COLORS.willow,
+        color: "#fff",
         cursor: "pointer"
       }
-    }, ["low", "medium", "high"].map(p => /*#__PURE__*/React.createElement("option", {
-      key: p,
-      value: p
-    }, p))), /*#__PURE__*/React.createElement("select", {
-      value: status,
-      onChange: e => handleSetStatus(it, e.target.value),
+    }, priority), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleSetStatus(it, ["open", "planned", "fixed", "wontfix"][(["open", "planned", "fixed", "wontfix"].indexOf(status) + 1) % 4]),
       disabled: busyId === it.id,
+      className: "cs-btn",
+      title: "Tap to cycle status",
       style: {
         fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 11.5,
-        padding: "5px 6px",
-        borderRadius: 8,
-        border: `1px solid ${statusColor[status] || COLORS.willow}`,
-        color: statusColor[status] || COLORS.pitch,
-        background: COLORS.surface,
+        fontWeight: 700,
+        fontSize: 11,
+        textTransform: "uppercase",
+        letterSpacing: 0.3,
+        padding: "6px 12px",
+        borderRadius: 999,
+        border: "none",
+        background: statusColor[status] || COLORS.willow,
+        color: "#fff",
         cursor: "pointer"
       }
-    }, ["open", "planned", "fixed", "wontfix"].map(s => /*#__PURE__*/React.createElement("option", {
-      key: s,
-      value: s
-    }, s))), /*#__PURE__*/React.createElement("button", {
+    }, status), /*#__PURE__*/React.createElement("button", {
       onClick: () => handleCopyPrompt(it),
       className: "cs-btn",
       style: {
