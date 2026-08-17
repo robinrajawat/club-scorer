@@ -1692,7 +1692,18 @@ function unpackMatchFromFirestore(match) {
     ...match,
     innings: match.innings.map(inn => ({
       ...inn,
-      overs: (inn.overs || []).map(o => Array.isArray(o) ? o : o.balls || [])
+      // `o.balls || []` only guarded against o.balls being falsy -- if it was truthy but NOT
+      // actually an array (an empty object from some malformed historical write, say), it passed
+      // straight through unchanged. That silently produced a non-array "balls" entry in overs,
+      // which then crashed OversStrip's render later (balls.reduce/.filter is not a function) --
+      // a genuine reported crash on FollowScreen, not a hypothetical. Also guards `o` itself being
+      // null/undefined, which the old ternary's else-branch would have thrown on immediately
+      // (Cannot read properties of null (reading 'balls')) rather than falling back to [].
+      overs: (inn.overs || []).map(o => {
+        if (Array.isArray(o)) return o;
+        const balls = o && o.balls;
+        return Array.isArray(balls) ? balls : [];
+      })
     }))
   };
 }
@@ -7281,16 +7292,22 @@ function OversStrip({
   overs,
   ballsPerOver
 }) {
+  // Normalize once, up front, rather than trusting every element of `overs` to already be an
+  // array -- this is exactly the shape that crashed FollowScreen's render (balls.reduce/.filter
+  // is not a function) when unpackMatchFromFirestore let a malformed non-array "balls" entry
+  // through. Defensive here too, not just at the unpack step, so no other future data-shape
+  // surprise (a different sync path, an older cached doc, etc.) can crash this component again.
+  const safeOvers = (overs || []).map(balls => Array.isArray(balls) ? balls : []);
   const scrollRef = useRef(null);
-  const totalBalls = overs.reduce((s, o) => s + o.length, 0);
-  const lastIndex = overs.length - 1;
+  const totalBalls = safeOvers.reduce((s, o) => s + o.length, 0);
+  const lastIndex = safeOvers.length - 1;
   const [activeIndex, setActiveIndex] = useState(lastIndex);
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }
     setActiveIndex(lastIndex);
-  }, [totalBalls, overs.length]);
+  }, [totalBalls, safeOvers.length]);
   function handleScroll() {
     const el = scrollRef.current;
     if (!el || el.clientWidth === 0) return;
@@ -7304,7 +7321,7 @@ function OversStrip({
     });
     setActiveIndex(lastIndex);
   }
-  return /*#__PURE__*/React.createElement("div", null, overs.length > 1 && /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", null, safeOvers.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -7347,7 +7364,7 @@ function OversStrip({
       scrollSnapType: "x mandatory",
       WebkitOverflowScrolling: "touch"
     }
-  }, overs.map((balls, i) => {
+  }, safeOvers.map((balls, i) => {
     const isCurrent = i === lastIndex;
     // Per-over runs/wickets summary, shown next to the over's label. This replaces the "This
     // over: N" line that used to live up in the score header (below the main score) -- keeping
