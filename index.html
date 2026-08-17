@@ -8426,7 +8426,23 @@ function AuthBar({
     "aria-label": "Account menu",
     "aria-haspopup": "true",
     "aria-expanded": open,
-    style: {
+    style: user ? {
+      // Signed in: icon-only, matching the header's other round icon buttons (Bell) rather than
+      // the pill this used to be -- the name moved to the Home screen's own greeting instead, so
+      // repeating it here as label text was pure duplication. See AuthBar's own comment block
+      // above for the fuller reasoning.
+      position: "relative",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 36,
+      height: 36,
+      padding: 0,
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      cursor: "pointer"
+    } : {
       position: "relative",
       display: "flex",
       alignItems: "center",
@@ -8434,38 +8450,38 @@ function AuthBar({
       background: COLORS.surface,
       border: `1.5px solid ${COLORS.creamDark}`,
       borderRadius: 20,
-      padding: user ? "5px 12px 5px 5px" : "7px 14px",
+      padding: "7px 14px",
       cursor: "pointer",
       fontFamily: "'Inter'",
       fontSize: 12.5,
       fontWeight: 700,
-      color: user ? COLORS.inkSoft : COLORS.ink,
+      color: COLORS.ink,
       boxShadow: "0 1px 2px rgba(42,36,32,0.08)"
     }
   }, user ? user.photoURL ? /*#__PURE__*/React.createElement("img", {
     src: user.photoURL,
     alt: "",
     style: {
-      width: 22,
-      height: 22,
+      width: 32,
+      height: 32,
       borderRadius: "50%"
     }
   }) : /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 22,
-      height: 22,
+      width: 32,
+      height: 32,
       borderRadius: "50%",
       background: COLORS.willow,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       color: "#fff",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: 700
     }
   }, label.charAt(0).toUpperCase()) : /*#__PURE__*/React.createElement(LogIn, {
     size: 14
-  }), label)), menu);
+  }), user ? null : label)), menu);
 }
 function RuleChoice({
   label,
@@ -15171,6 +15187,16 @@ function relativeDayLabel(ts) {
   const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
+// Local device time, not UTC -- a greeting is only warm if it matches when the person is actually
+// looking at the screen. Three bands rather than a finer split (e.g. a separate "late night") since
+// the boundaries themselves don't need to be precise; nobody's checking a clock to see which one
+// they're in, they're just glancing at whether it feels right.
+function greetingPrefix() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 // Venue lives on the tournament, not the individual fixture — so this edits "this tournament's
 // ground" even though it's opened from one specific fixture's card, same as how the tournament's
 // venue is otherwise only ever set as a side effect of scoring its first fixture. Small enough
@@ -15957,6 +15983,11 @@ function HomeScreen({
   const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
   const [playersLoading, setPlayersLoading] = useState(false);
   const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
+  // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
+  // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
+  // when there's genuinely no name to show, so the greeting line just doesn't render at all rather
+  // than saying something empty or generic.
+  const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
   useEffect(() => {
     if (searchScope !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
     let cancelled = false;
@@ -16331,7 +16362,14 @@ function renderMatchCard(m, i) {
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+  }))), homeGreetingName && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 21,
+      color: COLORS.pitch,
+      marginBottom: 18
+    }
+  }, `${greetingPrefix()}, ${homeGreetingName}`), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center"
