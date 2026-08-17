@@ -8174,6 +8174,7 @@ function AuthBar({
   const btnRef = useRef(null);
   const label = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "Account").split(" ")[0] : "Sign in";
   const email = user && (profile && profile.email || user.email);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   function toggle() {
     setOpen(o => {
       const next = !o;
@@ -8197,7 +8198,7 @@ function AuthBar({
       await onSignOut();
     } finally {
       setSigningOut(false);
-      setOpen(false);
+      setConfirmSignOut(false);
     }
   }
   const menuItemStyle = {
@@ -8307,23 +8308,22 @@ function AuthBar({
     type: "button",
     role: "menuitem",
     className: "cs-btn",
-    onClick: handleSignOut,
-    disabled: signingOut,
+    onClick: () => {
+      setOpen(false);
+      setConfirmSignOut(true);
+    },
     style: {
-      // Neutral, not COLORS.ball -- signing out is benign and fully reversible (sign back in any
-      // time, nothing is lost), unlike the red-styled actions elsewhere in this app that actually
-      // are destructive/irreversible. The full Account screen's own Sign Out button already uses
-      // Btn's neutral "default" variant for exactly this reason; this dropdown was the one place
-      // still treating it as if it needed a warning color.
+      // Back to COLORS.ball, now paired with a confirm step (see confirmSignOut below) rather
+      // than firing immediately -- red without confirmation just meant "the loudest-colored thing
+      // in the menu, no extra friction," which was the wrong tradeoff either way. With a confirm
+      // step, red is doing an actual job: making the action clearly identifiable before someone
+      // commits to it, while the confirm dialog itself is what actually prevents an accidental tap.
       ...menuItemStyle,
-      cursor: signingOut ? "default" : "pointer"
+      color: COLORS.ball
     }
   }, /*#__PURE__*/React.createElement(LogOut, {
-    size: 15,
-    style: {
-      color: COLORS.pitch
-    }
-  }), signingOut ? "Signing out\u2026" : "Sign out"), /*#__PURE__*/React.createElement("div", {
+    size: 15
+  }), "Sign out"), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
@@ -8526,7 +8526,14 @@ function AuthBar({
     }
   }, label.charAt(0).toUpperCase()) : /*#__PURE__*/React.createElement(LogIn, {
     size: 14
-  }), user ? null : label)), menu);
+  }), user ? null : label)), menu, confirmSignOut && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Sign out?",
+    message: "You'll need to sign in again to sync your matches and teams. Anything saved so far stays right where it is.",
+    confirmLabel: "Sign out",
+    busy: signingOut,
+    onConfirm: handleSignOut,
+    onCancel: () => setConfirmSignOut(false)
+  }));
 }
 function RuleChoice({
   label,
@@ -8609,6 +8616,7 @@ function AccountScreen({
   const [dummyBusy, setDummyBusy] = useState(false);
   const [dummyStatus, setDummyStatus] = useState("");
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const importFileRef = useRef(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -9195,13 +9203,22 @@ function AccountScreen({
       lineHeight: 1.5
     }
   }, "Your matches and teams sync to this account and follow you to any device you sign into."), /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleSignOut,
-    disabled: busy,
-    variant: "default",
+    onClick: () => setShowSignOutConfirm(true),
+    variant: "danger",
     style: {
       width: "100%"
     }
-  }, busy ? "Signing out…" : "Sign out")), isBetaTester && /*#__PURE__*/React.createElement("div", {
+  }, "Sign out")), showSignOutConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Sign out?",
+    message: "You'll need to sign in again to sync your matches and teams. Anything saved so far stays right where it is.",
+    confirmLabel: "Sign out",
+    busy: busy,
+    onConfirm: () => {
+      setShowSignOutConfirm(false);
+      handleSignOut();
+    },
+    onCancel: () => setShowSignOutConfirm(false)
+  }), isBetaTester && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
