@@ -3430,6 +3430,32 @@ async function loadPollByCode(code) {
     return null;
   }
 }
+// Shared by UpcomingFixtureCard and FixtureRow: a small "N yes · N no" glance next to the Send
+// poll button, for the one poll that's actually pinned to this exact fixture (p.fixtureId ===
+// fixtureId — a real match, not a guess the way the now-removed match-card summary had to be,
+// since a match has no fixtureId to pin to but a fixture always does). Deliberately only returns
+// an entry once that poll has at least one response — an empty "0 yes · 0 no" next to a
+// just-sent poll would be noise, not signal, on a card that already shows the send button itself.
+async function loadFixturePollSummary(fixtureId, matchingPollTeams) {
+  if (!matchingPollTeams || matchingPollTeams.length === 0) return [];
+  const results = await Promise.all(matchingPollTeams.map(async entry => {
+    const pointers = await loadTeamPolls(entry.club.id, entry.team.id);
+    const active = pointers.find(p => p.fixtureId === fixtureId && (expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now()));
+    if (!active) return null;
+    const full = await loadPollByCode(active.code);
+    if (!full) return null;
+    const vals = Object.values(full.responses || {});
+    if (vals.length === 0) return null;
+    return {
+      team: entry.team,
+      code: active.code,
+      yes: vals.filter(r => r.status === "yes").length,
+      no: vals.filter(r => r.status === "no").length,
+      maybe: vals.filter(r => r.status === "maybe").length
+    };
+  }));
+  return results.filter(Boolean);
+}
 // No auth required, by design — see the module comment above. `name` is whatever the respondent
 // picked from the roster or typed themselves; submitting again under the same name overwrites
 // their own previous answer (updating your RSVP), which is the whole point of allowing a resend.
@@ -15372,6 +15398,54 @@ function VenueEditModal({
     }
   }, busy ? "\u2026" : "Save")));
 }
+// Small "N yes · N no" glance rendered next to the Send poll button — see loadFixturePollSummary
+// for what it's built from and why it only ever shows once a poll has responses. Team-name prefix
+// only appears when there's more than one matching team (both fixture sides tracked by the same
+// person) — the common single-team case stays as plain "5 yes · 1 no" with nothing to disambiguate.
+function FixturePollSummary({
+  items
+}) {
+  if (!items || items.length === 0) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, items.map(it => /*#__PURE__*/React.createElement("div", {
+    key: it.code,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, items.length > 1 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontWeight: 600,
+      maxWidth: 70,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, it.team.name), it.yes > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.pitch
+    }
+  }, it.yes, " yes"), it.no > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.ball
+    }
+  }, it.no, " no"), it.maybe > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, it.maybe, " maybe"))));
+}
 // An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
 // section both use this). Own component rather than a plain render function -- it needs its own
 // pickerOpen state for the inline date/time modal (letting a fixture be scheduled right from Home
@@ -15417,6 +15491,16 @@ function UpcomingFixtureCard({
   // entered as bare names and were never meant to resolve to one. More than one match (both sides
   // are teams this person manages) surfaces a picker instead of guessing -- see pollTeamPickerOpen.
   const matchingPollTeams = resolvePollTeams(f.teamA, f.teamB, clubs, clubTeamsById);
+  const [pollSummary, setPollSummary] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    loadFixturePollSummary(f.id, matchingPollTeams).then(result => {
+      if (!cancelled) setPollSummary(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [f.id, matchingPollTeams.map(e => e.team.id).join(",")]);
   async function openPollFor(club, team) {
     if (pollCheckBusy) return;
     setSelectedPollTeam({
@@ -15622,7 +15706,9 @@ function UpcomingFixtureCard({
       fontWeight: 600,
       color: COLORS.inkSoft
     }
-  }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), /*#__PURE__*/React.createElement(FixturePollSummary, {
+    items: pollSummary
+  }), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       if (pollCheckBusy) return;
@@ -15795,7 +15881,10 @@ function UpcomingFixtureCard({
       question: `Available for ${f.teamA} vs ${f.teamB}?`,
       fixtureDate: fixtureDateStr || ""
     },
-    onClose: () => setPollModalOpen(false)
+    onClose: () => {
+      setPollModalOpen(false);
+      loadFixturePollSummary(f.id, matchingPollTeams).then(setPollSummary);
+    }
   }));
 }
 function HomeScreen({
@@ -19924,6 +20013,16 @@ function FixtureRow({
   // Same as UpcomingFixtureCard -- quietly finds nothing (no "Send poll" button) for a fixture
   // where neither side corresponds to a roster-tracked team.
   const matchingPollTeams = resolvePollTeams(fixture.teamA, fixture.teamB, clubs, clubTeamsById);
+  const [pollSummary, setPollSummary] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    loadFixturePollSummary(fixture.id, matchingPollTeams).then(result => {
+      if (!cancelled) setPollSummary(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixture.id, matchingPollTeams.map(e => e.team.id).join(",")]);
   async function openPollFor(club, team) {
     if (pollCheckBusy) return;
     setSelectedPollTeam({
@@ -20105,7 +20204,9 @@ function FixtureRow({
       setPickerOpen(false);
     } : null,
     onClose: () => setPickerOpen(false)
-  })), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement(FixturePollSummary, {
+    items: pollSummary
+  }), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       if (pollCheckBusy) return;
@@ -20272,7 +20373,10 @@ function FixtureRow({
       question: `Available for ${fixture.teamA} vs ${fixture.teamB}?`,
       fixtureDate: fixtureDateStr || ""
     },
-    onClose: () => setPollModalOpen(false)
+    onClose: () => {
+      setPollModalOpen(false);
+      loadFixturePollSummary(fixture.id, matchingPollTeams).then(setPollSummary);
+    }
   }));
 }
 // Round-robin generation, manual add/remove, date/time fields, and knockout-stage proposals for a
