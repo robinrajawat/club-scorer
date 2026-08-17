@@ -8764,6 +8764,26 @@ function AccountScreen({
     if (result.ok) setBetaRequestSent(true);
     else setBetaRequestError(result.error);
   }
+  // Pending counts for the Admin card's two rows -- null until loaded (renders no badge rather
+  // than a misleading "0" while the fetch is still in flight). Every doc actually IN
+  // /betaRequests is by definition still pending (approveBetaRequest/declineBetaRequest both
+  // delete the doc as part of resolving it), so betaRequests.length needs no extra filtering the
+  // way feedback's open count does. Only fetched for an admin -- these two extra reads have no
+  // reason to happen for anyone who'll never see this card at all.
+  const [adminFeedbackOpenCount, setAdminFeedbackOpenCount] = useState(null);
+  const [adminBetaPendingCount, setAdminBetaPendingCount] = useState(null);
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    let cancelled = false;
+    Promise.all([loadFeedback(), loadBetaRequests()]).then(([feedbackItems, betaRequests]) => {
+      if (cancelled) return;
+      setAdminFeedbackOpenCount(feedbackItems.filter(it => (it.status || "open") === "open").length);
+      setAdminBetaPendingCount(betaRequests.length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isAdmin]);
   const importFileRef = useRef(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -9758,11 +9778,13 @@ function AccountScreen({
 }, "Admin"), [{
   icon: InboxIcon,
   label: "Feedback Inbox",
-  onClick: onOpenFeedbackInbox
+  onClick: onOpenFeedbackInbox,
+  count: adminFeedbackOpenCount
 }, {
   icon: Users,
   label: "Beta Testers",
-  onClick: onOpenBetaTesters
+  onClick: onOpenBetaTesters,
+  count: adminBetaPendingCount
 }].map((item, i, arr) => /*#__PURE__*/React.createElement(React.Fragment, {
   key: item.label
 }, /*#__PURE__*/React.createElement("button", {
@@ -9805,7 +9827,23 @@ function AccountScreen({
     fontSize: 13.5,
     color: COLORS.ink
   }
-}, item.label), /*#__PURE__*/React.createElement(ChevronRight, {
+}, item.label), !!item.count && /*#__PURE__*/React.createElement("span", {
+  style: {
+    minWidth: 20,
+    height: 20,
+    padding: "0 6px",
+    borderRadius: 10,
+    background: COLORS.ballFixed,
+    color: "#fff",
+    fontFamily: "'Inter'",
+    fontWeight: 700,
+    fontSize: 11,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
+  }
+}, item.count), /*#__PURE__*/React.createElement(ChevronRight, {
   size: 15,
   style: {
     color: COLORS.inkSoft,
