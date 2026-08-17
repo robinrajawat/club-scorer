@@ -10184,7 +10184,14 @@ function FeedbackInboxScreen({
     }
   }
   function handleCopyPrompt(item) {
-    const prompt = buildClaudeFixPrompt(item);
+    // Copy should reflect what's actually on screen, including a note typed but not yet saved via
+    // a status click -- same "draft wins if present" resolution handleSetStatus already uses, so
+    // the two stay consistent with each other.
+    const effectiveNote = noteDraftById[item.id] !== undefined ? noteDraftById[item.id] : item.resolutionNote;
+    const prompt = buildClaudeFixPrompt({
+      ...item,
+      resolutionNote: effectiveNote
+    });
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(prompt).catch(() => {});
     }
