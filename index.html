@@ -5938,31 +5938,6 @@ function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   });
   return out;
 }
-// A match started from a real club-roster team already carries teamAId/teamBId pointing directly
-// at that team (see startNewMatch/selectTeamA in SetupScreen) -- far more reliable for a match
-// specifically than resolvePollTeams' name matching above, which exists because a tournament
-// FIXTURE has no id to match against at all (just two plain name strings). A match does have one,
-// and name matching alone can silently break even though the team itself hasn't changed: the team
-// could have been renamed since the match started, or selectTeamA/selectTeamB append " (A)"/" (B)"
-// to the stored name specifically when both sides happen to be the same team name, which then
-// never matches the real team.name either. Falls back to name matching only when there's truly no
-// id to go on -- an older match saved before these fields existed, or a match between two ad-hoc
-// typed opponent names that were never real club teams to begin with.
-function resolveMatchPollTeams(match, clubs, clubTeamsById) {
-  const out = [];
-  (clubs || []).forEach(club => {
-    (clubTeamsById[club.id] || []).forEach(team => {
-      if (team.id === match.teamAId || team.id === match.teamBId) {
-        out.push({
-          team,
-          club
-        });
-      }
-    });
-  });
-  if (out.length > 0) return out;
-  return resolvePollTeams(match.teamA, match.teamB, clubs, clubTeamsById);
-}
 // Every still-active poll, across every team across every club someone has access to, that still
 // has at least one roster name who hasn't responded -- the Inbox's poll section and its badge
 // count both come from this same list, so what the badge promises is exactly what's waiting there.
@@ -14220,138 +14195,6 @@ function MoveTeamMenu({
     size: 16
   })), menu);
 }
-// Small inline summary of the most relevant active poll for a match's team(s), attached as a
-// footer strip on the match card itself -- so where responses stand is visible without a trip to
-// the team screen or the Home poll widget. Renders nothing when no team resolves or there's no
-// active poll for it, the same quiet-by-default pattern as the fixture card's "Send poll" button.
-// A started match has no fixtureId to pin to one specific poll the way a tournament fixture does
-// (see resolvePollTeams/openPollFor there), so this shows whichever active poll is most recent for
-// the resolved team -- loadTeamPolls already returns newest-first. Both sides can resolve at once
-// (see resolvePollTeams) -- unlike sending a poll, showing a summary doesn't need to pick one, so
-// this just lists a row per team that has something active rather than forcing a choice.
-function MatchPollSummary({
-  match,
-  clubs,
-  clubTeamsById
-}) {
-  const [items, setItems] = useState(null); // null = loading, [] = nothing active to show
-  const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
-  const matchingTeams = resolveMatchPollTeams(match, clubs, clubTeamsById);
-  const teamKey = matchingTeams.map(e => e.team.id).join(",");
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (matchingTeams.length === 0) {
-        setItems([]);
-        return;
-      }
-      const results = await Promise.all(matchingTeams.map(async entry => {
-        const pointers = await loadTeamPolls(entry.club.id, entry.team.id);
-        const active = pointers.find(p => expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now());
-        if (!active) return null;
-        const full = await loadPollByCode(active.code);
-        if (!full) return null;
-        return {
-          clubId: entry.club.id,
-          clubName: entry.club.name,
-          team: entry.team,
-          code: active.code,
-          responses: full.responses || {}
-        };
-      }));
-      if (!cancelled) setItems(results.filter(Boolean));
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [teamKey]);
-  if (!items || items.length === 0) return null;
-  function counts(responses) {
-    const vals = Object.values(responses || {});
-    return {
-      yes: vals.filter(r => r.status === "yes").length,
-      no: vals.filter(r => r.status === "no").length,
-      maybe: vals.filter(r => r.status === "maybe").length
-    };
-  }
-  return /*#__PURE__*/React.createElement(React.Fragment, null, items.map((item, idx) => {
-    const c = counts(item.responses);
-    return /*#__PURE__*/React.createElement("button", {
-      key: item.code,
-      type: "button",
-      onClick: () => setOpenPoll(item),
-      className: "cs-btn",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-        width: "100%",
-        textAlign: "left",
-        background: COLORS.cream,
-        border: "none",
-        borderTop: `1px solid ${COLORS.creamDark}`,
-        padding: "9px 14px",
-        cursor: "pointer",
-        animation: `cs-fadeIn 0.25s ease ${idx * 0.04}s backwards`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        minWidth: 0,
-        fontFamily: "'Inter'",
-        fontSize: 11.5,
-        fontWeight: 600,
-        color: COLORS.inkSoft,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, /*#__PURE__*/React.createElement(Hand, {
-      size: 12,
-      style: {
-        flexShrink: 0,
-        color: COLORS.turf
-      }
-    }), item.team.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        flexShrink: 0,
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        fontWeight: 700
-      }
-    }, c.yes > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.pitch
-      }
-    }, c.yes, " yes"), c.no > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.ball
-      }
-    }, c.no, " no"), c.maybe > 0 && /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.gold
-      }
-    }, c.maybe, " maybe"), /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 13,
-      style: {
-        color: COLORS.inkSoft
-      }
-    })));
-  }), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: openPoll.clubId,
-    clubName: openPoll.clubName,
-    team: openPoll.team,
-    initialCode: openPoll.code,
-    onClose: () => setOpenPoll(null)
-  }));
-}
 function ShareMenu({
   match,
   onGetCode,
@@ -16221,11 +16064,7 @@ function renderMatchCard(m, i) {
       flexShrink: 0,
       marginLeft: 8
     }
-  })), /*#__PURE__*/React.createElement(MatchPollSummary, {
-    match: m,
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
-  })));
+  }))));
   }
   // Shared row style for the four new search categories below -- same look as the player search
   // results just above, so a mixed set of result kinds still reads as one consistent list style
@@ -22980,8 +22819,8 @@ function AvailabilityPollModal({
   team,
   onClose,
   // Both optional, and mutually exclusive in practice: initialCode is "open this app straight to
-  // one specific poll's results" (see the Inbox screen and MatchPollSummary, both of which
-  // otherwise had no way to link a tap through to the actual poll it was summarizing).
+  // one specific poll's results" (see the Inbox screen, which otherwise had no way to link a tap
+  // through to the actual poll it was summarizing).
   // fixtureContext is "open straight to creating a new poll FOR this fixture" (see the Upcoming
   // card's "Send poll" action), pre-filling the question/date from the fixture and tagging the
   // created poll with tournamentId/fixtureId so it can be traced back.
