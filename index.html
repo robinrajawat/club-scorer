@@ -15987,11 +15987,13 @@ function HomeScreen({
   // under everything already finished. Forced open below whenever there are no in-progress matches
   // to separate it from, since folding the only content on screen would just look empty.
   const [completedExpanded, setCompletedExpanded] = useState(false);
-  // In Progress and Upcoming default open (they're what someone opened this screen to act on),
-  // Completed defaults closed (least urgent) -- but all three get the same fold affordance so a
-  // busy club can tuck any of them away once they've seen what's there, not just Completed.
+  // In Progress stays open by default -- it's what someone most likely opened this screen to
+  // resume. Upcoming and Completed both default closed: Upcoming is planning-ahead information,
+  // not something to act on right this moment the way a live match is, and a season's worth of
+  // either otherwise pushes past the fold before the "New Match" button and search even come into
+  // view. All three still get the same fold affordance either way, so nothing here is one-way.
   const [inProgressExpanded, setInProgressExpanded] = useState(true);
-  const [upcomingExpanded, setUpcomingExpanded] = useState(true);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
   // Merges what used to be separate destinations (a "Search players" screen, plus Cups/Clubs/
   // Federations/Help each living behind their own tap) into one search box: type once, see
   // matches, players, tournaments/series, clubs, federations, and FAQ entries all filtered by the
@@ -16386,12 +16388,13 @@ function renderMatchCard(m, i) {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 18,
       color: COLORS.pitch,
-      marginBottom: 14
+      marginBottom: 26
     }
   }, `${greetingPrefix()}, ${homeGreetingName}`), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      justifyContent: "center"
+      justifyContent: "center",
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
@@ -16645,6 +16648,11 @@ function renderMatchCard(m, i) {
       clubTeamsById: clubTeamsById
     }))));
     const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
+    // Same "don't fold the only thing on the page" rule as showCompleted above, mirrored: if
+    // Upcoming is literally the only section with anything in it (no in-progress match to resume,
+    // no completed history either), force it open rather than handing back a Home screen that
+    // looks empty at a glance just because collapsed-by-default is now the norm for this section.
+    const showUpcoming = upcomingExpanded || inProgressMatches.length === 0 && completedMatches.length === 0 && sortedUpcomingFixtures.length > 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && (completedMatches.length > 0 || sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => setInProgressExpanded(e => !e),
@@ -16683,7 +16691,7 @@ function renderMatchCard(m, i) {
       type: "button",
       onClick: () => setUpcomingExpanded(e => !e),
       className: "cs-btn",
-      "aria-expanded": upcomingExpanded,
+      "aria-expanded": showUpcoming,
       style: {
         display: "flex",
         alignItems: "center",
@@ -16705,11 +16713,11 @@ function renderMatchCard(m, i) {
     }, /*#__PURE__*/React.createElement(ChevronRight, {
       size: 13,
       style: {
-        transform: upcomingExpanded ? "rotate(90deg)" : "none",
+        transform: showUpcoming ? "rotate(90deg)" : "none",
         transition: "transform 0.15s ease",
         flexShrink: 0
       }
-    }), "Upcoming (", sortedUpcomingFixtures.length, ")"), upcomingExpanded && visibleUpcomingFixtures.map(({
+    }), "Upcoming (", sortedUpcomingFixtures.length, ")"), showUpcoming && visibleUpcomingFixtures.map(({
       tournament: t,
       fixture: f
     }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
@@ -16723,7 +16731,7 @@ function renderMatchCard(m, i) {
       onEditVenue: onEditVenue,
       clubs: clubs,
       clubTeamsById: clubTeamsById
-    })), upcomingExpanded && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
+    })), showUpcoming && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: onOpenTournaments,
       className: "cs-btn",
