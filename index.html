@@ -27325,6 +27325,26 @@ function SyncStatusBanner({
 }) {
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState(null);
+  // Distinguishes "there's genuinely no connection right now" from "online, but the last sync
+  // attempt failed for some other reason" (a real conflict, unpublished rules, etc.) -- those need
+  // different wording. Retrying does nothing while offline, so telling someone to "tap to retry"
+  // in that state is either a no-op or actively misleading; once a real connection issue is the
+  // cause, "tap to retry" is exactly the right, actionable copy.
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine !== false);
+  useEffect(() => {
+    function goOnline() {
+      setIsOnline(true);
+    }
+    function goOffline() {
+      setIsOnline(false);
+    }
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
   // Once the outbox is empty, whatever lastError was showing is no longer relevant — without this,
   // it would silently resurface next time count goes above 0 for a completely unrelated reason
   // (a different match failing later), reading as if it were about that new failure.
@@ -27378,7 +27398,7 @@ function SyncStatusBanner({
     }
   }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
     size: 13
-  }), syncing ? "Syncing\u2026" : `${count} match${count === 1 ? "" : "es"} not synced \u2014 tap to retry`), lastError && /*#__PURE__*/React.createElement("div", {
+  }), syncing ? "Syncing\u2026" : !isOnline ? `You're offline \u2014 ${count} match${count === 1 ? "" : "es"} will sync automatically` : `${count} match${count === 1 ? "" : "es"} not synced \u2014 tap to retry`), lastError && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
