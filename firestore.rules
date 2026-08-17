@@ -597,6 +597,32 @@ service cloud.firestore {
         );
     }
 
+    // A federation's member directory — one doc per affiliated club ({clubId, clubName}), written
+    // the moment a club's affiliation is confirmed (both accept paths in index.html) regardless of
+    // whether that club has published any teams yet. This exists because affiliatedClubIds on the
+    // federation doc (see canSyncFederationClubJoin/Leave above) is the authoritative membership
+    // list but carries no club name, and a federation owner has no read access to a club doc they
+    // don't belong to (see clubs/{clubId} read rule) — so without this doc a club with zero
+    // published teams would be affiliated but permanently nameless to everyone but itself. Same
+    // write shape and same reasoning as federations/{federationId}/teams just below: the joining
+    // club's own owner writes it (they have read access to their own club doc to source the name),
+    // and either side can delete it (self-leave or being kicked).
+    match /federations/{federationId}/members/{clubId} {
+      allow read: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.resource.data.clubId == clubId
+        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
+        && federationId in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('federationIds', [])
+        && !(clubId in get(/databases/$(database)/documents/federations/$(federationId)).data.get('kickedClubIds', []));
+
+      allow delete: if request.auth != null
+        && (
+          isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
+          || isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
+        );
+    }
+
     // ---------------------------------------------------------------------
     // Public directories — a lightweight denormalized entry (name + owner name only) so a club or
     // federation can be found by search WITHOUT exposing the real document (roster, member uids,

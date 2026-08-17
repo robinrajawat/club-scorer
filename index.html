@@ -3662,6 +3662,7 @@ async function leaveFederation(clubId, federationId) {
       federationIds: firebase.firestore.FieldValue.arrayRemove(federationId)
     });
     await syncFederationAffiliation(federationId, clubId, false);
+    await syncFederationMembership(federationId, clubId, false);
     const snap = await db.collection("federations").doc(federationId).collection("teams").where("clubId", "==", clubId).get();
     await Promise.all(snap.docs.map(d => d.ref.delete()));
     return {
@@ -3817,6 +3818,7 @@ async function respondFederationRequest(requestId, accept) {
         federationIds: firebase.firestore.FieldValue.arrayUnion(reqData.federationId)
       });
       await syncFederationAffiliation(reqData.federationId, reqData.clubId, true);
+      await syncFederationMembership(reqData.federationId, reqData.clubId, true);
       await mirrorClubTeamsIntoFederation(reqData.clubId, reqData.federationId);
     }
     return {
@@ -3857,6 +3859,7 @@ async function completeAcceptedFederationRequest(requestId, clubId, federationId
       federationIds: firebase.firestore.FieldValue.arrayUnion(federationId)
     });
     await syncFederationAffiliation(federationId, clubId, true);
+    await syncFederationMembership(federationId, clubId, true);
     await mirrorClubTeamsIntoFederation(clubId, federationId);
     await db.collection("federationRequests").doc(requestId).update({
       status: "joined"
@@ -3950,6 +3953,7 @@ async function kickClubFromFederation(federationId, clubId) {
       kickedClubIds: firebase.firestore.FieldValue.arrayUnion(clubId),
       affiliatedClubIds: firebase.firestore.FieldValue.arrayRemove(clubId)
     });
+    await syncFederationMembership(federationId, clubId, false);
     const snap = await db.collection("federations").doc(federationId).collection("teams").where("clubId", "==", clubId).get();
     await Promise.all(snap.docs.map(d => d.ref.delete()));
     return {
@@ -4110,6 +4114,41 @@ async function mirrorClubTeamsIntoFederation(clubId, federationId) {
     await batch.commit();
   } catch (e) {
     console.error("mirror club teams into federation failed", e);
+  }
+}
+// Writes/removes this club's entry in a federation's member directory (see
+// federations/{federationId}/members/{clubId} in firestore.rules for why this doc exists
+// separately from affiliatedClubIds). Called right after affiliatedClubIds itself is confirmed to
+// contain this club, on both join paths, and mirrored on both leave paths (self-leave and being
+// kicked) so the directory never outlives the actual affiliation. Best-effort: a failure here
+// leaves the club correctly affiliated but temporarily unnamed in "All member clubs", same
+// trade-off mirrorClubTeamsIntoFederation already accepts for team data.
+async function syncFederationMembership(federationId, clubId, joining) {
+  try {
+    const ref = db.collection("federations").doc(federationId).collection("members").doc(clubId);
+    if (joining) {
+      const clubDoc = await db.collection("clubs").doc(clubId).get();
+      await ref.set({
+        clubId,
+        clubName: clubDoc.exists ? clubDoc.data().name || "" : ""
+      });
+    } else {
+      await ref.delete();
+    }
+  } catch (e) {
+    console.error("federation membership sync failed", federationId, clubId, joining, e);
+  }
+}
+// Loads a federation's member directory — see syncFederationMembership/firestore.rules for what
+// this doc represents. This, not federations/{id}/teams, is the authoritative name source for
+// "All member clubs"; team data is only a fallback for clubs that affiliated before this existed.
+async function loadFederationMembers(federationId) {
+  try {
+    const snap = await db.collection("federations").doc(federationId).collection("members").get();
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    console.error("federation members load failed", e);
+    return [];
   }
 }
 // Keeps a single team's directory entries in sync across every federation the team's club
@@ -12015,6 +12054,7 @@ function FederationsPanel({
   onSetFederationVisibility,
   onLeaveFederation,
   onLoadFederationTeams,
+  onLoadFederationMembers,
   onRenameFederation,
   onUpdateFederationDescription,
   onInviteFederationCoOwnerByEmail,
@@ -12106,17 +12146,30 @@ function FederationsPanel({
     setFindClubOpen(false);
     setManageClubs([]);
     setManageLoading(true);
-    onLoadFederationTeams(f.id).then(teams => {
-      const seen = new Set();
-      const list = [];
-      (teams || []).forEach(t => {
-        if (seen.has(t.clubId)) return;
-        seen.add(t.clubId);
-        list.push({
-          clubId: t.clubId,
-          clubName: t.clubName
-        });
+    // Member list is driven by affiliatedClubIds (the actual join/leave record), not by which
+    // clubs happen to have published a team into this federation's directory -- those are two
+    // different things (a club can affiliate without ever publishing a team). Team data and the
+    // public clubDirectory are used only to resolve a display name for each affiliated id, in
+    // that priority order, since a federation owner has no Firestore read access to a club doc
+    // they don't belong to (see clubs/{clubId} rules) -- a private club with no published team
+    // has no name available at all and falls back to a placeholder.
+    Promise.all([onLoadFederationMembers(f.id), onLoadFederationTeams(f.id), onSearchPublicClubs("")]).then(([members, teams, directory]) => {
+      // Priority: members directory (written at join time for every affiliated club, so this is
+      // the only source guaranteed to cover all of them) > clubDirectory (public clubs only) >
+      // team snapshot (covers pre-existing affiliations from before the members directory
+      // existed). Members intentionally wins over the team snapshot too, since a club can rename
+      // itself after publishing a team but before its membership doc is next touched -- rare, but
+      // members is the fresher of the two either way.
+      const nameById = new Map();
+      (teams || []).forEach(t => nameById.set(t.clubId, t.clubName));
+      (directory || []).forEach(c => {
+        if (c.clubId) nameById.set(c.clubId, c.name || "");
       });
+      (members || []).forEach(m => nameById.set(m.clubId, m.clubName));
+      const list = (f.affiliatedClubIds || []).map(clubId => ({
+        clubId,
+        clubName: nameById.get(clubId) || "Unnamed club"
+      }));
       setManageLoading(false);
       setManageClubs(list);
     });
@@ -12588,7 +12641,7 @@ function FederationsPanel({
       fontStyle: "italic",
       marginBottom: 10
     }
-  }, "No clubs have published teams here yet.") : manageClubs.map(c => /*#__PURE__*/React.createElement("div", {
+  }, "No clubs affiliated yet.") : manageClubs.map(c => /*#__PURE__*/React.createElement("div", {
     key: c.clubId,
     style: {
       display: "flex",
@@ -22757,6 +22810,7 @@ function TeamsScreen({
   onKickClubFromFederation,
   onDeleteFederation,
   onLoadFederationTeams,
+  onLoadFederationMembers,
   onInviteFederationCoOwnerByEmail,
   onRevokeFederationInvite,
   onRemoveFederationCoOwner,
@@ -23537,6 +23591,7 @@ function TeamsScreen({
     onSetFederationVisibility: onSetFederationVisibility,
     onLeaveFederation: onLeaveFederation,
     onLoadFederationTeams: onLoadFederationTeams,
+    onLoadFederationMembers: onLoadFederationMembers,
     onRenameFederation: onRenameFederation,
     onUpdateFederationDescription: onUpdateFederationDescription,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
@@ -33969,6 +34024,7 @@ function CricketScorer() {
     onKickClubFromFederation: handleKickClubFromFederation,
     onDeleteFederation: handleDeleteFederation,
     onLoadFederationTeams: loadFederationTeams,
+    onLoadFederationMembers: loadFederationMembers,
     onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
