@@ -187,6 +187,17 @@ service cloud.firestore {
       return request.auth.uid == club.ownerUid || request.auth.uid in club.get('coOwnerUids', []);
     }
 
+    // App-wide admin check for /feedback triage -- hardcoded email kept as a bootstrap fallback
+    // (so this account can never get locked out), ORed with a data-driven /admins/{uid} doc so
+    // additional admins can be added/removed without a code + rules redeploy. See index.html's
+    // isFeedbackAdmin/checkIsCollectionAdmin for the client-side mirror of this same check.
+    function isFeedbackAdminAuth() {
+      return request.auth != null && (
+        request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
     match /clubs/{clubId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.memberUids;
 
@@ -750,10 +761,22 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() > 0
         && request.resource.data.message.size() < 6000;
-      allow read: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com';
-      allow update: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com'
+      allow read: if isFeedbackAdminAuth();
+      allow update: if isFeedbackAdminAuth()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolutionNote', 'priority']);
-      allow delete: if request.auth != null && request.auth.token.email.lower() == 'robinsinghrajawat@gmail.com';
+      allow delete: if isFeedbackAdminAuth();
+    }
+
+    // Existence-only admin registry -- a doc at /admins/{uid} means that uid is an admin, checked
+    // by isFeedbackAdminAuth() above. A user may only read their OWN doc (existence, no field
+    // values needed), never list the collection, so this can't be used to enumerate who else is
+    // an admin. No client write path at all -- adding/removing an admin is a Firebase Console (or
+    // Admin SDK) action, the same trust tier as reviewing /feedback itself in the console before
+    // the in-app inbox existed.
+    match /admins/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list: if false;
+      allow write: if false;
     }
   }
 }

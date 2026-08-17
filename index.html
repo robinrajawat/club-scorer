@@ -749,12 +749,32 @@ async function submitFeedback({
     };
   }
 }
-// The one email allowed to read/triage /feedback in-app (see firestore.rules) -- everyone else's
-// reports stay write-only, matching how submitFeedback is documented above. Kept as a single
-// constant rather than duplicating the literal at each call site.
+// The hardcoded fallback email allowed to read/triage /feedback in-app (see firestore.rules) --
+// everyone else's reports stay write-only, matching how submitFeedback is documented above. Kept
+// as a bootstrap/fallback rather than the only source of truth: see checkIsCollectionAdmin below
+// for the primary, data-driven path (an /admins/{uid} doc) that matches how every other
+// permission in this app works (club/federation ownership is always a Firestore field, never a
+// hardcoded identity) -- this was the one place that wasn't. Keeping this constant as an OR,
+// rather than replacing it outright, means this account can never get locked out even if the
+// admins collection is empty, misconfigured, or a rules deploy lags behind.
 const FEEDBACK_ADMIN_EMAIL = "robinsinghrajawat@gmail.com";
 function isFeedbackAdmin(user) {
   return !!user && !!user.email && user.email.toLowerCase() === FEEDBACK_ADMIN_EMAIL;
+}
+// Data-driven admin check: does an /admins/{uid} doc exist for this person? See firestore.rules
+// for the collection's own rule (a user may only read their OWN doc there, existence-only, no
+// listing) -- adding or removing an admin becomes a Firestore document instead of a code change +
+// rules redeploy, matching how club/federation ownership already works everywhere else. Async by
+// nature (unlike isFeedbackAdmin's instant email check), so callers combine both rather than
+// blocking the UI on this alone -- see the isAdmin state/effect in the App component.
+async function checkIsCollectionAdmin(uid) {
+  if (!uid) return false;
+  try {
+    const doc = await db.collection("admins").doc(uid).get();
+    return doc.exists;
+  } catch (e) {
+    return false;
+  }
 }
 // Admin-only. Newest first, capped at 300 so a long-running install never pulls the whole
 // collection into memory at once -- see the Feedback Inbox screen for the actual triage UI.
@@ -8090,6 +8110,7 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 function AuthBar({
   user,
   profile,
+  isAdmin,
   onOpenAccount,
   onOpenSharedLinks,
   onOpenHelp,
@@ -8233,11 +8254,11 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), "Shared Links"), isFeedbackAdmin(user) && /*#__PURE__*/React.createElement("div", {
+  }), "Shared Links"), isAdmin && /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
-  }), isFeedbackAdmin(user) && /*#__PURE__*/React.createElement("div", {
+  }), isAdmin && /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
-  }, "Admin"), isFeedbackAdmin(user) && /*#__PURE__*/React.createElement("button", {
+  }, "Admin"), isAdmin && /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
     className: "cs-btn",
@@ -15925,6 +15946,7 @@ function HomeScreen({
   onOpenFederation,
   user,
   profile,
+  isAdmin,
   onOpenAccount,
   onOpenInbox,
   onOpenSharedLinks,
@@ -16351,6 +16373,7 @@ function renderMatchCard(m, i) {
   }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
+    isAdmin: isAdmin,
     onOpenAccount: onOpenAccount,
     onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,
@@ -32630,6 +32653,26 @@ function CricketScorer() {
   const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  // isFeedbackAdmin(user) (hardcoded-email, instant) covers this account with zero delay/flicker.
+  // isCollectionAdmin is the async /admins/{uid} check -- starts false and only ever flips true
+  // after the Firestore read resolves, so it only affects a hypothetical second admin, never this
+  // account's own experience. Combined into isAdmin below, which is what's actually threaded
+  // through props from here on instead of components each recomputing isFeedbackAdmin themselves.
+  const [isCollectionAdmin, setIsCollectionAdmin] = useState(false);
+  const isAdmin = isFeedbackAdmin(user) || isCollectionAdmin;
+  useEffect(() => {
+    if (!user) {
+      setIsCollectionAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    checkIsCollectionAdmin(user.uid).then(result => {
+      if (!cancelled) setIsCollectionAdmin(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user && user.uid]);
   const [profile, setProfile] = useState(null);
   // This account's own published player profile, if any club has ever published one at this
   // exact email (see publishPlayer/linkPlayerIfMatch) -- fetched by a direct doc lookup on the
@@ -34514,6 +34557,7 @@ function CricketScorer() {
     },
     user: user,
     profile: profile,
+    isAdmin: isAdmin,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
@@ -34803,7 +34847,7 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(FeedbackScreen, {
     onBack: () => setScreen("home"),
     userEmail: user && user.email
-  })), screen === "feedback-inbox" && isFeedbackAdmin(user) && /*#__PURE__*/React.createElement(NavWrap, {
+  })), screen === "feedback-inbox" && isAdmin && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "feedback-inbox",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FeedbackInboxScreen, {
