@@ -8433,18 +8433,21 @@ function AuthBar({
       minHeight: 40,
       padding: "0 12px",
       borderRadius: 10,
-      // Outlined, not filled -- a solid gold-gradient CTA with a glossy shine sitting directly
-      // under "a tip is appreciated, never expected" read as a commercial upsell button
-      // contradicting its own copy. Gold stays as an accent (border/icon/text) rather than
-      // disappearing into a plain gray button, which would undersell that tipping is genuinely
-      // welcomed -- just not pushed.
-      background: "none",
-      border: `1.5px solid ${COLORS.gold}`,
-      color: COLORS.gold,
+      // Flat solid fill, not outlined and not the old gradient+glossy-shine either -- this is the
+      // app's only monetization path (free, no ads, nothing locked), so staying genuinely visible
+      // matters more here than it does for a purely secondary action; an outlined button undersold
+      // that. But the old gradient+shine read as a dated commercial CTA sitting right under "never
+      // expected," fighting its own copy. Flat gold splits the difference: still the warmest,
+      // most-noticed thing in the menu, without the skeuomorphic overlay everything else on this
+      // screen has deliberately moved away from.
+      background: COLORS.gold,
+      border: "none",
+      color: "#2e1c04",
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13,
-      cursor: "pointer"
+      cursor: "pointer",
+      boxShadow: "0 1px 4px rgba(184,137,43,0.25)"
     }
   }, /*#__PURE__*/React.createElement("svg", {
     width: 15,
@@ -10839,13 +10842,17 @@ function AboutScreen({
       minHeight: 42,
       padding: "0 14px",
       borderRadius: 10,
-      background: "none",
-      border: `1.5px solid ${COLORS.gold}`,
-      color: COLORS.gold,
+      // Flat solid fill -- see the same button's comment in AuthBar's dropdown for the full
+      // reasoning (this is the app's only monetization channel, so it earns staying genuinely
+      // visible, just without the old gradient+glossy-shine treatment).
+      background: COLORS.gold,
+      border: "none",
+      color: "#2e1c04",
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13.5,
-      cursor: "pointer"
+      cursor: "pointer",
+      boxShadow: "0 1px 4px rgba(184,137,43,0.25)"
     }
   }, /*#__PURE__*/React.createElement("svg", {
     width: 16,
