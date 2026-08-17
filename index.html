@@ -806,6 +806,18 @@ async function deleteFeedback(feedbackId) {
     };
   }
 }
+// Turns one feedback/error row into a ready-to-paste prompt for the actual fix session -- saves
+// retyping the same "here's what a user reported" framing by hand every time from the Feedback
+// Inbox. Deliberately just the report's own fields (message/kind/url/agent/timestamp), no attempt
+// to pre-diagnose or point at a file/function -- that's the point of the fix session itself.
+function buildClaudeFixPrompt(item) {
+  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/cricket-scorer):`, "", `"${item.message}"`, ""];
+  if (item.url) lines.push(`Page: ${item.url}`);
+  if (item.userAgent) lines.push(`Browser: ${item.userAgent}`);
+  if (item.createdAt) lines.push(`Reported: ${new Date(item.createdAt).toLocaleString()}`);
+  lines.push("", "Please investigate index.html and fix the underlying issue.");
+  return lines.join("\n");
+}
 // Best-effort automatic crash report — called from ErrorBoundary (React render crashes) and the
 // window-level error/unhandledrejection handlers below (everything else: event handlers, async
 // code, code outside any component tree). Session-scoped dedupe + a hard cap guard against a
@@ -10134,6 +10146,7 @@ function FeedbackInboxScreen({
   const [busyId, setBusyId] = useState(null);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(null); // { id } | null
   const [deleteBusyId, setDeleteBusyId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
   async function refresh() {
     setLoading(true);
     const rows = await loadFeedback();
@@ -10168,6 +10181,14 @@ function FeedbackInboxScreen({
       setItems(list => list.filter(x => x.id !== id));
       if (expandedId === id) setExpandedId(null);
     }
+  }
+  function handleCopyPrompt(item) {
+    const prompt = buildClaudeFixPrompt(item);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(prompt).catch(() => {});
+    }
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(id => id === item.id ? null : id), 1500);
   }
   const visible = items.filter(it => (kindFilter === "all" || it.kind === kindFilter) && (statusFilter === "all" || (it.status || "open") === statusFilter));
   const statusColor = {
@@ -10382,6 +10403,20 @@ function FeedbackInboxScreen({
         cursor: "pointer"
       }
     }, busyId === it.id ? "\u2026" : s)), /*#__PURE__*/React.createElement("button", {
+      onClick: () => handleCopyPrompt(it),
+      className: "cs-btn",
+      style: {
+        padding: "5px 10px",
+        borderRadius: 8,
+        border: `1px solid ${COLORS.gold}`,
+        background: copiedId === it.id ? COLORS.gold : "none",
+        color: copiedId === it.id ? COLORS.pitch : COLORS.gold,
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 11.5,
+        cursor: "pointer"
+      }
+    }, copiedId === it.id ? "Copied!" : "Copy prompt for Claude"), /*#__PURE__*/React.createElement("button", {
       onClick: () => setConfirmDeleteItem({
         id: it.id
       }),
