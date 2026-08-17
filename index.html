@@ -7709,6 +7709,7 @@ function SearchAndRequestPanel({
   idKey,
   alreadyLinkedIds = [],
   alreadyLinkedLabel = "Sent",
+  linkedLabelById = {},
   actionLabel,
   onRequest,
   emptyHint
@@ -7817,7 +7818,7 @@ function SearchAndRequestPanel({
         minHeight: 36,
         fontSize: 12
       }
-    }, already ? alreadyLinkedLabel : busyId === id ? "\u2026" : actionLabel));
+    }, already ? linkedLabelById[id] || alreadyLinkedLabel : busyId === id ? "\u2026" : actionLabel));
   }));
 }
 function TextField({
@@ -12062,6 +12063,8 @@ function FederationsPanel({
   onKickClubFromFederation,
   onDeleteFederation,
   onRevokeInvite,
+  federationRequests = [],
+  onCancelFederationRequest,
   onOpenRecords
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -12074,8 +12077,10 @@ function FederationsPanel({
   const [error, setError] = useState("");
   const [manageOpenId, setManageOpenId] = useState(null);
   const [manageClubs, setManageClubs] = useState([]);
+  const [manageNameById, setManageNameById] = useState({});
   const [manageLoading, setManageLoading] = useState(false);
   const [kickBusyClubId, setKickBusyClubId] = useState(null);
+  const [cancelInviteBusyId, setCancelInviteBusyId] = useState(null);
   const [deleteFedBusy, setDeleteFedBusy] = useState(false);
   const [deleteFedConfirmId, setDeleteFedConfirmId] = useState(null);
   const [deleteFedError, setDeleteFedError] = useState("");
@@ -12097,8 +12102,22 @@ function FederationsPanel({
   const [revokeBusyCode, setRevokeBusyCode] = useState(null);
   const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
   const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
+  const [confirmCancelInvite, setConfirmCancelInvite] = useState(null); // { requestId, clubName } | null
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
+  }
+  // Outgoing federation_to_club invites sent by search (as opposed to the email-code
+  // pendingInvites already shown lower down) -- these live in federationRequests, not on the
+  // federation doc itself, so without this they were invisible in the manage panel: a club could
+  // have an invite sitting unanswered and the owner would have no way to see it, cancel it, or
+  // avoid sending a second one. manageNameById is populated by openManage; falls back to the raw
+  // clubId if a name was never resolved (e.g. panel not yet opened this session).
+  function pendingClubInvitesFor(f) {
+    return federationRequests.filter(r => r.direction === "federation_to_club" && r.status === "pending" && r.federationId === f.id).map(r => ({
+      requestId: r.id,
+      clubId: r.clubId,
+      clubName: manageNameById[r.clubId] || r.clubId
+    }));
   }
   function roleLabel(f) {
     if (!f || !currentUid) return "";
@@ -12172,6 +12191,7 @@ function FederationsPanel({
       }));
       setManageLoading(false);
       setManageClubs(list);
+      setManageNameById(Object.fromEntries(nameById)); // also feeds pendingClubInvitesFor's name lookup
     });
   }
   function toggleManage(f) {
@@ -12289,6 +12309,22 @@ function FederationsPanel({
   function requestDeleteFederation(federationId) {
     setDeleteFedError("");
     setDeleteFedConfirmId(federationId);
+  }
+  function requestCancelInvite(requestId, clubName) {
+    setConfirmCancelInvite({
+      requestId,
+      clubName
+    });
+  }
+  async function handleCancelInviteClick() {
+    const {
+      requestId
+    } = confirmCancelInvite;
+    setConfirmCancelInvite(null);
+    setCancelInviteBusyId(requestId);
+    const result = await onCancelFederationRequest(requestId);
+    setCancelInviteBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't cancel that invite.");
   }
   async function handleDeleteFederationConfirm() {
     const federationId = deleteFedConfirmId;
@@ -12670,7 +12706,51 @@ function FederationsPanel({
       textDecoration: "underline",
       padding: 0
     }
-  }, kickBusyClubId === c.clubId ? "\u2026" : "Remove"))), /*#__PURE__*/React.createElement("div", {
+  }, kickBusyClubId === c.clubId ? "\u2026" : "Remove"))), isOwner(f) && pendingClubInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      paddingTop: 10,
+      borderTop: `1px dashed ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending club invites"), pendingClubInvitesFor(f).map(inv => /*#__PURE__*/React.createElement("div", {
+    key: inv.requestId,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "5px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft
+    }
+  }, inv.clubName, " \u2014 awaiting response"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => requestCancelInvite(inv.requestId, inv.clubName),
+    disabled: cancelInviteBusyId === inv.requestId,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      textDecoration: "underline",
+      padding: 0
+    }
+  }, cancelInviteBusyId === inv.requestId ? "\u2026" : "Cancel")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -12740,8 +12820,9 @@ function FederationsPanel({
     onSearch: onSearchPublicClubs,
     idKey: "clubId",
     actionLabel: "Invite",
-    alreadyLinkedIds: manageClubs.map(c => c.clubId),
+    alreadyLinkedIds: [...manageClubs.map(c => c.clubId), ...pendingClubInvitesFor(f).map(inv => inv.clubId)],
     alreadyLinkedLabel: "Member",
+    linkedLabelById: Object.fromEntries(pendingClubInvitesFor(f).map(inv => [inv.clubId, "Invited"])),
     onRequest: club => onRequestFederationAffiliation("federation_to_club", club.clubId, f.id)
   }), /*#__PURE__*/React.createElement("button", {
     onClick: () => setFindClubOpen(false),
@@ -13117,6 +13198,12 @@ function FederationsPanel({
     confirmLabel: "Revoke",
     onConfirm: handleRevokeInviteClick,
     onCancel: () => setConfirmRevokeInvite(null)
+  }), confirmCancelInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Cancel this invite?",
+    message: `Cancel the pending invite to ${confirmCancelInvite.clubName}? They'll no longer be able to accept it.`,
+    confirmLabel: "Cancel invite",
+    onConfirm: handleCancelInviteClick,
+    onCancel: () => setConfirmCancelInvite(null)
   }));
 }
 function InboxScreen({
@@ -22811,6 +22898,8 @@ function TeamsScreen({
   onDeleteFederation,
   onLoadFederationTeams,
   onLoadFederationMembers,
+  federationRequests,
+  onCancelFederationRequest,
   onInviteFederationCoOwnerByEmail,
   onRevokeFederationInvite,
   onRemoveFederationCoOwner,
@@ -23592,6 +23681,8 @@ function TeamsScreen({
     onLeaveFederation: onLeaveFederation,
     onLoadFederationTeams: onLoadFederationTeams,
     onLoadFederationMembers: onLoadFederationMembers,
+    federationRequests: federationRequests,
+    onCancelFederationRequest: onCancelFederationRequest,
     onRenameFederation: onRenameFederation,
     onUpdateFederationDescription: onUpdateFederationDescription,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
@@ -34025,6 +34116,8 @@ function CricketScorer() {
     onDeleteFederation: handleDeleteFederation,
     onLoadFederationTeams: loadFederationTeams,
     onLoadFederationMembers: loadFederationMembers,
+    federationRequests: myFederationRequests,
+    onCancelFederationRequest: handleCancelFederationRequest,
     onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
