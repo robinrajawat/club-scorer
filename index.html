@@ -8111,12 +8111,10 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 function AuthBar({
   user,
   profile,
-  isAdmin,
   onOpenAccount,
   onOpenSharedLinks,
   onOpenHelp,
   onOpenFeedback,
-  onOpenFeedbackInbox,
   onOpenAbout,
   onSignOut,
   themePref,
@@ -8255,22 +8253,7 @@ function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), "Shared Links"), isAdmin && /*#__PURE__*/React.createElement("div", {
-    style: dividerStyle
-  }), isAdmin && /*#__PURE__*/React.createElement("div", {
-    style: sectionLabelStyle
-  }, "Admin"), isAdmin && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    role: "menuitem",
-    className: "cs-btn",
-    onClick: () => go(onOpenFeedbackInbox),
-    style: menuItemStyle
-  }, /*#__PURE__*/React.createElement(InboxIcon, {
-    size: 15,
-    style: {
-      color: COLORS.pitch
-    }
-  }), "Feedback Inbox"), user && /*#__PURE__*/React.createElement("div", {
+  }), "Shared Links"), user && /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), user && /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -8533,6 +8516,8 @@ function AccountScreen({
   user,
   profile,
   myPlayer,
+  isAdmin,
+  onOpenFeedbackInbox,
   onOpenClub,
   isBetaTester = false,
   onGenerateDummyData,
@@ -9486,7 +9471,45 @@ function AccountScreen({
       setPendingImportData(null);
     }
   })
-), user && /*#__PURE__*/React.createElement("div", {
+), user && isAdmin && /*#__PURE__*/React.createElement("div", {
+  style: {
+    background: "rgba(184,137,43,0.08)",
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 14,
+    border: `1.5px solid rgba(184,137,43,0.3)`
+  }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: "'Inter'",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 1,
+    color: COLORS.gold,
+    textTransform: "uppercase",
+    marginBottom: 10
+  }
+}, "Admin"), /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: onOpenFeedbackInbox,
+  className: "cs-btn",
+  style: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: `1.5px solid ${COLORS.gold}`,
+    background: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: "pointer"
+  }
+}, /*#__PURE__*/React.createElement(InboxIcon, {
+  size: 16
+}), "Feedback Inbox")), user && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.05)",
       borderRadius: 16,
@@ -15924,13 +15947,11 @@ function HomeScreen({
   onOpenFederation,
   user,
   profile,
-  isAdmin,
   onOpenAccount,
   onOpenInbox,
   onOpenSharedLinks,
   onOpenHelp,
   onOpenFeedback,
-  onOpenFeedbackInbox,
   onOpenAbout,
   onSignOut,
   themePref,
@@ -16352,12 +16373,10 @@ function renderMatchCard(m, i) {
   }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
-    isAdmin: isAdmin,
     onOpenAccount: onOpenAccount,
     onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,
     onOpenFeedback: onOpenFeedback,
-    onOpenFeedbackInbox: onOpenFeedbackInbox,
     onOpenAbout: onOpenAbout,
     onSignOut: onSignOut,
     themePref: themePref,
@@ -34568,7 +34587,6 @@ function CricketScorer() {
     },
     user: user,
     profile: profile,
-    isAdmin: isAdmin,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
@@ -34577,7 +34595,6 @@ function CricketScorer() {
       setScreen("help");
     },
     onOpenFeedback: () => setScreen("feedback"),
-    onOpenFeedbackInbox: () => setScreen("feedback-inbox"),
     onOpenAbout: () => setScreen("about"),
     onSignOut: signOutUser,
     themePref: themePref,
@@ -34822,6 +34839,8 @@ function CricketScorer() {
     user: user,
     profile: profile,
     myPlayer: myPlayer,
+    isAdmin: isAdmin,
+    onOpenFeedbackInbox: () => setScreen("feedback-inbox"),
     onOpenClub: clubId => {
       setActiveClubAdminId(clubId);
       setTeamsTab("clubs");
