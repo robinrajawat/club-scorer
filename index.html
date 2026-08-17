@@ -6060,6 +6060,18 @@ function buildPollShareText(question, fixtureDate, code) {
   lines.push(buildPollUrl(code));
   return lines.join("\n");
 }
+// Upcoming-fixture equivalent of buildShareText/buildLiveShareText -- there's no match object yet
+// (nothing's been started), just a tournament fixture, so this reads straight off the fixture/
+// tournament fields instead: teams, tournament name, scheduled date/time, and venue, skipping
+// anything not yet set rather than showing empty placeholders.
+function buildFixtureShareText(tournamentName, fixture, venue) {
+  const lines = [`\uD83C\uDFCF ${fixture.teamA} vs ${fixture.teamB}`];
+  if (tournamentName) lines.push(tournamentName);
+  const when = formatFixtureDateTime(fixture.date || "");
+  if (when) lines.push(when);
+  if (venue) lines.push(`\uD83D\uDCCD ${venue}`);
+  return lines.join("\n");
+}
 // createdAt is a plain millis number (see createAvailabilityPoll) -- expiresAt itself is a
 // Firestore Timestamp only on the full poll doc, not the lightweight list pointer, so this is
 // computed from createdAt + the fixed TTL rather than read off expiresAt, working the same way
@@ -14979,6 +14991,14 @@ function ShareMenu({
     window.open(url, "_blank", "noopener,noreferrer");
     setOpen(false);
   }
+  // Plain score snapshot, no follow link/code involved -- unlike handleWhatsAppLive this never
+  // needs a view code, so it never touches ensureViewCode and can't fail on that account.
+  function handleWhatsAppDetails() {
+    const text = buildShareText(match);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setOpen(false);
+  }
   const rowLabelStyle = {
     display: "flex",
     alignItems: "center",
@@ -15143,7 +15163,41 @@ function ShareMenu({
     }
   }, copiedWhich === "link" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
     size: 14
-  }), "Copied!") : "Copy link"))), error && /*#__PURE__*/React.createElement("div", {
+  }), "Copied!") : "Copy link"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 8px 8px",
+      borderTop: "1px solid rgba(242,236,217,0.1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: rowLabelStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: iconChipStyle
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 12
+  })), "Share match details"), /*#__PURE__*/React.createElement("div", {
+    style: rowSubStyle
+  }, "Just the score line \u2014 no live link, nothing to keep updating."), /*#__PURE__*/React.createElement("button", {
+    className: "cs-btn",
+    onClick: handleWhatsAppDetails,
+    style: {
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      background: COLORS.turfFixed,
+      border: "none",
+      borderRadius: 10,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      padding: "8px 6px",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(WhatsAppIcon, {
+    size: 14
+  }), "WhatsApp")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 2px",
       fontSize: 11.5,
@@ -16370,6 +16424,31 @@ function UpcomingFixtureCard({
       color: COLORS.turf
     }
   }, /*#__PURE__*/React.createElement(Hand, {
+    size: 14
+  })), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      const text = buildFixtureShareText(t.name, f, venue);
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    className: "cs-btn",
+    "aria-label": "Share match details",
+    title: "Share match details",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 30,
+      height: 30,
+      flexShrink: 0,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
     size: 14
   })), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
