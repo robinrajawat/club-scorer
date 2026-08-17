@@ -24512,6 +24512,7 @@ function TeamEditScreen({
   onUnpublishPlayer,
   onUpdatePlayerInfo,
   onLoadPublicPlayers,
+  onAddPoolPlayers,
   onSave,
   onCancel
 }) {
@@ -24635,7 +24636,14 @@ function TeamEditScreen({
   // present on the clubs prop, unlike publicPlayers above which needs its own async load.
   const clubPool = clubId ? ((clubs.find(c => c.id === clubId) || {}).playerPool || []).filter(p => p.status !== "inactive") : [];
   const [addError, setAddError] = useState("");
-  function addPlayer() {
+  // Typing a brand-new name into the roster only ever added them to THIS team -- there was no way
+  // to also get them into the club's reusable pool without leaving team editing entirely, adding
+  // them from ClubPanel's own Player Pool section, then coming back. Defaults on for a club team
+  // (opt-out, not opt-in) since the whole point of a pool is that most new names typed while
+  // building a roster are genuinely new club members worth having reusable for future teams too,
+  // not one-off placeholders. Irrelevant for a personal team (no clubId, no pool to add to).
+  const [alsoAddToPool, setAlsoAddToPool] = useState(true);
+  async function addPlayer() {
     const n = newPlayer.trim();
     if (!n) return;
     if (players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
@@ -24650,6 +24658,17 @@ function TeamEditScreen({
       public: false,
       _key: uid()
     }]);
+    // Skips silently (not an error) on a name already in the pool -- same "picking, not typing,
+    // makes a clash almost certainly accidental" reasoning as addPoolPlayerToRoster below, and
+    // this path is typing, so an exact match is more likely someone re-adding the same person to
+    // a second team than a genuine same-named duplicate. onAddPoolPlayers (handleAddPoolPlayers
+    // at the App level) already updates the shared clubs state on success, so clubPool picks up
+    // the addition on next render with no extra plumbing needed here.
+    if (clubId && alsoAddToPool && onAddPoolPlayers && !clubPool.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
+      onAddPoolPlayers(clubId, [{
+        name: n
+      }]);
+    }
     setNewPlayer("");
     setNewNumber("");
   }
@@ -24978,7 +24997,11 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }))), addError && /*#__PURE__*/React.createElement("div", {
+  }))), clubId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: addError ? 4 : 10
+    }
+  }, pillBtn(alsoAddToPool, alsoAddToPool ? "\u2713 Also save to club pool" : "Also save to club pool", () => setAlsoAddToPool(v => !v))), addError && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -35131,6 +35154,7 @@ function CricketScorer() {
     onUnpublishPlayer: unpublishPlayer,
     onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
+    onAddPoolPlayers: handleAddPoolPlayers,
     onSave: team => handleSaveTeam(team, activeClubAdminId),
     onCancel: () => setScreen(teamEditReturnScreen)
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
