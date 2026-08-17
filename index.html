@@ -469,6 +469,27 @@ const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__
   x2: "12.01",
   y2: "17"
 }));
+const Hash = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
+  x1: "4",
+  y1: "9",
+  x2: "20",
+  y2: "9"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "4",
+  y1: "15",
+  x2: "20",
+  y2: "15"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "10",
+  y1: "3",
+  x2: "8",
+  y2: "21"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "16",
+  y1: "3",
+  x2: "14",
+  y2: "21"
+}));
 
 // ---------- Design tokens ----------
 // Pitch green header, scorecard-cream body, willow tan accents, ball-red for wickets.
@@ -5562,6 +5583,23 @@ function markInstallHintSeen() {
   const result = lsSetItem(`${LS_PREFIX}install-hint-seen`, "1");
   if (!result.ok) console.error("save install-hint-seen failed", result.error);
 }
+// Same one-time-hint pattern as install-hint above, for the "swipe to delete" label shown next to
+// Home's Saved Matches / Teams' team list headers. Shared across both surfaces deliberately --
+// once someone's actually swiped a row anywhere in the app, they know the gesture; repeating the
+// hint on the other screen would be teaching something already learned. Marked seen only once a
+// real swipe happens (see SwipeableRow's onSwipeStart), not just on first render, so it keeps
+// showing until the gesture is actually demonstrated rather than disappearing after one glance.
+function hasSeenSwipeHint() {
+  try {
+    return localStorage.getItem(`${LS_PREFIX}swipe-hint-seen`) === "1";
+  } catch (e) {
+    return true;
+  }
+}
+function markSwipeHintSeen() {
+  const result = lsSetItem(`${LS_PREFIX}swipe-hint-seen`, "1");
+  if (!result.ok) console.error("save swipe-hint-seen failed", result.error);
+}
 async function loadRules() {
   if (auth.currentUser) {
     const prof = await loadProfile();
@@ -7524,7 +7562,8 @@ function OdometerScore({
 function SwipeableRow({
   children,
   onDelete,
-  deleteLabel = "Delete"
+  deleteLabel = "Delete",
+  onSwipeStart
 }) {
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -7544,7 +7583,16 @@ function SwipeableRow({
   function onPointerMove(e) {
     if (!dragging) return;
     const delta = pointerX(e) - startX.current;
-    if (Math.abs(delta) > 4) moved.current = true;
+    if (Math.abs(delta) > 4) {
+      // First real movement of an actual swipe (not just a tap) -- the person has now
+      // demonstrably discovered the gesture, so the "swipe to delete" hint text has done its job
+      // and can stop showing, here and on any other screen using the same shared flag.
+      if (!moved.current && !hasSeenSwipeHint()) {
+        markSwipeHintSeen();
+        onSwipeStart && onSwipeStart();
+      }
+      moved.current = true;
+    }
     let next = startDragX.current + delta;
     next = Math.max(-REVEAL - 24, Math.min(0, next));
     setDragX(next);
@@ -11021,7 +11069,10 @@ function JoinCodeBar({
       className: "cs-btn",
       onClick: () => setOpen(true),
       style: {
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
         margin: "0 auto 24px",
         background: "none",
         border: "none",
@@ -11029,11 +11080,14 @@ function JoinCodeBar({
         fontFamily: "'Inter'",
         fontSize: 12.5,
         fontWeight: 600,
-        textDecoration: "underline",
-        textUnderlineOffset: 3,
         cursor: "pointer"
       }
-    }, "Have a match code from a teammate?");
+    }, /*#__PURE__*/React.createElement(Hash, {
+      size: 14,
+      style: {
+        flexShrink: 0
+      }
+    }), "Have a match code from a teammate?");
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15936,6 +15990,48 @@ function UpcomingFixtureCard({
     }
   }));
 }
+// Flat, borderless, icon-over-label utility button -- Home's Teams/Cups/Clubs row, deliberately
+// not routed through Btn (no card shell, no shadow, no cs-shine). These sit directly under New
+// Match, the screen's one real focal point; giving them the same bordered-card treatment as
+// everything else on the page (which is what they had before) made three secondary shortcuts
+// visually compete with the primary action instead of receding behind it. Icon keeps a spot of
+// brand color so the row doesn't go fully flat/dead, label stays quiet ink-soft text.
+function HomeUtilityButton({
+  icon: IconComp,
+  label,
+  onClick
+}) {
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onClick,
+    className: "cs-btn",
+    "aria-label": label,
+    style: {
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 5,
+      padding: "8px 4px",
+      background: "none",
+      border: "none",
+      borderRadius: 12,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconComp, {
+    size: 19,
+    style: {
+      color: COLORS.turf
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      color: COLORS.inkSoft
+    }
+  }, label));
+}
 function HomeScreen({
   matches,
   onNew,
@@ -15982,6 +16078,10 @@ function HomeScreen({
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
   const [query, setQuery] = useState("");
+  // The "swipe to delete" label next to Saved Matches -- shown until a real swipe happens
+  // anywhere in the app (see SwipeableRow's onSwipeStart / hasSeenSwipeHint), not just once ever
+  // on render, so it keeps earning its space until the gesture's actually been demonstrated.
+  const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
   // Collapsed by default -- a season's worth of completed matches otherwise buries the in-progress
   // ones (the matches someone's actually mid-way through and likely opened this screen to resume)
   // under everything already finished. Forced open below whenever there are no in-progress matches
@@ -16101,7 +16201,8 @@ function renderMatchCard(m, i) {
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: () => setConfirmDeleteId(m.id),
-    deleteLabel: "Delete"
+    deleteLabel: "Delete",
+    onSwipeStart: () => setShowSwipeHint(false)
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
@@ -16354,23 +16455,27 @@ function renderMatchCard(m, i) {
   }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
-      top: 3,
-      right: 3,
+      top: 4,
+      right: 4,
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
       boxSizing: "border-box",
-      minWidth: 15,
-      height: 15,
+      minWidth: 13,
+      height: 13,
       padding: "0 3px",
-      borderRadius: 8,
+      borderRadius: 7,
       background: COLORS.ballFixed,
       color: "#fff",
       fontFamily: "'Inter'",
-      fontSize: 9.5,
+      fontSize: 9,
       fontWeight: 700,
       lineHeight: 1,
-      border: `1.5px solid ${COLORS.creamFixed}`
+      // A soft box-shadow ring reads as separation from the icon behind it without the harder,
+      // more attention-grabbing look a solid 1.5px border gave it -- same visual job, quieter
+      // execution, so the badge signals "something's here" without being the loudest thing on
+      // the screen the way a thick white-ringed red circle was.
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
     }
   }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
@@ -16401,64 +16506,58 @@ function renderMatchCard(m, i) {
     onSynced: onPendingSynced
   })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
     onDismiss: onDismissInstallHint
-  }), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: onNew,
+    className: "cs-btn",
     style: {
       display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
       width: "100%",
       padding: "15px",
-      fontSize: 16,
+      boxSizing: "border-box",
+      // Flat single-tone fill and a plain soft shadow, deliberately not routed through Btn's
+      // "primary" variant -- that variant (used app-wide) always gets a gradient fill plus
+      // .cs-shine's glossy top-highlight overlay, which is the app's established language for
+      // buttons generally but reads dated specifically here, on the one button that's supposed to
+      // be the calm, confident focal point of the whole screen. Scoped to just this button rather
+      // than stripping shine from Btn's primary variant everywhere -- that's used on hundreds of
+      // buttons across the whole app and would be a much bigger, unrequested visual-language
+      // change; this CTA earning its own bespoke treatment is the proportionate version of that.
+      background: COLORS.pitchFixed,
+      color: "#fff",
+      border: "none",
       borderRadius: 14,
       marginBottom: 10,
-      boxSizing: "border-box"
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 16,
+      cursor: "pointer",
+      boxShadow: "0 2px 8px rgba(45,80,22,0.25)"
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 19,
     strokeWidth: 2.5
-  }), " New Match"), /*#__PURE__*/React.createElement("div", {
+  }), "New Match"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 8,
       marginBottom: 22
     }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: onManageTeams,
-    style: {
-      flex: 1,
-      padding: "10px 6px",
-      fontSize: 12.5,
-      borderRadius: 12,
-      boxShadow: "none",
-      border: `0.5px solid ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 15
-  }), " Teams"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: onOpenTournaments,
-    style: {
-      flex: 1,
-      padding: "10px 6px",
-      fontSize: 12.5,
-      borderRadius: 12,
-      boxShadow: "none",
-      border: `0.5px solid ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement(Trophy, {
-    size: 15
-  }), " Cups"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: onOpenClubs,
-    style: {
-      flex: 1,
-      padding: "10px 6px",
-      fontSize: 12.5,
-      borderRadius: 12,
-      boxShadow: "none",
-      border: `0.5px solid ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement(Shield, {
-    size: 15
-  }), " Clubs")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }, /*#__PURE__*/React.createElement(HomeUtilityButton, {
+    icon: Users,
+    label: "Teams",
+    onClick: onManageTeams
+  }), /*#__PURE__*/React.createElement(HomeUtilityButton, {
+    icon: Trophy,
+    label: "Cups",
+    onClick: onOpenTournaments
+  }), /*#__PURE__*/React.createElement(HomeUtilityButton, {
+    icon: Shield,
+    label: "Clubs",
+    onClick: onOpenClubs
+  })), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -16600,7 +16699,7 @@ function renderMatchCard(m, i) {
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Saved Matches"), !q && /*#__PURE__*/React.createElement("div", {
+  }, "Saved Matches"), showSwipeHint && !q && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -17067,6 +17166,9 @@ function MyTeamsScreen({
   onTogglePinClub
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
+  // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
+  // comment for why this is one flag across both screens rather than two separate ones.
+  const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
   // Team to show the availability-poll modal for, or null when it's closed -- club teams only
   // (see canManageTeam below and the modal's own team-scoping), matching how sending a poll has
   // always been club-only: there's nobody else to poll for a personal team.
@@ -17251,7 +17353,7 @@ function MyTeamsScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
+  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "right",
       fontFamily: "'Inter'",
@@ -17268,7 +17370,8 @@ function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: canManageTeam(t) ? () => onDeleteTeam(t.id, t._clubId || null) : undefined,
-    deleteLabel: "Delete"
+    deleteLabel: "Delete",
+    onSwipeStart: () => setShowSwipeHint(false)
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
