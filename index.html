@@ -10292,41 +10292,52 @@ function FeedbackInboxScreen({
   }, "Everything submitted via Send Feedback, plus auto-captured crashes. Newest first, up to 300 rows."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
+      alignItems: "center",
       gap: 8,
-      flexWrap: "wrap",
       marginBottom: 16
     }
-  }, ["all", "feedback", "error"].map(k => /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("select", {
+    value: kindFilter,
+    onChange: e => setKindFilter(e.target.value),
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      padding: "7px 8px",
+      borderRadius: 8,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
+      cursor: "pointer"
+    }
+  }, ["all", "feedback", "error"].map(k => /*#__PURE__*/React.createElement("option", {
     key: k,
-    onClick: () => setKindFilter(k),
-    className: "cs-btn",
+    value: k
+  }, k === "all" ? "All kinds" : k))), /*#__PURE__*/React.createElement("select", {
+    value: statusFilter,
+    onChange: e => setStatusFilter(e.target.value),
     style: {
-      padding: "5px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: kindFilter === k ? COLORS.pitch : COLORS.surface,
-      color: kindFilter === k ? COLORS.cream : COLORS.pitch,
       fontFamily: "'Inter'",
       fontWeight: 600,
-      fontSize: 11.5,
+      fontSize: 12.5,
+      padding: "7px 8px",
+      borderRadius: 8,
+      border: `1.5px solid ${COLORS.creamDark}`,
+      background: COLORS.surface,
+      color: COLORS.pitch,
       cursor: "pointer"
     }
-  }, k === "all" ? "All kinds" : k)), ["open", "planned", "fixed", "wontfix", "all"].map(s => /*#__PURE__*/React.createElement("button", {
+  }, ["open", "planned", "fixed", "wontfix", "all"].map(s => /*#__PURE__*/React.createElement("option", {
     key: s,
-    onClick: () => setStatusFilter(s),
-    className: "cs-btn",
+    value: s
+  }, s === "all" ? "All statuses" : s))), /*#__PURE__*/React.createElement("span", {
     style: {
-      padding: "5px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: statusFilter === s ? COLORS.pitch : COLORS.surface,
-      color: statusFilter === s ? COLORS.cream : COLORS.pitch,
       fontFamily: "'Inter'",
-      fontWeight: 600,
       fontSize: 11.5,
-      cursor: "pointer"
+      color: COLORS.inkSoft,
+      marginLeft: "auto"
     }
-  }, s === "all" ? "All statuses" : s))), loading ? /*#__PURE__*/React.createElement(LoadingNote, {
+  }, visible.length, " of ", items.length)), loading ? /*#__PURE__*/React.createElement(LoadingNote, {
     size: 14
   }) : visible.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
