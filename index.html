@@ -8175,6 +8175,7 @@ function AuthBar({
   const label = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "Account").split(" ")[0] : "Sign in";
   const email = user && (profile && profile.email || user.email);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   function toggle() {
     setOpen(o => {
       const next = !o;
@@ -8194,10 +8195,17 @@ function AuthBar({
   }
   async function handleSignOut() {
     setSigningOut(true);
-    try {
-      await onSignOut();
-    } finally {
-      setSigningOut(false);
+    setSignOutError("");
+    // Unlike AccountScreen's own Sign Out (which checks the result and shows an error box), this
+    // one used to close the confirm dialog in a `finally` regardless of outcome -- a genuine
+    // sign-out failure (rare, but auth.signOut() can fail on a bad connection) meant the dialog
+    // just vanished with nothing telling the person they're actually still signed in. Now only
+    // closes on success; a failure keeps the dialog open with the error in place of the normal copy.
+    const result = await onSignOut();
+    setSigningOut(false);
+    if (result && result.ok === false && result.error) {
+      setSignOutError(result.error);
+    } else {
       setConfirmSignOut(false);
     }
   }
@@ -8310,6 +8318,7 @@ function AuthBar({
     className: "cs-btn",
     onClick: () => {
       setOpen(false);
+      setSignOutError("");
       setConfirmSignOut(true);
     },
     style: {
@@ -8528,11 +8537,14 @@ function AuthBar({
     size: 14
   }), user ? null : label)), menu, confirmSignOut && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Sign out?",
-    message: "You'll need to sign in again to sync your matches and teams. Anything saved so far stays right where it is.",
+    message: signOutError || "You'll need to sign in again to sync your matches and teams. Anything saved so far stays right where it is.",
     confirmLabel: "Sign out",
     busy: signingOut,
     onConfirm: handleSignOut,
-    onCancel: () => setConfirmSignOut(false)
+    onCancel: () => {
+      setSignOutError("");
+      setConfirmSignOut(false);
+    }
   }));
 }
 function RuleChoice({
