@@ -29077,8 +29077,19 @@ function FollowScreen({
     const milestoneCount = (inn.toastMilestones || []).length;
     const sameInning = prevInningIdxRef.current === inningIdx;
     if (sameInning && prevBallCountRef.current != null && ballCount === prevBallCountRef.current + 1) {
+      // Finding "the ball that was just scored" isn't simply overs[last][last]: applyBall starts a
+      // NEW empty over the moment a legal ball completes one, in the exact same commit that added
+      // that final ball -- so a boundary or wicket landing on the last ball of an over would put
+      // the just-started (empty) over last, with the actual ball one array back. Walking backward
+      // past any empty trailing over(s) finds the real most recent ball regardless of whether one
+      // just started; this exact miss would otherwise silently swallow the celebration for every
+      // over-ending boundary/wicket, arguably the most dramatic ball of the over to miss.
       const overs = inn.overs || [];
-      const lastBall = (overs[overs.length - 1] || [])[(overs[overs.length - 1] || []).length - 1];
+      let lastBall = null;
+      for (let i = overs.length - 1; i >= 0 && !lastBall; i--) {
+        const o = overs[i];
+        if (Array.isArray(o) && o.length > 0) lastBall = o[o.length - 1];
+      }
       if (lastBall && lastBall.kind === "wicket") {
         const key = Date.now();
         setCelebration({
