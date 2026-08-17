@@ -19330,15 +19330,47 @@ function FixtureDateTimeModal({
 }
 function FixtureRow({
   fixture,
+  tournament,
   match,
   onScore,
   onUpdateDate,
-  onDelete
+  onDelete,
+  onEditVenue,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
   const rawDate = fixture.date || "";
   const isIsoDate = ISO_DATETIME_RE.test(rawDate);
   const friendlyDateTime = formatFixtureDateTime(rawDate);
+  // Same fixture-overrides-tournament fallback as UpcomingFixtureCard/handleEditVenueFromHome --
+  // a fixture's own venue, when set, wins over the tournament's default.
+  const venue = fixture.venue || tournament.venue;
+  const venueLat = fixture.venue ? fixture.venueLat : tournament.venueLat;
+  const venueLng = fixture.venue ? fixture.venueLng : tournament.venueLng;
+  const fixtureDateStr = isIsoDate ? rawDate.split("T")[0] : null;
+  const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [pollCheckBusy, setPollCheckBusy] = useState(false);
+  const [existingPollCode, setExistingPollCode] = useState(null);
+  const [pollTeamPickerOpen, setPollTeamPickerOpen] = useState(false);
+  const [selectedPollTeam, setSelectedPollTeam] = useState(null); // {team, club}, once resolved or picked
+  // Same as UpcomingFixtureCard -- quietly finds nothing (no "Send poll" button) for a fixture
+  // where neither side corresponds to a roster-tracked team.
+  const matchingPollTeams = resolvePollTeams(fixture.teamA, fixture.teamB, clubs, clubTeamsById);
+  async function openPollFor(club, team) {
+    if (pollCheckBusy) return;
+    setSelectedPollTeam({
+      club,
+      team
+    });
+    setPollCheckBusy(true);
+    const pointers = await loadTeamPolls(club.id, team.id);
+    const existing = pointers.find(p => p.fixtureId === fixture.id && (expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now()));
+    setPollCheckBusy(false);
+    setExistingPollCode(existing ? existing.code : null);
+    setPollModalOpen(true);
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -19386,7 +19418,76 @@ function FixtureRow({
       padding: 4,
       flexShrink: 0
     }
-  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+  }, "\u2715")), venue ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 2,
+      marginBottom: 8,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("a", {
+    href: buildMapsUrl(venue, venueLat, venueLng),
+    target: "_blank",
+    rel: "noopener noreferrer",
+    className: "cs-btn",
+    "aria-label": `Open ${venue} in Maps`,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      minWidth: 0,
+      textDecoration: "none",
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.turf,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, "\uD83D\uDCCD ", venue), onEditVenue && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Edit venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }))) : onEditVenue && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Add venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      marginBottom: 8,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 500,
+      color: COLORS.turf
+    }
+  }, "\uD83D\uDCCD Add venue"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -19438,6 +19539,55 @@ function FixtureRow({
       setPickerOpen(false);
     } : null,
     onClose: () => setPickerOpen(false)
+  })), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      if (pollCheckBusy) return;
+      if (matchingPollTeams.length > 1) {
+        setPollTeamPickerOpen(true);
+        return;
+      }
+      openPollFor(matchingPollTeams[0].club, matchingPollTeams[0].team);
+    },
+    className: "cs-btn",
+    disabled: pollCheckBusy,
+    "aria-label": "Send availability poll",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 30,
+      height: 30,
+      flexShrink: 0,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      cursor: pollCheckBusy ? "default" : "pointer",
+      opacity: pollCheckBusy ? 0.6 : 1,
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(Hand, {
+    size: 14
+  })), fixture.date && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => downloadTextFile(`${fixture.teamA}-vs-${fixture.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(fixture, tournament.name, venue, venueLat, venueLng)),
+    className: "cs-btn",
+    "aria-label": "Add to calendar",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 30,
+      height: 30,
+      flexShrink: 0,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(CalendarClock, {
+    size: 14
   })), match ? /*#__PURE__*/React.createElement("button", {
     onClick: onScore,
     className: "cs-btn",
@@ -19462,7 +19612,102 @@ function FixtureRow({
       fontSize: 12,
       flexShrink: 0
     }
-  }, "Score")));
+  }, "Score")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+    value: venue || "",
+    initialLat: venueLat,
+    initialLng: venueLng,
+    clubs: clubs,
+    onSave: (newVenue, newLat, newLng) => onEditVenue(newVenue, newLat, newLng),
+    onClose: () => setVenueModalOpen(false)
+  }), pollTeamPickerOpen && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setPollTeamPickerOpen(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 4
+    }
+  }, "Which team?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 16
+    }
+  }, `Both ${fixture.teamA} and ${fixture.teamB} are teams you manage \u2014 who's this poll for?`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, matchingPollTeams.map((entry, idx) => /*#__PURE__*/React.createElement("button", {
+    key: entry.team.id,
+    type: "button",
+    onClick: () => {
+      setPollTeamPickerOpen(false);
+      openPollFor(entry.club, entry.team);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: `1px solid ${COLORS.willow}`,
+      borderRadius: 12,
+      padding: "10px 12px",
+      cursor: "pointer",
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 28,
+      height: 28,
+      borderRadius: "50%",
+      background: "rgba(74,124,46,0.1)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 13,
+    style: {
+      color: COLORS.turf
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13.5,
+      color: COLORS.ink
+    }
+  }, entry.team.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      color: COLORS.inkSoft
+    }
+  }, entry.club.name)))))), pollModalOpen && selectedPollTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+    clubId: selectedPollTeam.club.id,
+    clubName: selectedPollTeam.club.name,
+    team: selectedPollTeam.team,
+    initialCode: existingPollCode || undefined,
+    fixtureContext: existingPollCode ? undefined : {
+      tournamentId: tournament.id,
+      fixtureId: fixture.id,
+      question: `Available for ${fixture.teamA} vs ${fixture.teamB}?`,
+      fixtureDate: fixtureDateStr || ""
+    },
+    onClose: () => setPollModalOpen(false)
+  }));
 }
 // Round-robin generation, manual add/remove, date/time fields, and knockout-stage proposals for a
 // tournament's schedule. Fixtures live inline on the tournament doc (tournament.fixtures) rather
@@ -19476,7 +19721,9 @@ function FixturesSection({
   onUpdateTournament,
   onOpenMatch,
   onOpenRecords,
-  canManage = true
+  canManage = true,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -19531,6 +19778,20 @@ function FixturesSection({
       fixtures: fixtures.map(f => f.id === fixtureId ? {
         ...f,
         date
+      } : f)
+    });
+  }
+  // Same fixture-overrides-tournament venue field as handleEditVenueFromHome -- this is the
+  // schedule tab's equivalent, saving straight to the tournament doc like updateDate above.
+  function editVenue(fixtureId, venue, lat, lng) {
+    if (!canManage) return;
+    onUpdateTournament({
+      ...tournament,
+      fixtures: fixtures.map(f => f.id === fixtureId ? {
+        ...f,
+        venue: venue || null,
+        venueLat: lat != null ? lat : null,
+        venueLng: lng != null ? lng : null
       } : f)
     });
   }
@@ -19685,10 +19946,14 @@ function FixturesSection({
     }
   }, f.stage), /*#__PURE__*/React.createElement(FixtureRow, {
     fixture: f,
+    tournament: tournament,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
-    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined,
+    onEditVenue: canManage ? (venue, lat, lng) => editVenue(f.id, venue, lat, lng) : undefined,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }))));
   const knockoutSection = stages.length === 0 ? null : /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19749,10 +20014,14 @@ function FixturesSection({
   }), "Record Book")), stages.flatMap(s => fixturesForStage(s.label)).filter(f => !isFixturePlayed(f)).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
+    tournament: tournament,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
-    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined,
+    onEditVenue: canManage ? (venue, lat, lng) => editVenue(f.id, venue, lat, lng) : undefined,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })), (() => {
     const playedKnockoutCount = stages.flatMap(s => fixturesForStage(s.label)).filter(f => isFixturePlayed(f)).length;
     return playedKnockoutCount > 0 && /*#__PURE__*/React.createElement("div", {
@@ -19856,10 +20125,14 @@ function FixturesSection({
     }
   }, f.group), /*#__PURE__*/React.createElement(FixtureRow, {
     fixture: f,
+    tournament: tournament,
     match: f.matchId ? matchById.get(f.matchId) : null,
     onScore: () => f.matchId ? onOpenMatch(f.matchId) : onStartFixtureMatch(tournament, f),
     onUpdateDate: canManage ? date => updateDate(f.id, date) : undefined,
-    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined
+    onDelete: canManage ? () => requestDeleteFixture(f.id) : undefined,
+    onEditVenue: canManage ? (venue, lat, lng) => editVenue(f.id, venue, lat, lng) : undefined,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }))), playedGroupCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -20115,7 +20388,9 @@ function TournamentDetailScreen({
   onOpenMatch,
   onDeleteTournament,
   onOpenRecords,
-  canManage = true
+  canManage = true,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [matches, setMatches] = useState(null); // null = loading
   const [deleting, setDeleting] = useState(false);
@@ -20657,7 +20932,9 @@ function TournamentDetailScreen({
     onUpdateTournament: onUpdateTournament,
     onOpenMatch: onOpenMatch,
     onOpenRecords: onOpenRecords,
-    canManage: canManage
+    canManage: canManage,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })),
     activeTab === "standings" && /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings ? /*#__PURE__*/React.createElement(React.Fragment, null, groupStandings.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
     key: g.label
@@ -21834,6 +22111,7 @@ function SeriesDetailScreen({
   }, "Loading\u2026") : /*#__PURE__*/React.createElement(React.Fragment, null, (series.fixtures || []).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
+    tournament: series,
     match: seriesMatches.find(m => m.id === f.matchId) || null,
     onScore: () => onStartFixtureMatch(series, f),
     onUpdateDate: date => onUpdateSeries({
@@ -33781,7 +34059,9 @@ function CricketScorer() {
     // Club/Federation screen entry points, just resolved from whichever source this tournament
     // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
     onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
-    canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
+    canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "account",
     direction: navDirection
