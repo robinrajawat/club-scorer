@@ -24276,34 +24276,11 @@ function TeamsScreen({
     if (!result.ok) setPoolError(result.error);
   }
   const [editingPoolId, setEditingPoolId] = useState(null);
-  const [editPoolName, setEditPoolName] = useState("");
-  const [editPoolRole, setEditPoolRole] = useState("");
-  const [editPoolBusy, setEditPoolBusy] = useState(false);
-  const [editPoolError, setEditPoolError] = useState("");
   function startPoolEdit(pl) {
     setEditingPoolId(pl.id);
-    setEditPoolName(pl.name);
-    setEditPoolRole(pl.role || "");
-    setEditPoolError("");
   }
-  function cancelPoolEdit() {
-    setEditingPoolId(null);
-  }
-  async function savePoolEdit(pl) {
-    const trimmed = editPoolName.trim();
-    if (!trimmed) return;
-    setEditPoolBusy(true);
-    setEditPoolError("");
-    const result = await onUpdatePoolPlayer(activeClubId, pl.id, {
-      name: trimmed,
-      role: editPoolRole
-    });
-    setEditPoolBusy(false);
-    if (!result.ok) {
-      setEditPoolError(result.error);
-      return;
-    }
-    setEditingPoolId(null);
+  async function savePoolEdit(pl, updates) {
+    return onUpdatePoolPlayer(activeClubId, pl.id, updates);
   }
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -24542,85 +24519,7 @@ function TeamsScreen({
     fontStyle: "italic",
     marginBottom: 8
   }
-}, "No players in the pool yet \u2014 add one below, or paste a whole list in at once."), (activeClub.playerPool || []).map(pl => editingPoolId === pl.id ? /*#__PURE__*/React.createElement("div", {
-  key: pl.id,
-  style: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    padding: "6px 0"
-  }
-}, /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    gap: 6,
-    flexWrap: "wrap"
-  }
-}, /*#__PURE__*/React.createElement(TextField, {
-  value: editPoolName,
-  onChange: setEditPoolName,
-  placeholder: "Player name",
-  autoCapitalize: "words",
-  autoCorrect: "off",
-  autoComplete: "off",
-  spellCheck: false,
-  style: {
-    flex: 1,
-    minWidth: 100,
-    padding: "6px 8px",
-    fontSize: 12.5
-  }
-}), PLAYER_ROLES.map(r => /*#__PURE__*/React.createElement("button", {
-  key: r.value,
-  type: "button",
-  onClick: () => setEditPoolRole(editPoolRole === r.value ? "" : r.value),
-  "aria-pressed": editPoolRole === r.value,
-  style: {
-    padding: "4px 10px",
-    borderRadius: 12,
-    border: editPoolRole === r.value ? "none" : `1.5px solid ${COLORS.willow}`,
-    background: editPoolRole === r.value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-    color: editPoolRole === r.value ? "#fff" : COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11,
-    cursor: "pointer",
-    flexShrink: 0
-  }
-}, r.label))), editPoolError && /*#__PURE__*/React.createElement("div", {
-  style: {
-    color: COLORS.ball,
-    fontSize: 11,
-    fontFamily: "'Inter'"
-  }
-}, editPoolError), /*#__PURE__*/React.createElement("div", {
-  style: {
-    display: "flex",
-    gap: 8
-  }
-}, /*#__PURE__*/React.createElement(Btn, {
-  onClick: () => savePoolEdit(pl),
-  disabled: editPoolBusy || !editPoolName.trim(),
-  style: {
-    padding: "0 12px",
-    minHeight: 28,
-    fontSize: 11.5
-  }
-}, editPoolBusy ? "\u2026" : "Save"), /*#__PURE__*/React.createElement("button", {
-  type: "button",
-  onClick: cancelPoolEdit,
-  disabled: editPoolBusy,
-  style: {
-    background: "none",
-    border: "none",
-    color: COLORS.inkSoft,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 11.5,
-    cursor: "pointer",
-    padding: 0
-  }
-}, "Cancel"))) : /*#__PURE__*/React.createElement("div", {
+}, "No players in the pool yet \u2014 add one below, or paste a whole list in at once."), (activeClub.playerPool || []).map(pl => /*#__PURE__*/React.createElement("div", {
   key: pl.id,
   style: {
     display: "flex",
@@ -24718,7 +24617,14 @@ function TeamsScreen({
     padding: "2px 6px",
     flexShrink: 0
   }
-}, "\u00d7")))), /*#__PURE__*/React.createElement("div", {
+}, "\u00d7")))), editingPoolId && (() => {
+  const editingPl = (activeClub.playerPool || []).find(p => p.id === editingPoolId);
+  return editingPl && /*#__PURE__*/React.createElement(EditPoolPlayerModal, {
+    player: editingPl,
+    onSave: async updates => savePoolEdit(editingPl, updates),
+    onClose: () => setEditingPoolId(null)
+  });
+})(), /*#__PURE__*/React.createElement("div", {
   style: {
     display: "flex",
     gap: 6,
@@ -26410,6 +26316,177 @@ function EditPlayerModal({
       flexWrap: "wrap"
     }
   }, PLAYER_HANDS.map(h => pill(bowlingHand === h.value, h.label, () => setBowlingHand(bowlingHand === h.value ? "" : h.value), "bowl-" + h.value))))), error && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: COLORS.ball,
+      fontSize: 12,
+      fontFamily: "'Inter'",
+      marginBottom: 10
+    }
+  }, error), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onClose,
+    disabled: busy,
+    style: {
+      flex: 1
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: save,
+    disabled: busy || !name.trim(),
+    style: {
+      flex: 1
+    }
+  }, busy ? "\u2026" : "Save")));
+}
+// Edit a club's own player-pool entry -- previously only name and role were editable inline in
+// ClubPanel's pool list, even though the pool schema (see addPoolPlayers) has always stored
+// team, external id, batting/bowling hand, email, and a free-text note too; there was just never
+// a form field for them. Modal rather than inline given how many fields that now is -- same
+// labeled-field layout as EditPlayerModal right above (published-player details), reusing the
+// same pill pattern for role/hands.
+function EditPoolPlayerModal({
+  player,
+  onSave,
+  onClose
+}) {
+  const [name, setName] = useState(player.name || "");
+  const [role, setRole] = useState(player.role || "");
+  const [battingHand, setBattingHand] = useState(player.battingHand || "");
+  const [bowlingHand, setBowlingHand] = useState(player.bowlingHand || "");
+  const [team, setTeam] = useState(player.team || "");
+  const [externalId, setExternalId] = useState(player.externalId || "");
+  const [email, setEmail] = useState(player.email || "");
+  const [note, setNote] = useState(player.note || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  function pill(active, label, onClick, key) {
+    return /*#__PURE__*/React.createElement("button", {
+      key,
+      type: "button",
+      onClick,
+      "aria-pressed": active,
+      style: {
+        padding: "4px 10px",
+        borderRadius: 12,
+        border: active ? "none" : `1.5px solid ${COLORS.willow}`,
+        background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+        color: active ? "#fff" : COLORS.inkSoft,
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 11.5,
+        cursor: "pointer"
+      }
+    }, label);
+  }
+  async function save() {
+    const n = name.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    setError("");
+    const result = await onSave({
+      name: n,
+      role,
+      battingHand,
+      bowlingHand,
+      team: team.trim(),
+      externalId: externalId.trim(),
+      email: email.trim(),
+      note: note.trim()
+    });
+    setBusy(false);
+    if (!result || result.ok === false) {
+      setError(result && result.error || "Couldn't save these details.");
+      return;
+    }
+    onClose();
+  }
+  const labelStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: COLORS.inkSoft,
+    marginBottom: 5
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: busy ? () => {} : onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 16
+    }
+  }, "Edit pool player"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      marginBottom: 16,
+      maxHeight: "60vh",
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Name"), /*#__PURE__*/React.createElement(TextField, {
+    value: name,
+    onChange: setName,
+    placeholder: "Player name"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Role"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, PLAYER_ROLES.map(r => pill(role === r.value, r.label, () => setRole(role === r.value ? "" : r.value), r.value)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Batting hand"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, PLAYER_HANDS.map(h => pill(battingHand === h.value, h.label, () => setBattingHand(battingHand === h.value ? "" : h.value), "bat-" + h.value)))), (role === "bowler" || role === "allrounder") && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Bowling hand"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, PLAYER_HANDS.map(h => pill(bowlingHand === h.value, h.label, () => setBowlingHand(bowlingHand === h.value ? "" : h.value), "bowl-" + h.value)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Team"), /*#__PURE__*/React.createElement(TextField, {
+    value: team,
+    onChange: setTeam,
+    placeholder: "e.g. U19s, Firsts \u2014 optional"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "External ID"), /*#__PURE__*/React.createElement(TextField, {
+    value: externalId,
+    onChange: setExternalId,
+    placeholder: "Membership / league ID \u2014 optional"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Email"), /*#__PURE__*/React.createElement(TextField, {
+    value: email,
+    onChange: setEmail,
+    placeholder: "Optional",
+    autoCapitalize: "off",
+    autoCorrect: "off",
+    inputMode: "email"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: labelStyle
+  }, "Note"), /*#__PURE__*/React.createElement(TextField, {
+    value: note,
+    onChange: setNote,
+    placeholder: "Optional"
+  }))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12,
