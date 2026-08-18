@@ -6194,6 +6194,22 @@ function buildLiveShareText(match, code) {
   lines.push(buildFollowUrl(code));
   return lines.join("\n");
 }
+// Opens the OS's own share sheet (WhatsApp, iMessage, Mail, whatever the person actually has and
+// prefers) instead of assuming WhatsApp for everyone -- navigator.share needs a user gesture and
+// isn't available on every browser (mainly desktop), so this falls back to the WhatsApp link only
+// where the native sheet genuinely isn't an option. The user cancelling the sheet rejects with an
+// AbortError, not a real failure, so that's swallowed silently rather than falling through to the
+// WhatsApp fallback underneath it.
+function shareText(text) {
+  if (navigator.share) {
+    navigator.share({
+      text
+    }).catch(() => {});
+    return;
+  }
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 function computePlayerStats(matches) {
   const players = {}; // name -> { runs, balls, dismissals, innings, wickets, ballsBowled, runsConceded, matches: Set }
   function get(name) {
@@ -14983,20 +14999,17 @@ function ShareMenu({
     }
     flashCopied("link");
   }
-  async function handleWhatsAppLive() {
+  async function handleShareLive() {
     const res = await ensureViewCode();
     if (!res.ok) return;
     const text = buildLiveShareText(match, res.code);
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    shareText(text);
     setOpen(false);
   }
-  // Plain score snapshot, no follow link/code involved -- unlike handleWhatsAppLive this never
+  // Plain score snapshot, no follow link/code involved -- unlike handleShareLive this never
   // needs a view code, so it never touches ensureViewCode and can't fail on that account.
-  function handleWhatsAppDetails() {
-    const text = buildShareText(match);
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+  function handleShareDetails() {
+    shareText(buildShareText(match));
     setOpen(false);
   }
   const rowLabelStyle = {
@@ -15121,7 +15134,7 @@ function ShareMenu({
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
-    onClick: handleWhatsAppLive,
+    onClick: handleShareLive,
     disabled: busy,
     style: {
       flex: 1,
@@ -15139,9 +15152,9 @@ function ShareMenu({
       padding: "8px 6px",
       cursor: busy ? "default" : "pointer"
     }
-  }, /*#__PURE__*/React.createElement(WhatsAppIcon, {
+  }, /*#__PURE__*/React.createElement(Share, {
     size: 14
-  }), "WhatsApp"), /*#__PURE__*/React.createElement("button", {
+  }), "Share"), /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleCopyLink,
     disabled: busy,
@@ -15178,7 +15191,7 @@ function ShareMenu({
     style: rowSubStyle
   }, "Just the score line \u2014 no live link, nothing to keep updating."), /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
-    onClick: handleWhatsAppDetails,
+    onClick: handleShareDetails,
     style: {
       width: "100%",
       display: "flex",
@@ -15195,9 +15208,9 @@ function ShareMenu({
       padding: "8px 6px",
       cursor: "pointer"
     }
-  }, /*#__PURE__*/React.createElement(WhatsAppIcon, {
+  }, /*#__PURE__*/React.createElement(Share, {
     size: 14
-  }), "WhatsApp")), error && /*#__PURE__*/React.createElement("div", {
+  }), "Share")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 2px",
       fontSize: 11.5,
@@ -16281,11 +16294,7 @@ function UpcomingFixtureCard({
     }
   }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => {
-      const text = buildFixtureShareText(t.name, f, venue);
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-    },
+    onClick: () => shareText(buildFixtureShareText(t.name, f, venue)),
     className: "cs-btn",
     "aria-label": "Share match details",
     title: "Share match details",
