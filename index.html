@@ -35472,7 +35472,9 @@ function CricketScorer() {
   })), ...Object.entries(clubTeamsById).flatMap(([cid, list]) => (list || []).map(t => ({ ...t,
     _clubId: cid
   })))].sort((a, b) => a.name.localeCompare(b.name));
-  const teamsForTeamsScreen = activeClubAdminId ? clubTeamsById[activeClubAdminId] || [] : allTeamsFlat;
+  const teamsForTeamsScreen = activeClubAdminId ? (clubTeamsById[activeClubAdminId] || []).map(t => ({ ...t,
+    _clubId: activeClubAdminId
+  })) : allTeamsFlat;
   // Copies a team into the destination first, then deletes it from the source — so a failed or
   // denied destination write (e.g. rules not yet published) never loses the team.
   // fromClubId is passed explicitly for the same reason clubId is on handleSaveTeam/
