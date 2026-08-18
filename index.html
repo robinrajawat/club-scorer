@@ -14451,6 +14451,7 @@ function InboxScreen({
   onCancel,
   onCompleteJoin,
   pollItems = [],
+  onPollsChanged,
   onBack
 }) {
   const [busyId, setBusyId] = useState(null);
@@ -14759,7 +14760,15 @@ function InboxScreen({
     clubName: openPoll.clubName,
     team: openPoll.team,
     initialCode: openPoll.code,
-    onClose: () => setOpenPoll(null)
+    onClose: () => {
+      setOpenPoll(null);
+      // A poll deleted (or responded to) inside the modal doesn't change clubs/clubTeamsById, so
+      // the Inbox's own pollItems list -- fetched once and only re-run on that dependency -- never
+      // finds out on its own. Closing the modal is the one moment we know something might have
+      // changed, so force a refetch here rather than leaving a deleted poll showing until an
+      // unrelated club/team edit happens to trigger one.
+      if (onPollsChanged) onPollsChanged();
+    }
   }));
 }
 
@@ -35778,6 +35787,7 @@ function CricketScorer() {
     onCancel: handleCancelFederationRequest,
     onCompleteJoin: handleCompleteAcceptedFederationRequest,
     pollItems: pendingPollItems,
+    onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
