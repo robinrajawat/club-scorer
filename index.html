@@ -8166,7 +8166,8 @@ function TextField({
   autoComplete,
   spellCheck,
   inputMode,
-  list
+  list,
+  autoFocus
 }) {
   return /*#__PURE__*/React.createElement("input", {
     value: value,
@@ -8180,6 +8181,7 @@ function TextField({
     spellCheck: spellCheck,
     inputMode: inputMode,
     list: list,
+    autoFocus: autoFocus,
     style: {
       fontFamily: "'Inter', sans-serif",
       fontSize: 15,
@@ -25152,6 +25154,19 @@ function TeamEditScreen({
   // stays a plain ternary instead of an inline IIFE -- much easier to get right than juggling
   // extra parens deep inside a JSX expression.
   const filteredPool = poolSearch.trim() ? clubPool.filter(pp => pp.name.toLowerCase().includes(poolSearch.trim().toLowerCase())) : clubPool;
+  // "Select all" acts on whatever's currently filtered, not the whole pool -- so searching first
+  // then selecting-all only grabs the matches, and it toggles off if everything visible (that
+  // isn't already on the roster) is already checked, rather than being a one-way action.
+  // Selections outside the current filter (from a previous search term) are left untouched.
+  const selectablePoolIds = filteredPool.filter(pp => !players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase())).map(pp => pp.id);
+  const allFilteredSelected = selectablePoolIds.length > 0 && selectablePoolIds.every(id => selectedPoolIds.has(id));
+  function toggleSelectAllFiltered() {
+    setSelectedPoolIds(cur => {
+      const next = new Set(cur);
+      selectablePoolIds.forEach(id => allFilteredSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  }
   const [addError, setAddError] = useState("");
   // Typing a brand-new name into the roster only ever added them to THIS team -- there was no way
   // to also get them into the club's reusable pool without leaving team editing entirely, adding
@@ -26036,7 +26051,12 @@ function TeamEditScreen({
       color: COLORS.inkSoft,
       marginBottom: 14
     }
-  }, "Tick everyone you want, then add them all at once. Copies them onto this team's roster \u2014 editing or removing them from the pool later won't change this roster."), clubPool.length > 0 && /*#__PURE__*/React.createElement(TextField, {
+  }, "Tick everyone you want, then add them all at once. Copies them onto this team's roster \u2014 editing or removing them from the pool later won't change this roster."), clubPool.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
     value: poolSearch,
     onChange: setPoolSearch,
     placeholder: "Search the pool\u2026",
@@ -26044,12 +26064,46 @@ function TeamEditScreen({
     autoCorrect: "off",
     autoComplete: "off",
     spellCheck: false,
+    autoFocus: true,
     style: {
-      marginBottom: 10,
       padding: "8px 10px",
+      paddingRight: poolSearch ? 30 : 10,
       fontSize: 13
     }
-  }), clubPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }), poolSearch && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPoolSearch(""),
+    "aria-label": "Clear search",
+    style: {
+      position: "absolute",
+      right: 4,
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontSize: 17,
+      lineHeight: 1,
+      padding: "4px 6px",
+      cursor: "pointer"
+    }
+  }, "\u00d7")), clubPool.length > 0 && filteredPool.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: toggleSelectAllFiltered,
+    disabled: selectablePoolIds.length === 0,
+    style: {
+      background: "none",
+      border: "none",
+      color: selectablePoolIds.length === 0 ? COLORS.inkSoft : COLORS.turf,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: selectablePoolIds.length === 0 ? "default" : "pointer",
+      padding: 0,
+      marginBottom: 10,
+      textDecoration: "underline"
+    }
+  }, allFilteredSelected ? "Clear selection" : poolSearch.trim() ? `Select all ${selectablePoolIds.length} match${selectablePoolIds.length === 1 ? "" : "es"}` : `Select all ${selectablePoolIds.length}`), clubPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
