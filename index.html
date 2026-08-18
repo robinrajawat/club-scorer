@@ -25156,6 +25156,22 @@ function TeamEditScreen({
   // Club player pool picker -- data's already on hand via the clubs prop (no async load needed,
   // unlike publicPlayers above), so this is just visibility state for the modal.
   const [poolPickerOpen, setPoolPickerOpen] = useState(false);
+  // Which pool players are checked in the picker, keyed by pool entry id -- lets someone tick
+  // several names and add them all in one go instead of reopening the picker per player (the
+  // previous behavior: tapping a row added it and closed the modal immediately). Cleared whenever
+  // the picker opens/closes so a stale selection never carries into the next time it's opened.
+  const [selectedPoolIds, setSelectedPoolIds] = useState(new Set());
+  function togglePoolSelection(id) {
+    setSelectedPoolIds(cur => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);else next.add(id);
+      return next;
+    });
+  }
+  function closePoolPicker() {
+    setPoolPickerOpen(false);
+    setSelectedPoolIds(new Set());
+  }
   // Removing a player is destructive to whatever local edits (number, captain/keeper role) they
   // had on this team, so it goes through the same ConfirmModal pattern as every other destructive
   // action in the app, instead of the previous single-tap X.
@@ -25261,29 +25277,36 @@ function TeamEditScreen({
     setNewPlayer("");
     setNewNumber("");
   }
-  // Copies a club player-pool entry onto this team's roster -- a one-time snapshot, same
+  // Copies club player-pool entries onto this team's roster -- a one-time snapshot, same
   // relationship as addBorrowedPlayer above, not a live reference back to the pool (editing or
   // removing them from the pool later doesn't touch teams that already added them). Skips
-  // silently on an exact name clash rather than erroring, since picking from a list (as opposed
-  // to typing) makes an accidental double-click the far more likely cause than a genuine intent
-  // to add a same-named second player.
-  function addPoolPlayerToRoster(pp) {
-    if (players.some(p => p.name.trim().toLowerCase() === pp.name.trim().toLowerCase())) {
-      setPoolPickerOpen(false);
-      return;
-    }
-    setPlayers(p => [...p, {
-      name: pp.name,
-      number: "",
-      email: "",
-      public: false,
-      age: "",
-      role: pp.role || "",
-      battingHand: "",
-      bowlingHand: "",
-      _key: uid()
-    }]);
-    setPoolPickerOpen(false);
+  // silently over any name clash rather than erroring, since picking from a list (as opposed
+  // to typing) makes an accidental double-add the far more likely cause than a genuine intent
+  // to add a same-named second player. Takes the whole selected batch at once so ticking several
+  // names in the picker adds them all in a single tap instead of one modal round-trip each.
+  function addPoolPlayersToRoster(entries) {
+    setPlayers(p => {
+      const existingLower = new Set(p.map(x => x.name.trim().toLowerCase()));
+      const additions = [];
+      entries.forEach(pp => {
+        const lower = pp.name.trim().toLowerCase();
+        if (existingLower.has(lower)) return;
+        existingLower.add(lower);
+        additions.push({
+          name: pp.name,
+          number: "",
+          email: "",
+          public: false,
+          age: "",
+          role: pp.role || "",
+          battingHand: "",
+          bowlingHand: "",
+          _key: uid()
+        });
+      });
+      return [...p, ...additions];
+    });
+    closePoolPicker();
   }
   function removePlayer(key) {
     const old = players.find(p => p._key === key);
@@ -26086,7 +26109,7 @@ function TeamEditScreen({
       flexShrink: 0
     }
   }))))), poolPickerOpen && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setPoolPickerOpen(false)
+    onClose: closePoolPicker
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
@@ -26101,7 +26124,7 @@ function TeamEditScreen({
       color: COLORS.inkSoft,
       marginBottom: 14
     }
-  }, "Copies them onto this team's roster \u2014 editing or removing them from the pool later won't change this roster."), clubPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "Tick everyone you want, then add them all at once. Copies them onto this team's roster \u2014 editing or removing them from the pool later won't change this roster."), clubPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -26110,7 +26133,7 @@ function TeamEditScreen({
       textAlign: "center",
       padding: "20px 0"
     }
-  }, "No players in the club pool yet \u2014 add some from the Clubs tab first.") : /*#__PURE__*/React.createElement("div", {
+  }, "No players in the club pool yet \u2014 add some from the Clubs tab first.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
@@ -26118,42 +26141,76 @@ function TeamEditScreen({
       maxHeight: "50vh",
       overflowY: "auto"
     }
-  }, clubPool.map(pp => /*#__PURE__*/React.createElement("button", {
-    key: pp.id,
-    type: "button",
-    onClick: () => addPoolPlayerToRoster(pp),
-    disabled: players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase()),
+  }, clubPool.map(pp => {
+    const alreadyOnRoster = players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase());
+    const checked = selectedPoolIds.has(pp.id);
+    return /*#__PURE__*/React.createElement("button", {
+      key: pp.id,
+      type: "button",
+      onClick: () => togglePoolSelection(pp.id),
+      disabled: alreadyOnRoster,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: checked ? `1.5px solid ${COLORS.turf}` : "1.5px solid transparent",
+        background: checked ? "rgba(74,124,46,0.08)" : COLORS.surface,
+        cursor: alreadyOnRoster ? "default" : "pointer",
+        textAlign: "left",
+        opacity: alreadyOnRoster ? 0.5 : 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 18,
+        height: 18,
+        borderRadius: 5,
+        flexShrink: 0,
+        border: checked ? "none" : `1.5px solid ${COLORS.inkSoft}`,
+        background: checked ? COLORS.turf : "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, checked && /*#__PURE__*/React.createElement(Check, {
+      size: 12,
+      color: "#fff"
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 13.5,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, pp.name)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        flexShrink: 0
+      }
+    }, alreadyOnRoster ? "Already added" : (PLAYER_ROLES.find(r => r.value === pp.role) || {}).label || ""));
+  })), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    disabled: selectedPoolIds.size === 0,
+    onClick: () => addPoolPlayersToRoster(clubPool.filter(pp => selectedPoolIds.has(pp.id))),
     style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: "none",
-      background: COLORS.surface,
-      cursor: "pointer",
-      textAlign: "left",
-      opacity: players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase()) ? 0.5 : 1
+      width: "100%",
+      marginTop: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, pp.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      flexShrink: 0
-    }
-  }, (PLAYER_ROLES.find(r => r.value === pp.role) || {}).label || "")))))))
+  }, selectedPoolIds.size === 0 ? "Add selected" : `Add ${selectedPoolIds.size} player${selectedPoolIds.size === 1 ? "" : "s"}`)))))
 }
 
 // Up to 2 letters: first+last name initials, or just the one letter for a single-word name.
