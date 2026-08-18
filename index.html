@@ -16232,13 +16232,20 @@ function UpcomingFixtureCard({
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 3px 10px rgba(42,36,32,0.04)",
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
     }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 8
+    }
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => onOpenTournament(t),
     className: "cs-btn",
     style: {
       display: "block",
-      width: "100%",
+      flex: 1,
+      minWidth: 0,
       textAlign: "left",
       background: "none",
       border: "none",
@@ -16272,7 +16279,32 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), venue ? /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      const text = buildFixtureShareText(t.name, f, venue);
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    className: "cs-btn",
+    "aria-label": "Share match details",
+    title: "Share match details",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 26,
+      height: 26,
+      flexShrink: 0,
+      background: COLORS.creamDark,
+      border: "none",
+      borderRadius: 8,
+      cursor: "pointer",
+      color: COLORS.turf
+    }
+  }, /*#__PURE__*/React.createElement(Share, {
+    size: 13
+  }))), venue ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -16424,31 +16456,6 @@ function UpcomingFixtureCard({
       color: COLORS.turf
     }
   }, /*#__PURE__*/React.createElement(Hand, {
-    size: 14
-  })), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      const text = buildFixtureShareText(t.name, f, venue);
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-    },
-    className: "cs-btn",
-    "aria-label": "Share match details",
-    title: "Share match details",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 30,
-      height: 30,
-      flexShrink: 0,
-      background: COLORS.creamDark,
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
     size: 14
   })), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -16819,7 +16826,7 @@ function renderMatchCard(m, i) {
       background: COLORS.surface,
       padding: "14px 14px",
       display: "flex",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
