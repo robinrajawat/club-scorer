@@ -27079,6 +27079,29 @@ function Modal({
 }) {
   const sheetRef = useRef(null);
   const previouslyFocused = useRef(null);
+  // Mobile keyboards shrink the *visual* viewport but a plain `vh` unit is sized against the
+  // *layout* viewport, which most mobile browsers leave alone when the keyboard opens -- so a
+  // sheet pinned to e.g. 85vh doesn't shrink, and whatever's near its bottom (whether that's the
+  // footer buttons or a scrollable list once you're partway through it) ends up hidden behind the
+  // keyboard instead of within the area that's actually still visible. Tracking
+  // visualViewport.height directly and sizing off that instead keeps the sheet honest about how
+  // much space is really on screen, keyboard included. Falls back to window.innerHeight on
+  // browsers without the API (desktop mainly, where there's no keyboard to worry about anyway).
+  const [viewportHeight, setViewportHeight] = useState(() => window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function update() {
+      setViewportHeight(vv.height);
+    }
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
   useEffect(() => {
     previouslyFocused.current = document.activeElement;
     // Focus the sheet itself (not a specific control inside it, since Modal's content varies by
@@ -27102,6 +27125,7 @@ function Modal({
     style: {
       position: "fixed",
       inset: 0,
+      height: viewportHeight,
       background: "rgba(31,58,15,0.55)",
       display: "flex",
       alignItems: "flex-end",
@@ -27122,7 +27146,7 @@ function Modal({
       padding: "22px 18px 30px",
       width: "100%",
       maxWidth: 560,
-      maxHeight: "85vh",
+      maxHeight: viewportHeight * 0.85,
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
       boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
