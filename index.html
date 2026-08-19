@@ -25330,7 +25330,7 @@ function TeamEditScreen({
   // so savePlayerDetails/makePrivate below can call it too (with an override for the players
   // array, since setPlayers is async and the caller needs the just-updated array immediately,
   // not next render).
-  function buildTeamPayload(playersOverride) {
+  function buildTeamPayload(playersOverride, captainOverride, keeperOverride) {
     const savedPlayers = (playersOverride || players).map(p => ({
       name: p.name.trim(),
       number: p.number,
@@ -25342,8 +25342,8 @@ function TeamEditScreen({
       id: team ? team.id : uid(),
       name: name.trim(),
       players: savedPlayers,
-      captain: captain.trim(),
-      keeper: keeper.trim(),
+      captain: (captainOverride !== undefined ? captainOverride : captain).trim(),
+      keeper: (keeperOverride !== undefined ? keeperOverride : keeper).trim(),
       color: color || null
     };
   }
@@ -25389,7 +25389,16 @@ function TeamEditScreen({
       public: true
     } : x);
     setPlayers(updatedPlayers);
-    onSave(buildTeamPayload(updatedPlayers));
+    // Renaming can now also happen through EditPlayerModal's Save (not just the row's own name
+    // field, which already does this via updateName) -- keep captain/keeper in sync either way,
+    // since both are tracked by name string rather than a stable id. Computed explicitly rather
+    // than read back from state for the buildTeamPayload call below: setCaptain/setKeeper are
+    // async, so the immediate persist would otherwise still see the pre-rename name.
+    const newCaptain = row.name !== info.name && captain === row.name ? info.name : captain;
+    const newKeeper = row.name !== info.name && keeper === row.name ? info.name : keeper;
+    if (newCaptain !== captain) setCaptain(newCaptain);
+    if (newKeeper !== keeper) setKeeper(newKeeper);
+    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper));
     return result;
   }
   async function makePrivate(key) {
