@@ -6130,6 +6130,45 @@ function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   });
   return out;
 }
+// Best-effort club logo for a team name -- scans every club's team list for a name match and
+// returns that club's logoURL, or null if this is a personal team, no club has claimed a team by
+// this name, or the matching club hasn't set a logo. Same name-matching approach as
+// resolvePollTeams above; unlike that helper this is display-only, so the first match is good
+// enough -- a shared team name across two clubs shows one club's badge rather than blocking on a
+// picker the way poll routing has to.
+function teamClubLogo(teamName, clubs, clubTeamsById) {
+  if (!teamName) return null;
+  const lower = teamName.trim().toLowerCase();
+  for (const club of clubs || []) {
+    const teams = clubTeamsById && clubTeamsById[club.id] || [];
+    if (teams.some(t => t.name && t.name.trim().toLowerCase() === lower)) {
+      return club.logoURL || null;
+    }
+  }
+  return null;
+}
+// Small circular club-logo badge for a team name -- renders nothing when the team isn't tied to
+// a club with a logo, so cards for personal/logo-less teams look exactly as they always have.
+function TeamLogoBadge({
+  teamName,
+  clubs,
+  clubTeamsById,
+  size = 20
+}) {
+  const logoURL = teamClubLogo(teamName, clubs, clubTeamsById);
+  if (!logoURL) return null;
+  return /*#__PURE__*/React.createElement("img", {
+    src: logoURL,
+    alt: "",
+    style: {
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      objectFit: "cover",
+      flexShrink: 0
+    }
+  });
+}
 // Every still-active poll, across every team across every club someone has access to, that still
 // has at least one roster name who hasn't responded -- the Inbox's poll section and its badge
 // count both come from this same list, so what the badge promises is exactly what's waiting there.
@@ -16327,17 +16366,31 @@ function UpcomingFixtureCard({
     size: 10
   }), t.name), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 5,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 14.5,
       color: COLORS.ink
     }
-  }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: f.teamA,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 16
+  }), f.teamA, " ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("button", {
+  }, "vs"), " ", /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: f.teamB,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 16
+  }), f.teamB)), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => shareText(buildFixtureShareText(t.name, f, venue)),
     className: "cs-btn",
@@ -16933,17 +16986,31 @@ function renderMatchCard(m, i) {
     size: 10
   }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 5,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 14.5,
       color: COLORS.ink
     }
-  }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: m.teamA,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 16
+  }), m.teamA, " ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", m.teamB), (() => {
+  }, "vs"), " ", /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: m.teamB,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 16
+  }), m.teamB), (() => {
     // Cloud-synced matches land in `matches` as full docs (loadIndex reads them straight from
     // Firestore), so compute fresh from m.innings when it's there -- it's already up to date and
     // needs no extra plumbing. A local-only/offline match never carries full innings data on this
