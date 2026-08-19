@@ -27156,6 +27156,38 @@ function Modal({
       vv.removeEventListener("scroll", update);
     };
   }, []);
+  // Locks the page behind the sheet in place while it's open. `overflow: hidden` on body alone
+  // doesn't reliably stop touch scrolling on iOS Safari -- the page can still rubber-band/scroll
+  // behind a `position: fixed` overlay, most noticeably once a touch drag inside the sheet's own
+  // scrollable content (e.g. the club pool picker's player list) reaches the top or bottom of
+  // that list and the drag "leaks" into scrolling whatever's behind the modal. Pinning body itself
+  // to `position: fixed` at its current scroll offset blocks that path entirely, and restoring
+  // scrollTop on close (rather than letting the browser do it) avoids the page silently jumping
+  // to the top while the sheet was open.
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
   useEffect(() => {
     previouslyFocused.current = document.activeElement;
     // Focus the sheet itself (not a specific control inside it, since Modal's content varies by
@@ -27202,6 +27234,7 @@ function Modal({
       maxWidth: 560,
       maxHeight: viewportHeight * 0.85,
       overflowY: "auto",
+      overscrollBehavior: "contain",
       WebkitOverflowScrolling: "touch",
       boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
       animation: "cs-slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
