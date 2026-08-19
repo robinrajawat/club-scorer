@@ -18141,7 +18141,17 @@ function MyTeamsScreen({
       alignItems: "center",
       gap: 7
     }
-  }, t.color && /*#__PURE__*/React.createElement("span", {
+  }, t._clubId && (clubs.find(c => c.id === t._clubId) || {}).logoURL && /*#__PURE__*/React.createElement("img", {
+    src: (clubs.find(c => c.id === t._clubId) || {}).logoURL,
+    alt: "",
+    style: {
+      width: 16,
+      height: 16,
+      borderRadius: "50%",
+      objectFit: "cover",
+      flexShrink: 0
+    }
+  }), t.color && /*#__PURE__*/React.createElement("span", {
     "aria-hidden": "true",
     style: {
       width: 11,
