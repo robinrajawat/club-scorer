@@ -25293,9 +25293,39 @@ function TeamEditScreen({
       }
     }, label);
   }
+  // Builds the same payload the bottom Save button writes to the team's own storage. Pulled out
+  // so savePlayerDetails/makePrivate below can call it too (with an override for the players
+  // array, since setPlayers is async and the caller needs the just-updated array immediately,
+  // not next render).
+  function buildTeamPayload(playersOverride) {
+    const savedPlayers = (playersOverride || players).map(p => ({
+      name: p.name.trim(),
+      number: p.number,
+      email: normalizeEmail(p.email),
+      public: !!p.public,
+      homeClubId: p.homeClubId || null
+    }));
+    return {
+      id: team ? team.id : uid(),
+      name: name.trim(),
+      players: savedPlayers,
+      captain: captain.trim(),
+      keeper: keeper.trim(),
+      color: color || null
+    };
+  }
   // Not-yet-public: publishes with whatever age/role/hand fields are already filled in. Already
   // public: saves any edits to those fields straight through instead (name/public/homeClubId
   // never change via this path — see updatePlayerInfo).
+  // Publishing/editing/un-publishing a player writes straight to Firestore's shared /players doc
+  // immediately regardless of whether this screen's own Save has been pressed -- that part was
+  // always true and is correct (the shared doc has to reflect reality the moment another club
+  // could see it). What used to be missing: the LOCAL roster's own copy of `public` only picked
+  // up that change if the person also pressed the screen's bottom Save button afterward. Back out
+  // any other way -- a nav-away, a closed tab -- and the roster would silently keep showing "Make
+  // public" for a player Firestore already had as public. Calling onSave immediately here, with
+  // the freshly-updated players array (not the one still in state pre-render), closes that gap:
+  // this screen's own storage can now never drift from the shared doc it just wrote.
   async function savePlayerDetails(key) {
     const row = players.find(p => p._key === key);
     if (!row || publishBusyKey) return;
@@ -25316,12 +25346,12 @@ function TeamEditScreen({
       setPublishError(result.error);
       return;
     }
-    if (!row.public) {
-      setPlayers(p => p.map(x => x._key === key ? {
-        ...x,
-        public: true
-      } : x));
-    }
+    const updatedPlayers = players.map(x => x._key === key ? {
+      ...x,
+      public: true
+    } : x);
+    setPlayers(updatedPlayers);
+    onSave(buildTeamPayload(updatedPlayers));
   }
   async function makePrivate(key) {
     const row = players.find(p => p._key === key);
@@ -25334,10 +25364,12 @@ function TeamEditScreen({
       setPublishError(result.error);
       return;
     }
-    setPlayers(p => p.map(x => x._key === key ? {
+    const updatedPlayers = players.map(x => x._key === key ? {
       ...x,
       public: false
-    } : x));
+    } : x);
+    setPlayers(updatedPlayers);
+    onSave(buildTeamPayload(updatedPlayers));
   }
   const trimmedNames = players.map(p => p.name.trim());
   const canSave = name.trim() && players.length > 0 && trimmedNames.every(n => n) && new Set(trimmedNames.map(n => n.toLowerCase())).size === players.length;
@@ -25924,23 +25956,7 @@ function TeamEditScreen({
   }, publishError)))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
-    onClick: () => {
-      const savedPlayers = players.map(p => ({
-        name: p.name.trim(),
-        number: p.number,
-        email: normalizeEmail(p.email),
-        public: !!p.public,
-        homeClubId: p.homeClubId || null
-      }));
-      onSave({
-        id: team ? team.id : uid(),
-        name: name.trim(),
-        players: savedPlayers,
-        captain: captain.trim(),
-        keeper: keeper.trim(),
-        color: color || null
-      });
-    },
+    onClick: () => onSave(buildTeamPayload()),
     style: {
       width: "100%"
     }
