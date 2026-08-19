@@ -21865,7 +21865,9 @@ function FixturesSection({
 // parameterized on `standings` (tableTopper now derives from the prop instead of an outer
 // closure variable, since each group's topper is its own group's #1, not the whole tournament's).
 function StandingsTable({
-  standings
+  standings,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const tableTopper = standings[0] && standings[0].played > 0 ? standings[0] : null;
   return /*#__PURE__*/React.createElement("div", {
@@ -21913,7 +21915,18 @@ function StandingsTable({
       color: COLORS.ink,
       whiteSpace: "nowrap"
     }
-  }, r.team), /*#__PURE__*/React.createElement("td", {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: r.team,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 16
+  }), r.team)), /*#__PURE__*/React.createElement("td", {
     style: {
       textAlign: "center",
       padding: "8px"
@@ -22523,9 +22536,13 @@ function TournamentDetailScreen({
       marginBottom: 8
     }
   }, g.label), /*#__PURE__*/React.createElement(StandingsTable, {
-    standings: g.standings
+    standings: g.standings,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })))) : /*#__PURE__*/React.createElement(StandingsTable, {
-    standings: standings
+    standings: standings,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
