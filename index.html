@@ -25090,6 +25090,9 @@ function TeamEditScreen({
   // shown, since most rec-league rosters will never touch this — one row open at a time.
   const [expandedKey, setExpandedKey] = useState(null);
   const [publishBusyKey, setPublishBusyKey] = useState(null);
+  // Which row's EditPlayerModal is open, if any -- separate from expandedKey (which row's detail
+  // panel is expanded) since the modal can be opened while any row is expanded.
+  const [editingPlayerKey, setEditingPlayerKey] = useState(null);
   const [publishError, setPublishError] = useState("");
   // Cross-club "borrow a player" directory — only relevant for a club-owned team (clubId set);
   // loaded lazily the first time the picker opens rather than on mount, since most edits never
@@ -25302,13 +25305,7 @@ function TeamEditScreen({
       email
     } : x));
   }
-  function updatePlayerField(key, field, value) {
-    setPlayers(p => p.map(x => x._key === key ? {
-      ...x,
-      [field]: value
-    } : x));
-  }
-  // Small pill toggle shared by the role/batting-hand/bowling-hand selectors below — same visual
+  // Small pill toggle used for the "also save to club pool" checkbox below — same visual
   // language as the color swatches above, just text instead of a color fill.
   function pillBtn(active, label, onClick, key) {
     return /*#__PURE__*/React.createElement("button", {
@@ -25362,32 +25359,38 @@ function TeamEditScreen({
   // public" for a player Firestore already had as public. Calling onSave immediately here, with
   // the freshly-updated players array (not the one still in state pre-render), closes that gap:
   // this screen's own storage can now never drift from the shared doc it just wrote.
-  async function savePlayerDetails(key) {
+  async function savePlayerDetails(key, info) {
     const row = players.find(p => p._key === key);
-    if (!row || publishBusyKey) return;
+    if (!row || publishBusyKey) return {
+      ok: false,
+      error: "Already saving \u2014 try again in a moment."
+    };
     setPublishError("");
     setPublishBusyKey(key);
-    const info = {
-      age: row.age,
-      role: row.role,
-      battingHand: row.battingHand,
-      bowlingHand: row.bowlingHand
+    const detail = {
+      age: info.age,
+      role: info.role,
+      battingHand: info.battingHand,
+      bowlingHand: info.bowlingHand
     };
     const result = row.public ? await onUpdatePlayerInfo(row.email, {
-      name: row.name,
-      ...info
-    }) : await onPublishPlayer(clubId, row.name, row.email, info);
+      name: info.name,
+      ...detail
+    }) : await onPublishPlayer(clubId, info.name, row.email, detail);
     setPublishBusyKey(null);
     if (!result.ok) {
       setPublishError(result.error);
-      return;
+      return result;
     }
     const updatedPlayers = players.map(x => x._key === key ? {
       ...x,
+      name: info.name,
+      ...detail,
       public: true
     } : x);
     setPlayers(updatedPlayers);
     onSave(buildTeamPayload(updatedPlayers));
+    return result;
   }
   async function makePrivate(key) {
     const row = players.find(p => p._key === key);
@@ -25890,68 +25893,7 @@ function TeamEditScreen({
       color: COLORS.inkSoft,
       marginTop: 4
     }
-  }, "Lets other clubs find and borrow this player onto their own roster \u2014 leave blank to keep them private to this team.")), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 5
-    }
-  }, "Age & role"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      alignItems: "center",
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    value: p.age,
-    onChange: e => updatePlayerField(p._key, "age", e.target.value.replace(/[^0-9]/g, "").slice(0, 3)),
-    placeholder: "Age",
-    "aria-label": "Age",
-    inputMode: "numeric",
-    style: {
-      width: 52,
-      boxSizing: "border-box",
-      textAlign: "center",
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.ink,
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 8,
-      padding: "6px 4px"
-    }
-  }), PLAYER_ROLES.map(r => pillBtn(p.role === r.value, r.label, () => updatePlayerField(p._key, "role", p.role === r.value ? "" : r.value), r.value)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 5
-    }
-  }, "Batting hand"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap"
-    }
-  }, PLAYER_HANDS.map(h => pillBtn(p.battingHand === h.value, h.label, () => updatePlayerField(p._key, "battingHand", p.battingHand === h.value ? "" : h.value), "bat-" + h.value)))), (p.role === "bowler" || p.role === "allrounder") && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 5
-    }
-  }, "Bowling hand"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap"
-    }
-  }, PLAYER_HANDS.map(h => pillBtn(p.bowlingHand === h.value, h.label, () => updatePlayerField(p._key, "bowlingHand", p.bowlingHand === h.value ? "" : h.value), "bowl-" + h.value)))), /*#__PURE__*/React.createElement("div", {
+  }, "Lets other clubs find and borrow this player onto their own roster \u2014 leave blank to keep them private to this team.")), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -25959,15 +25901,15 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Btn, {
     variant: p.public ? "gold" : "default",
-    onClick: () => savePlayerDetails(p._key),
-    disabled: publishBusyKey === p._key || !p.email.trim(),
+    onClick: () => setEditingPlayerKey(p._key),
+    disabled: publishBusyKey === p._key,
     style: {
       flexShrink: 0,
       padding: "0 14px",
       minHeight: 34,
       fontSize: 12
     }
-  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Save details" : "Make public"), p.public && /*#__PURE__*/React.createElement("button", {
+  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Edit details" : "Make public"), p.public && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => makePrivate(p._key),
     disabled: publishBusyKey === p._key,
@@ -26087,7 +26029,15 @@ function TeamEditScreen({
       color: COLORS.gold,
       flexShrink: 0
     }
-  }))))), poolPickerOpen && /*#__PURE__*/React.createElement(Modal, {
+  }))))), editingPlayerKey && (() => {
+    const editingRow = players.find(p => p._key === editingPlayerKey);
+    return editingRow && /*#__PURE__*/React.createElement(EditPlayerModal, {
+      player: editingRow,
+      title: editingRow.public ? "Edit player details" : "Make player public",
+      onSave: info => savePlayerDetails(editingPlayerKey, info),
+      onClose: () => setEditingPlayerKey(null)
+    });
+  })(), poolPickerOpen && /*#__PURE__*/React.createElement(Modal, {
     onClose: closePoolPicker
   }, /*#__PURE__*/React.createElement("div", {
     style: {
