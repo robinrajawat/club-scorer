@@ -30232,7 +30232,9 @@ function MatchScreen({
   onExit,
   pendingCount,
   onPendingSynced,
-  tournament
+  tournament,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [padCollapsed, setPadCollapsed] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
@@ -31255,6 +31257,9 @@ function MatchScreen({
     }
   }, "Super Over"), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
       fontFamily: "'Inter'",
       fontSize: 12,
       opacity: 0.75,
@@ -31262,7 +31267,12 @@ function MatchScreen({
       fontWeight: 600,
       letterSpacing: 0.3
     }
-  }, inning.battingTeam.toUpperCase()), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: inning.battingTeam,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 14
+  }), inning.battingTeam.toUpperCase()), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "baseline",
@@ -35790,7 +35800,9 @@ function CricketScorer() {
     onExit: exitToHome,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null
+    tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })), screen === "my-teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "my-teams",
     direction: navDirection
