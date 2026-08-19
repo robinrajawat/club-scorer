@@ -27647,7 +27647,9 @@ function InningScorecard({
   bowlingCaptain,
   bowlingKeeper,
   battingNumbers,
-  bowlingNumbers
+  bowlingNumbers,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye + (inning.extras.penalty || 0);
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
@@ -27661,11 +27663,22 @@ function InningScorecard({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement(TeamLogoBadge, {
+    teamName: inning.battingTeam,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById,
+    size: 18
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, inning.battingTeam), /*#__PURE__*/React.createElement("div", {
+  }, inning.battingTeam)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
       fontSize: 18,
@@ -28966,7 +28979,9 @@ function MatchStatsPanel({
   match,
   tab,
   setTab,
-  showOvers
+  showOvers,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const chasing = chasingInfo(match);
   // The quick-summary card (score + target/chase context + this over) is only worth surfacing
@@ -29226,7 +29241,9 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -29283,7 +29300,9 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
@@ -29292,7 +29311,9 @@ function MatchStatsPanel({
 }
 function ScorecardOverlay({
   match,
-  onClose
+  onClose,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [tab, setTab] = useState(match.innings.length - 1);
   return /*#__PURE__*/React.createElement("div", {
@@ -29352,7 +29373,9 @@ function ScorecardOverlay({
     match: match,
     tab: tab,
     setTab: setTab,
-    showOvers: false
+    showOvers: false,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
@@ -31123,14 +31146,18 @@ function MatchScreen({
   if (match.awaitingSecondInningsSetup) {
     return /*#__PURE__*/React.createElement(SecondInningsSetup, {
       match: match,
-      setMatch: setMatch
+      setMatch: setMatch,
+      clubs: clubs,
+      clubTeamsById: clubTeamsById
     });
   }
   if (match.status === "complete") {
     return /*#__PURE__*/React.createElement(ResultScreen, {
       match: match,
       setMatch: setMatch,
-      onExit: onExit
+      onExit: onExit,
+      clubs: clubs,
+      clubTeamsById: clubTeamsById
     });
   }
   // Doesn't include Timed out -- unlike every other dismissal here, it isn't tied to a delivery at
@@ -32678,7 +32705,9 @@ function MatchScreen({
     }
   }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: match,
-    onClose: () => setShowScorecard(false)
+    onClose: () => setShowScorecard(false),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }), conflict && /*#__PURE__*/React.createElement(SyncConflictModal, {
     local: match,
     remote: conflict,
@@ -32820,7 +32849,9 @@ async function saveTransition(updatedMatch, setMatch) {
 }
 function SecondInningsSetup({
   match,
-  setMatch
+  setMatch,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [striker, setStriker] = useState("");
   const [nonStriker, setNonStriker] = useState("");
@@ -32998,7 +33029,9 @@ function SecondInningsSetup({
       ...match,
       innings: [match.innings[0]]
     },
-    onClose: () => setShowScorecard(false)
+    onClose: () => setShowScorecard(false),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }), confirmGoBack && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Back to 1st innings?",
     message: `This reopens ${match.innings[0].battingTeam}'s completed innings so you can fix a mistake — the 2nd innings hasn't started yet, so nothing from it is lost. You'll pick openers again when you're ready to move on.`,
@@ -33317,7 +33350,9 @@ function BestFielderCard({
 function ResultScreen({
   match,
   setMatch,
-  onExit
+  onExit,
+  clubs = [],
+  clubTeamsById = {}
 }) {
   const [i1, i2] = match.innings;
   const resultText = matchResultText(match);
@@ -33673,7 +33708,9 @@ function ResultScreen({
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
-    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam),
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
   }))));
 }
 
