@@ -11715,7 +11715,29 @@ function JoinCodeBar({
       padding: "0 16px",
       minHeight: 44
     }
-  }, busy ? "Joining…" : "Join")), error && /*#__PURE__*/React.createElement("div", {
+  }, busy ? "Joining…" : "Join"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setOpen(false);
+      setCode("");
+      setError("");
+    },
+    "aria-label": "Close",
+    style: {
+      flexShrink: 0,
+      width: 44,
+      height: 44,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      fontSize: 22,
+      lineHeight: 1
+    }
+  }, "\u00d7")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 12,
