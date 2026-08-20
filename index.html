@@ -33932,12 +33932,24 @@ function CricketScorer() {
   // / the browser's own back button actually walk the app's own screen stack backwards, instead
   // of leaving the OS gesture with nothing of ours to act on and falling through to unpredictable
   // default browser behavior (see the popstate listener below for the other half of this).
-  function setScreen(next) {
+  // `opts.replace` swaps the pushState for a replaceState -- for transitions like starting a
+  // match, where the screen being left (setup) shouldn't remain a swipe-back target once the
+  // match it produced already exists and is saved: landing back in a live match's setup wizard
+  // let a second "Start Match" tap spin up an entirely separate match, orphaning the first one
+  // still in progress. Replacing collapses setup out of the stack, so back from match goes
+  // straight to wherever setup itself was opened from.
+  function setScreen(next, opts) {
     applyScreenTransition(next);
     if (!suppressHistoryPushRef.current) {
-      window.history.pushState({
-        screen: next
-      }, "");
+      if (opts && opts.replace) {
+        window.history.replaceState({
+          screen: next
+        }, "");
+      } else {
+        window.history.pushState({
+          screen: next
+        }, "");
+      }
     }
   }
   // Seeds the current history entry with the starting screen (so the very first swipe-back has
@@ -34373,7 +34385,9 @@ function CricketScorer() {
         } : cur);
       }
     });
-    setScreen("match");
+    setScreen("match", {
+      replace: true
+    });
     setPresetTournament(null);
     if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
     // Came from "Score this fixture" — link the new match back onto that fixture so it shows as
