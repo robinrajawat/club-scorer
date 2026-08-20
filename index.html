@@ -21830,9 +21830,7 @@ function FixturesSection({
 // parameterized on `standings` (tableTopper now derives from the prop instead of an outer
 // closure variable, since each group's topper is its own group's #1, not the whole tournament's).
 function StandingsTable({
-  standings,
-  clubs = [],
-  clubTeamsById = {}
+  standings
 }) {
   const tableTopper = standings[0] && standings[0].played > 0 ? standings[0] : null;
   return /*#__PURE__*/React.createElement("div", {
@@ -22490,13 +22488,9 @@ function TournamentDetailScreen({
       marginBottom: 8
     }
   }, g.label), /*#__PURE__*/React.createElement(StandingsTable, {
-    standings: g.standings,
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    standings: g.standings
   })))) : /*#__PURE__*/React.createElement(StandingsTable, {
-    standings: standings,
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    standings: standings
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -27591,9 +27585,7 @@ function InningScorecard({
   bowlingCaptain,
   bowlingKeeper,
   battingNumbers,
-  bowlingNumbers,
-  clubs = [],
-  clubTeamsById = {}
+  bowlingNumbers
 }) {
   const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye + (inning.extras.penalty || 0);
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
@@ -28912,9 +28904,7 @@ function MatchStatsPanel({
   match,
   tab,
   setTab,
-  showOvers,
-  clubs = [],
-  clubTeamsById = {}
+  showOvers
 }) {
   const chasing = chasingInfo(match);
   // The quick-summary card (score + target/chase context + this over) is only worth surfacing
@@ -29174,9 +29164,7 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -29233,9 +29221,7 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
@@ -29244,9 +29230,7 @@ function MatchStatsPanel({
 }
 function ScorecardOverlay({
   match,
-  onClose,
-  clubs = [],
-  clubTeamsById = {}
+  onClose
 }) {
   const [tab, setTab] = useState(match.innings.length - 1);
   return /*#__PURE__*/React.createElement("div", {
@@ -29306,9 +29290,7 @@ function ScorecardOverlay({
     match: match,
     tab: tab,
     setTab: setTab,
-    showOvers: false,
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    showOvers: false
   }));
 }
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
@@ -30188,9 +30170,7 @@ function MatchScreen({
   onExit,
   pendingCount,
   onPendingSynced,
-  tournament,
-  clubs = [],
-  clubTeamsById = {}
+  tournament
 }) {
   const [padCollapsed, setPadCollapsed] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
@@ -31079,18 +31059,14 @@ function MatchScreen({
   if (match.awaitingSecondInningsSetup) {
     return /*#__PURE__*/React.createElement(SecondInningsSetup, {
       match: match,
-      setMatch: setMatch,
-      clubs: clubs,
-      clubTeamsById: clubTeamsById
+      setMatch: setMatch
     });
   }
   if (match.status === "complete") {
     return /*#__PURE__*/React.createElement(ResultScreen, {
       match: match,
       setMatch: setMatch,
-      onExit: onExit,
-      clubs: clubs,
-      clubTeamsById: clubTeamsById
+      onExit: onExit
     });
   }
   // Doesn't include Timed out -- unlike every other dismissal here, it isn't tied to a delivery at
@@ -32630,9 +32606,7 @@ function MatchScreen({
     }
   }, "Confirm")), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: match,
-    onClose: () => setShowScorecard(false),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    onClose: () => setShowScorecard(false)
   }), conflict && /*#__PURE__*/React.createElement(SyncConflictModal, {
     local: match,
     remote: conflict,
@@ -32774,9 +32748,7 @@ async function saveTransition(updatedMatch, setMatch) {
 }
 function SecondInningsSetup({
   match,
-  setMatch,
-  clubs = [],
-  clubTeamsById = {}
+  setMatch
 }) {
   const [striker, setStriker] = useState("");
   const [nonStriker, setNonStriker] = useState("");
@@ -32954,9 +32926,7 @@ function SecondInningsSetup({
       ...match,
       innings: [match.innings[0]]
     },
-    onClose: () => setShowScorecard(false),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    onClose: () => setShowScorecard(false)
   }), confirmGoBack && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Back to 1st innings?",
     message: `This reopens ${match.innings[0].battingTeam}'s completed innings so you can fix a mistake — the 2nd innings hasn't started yet, so nothing from it is lost. You'll pick openers again when you're ready to move on.`,
@@ -33275,9 +33245,7 @@ function BestFielderCard({
 function ResultScreen({
   match,
   setMatch,
-  onExit,
-  clubs = [],
-  clubTeamsById = {}
+  onExit
 }) {
   const [i1, i2] = match.innings;
   const resultText = matchResultText(match);
@@ -33633,9 +33601,7 @@ function ResultScreen({
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
-    bowlingNumbers: numbersFor(match, inn.bowlingTeam),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   }))));
 }
 
@@ -35776,9 +35742,7 @@ function CricketScorer() {
     onExit: exitToHome,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null,
-    clubs: clubs,
-    clubTeamsById: clubTeamsById
+    tournament: match && match.tournamentId && viewingTournament && viewingTournament.id === match.tournamentId ? viewingTournament : null
   })), screen === "my-teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "my-teams",
     direction: navDirection
