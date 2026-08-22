@@ -24317,6 +24317,7 @@ function TeamsScreen({
   onAddPoolPlayers,
   onUpdatePoolPlayer,
   onRemovePoolPlayer,
+  onCreateTeamFromPool,
   pinnedClubIds = [],
   onTogglePinClub
 }) {
@@ -24374,6 +24375,22 @@ function TeamsScreen({
     setRedeemSuccess(result.federation.name);
     setRedeemCode("");
   }
+  // Distinct team tags present in the pool (e.g. "U15", "2nd XI") -- lets someone spin up an
+  // actual Team pre-filled with everyone who shares that tag, instead of hand-picking each name
+  // one by one via the roster's own pool picker. Inactive pool players are left out, same as
+  // that picker, and a blank/unset tag isn't a group worth offering.
+  const poolTeamGroups = [];
+  (activeClub && activeClub.playerPool || []).forEach(p => {
+    if (p.status === "inactive") return;
+    const tag = (p.team || "").trim();
+    if (!tag) return;
+    const group = poolTeamGroups.find(g => g.tag === tag);
+    if (group) group.players.push(p);else poolTeamGroups.push({
+      tag,
+      players: [p]
+    });
+  });
+  poolTeamGroups.sort((a, b) => a.tag.localeCompare(b.tag));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 40px",
@@ -24579,7 +24596,55 @@ function TeamsScreen({
     fontFamily: "'Inter'",
     marginBottom: 8
   }
-}, "Add people once here, then pull them onto any of this club's teams from Team editing \u2014 separate from the cross-club public directory, and no email required."), (activeClub.playerPool || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+}, "Add people once here, then pull them onto any of this club's teams from Team editing \u2014 separate from the cross-club public directory, and no email required."), poolTeamGroups.length > 0 && /*#__PURE__*/React.createElement("div", {
+  style: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    marginBottom: 10
+  }
+}, poolTeamGroups.map(g => /*#__PURE__*/React.createElement("div", {
+  key: g.tag,
+  style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "5px 8px",
+    background: COLORS.cream,
+    borderRadius: 8
+  }
+}, /*#__PURE__*/React.createElement("span", {
+  style: {
+    fontSize: 11.5,
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    color: COLORS.ink,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  }
+}, g.tag, " ", /*#__PURE__*/React.createElement("span", {
+  style: {
+    color: COLORS.inkSoft,
+    fontWeight: 500
+  }
+}, `\u00b7 ${g.players.length}`)), /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => onCreateTeamFromPool(activeClubId, g.tag, g.players),
+  style: {
+    flexShrink: 0,
+    background: "none",
+    border: `1px solid ${COLORS.pitch}`,
+    borderRadius: 10,
+    color: COLORS.pitch,
+    cursor: "pointer",
+    fontFamily: "'Inter'",
+    fontWeight: 600,
+    fontSize: 10.5,
+    padding: "3px 9px"
+  }
+}, "Create team")))), (activeClub.playerPool || []).length === 0 && /*#__PURE__*/React.createElement("div", {
   style: {
     fontSize: 12,
     color: COLORS.inkSoft,
@@ -25078,10 +25143,14 @@ function TeamEditScreen({
   onUpdatePlayerInfo,
   onLoadPublicPlayers,
   onAddPoolPlayers,
+  // Prefills a brand-new team's name/roster (only ever consulted when `team` is null) -- set
+  // when this screen was opened via "Create team" from a Player Pool group in TeamsScreen,
+  // instead of the usual empty new-team state. { name, players: [pool player objects] } | null.
+  presetTeamSeed,
   onSave,
   onCancel
 }) {
-  const [name, setName] = useState(team ? team.name : "");
+  const [name, setName] = useState(team ? team.name : presetTeamSeed ? presetTeamSeed.name : "");
   const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
     name: p,
     number: "",
@@ -25112,7 +25181,17 @@ function TeamEditScreen({
     battingHand: "",
     bowlingHand: "",
     _key: uid()
-  }) : []);
+  }) : (presetTeamSeed ? presetTeamSeed.players : []).map(p => ({
+    name: p.name,
+    number: "",
+    email: "",
+    public: false,
+    age: "",
+    role: p.role || "",
+    battingHand: "",
+    bowlingHand: "",
+    _key: uid()
+  })));
   const [newPlayer, setNewPlayer] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
@@ -33723,6 +33802,11 @@ function CricketScorer() {
   // later, unrelated entry into the players screen doesn't reopen a stale profile.
   const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
+  // Prefills a new team's name/roster when team-edit is opened via "Create team" from a Player
+  // Pool group (see handleCreateTeamFromPool) instead of the usual empty new-team state. Cleared
+  // after save and by every other route into team-edit, so a stale seed never leaks into an
+  // unrelated "New Team" tap afterward.
+  const [presetTeamSeed, setPresetTeamSeed] = useState(null);
   // Which screen to return to after saving/cancelling out of team-edit -- entering from Home
   // (a personal team) should land back on Home, entering from the Teams tab (personal or a
   // club's own team) should land back there, same as it always did.
@@ -34730,6 +34814,21 @@ function CricketScorer() {
       document.removeEventListener("touchend", onTouchEnd);
     };
   }, []);
+  // Opened from a Player Pool group in TeamsScreen ("Create team" next to a team tag like "U15")
+  // -- jumps straight into team-edit for a brand-new team pre-filled with that tag's name and
+  // everyone in it, instead of the usual empty roster. clubId comes from the caller (always the
+  // pool's own club) rather than ambient activeClubAdminId, same reasoning as handleSaveTeam
+  // above.
+  function handleCreateTeamFromPool(clubId, tagName, poolPlayers) {
+    setActiveClubAdminId(clubId);
+    setEditingTeam(null);
+    setPresetTeamSeed({
+      name: tagName,
+      players: poolPlayers
+    });
+    setTeamEditReturnScreen("teams");
+    setScreen("team-edit");
+  }
   // clubId is passed explicitly (rather than read from ambient activeClubId) so this is correct
   // no matter where it's called from -- the Teams tab passes its own activeClubId, Home always
   // passes null (personal). Relying on ambient state here would silently misfile a save under
@@ -34752,6 +34851,7 @@ function CricketScorer() {
     }
     setScreen(teamEditReturnScreen);
     setEditingTeam(null);
+    setPresetTeamSeed(null);
   }
   async function handleDeleteTeam(id, clubId) {
     if (clubId) {
@@ -35759,12 +35859,14 @@ function CricketScorer() {
     onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
+      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
       setActiveClubAdminId(t._clubId || null);
       setEditingTeam(t);
+      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
@@ -35827,7 +35929,8 @@ function CricketScorer() {
     onRemoveUmpire: handleRemoveUmpire,
     onAddPoolPlayers: handleAddPoolPlayers,
     onUpdatePoolPlayer: handleUpdatePoolPlayer,
-    onRemovePoolPlayer: handleRemovePoolPlayer
+    onRemovePoolPlayer: handleRemovePoolPlayer,
+    onCreateTeamFromPool: handleCreateTeamFromPool
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -36039,6 +36142,7 @@ function CricketScorer() {
     onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
     onAddPoolPlayers: handleAddPoolPlayers,
+    presetTeamSeed: presetTeamSeed,
     onSave: team => handleSaveTeam(team, activeClubAdminId),
     onCancel: () => setScreen(teamEditReturnScreen)
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
