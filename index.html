@@ -24614,6 +24614,13 @@ function TeamsScreen({
     background: COLORS.cream,
     borderRadius: 8
   }
+}, /*#__PURE__*/React.createElement("div", {
+  style: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 4
+  }
 }, /*#__PURE__*/React.createElement("span", {
   style: {
     fontSize: 11.5,
@@ -24624,14 +24631,17 @@ function TeamsScreen({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap"
   }
-}, g.tag, " ", /*#__PURE__*/React.createElement("span", {
+}, g.tag), /*#__PURE__*/React.createElement("span", {
   style: {
+    fontSize: 10.5,
     color: COLORS.inkSoft,
-    fontWeight: 500
+    fontWeight: 500,
+    flexShrink: 0
   }
 }, `\u00b7 ${g.players.length}`)), /*#__PURE__*/React.createElement("button", {
   type: "button",
   onClick: () => onCreateTeamFromPool(activeClubId, g.tag, g.players),
+  "aria-label": `Create team from ${g.tag}`,
   style: {
     flexShrink: 0,
     background: "none",
