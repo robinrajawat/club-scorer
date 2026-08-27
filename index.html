@@ -8600,8 +8600,11 @@ function AuthBar({
       // that. But the old gradient+shine read as a dated commercial CTA sitting right under "never
       // expected," fighting its own copy. Flat gold splits the difference: still the warmest,
       // most-noticed thing in the menu, without the skeuomorphic overlay everything else on this
-      // screen has deliberately moved away from.
-      background: COLORS.gold,
+      // screen has deliberately moved away from. Fixed hex rather than COLORS.gold: in light mode
+      // that token is a muted brownish gold that reads dark here, so this uses the same brighter
+      // gold already used app-wide as the highlight stop in gold gradients (six-hit badge, captain
+      // badge, etc.) instead of tying this button's brightness to the (theme-flipping) accent color.
+      background: "#d4a544",
       border: "none",
       color: "#2e1c04",
       fontFamily: "'Inter'",
@@ -11388,8 +11391,9 @@ function AboutScreen({
       borderRadius: 10,
       // Flat solid fill -- see the same button's comment in AuthBar's dropdown for the full
       // reasoning (this is the app's only monetization channel, so it earns staying genuinely
-      // visible, just without the old gradient+glossy-shine treatment).
-      background: COLORS.gold,
+      // visible, just without the old gradient+glossy-shine treatment; fixed brighter hex rather
+      // than COLORS.gold, which reads dark in light mode).
+      background: "#d4a544",
       border: "none",
       color: "#2e1c04",
       fontFamily: "'Inter'",
