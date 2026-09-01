@@ -122,6 +122,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   before `afterEach` tears the DOM down, and Node's own read-only
   `navigator` global needing `Object.defineProperty` instead of a plain
   assignment).
+- `src/components/scoreboardAtoms.js` /
+  `tests/unit/components/scoreboardAtoms.test.js` — three small
+  live-scoring display atoms. `OversStrip` (swipeable per-over strip) and
+  `FixturePollSummary` (yes/no/maybe tally chips) are pure, no DOM APIs.
+  `SyncStatusBanner` reads `navigator.onLine` and `window`'s
+  `online`/`offline` events directly — jsdom again, same shape as
+  `modal.test.js` (`react-test-renderer` this time, no portal, so no need
+  for the real-`react-dom` approach `shareMenus.test.js` needed). Its
+  `handleTap` calls `flushPendingWrites` (a Firestore write, still in
+  `docs/index.html`, not extracted) — stubbed on `globalThis` the same
+  way `saveMatch` was for `matchInsightCards.test.js`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

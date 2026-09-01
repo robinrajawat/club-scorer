@@ -305,13 +305,15 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`Modal`), `src/components/matchInsightCards.js` (`RunRateChart`,
 `RunsPerOverChart`, `SyncConflictModal`, `PlayerOfMatchCard`,
 `BestFielderCard`), `src/components/shareMenus.js` (`MoveTeamMenu`,
-`ShareMenu`) — all now with real `tests/unit/components/*.test.js`
-coverage, except `ConfirmModal` (tests its own prop wiring against a
-stubbed `Modal`, not `Modal` itself) and `exportButtons.js` (tests
-rendering/state only — both buttons call `window.print()`/`document.title`
-from inside their `onClick` handler, never during render, so they're
-safely renderable without a DOM stub, but clicking them isn't exercised).
-`modal.test.js` tests `Modal` itself for real, DOM behavior included, and
+`ShareMenu`), `src/components/scoreboardAtoms.js` (`OversStrip`,
+`FixturePollSummary`, `SyncStatusBanner`) — all now with real
+`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
+`exportButtons.js` (tests rendering/state only — both buttons call
+`window.print()`/`document.title` from inside their `onClick` handler,
+never during render, so they're safely renderable without a DOM stub, but
+clicking them isn't exercised). `modal.test.js` and `scoreboardAtoms.test.js`
+(for `SyncStatusBanner`) test real DOM behavior via jsdom, and
 `shareMenus.test.js` renders through real `react-dom` rather than
 `react-test-renderer` — see below.
 
@@ -424,7 +426,20 @@ for next time a portal-based component comes up:
   `createNodeMock` trick, simpler to apply since it's just a method on
   a real element.
 
-~54 components remain, including the large screen-level ones
+A fourteenth PR extracted three more small display atoms into
+`src/components/scoreboardAtoms.js`: `OversStrip` (the swipeable
+per-over ball-by-ball strip, pure — no DOM APIs), `FixturePollSummary`
+(yes/no/maybe availability tally chips, pure), and `SyncStatusBanner`
+(the "N matches not synced" banner). `SyncStatusBanner` reads
+`navigator.onLine` and `window`'s `online`/`offline` events directly, so
+it needed the jsdom pattern — same shape as `Modal`, just `react-test-renderer`
+this time (no portal involved, so no need for the real-`react-dom`
+approach `shareMenus.test.js` needed). Its `handleTap` calls
+`flushPendingWrites` (a Firestore write, still in `docs/index.html`, not
+extracted), stubbed on `globalThis` the same way `saveMatch` was for
+`PlayerOfMatchCard`/`BestFielderCard`.
+
+~51 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
