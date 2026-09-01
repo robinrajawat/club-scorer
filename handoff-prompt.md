@@ -143,6 +143,27 @@ a separate follow-up PR.
 - `.github/workflows/deploy.yml` — deploys `public/` to GitHub Pages via
   Actions on every push to `main` that touches it (or on demand via
   `workflow_dispatch`). No build step.
+- `.github/workflows/ci.yml` — the actual gate: runs on every push (any
+  branch) and every PR into `main`. `npm test`, `npm run generate:verify`,
+  and `scripts/validate_html_structure.py` (see below). Before this
+  existed, nothing enforced that a PR's tests actually pass or that
+  `public/index.html` stays in sync — every merge relied on whoever/
+  whatever was doing the merge running that pipeline by hand first.
+- `scripts/validate_html_structure.py` — parses `public/index.html` with a
+  real HTML5 parser (`html5lib`) and checks a few structural invariants
+  (exactly one `<title>`, no stray `<textarea>`/`<xmp>`/`<plaintext>`, the
+  main `<script>` block is at least ~1M characters, no leaked
+  `${...}` template-literal artifacts). Exists to catch a specific, real
+  class of bug this app is structurally exposed to: a literal
+  `<title`/`</script` substring landing somewhere it shouldn't (inside a
+  JS string, a comment, prose copy) can make the browser's HTML tokenizer
+  end the main script early or swallow a huge chunk of the file as raw
+  text — something `new Function(...)`-style syntax checks can't catch,
+  since they only validate JS *within whatever boundaries the tokenizer
+  already decided were a `<script>` tag* — exactly what this bug gets
+  wrong. Ported from a sibling project (`sakura`) that hit this for real
+  in production; run manually with `python3
+  scripts/validate_html_structure.py`, wired into `ci.yml`.
 - `src/core/` — tested logic modules spliced into `public/index.html` by
   `scripts/generate.js` (see above).
 - `src/components/` — presentational React components, also spliced by
