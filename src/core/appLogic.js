@@ -5,7 +5,12 @@
 // is just about not having proven out the splice pipeline on more than one module shape yet.
 // computeStandings/dlsTarget/dlsResourcePercent/oversLeftTrueDecimal are covered by
 // tests/unit/appLogic.test.js; the rest (DOM/localStorage-dependent) isn't unit-testable in Node
-// and is unchanged from before this refactor.
+// and is unchanged from before this refactor. useLongPress is a real React hook (used by
+// src/components/formUiAtoms.js's PinnableChip), hence the useRef import below -- everything else
+// in this file is plain logic and needs nothing from react.
+
+import { useRef } from "react";
+
 export function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {

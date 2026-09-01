@@ -5,6 +5,10 @@
   "scripts": {
     "generate": "node scripts/generate.js",
     "generate:verify": "node scripts/generate.js --verify",
-    "test": "node --test tests/unit/*.test.js"
+    "test": "node --test tests/unit/*.test.js tests/unit/components/*.test.js"
+  },
+  "devDependencies": {
+    "react": "18.3.1",
+    "react-test-renderer": "18.3.1"
   }
 }

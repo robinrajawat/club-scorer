@@ -1,9 +1,15 @@
 // Small, reusable presentational React components used across setup/roster/rules screens: a
 // player avatar, a plain text input, a single-choice pill row, a team-selector chip row, a
-// pinnable filter chip, an icon+label utility button, and a generic confirm dialog. Same
-// extraction rationale as illustrations.js -- presentational, no unit tests, reference React/
-// hooks/COLORS/icons/other components as ambient globals, not meant to be imported and called
-// from Node.
+// pinnable filter chip, an icon+label utility button, a generic button, and a generic confirm
+// dialog. Covered by tests/unit/components/formUiAtoms.test.js using react-test-renderer.
+// ConfirmModal's own test stubs Modal (not yet extracted -- it reads window.visualViewport with
+// no guard, a bigger lift than a plain presentational leaf) rather than skipping the component.
+
+import React from "react";
+import { COLORS } from "./theme.js";
+import { Pin } from "./icons.js";
+import { useLongPress } from "../core/appLogic.js";
+import { playerInitials, playerAvatarColor } from "../core/miscHelpers.js";
 
 export function PlayerAvatar({
   name,
@@ -300,4 +306,66 @@ export function ConfirmModal({
       flex: 1
     }
   }, busy ? "\u2026" : confirmLabel)));
+}
+export function Btn({
+  children,
+  onClick,
+  variant = "default",
+  disabled,
+  style
+}) {
+  const base = {
+    fontFamily: "'Inter', sans-serif",
+    fontWeight: 600,
+    fontSize: 15,
+    borderRadius: 14,
+    padding: "14px 14px",
+    minHeight: 48,
+    cursor: disabled ? "not-allowed" : "pointer",
+    border: "none",
+    opacity: disabled ? 0.45 : 1,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6
+  };
+  const variants = {
+    default: {
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.07), 0 3px 8px rgba(42,36,32,0.05)"
+    },
+    primary: {
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(45,80,22,0.4)"
+    },
+    danger: {
+      background: `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`,
+      color: "#fff",
+      boxShadow: "0 3px 12px rgba(139,30,30,0.35)"
+    },
+    gold: {
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      color: "#2e1c04",
+      boxShadow: "0 3px 12px rgba(184,137,43,0.35)"
+    },
+    ghost: {
+      background: "rgba(242,236,217,0.1)",
+      color: COLORS.creamFixed,
+      border: "1.5px solid rgba(242,236,217,0.35)"
+    }
+  };
+  return /*#__PURE__*/React.createElement("button", {
+    className: variant === "ghost" ? "cs-btn" : "cs-btn cs-shine",
+    onClick: onClick,
+    disabled: disabled,
+    style: {
+      ...base,
+      ...variants[variant],
+      ...style
+    }
+  }, children);
 }

@@ -55,14 +55,26 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `QuotaExceededError` would be — so the test file installs a small
   in-memory `localStorage` polyfill (and, for one case, a throwing one)
   on `globalThis` to exercise the real success and quota-exceeded paths.
-- `src/components/*.js` — presentational React components (see
-  `handoff-prompt.md`'s "React component extraction" section for the
-  mechanism and why they need no `import`s). **Not covered by any test
-  file, deliberately** — rendering/asserting on a component meaningfully
-  needs a React test renderer, which this repo hasn't added. Their
-  round-trip is still verified the same way as everything else
-  (`npm run generate`/`generate:verify`, a syntax re-parse, a
-  headless-browser local-asset check) — just not unit-tested.
+- `src/components/*.js` / `tests/unit/components/*.test.js` —
+  presentational React components (see `handoff-prompt.md`'s "React
+  component extraction" section for the splice mechanism). Rendered with
+  `react-test-renderer` (a `devDependency`, pinned to `18.3.1` — the
+  exact React version `docs/index.html` loads from CDN, so tests exercise
+  the real thing, not a version-skewed stand-in). Unlike the `src/core/`
+  modules, files here **do** use real `import`s (`react`, `./theme.js`,
+  `./icons.js`, and any already-extracted `src/core/`/sibling
+  `src/components/` module a component needs) — stripped the same way at
+  splice time, but needed here so a test can actually render the
+  component rather than just parse it. A component that still depends on
+  something *not yet extracted* (e.g. `ConfirmModal` needs `Modal`, which
+  reads `window.visualViewport` with no guard and hasn't been pulled out
+  yet) gets a local stub in its own test file rather than a real import —
+  see `formUiAtoms.test.js` for the pattern. **A component using
+  `useEffect` to start a timer/subscription must be `.unmount()`-ed after
+  each render in its test** — react-test-renderer only runs cleanup
+  functions on unmount, and a live `setInterval` left running keeps the
+  test process alive indefinitely instead of exiting (see
+  `InningsTimer`'s tests in `scoringUiAtoms.test.js`).
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

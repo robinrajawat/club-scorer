@@ -147,7 +147,48 @@ const FUNCTIONS = [
   { name: "TeamChips", file: "src/components/formUiAtoms.js" },
   { name: "PinnableChip", file: "src/components/formUiAtoms.js" },
   { name: "HomeUtilityButton", file: "src/components/formUiAtoms.js" },
-  { name: "ConfirmModal", file: "src/components/formUiAtoms.js" }
+  { name: "ConfirmModal", file: "src/components/formUiAtoms.js" },
+  { name: "COLORS", file: "src/components/theme.js" },
+  { name: "Icon", file: "src/components/icons.js" },
+  { name: "AlertTriangle", file: "src/components/icons.js" },
+  { name: "ArrowLeftRight", file: "src/components/icons.js" },
+  { name: "Bell", file: "src/components/icons.js" },
+  { name: "BookOpen", file: "src/components/icons.js" },
+  { name: "CalendarClock", file: "src/components/icons.js" },
+  { name: "Check", file: "src/components/icons.js" },
+  { name: "ChevronDown", file: "src/components/icons.js" },
+  { name: "ChevronLeft", file: "src/components/icons.js" },
+  { name: "ChevronRight", file: "src/components/icons.js" },
+  { name: "Circle", file: "src/components/icons.js" },
+  { name: "Download", file: "src/components/icons.js" },
+  { name: "Globe", file: "src/components/icons.js" },
+  { name: "GoogleGLogo", file: "src/components/icons.js" },
+  { name: "Hand", file: "src/components/icons.js" },
+  { name: "Hash", file: "src/components/icons.js" },
+  { name: "HelpCircle", file: "src/components/icons.js" },
+  { name: "InboxIcon", file: "src/components/icons.js" },
+  { name: "Info", file: "src/components/icons.js" },
+  { name: "LogIn", file: "src/components/icons.js" },
+  { name: "LogOut", file: "src/components/icons.js" },
+  { name: "MessageCircle", file: "src/components/icons.js" },
+  { name: "Monitor", file: "src/components/icons.js" },
+  { name: "Moon", file: "src/components/icons.js" },
+  { name: "MoreVertical", file: "src/components/icons.js" },
+  { name: "Pencil", file: "src/components/icons.js" },
+  { name: "Pin", file: "src/components/icons.js" },
+  { name: "Plus", file: "src/components/icons.js" },
+  { name: "Printer", file: "src/components/icons.js" },
+  { name: "Share", file: "src/components/icons.js" },
+  { name: "Shield", file: "src/components/icons.js" },
+  { name: "Sun", file: "src/components/icons.js" },
+  { name: "Table2", file: "src/components/icons.js" },
+  { name: "Trash2", file: "src/components/icons.js" },
+  { name: "Trophy", file: "src/components/icons.js" },
+  { name: "Undo2", file: "src/components/icons.js" },
+  { name: "User", file: "src/components/icons.js" },
+  { name: "Users", file: "src/components/icons.js" },
+  { name: "WhatsAppIcon", file: "src/components/icons.js" },
+  { name: "Btn", file: "src/components/formUiAtoms.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's
@@ -202,7 +243,12 @@ function findNamedExport(file, name) {
       const declName = m[1] || m[2];
       const start = m.index;
       const end = i + 1 < matches.length ? matches[i + 1].index : source.length;
-      exports.set(declName, source.slice(start, end).replace(/^export /, "").replace(/\s+$/, "\n"));
+      // `\s*$` (not `\s+$`) so this still appends exactly one trailing newline even when the
+      // source file has none at all -- e.g. the last declaration in a file someone appended to
+      // by hand without a final newline. Silently dropping this would glue the declaration's
+      // closing brace onto the next line (the GENERATED-FN-END marker), an easy mistake to miss
+      // in review since the diff still looks like "just marker lines".
+      exports.set(declName, source.slice(start, end).replace(/^export /, "").replace(/\s*$/, "\n"));
     });
     namedExportCache.set(file, exports);
   }

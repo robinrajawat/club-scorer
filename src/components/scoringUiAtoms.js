@@ -1,8 +1,12 @@
 // Small presentational React components used on the live scoring screen: role/celebration/
 // milestone indicators, the odometer-style score digit animation, the innings timer, and the
-// swipeable list-row-with-delete pattern used elsewhere too. Same extraction rationale as
-// illustrations.js -- presentational, no unit tests, reference React/hooks/COLORS/icons as
-// ambient globals, not meant to be imported and called from Node.
+// swipeable list-row-with-delete pattern used elsewhere too. Covered by
+// tests/unit/components/scoringUiAtoms.test.js using react-test-renderer.
+
+import React, { useState, useEffect, useRef } from "react";
+import { COLORS } from "./theme.js";
+import { CalendarClock, Trash2 } from "./icons.js";
+import { hasSeenSwipeHint, markSwipeHintSeen } from "../core/appLogic.js";
 
 export function RoleBadge({
   isCaptain,
