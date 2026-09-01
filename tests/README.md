@@ -56,7 +56,7 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   in-memory `localStorage` polyfill (and, for one case, a throwing one)
   on `globalThis` to exercise the real success and quota-exceeded paths.
 - `src/components/*.js` / `tests/unit/components/*.test.js` —
-  presentational React components (see `docs/handoff-prompt.md`'s "React
+  presentational React components (see `docs/history.md`'s "React
   component extraction" section for the splice mechanism). Rendered with
   `react-test-renderer` (a `devDependency`, pinned to `18.3.1` — the
   exact React version `public/index.html` loads from CDN, so tests exercise
@@ -297,7 +297,7 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   fixture, so tests additionally stub `FixtureRow`'s own `Modal`/
   `loadFixturePollSummary` bare globals — reusing `fixtureRow.test.js`'s
   own setup. Uses `computeSeriesScore` from `src/core/appLogic.js` (not
-  a new export — see the note in `docs/handoff-prompt.md` about not
+  a new export — see the note in `docs/history.md` about not
   re-extracting a function that's already inside an existing module
   splice).
 - `src/components/inboxScreen.js` /

@@ -124,7 +124,9 @@ No build step and no `npm install` needed to **run** the app — it's plain Reac
 ## Contributing
 
 Start with [`docs/handoff-prompt.md`](docs/handoff-prompt.md) — the
-repo's own workflow rules, structure, and history. Run `sh
+repo's own workflow rules and structure (see
+[`docs/history.md`](docs/history.md) for the fuller session-by-session
+narrative). Run `sh
 scripts/setup-git-identity.sh` once per clone before committing (sets
 the git identity and enables `.githooks/pre-commit`, which also
 re-validates `public/index.html`'s HTML structure on every commit that
