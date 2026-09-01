@@ -938,7 +938,7 @@ export function CricketScorer() {
     // and-forget pattern is already used (e.g. handleDelete's tournament cleanup below) — a
     // failure here shouldn't block the match that was just created and already navigated to.
     if (setup.fixtureId && setup.tournamentId) {
-      linkFixtureToMatch(setup.tournamentId, setup.fixtureId, m.id, setup.rules, setup.venue);
+      linkFixtureToMatch(setup.tournamentId, setup.fixtureId, m.id, setup.rules, setup.venue, setup.oversLimit);
     }
   }
   async function openMatch(id) {
@@ -1018,14 +1018,19 @@ export function CricketScorer() {
   // fixture scored for a tournament silently becomes its default going forward, same as before.
   // Separately backfills the fixture's own venue too (same only-if-unset rule), since a typed-in-
   // setup venue is the most direct signal of where that specific fixture is actually happening --
-  // matches aren't always all at the tournament's default ground.
-  async function linkFixtureToMatch(tournamentId, fixtureId, matchId, fallbackRules, fallbackVenue) {
+  // matches aren't always all at the tournament's default ground. defaultOvers gets the same
+  // only-if-unset backfill as defaultRules -- this is the fallback path for a tournament that
+  // never had its rules set explicitly at creation (see TournamentsScreen's "Match rules
+  // (optional)" section); one that did already has defaultOvers/defaultRules set, so `t.defaultOvers
+  // || fallbackOvers` is a no-op there.
+  async function linkFixtureToMatch(tournamentId, fixtureId, matchId, fallbackRules, fallbackVenue, fallbackOvers) {
     const personalIdx = tournaments.findIndex(t => t.id === tournamentId);
     if (personalIdx !== -1) {
       const t = tournaments[personalIdx];
       const updatedT = {
         ...t,
         defaultRules: t.defaultRules || fallbackRules || null,
+        defaultOvers: t.defaultOvers || fallbackOvers || null,
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
@@ -1044,6 +1049,7 @@ export function CricketScorer() {
       const updatedT = {
         ...t,
         defaultRules: t.defaultRules || fallbackRules || null,
+        defaultOvers: t.defaultOvers || fallbackOvers || null,
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
@@ -1066,6 +1072,7 @@ export function CricketScorer() {
       const updatedT = {
         ...t,
         defaultRules: t.defaultRules || fallbackRules || null,
+        defaultOvers: t.defaultOvers || fallbackOvers || null,
         venue: t.venue || fallbackVenue || null,
         fixtures: (t.fixtures || []).map(f => f.id === fixtureId ? {
           ...f,
@@ -1854,13 +1861,15 @@ export function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules) {
     const t = {
       id: uid(),
       name,
       teams: teamNames,
       groups: groups || null,
       advancePerGroup: groups ? advancePerGroup || 2 : null,
+      defaultOvers: defaultOvers || null,
+      defaultRules: defaultRules || null,
       createdAt: Date.now()
     };
     if (activeTournamentFederationId) {

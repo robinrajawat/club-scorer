@@ -8,7 +8,7 @@ import { afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js";
-import { Btn, PinnableChip } from "../../../src/components/formUiAtoms.js";
+import { Btn, PinnableChip, RuleChoice } from "../../../src/components/formUiAtoms.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -131,6 +131,70 @@ test("TournamentsScreen: with 4+ teams selected, turning on group split sends gr
   assert.ok(Array.isArray(createdWith.groups));
   assert.equal(createdWith.groups.length, 2);
   assert.equal(createdWith.advancePerGroup, 2);
+});
+
+test("TournamentsScreen: creating a tournament with no rules customization sends null defaults", async () => {
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules) => {
+      createdWith = { defaultOvers, defaultRules };
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Autumn Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith.defaultOvers, null);
+  assert.equal(createdWith.defaultRules, null);
+});
+
+test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/free-hit/squad-size into onCreateTournament", async () => {
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules) => {
+      createdWith = { defaultOvers, defaultRules };
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  const oversField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
+  act(() => { oversField.props.onChange({ target: { value: "8" } }); });
+
+  const ruleChoices = inst.root.findAllByType(RuleChoice);
+  act(() => { ruleChoices.find(r => r.props.label === "Players per side").props.onChange(8); });
+  act(() => { ruleChoices.find(r => r.props.label === "Runs on a wide").props.onChange(2); });
+  act(() => { ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.onChange(2); });
+  const freeHitBtn = inst.root.findAllByType("button").find(b => b.props.children === "Off");
+  act(() => { freeHitBtn.props.onClick(); });
+
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith.defaultOvers, 8);
+  assert.equal(createdWith.defaultRules.playersPerSide, 8);
+  assert.equal(createdWith.defaultRules.wideRuns, 2);
+  assert.equal(createdWith.defaultRules.noballRuns, 2);
+  assert.equal(createdWith.defaultRules.freeHit, true);
 });
 
 test("TournamentsScreen: canManage=false hides 'New Tournament' and shows an owner-only note", () => {

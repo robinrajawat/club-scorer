@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { AlertTriangle, ChevronLeft, ChevronRight, Info, Plus, Trophy } from "./icons.js";
-import { Btn, TextField, PinnableChip } from "./formUiAtoms.js";
+import { Btn, TextField, PinnableChip, RuleChoice } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
-import { knockoutStagesPreview, withPinnedFirst } from "../core/appLogic.js";
+import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
 
 // The "Cups" list: club/federation source chips, create-tournament (with optional group-stage
 // split) and create-series forms, a status/search filter over the list, and each tournament as a
@@ -49,6 +49,15 @@ export function TournamentsScreen({
   const [useGroups, setUseGroups] = useState(false);
   const [numGroups, setNumGroups] = useState(2);
   const [advancePerGroup, setAdvancePerGroup] = useState(2);
+  // Tournament-level defaults -- set once at creation, then inherited by every fixture started
+  // from this tournament (SetupScreen seeds its own `overs`/`matchRules` state from
+  // presetTournament.defaultOvers/defaultRules), instead of only becoming the default
+  // retroactively once the first fixture happens to get scored with whatever it was set to.
+  const [rulesExpanded, setRulesExpanded] = useState(false);
+  const [defaultOvers, setDefaultOvers] = useState("");
+  const [tournamentRules, setTournamentRules] = useState({
+    ...DEFAULT_RULES
+  });
   // The advance-per-group picker offers 1/2/3 unconditionally, with no upper bound tied to how
   // many teams actually end up in the smallest group -- so it's entirely possible to pick a
   // combination that's mathematically impossible (e.g. 4 teams split into 4 groups of 1, with
@@ -106,6 +115,11 @@ export function TournamentsScreen({
     setName("");
     setSelectedTeams([]);
     setError("");
+    setRulesExpanded(false);
+    setDefaultOvers("");
+    setTournamentRules({
+      ...DEFAULT_RULES
+    });
     setCreating(true);
   }
   async function submitCreate() {
@@ -116,7 +130,9 @@ export function TournamentsScreen({
       label,
       teams: selectedTeams.filter(t => teamGroupIndex(t) === i)
     })).filter(g => g.teams.length > 0) : null;
-    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null);
+    const oversNum = parseInt(defaultOvers || "0", 10);
+    const rulesChanged = JSON.stringify(tournamentRules) !== JSON.stringify(DEFAULT_RULES);
+    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't create the tournament.");
@@ -153,6 +169,142 @@ export function TournamentsScreen({
       return;
     }
     setCreatingSeries(false);
+  }
+  // Collapsed by default, same reasoning as SetupScreen's own match-rules editor: standard rules
+  // are right most of the time, so this shouldn't force a scroll past several settings on every
+  // tournament creation. Unlike SetupScreen, there's no ballsPerOver/superOver/powerplayOvers/
+  // timeCapMinutes/maxOversPerBowler here -- those are more niche match-level knobs, not the kind
+  // of thing a tournament organiser sets once up front; this covers exactly the settings that
+  // actually vary tournament-to-tournament (overs, squad size, wide/no-ball value, Free Hit).
+  function renderTournamentRulesSection() {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 4,
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: rulesExpanded ? 10 : 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.inkSoft
+      }
+    }, "Match rules (optional)"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "cs-btn cs-shine",
+      onClick: () => setRulesExpanded(e => !e),
+      style: {
+        padding: "6px 13px",
+        borderRadius: 18,
+        border: "none",
+        cursor: "pointer",
+        background: COLORS.surface,
+        boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 12.5,
+        color: COLORS.ink
+      }
+    }, rulesExpanded ? "Hide" : "Customize")), rulesExpanded && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.inkSoft,
+        lineHeight: 1.5,
+        marginBottom: 10
+      }
+    }, "Every fixture started from this tournament will use these settings automatically -- no need to re-enter them per match."), /*#__PURE__*/React.createElement(Field, {
+      label: "Overs per innings"
+    }, /*#__PURE__*/React.createElement(TextField, {
+      value: defaultOvers,
+      onChange: v => setDefaultOvers(v.replace(/[^0-9]/g, "")),
+      placeholder: "20"
+    })), /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Players per side",
+      value: tournamentRules.playersPerSide,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        playersPerSide: v
+      })),
+      options: [{
+        value: 6,
+        label: "6"
+      }, {
+        value: 7,
+        label: "7"
+      }, {
+        value: 8,
+        label: "8"
+      }, {
+        value: 9,
+        label: "9"
+      }, {
+        value: 11,
+        label: "11 (standard)"
+      }]
+    }), /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Runs on a wide",
+      value: tournamentRules.wideRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        wideRuns: v
+      })),
+      options: [{
+        value: 1,
+        label: "1 (standard)"
+      }, {
+        value: 2,
+        label: "2"
+      }]
+    }), /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Runs on a no-ball",
+      value: tournamentRules.noballRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        noballRuns: v
+      })),
+      options: [{
+        value: 1,
+        label: "1 (standard)"
+      }, {
+        value: 2,
+        label: "2"
+      }]
+    }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginBottom: 6
+      }
+    }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "cs-btn cs-shine",
+      onClick: () => setTournamentRules(r => ({
+        ...r,
+        freeHit: !r.freeHit
+      })),
+      style: {
+        padding: "8px 14px",
+        borderRadius: 20,
+        border: "none",
+        cursor: "pointer",
+        background: tournamentRules.freeHit ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+        color: tournamentRules.freeHit ? "#fff" : COLORS.ink,
+        boxShadow: tournamentRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, tournamentRules.freeHit ? "On" : "Off"))));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -724,7 +876,7 @@ export function TournamentsScreen({
       padding: "1.5px 6px",
       borderRadius: 8
     }
-  }, GROUP_LABELS[teamGroupIndex(t)].replace("Group ", ""))))))), error && /*#__PURE__*/React.createElement("div", {
+  }, GROUP_LABELS[teamGroupIndex(t)].replace("Group ", ""))))))), renderTournamentRulesSection(), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
