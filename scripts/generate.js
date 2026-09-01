@@ -1,6 +1,14 @@
 #!/usr/bin/env node
-// Splices the tested src/core/*.js modules into docs/index.html, replacing the content between
-// each pair of `// GENERATED-START: <name>` / `// GENERATED-END: <name>` marker comments.
+// Splices the tested src/core/*.js modules into docs/index.html.
+//
+// Two marker shapes, both replaced from src/core/ on every run:
+//  - `// GENERATED-START: <name>` / `// GENERATED-END: <name>` — a whole module (MODULES below)
+//    spliced in as one contiguous block.
+//  - `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>` — a single function, wrapped
+//    in place around its existing declaration (FUNCTIONS below). Used for logic that's pure and
+//    worth testing but lives scattered among docs/index.html's React components rather than in one
+//    contiguous span — this splices just that one function back in without relocating anything
+//    else in the file.
 //
 // docs/index.html is production (served by GitHub Pages from the docs/ folder) — there is no
 // separate build output — so this script edits it in place. The modules in src/core/ are the
@@ -24,6 +32,22 @@ const MODULES = [
   { name: "app-logic", file: "src/core/appLogic.js" }
 ];
 
+// Each of these names must be an `export function <name>` or `export const <name> =` at column 0
+// in the given file. Add a name here after wrapping its existing docs/index.html declaration in
+// `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>` and moving its body into the
+// src/core/ file (see src/core/statsAndFixtures.js for the pattern).
+const FUNCTIONS = [
+  { name: "uid", file: "src/core/statsAndFixtures.js" },
+  { name: "generateRoundRobinFixtures", file: "src/core/statsAndFixtures.js" },
+  { name: "generateGroupRoundRobinFixtures", file: "src/core/statsAndFixtures.js" },
+  { name: "computePlayerStats", file: "src/core/statsAndFixtures.js" },
+  { name: "computeClubRecords", file: "src/core/statsAndFixtures.js" },
+  { name: "suggestPlayerOfMatch", file: "src/core/statsAndFixtures.js" },
+  { name: "suggestBestFielder", file: "src/core/statsAndFixtures.js" },
+  { name: "suggestPlayerOfTournament", file: "src/core/statsAndFixtures.js" },
+  { name: "allMatchPlayers", file: "src/core/statsAndFixtures.js" }
+];
+
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's
 // left is plain global-scope script — exactly what docs/index.html's inline (non-module) <script> can
 // run. Local imports (`import { X } from "./other.js"`) are dropped entirely: by the time a
@@ -36,21 +60,65 @@ function toGlobalScript(source) {
     .replace(/^\n+/, "");
 }
 
-function spliceModule(html, name, moduleSource) {
-  const startMarker = `// GENERATED-START: ${name}`;
-  const endMarker = `// GENERATED-END: ${name}`;
+function splice(html, startMarker, endMarker, replacement, label) {
   const startIdx = html.indexOf(startMarker);
   const endIdx = html.indexOf(endMarker);
   if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
     throw new Error(
-      `Could not find generated-block markers for "${name}" in docs/index.html — expected ` +
-      `"${startMarker}" ... "${endMarker}". If the module was renamed or the markers were moved, ` +
-      `update MODULES in scripts/generate.js to match.`
+      `Could not find ${label} markers in docs/index.html — expected ` +
+      `"${startMarker}" ... "${endMarker}". If it was renamed or the markers were moved, update ` +
+      `scripts/generate.js to match.`
     );
   }
   const sliceStart = html.indexOf("\n", startIdx) + 1;
   const sliceEnd = endIdx;
-  return html.slice(0, sliceStart) + moduleSource + html.slice(sliceEnd);
+  return html.slice(0, sliceStart) + replacement + html.slice(sliceEnd);
+}
+
+function spliceModule(html, name, moduleSource) {
+  return splice(
+    html,
+    `// GENERATED-START: ${name}`,
+    `// GENERATED-END: ${name}`,
+    moduleSource,
+    `generated-block "${name}"`
+  );
+}
+
+// Finds a single `export function <name>` or `export const <name> =` declaration at column 0 in a
+// src/core/ file (declarations are assumed non-overlapping and not nested) and returns its text
+// with `export ` stripped, ready to splice back into a `GENERATED-FN` marker pair.
+const namedExportCache = new Map();
+function findNamedExport(file, name) {
+  let exports = namedExportCache.get(file);
+  if (!exports) {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    exports = new Map();
+    const re = /^export (?:function (\w+)|const (\w+) =)/gm;
+    const matches = [...source.matchAll(re)];
+    matches.forEach((m, i) => {
+      const declName = m[1] || m[2];
+      const start = m.index;
+      const end = i + 1 < matches.length ? matches[i + 1].index : source.length;
+      exports.set(declName, source.slice(start, end).replace(/^export /, "").replace(/\s+$/, "\n"));
+    });
+    namedExportCache.set(file, exports);
+  }
+  const text = exports.get(name);
+  if (text === undefined) {
+    throw new Error(`No "export function ${name}" or "export const ${name}" found in ${file}.`);
+  }
+  return text;
+}
+
+function spliceFunction(html, name, file) {
+  return splice(
+    html,
+    `// GENERATED-FN-START: ${name}`,
+    `// GENERATED-FN-END: ${name}`,
+    findNamedExport(file, name),
+    `generated-fn "${name}"`
+  );
 }
 
 function run() {
@@ -61,6 +129,10 @@ function run() {
   for (const mod of MODULES) {
     const src = fs.readFileSync(path.join(ROOT, mod.file), "utf8");
     html = spliceModule(html, mod.name, toGlobalScript(src));
+  }
+
+  for (const fn of FUNCTIONS) {
+    html = spliceFunction(html, fn.name, fn.file);
   }
 
   if (verify) {

@@ -154,22 +154,32 @@ a separate follow-up PR.
 *(Update this section at the end of every session. If it looks stale or
 contradicts the docs above, trust the docs.)*
 
-**2026-09-01: three PRs landed this session.** #2 added this prompt. #3
+**2026-09-01: four PRs landed this session.** #2 added this prompt. #3
 extracted the scoring engine/Firestore helpers/standings+DLS into tested
 `src/core/` modules with a `generate`/`generate:verify` splice-back
-pipeline (foundation pass — UI components and the rest of the app are
-still inside `index.html`). A follow-up PR moved the deploy-served files
-(`index.html`, `sw.js`, `manifest.json`, `icons/`, `CNAME`) into `docs/`
-and `firestore.rules`/`storage.rules` into `firebase/`, since classic
-GitHub Pages only serves from a repo's root or its `docs/` folder — **this
-requires a manual one-time step: go to Settings → Pages and change the
-source to "Deploy from a branch" → `main` → `/docs`, matching what's
-already in the repo.** If you're picking up a fresh session and
-`www.clubscorer.com` is 404ing, check that setting first before assuming
-something's actually broken.
+pipeline. #4 moved the deploy-served files (`index.html`, `sw.js`,
+`manifest.json`, `icons/`, `CNAME`) into `docs/` and
+`firestore.rules`/`storage.rules` into `firebase/`, since classic GitHub
+Pages only serves from a repo's root or its `docs/` folder — the required
+manual Settings → Pages → source change to `main`/`/docs` has been done
+and the live site confirmed working. A fifth PR extracted
+`src/core/statsAndFixtures.js` (round-robin fixture generation, player/club
+stats, Player-of-the-Match/Best-Fielder/Player-of-the-Tournament
+suggestion) — the first module built from **scattered, non-contiguous**
+functions rather than one contiguous span, via the new
+`GENERATED-FN-START`/`GENERATED-FN-END` per-function marker mechanism in
+`scripts/generate.js` (see `tests/README.md` for how it differs from the
+block-based `GENERATED-START`/`GENERATED-END` markers).
 
-Possible next steps (not yet started, not committed to): extracting more
-of `index.html`'s ~93 React components into `src/` now that the
-generate/splice pipeline is proven out, or picking a specific feature/bug
-to work on — check with the project owner for priorities if none are
-recorded here by the time you read this.
+**Continuing the modularization:** ~80 more pure, non-DOM helper functions
+are still scattered through `docs/index.html` uncovered by tests — text/
+share/URL builders (`buildShareText`, `matchResultText`, `buildFollowUrl`,
+etc.), ICS/CSV export (`buildTournamentICS`, `toCSV`, etc.), date/format
+helpers (`pad2`, `relativeDayLabel`, etc.), and small predicates (`uid`,
+`normalizeEmail`, `isClubOwner`, etc.) — good next candidates using the
+same `GENERATED-FN` pattern established in this pass. The ~93 React
+components are a separate, much larger and riskier undertaking (closures
+over shared app state, not standalone pure functions) — don't start on
+those without deciding on an approach first, given how much rides on
+`docs/index.html` staying correct. Check with the project owner for
+priorities if none are recorded here by the time you read this.
