@@ -304,14 +304,16 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`ExportPdfButton`, `ExportTournamentPdfButton`), `src/components/modal.js`
 (`Modal`), `src/components/matchInsightCards.js` (`RunRateChart`,
 `RunsPerOverChart`, `SyncConflictModal`, `PlayerOfMatchCard`,
-`BestFielderCard`) — all now with real `tests/unit/components/*.test.js`
-coverage using `react-test-renderer`, except `ConfirmModal` (tests its own
-prop wiring against a stubbed `Modal`, not `Modal` itself) and
-`exportButtons.js` (tests rendering/state only — both buttons call
-`window.print()`/`document.title` from inside their `onClick` handler,
-never during render, so they're safely renderable without a DOM stub, but
-clicking them isn't exercised). `modal.test.js` tests `Modal` itself for
-real, DOM behavior included — see below.
+`BestFielderCard`), `src/components/shareMenus.js` (`MoveTeamMenu`,
+`ShareMenu`) — all now with real `tests/unit/components/*.test.js`
+coverage, except `ConfirmModal` (tests its own prop wiring against a
+stubbed `Modal`, not `Modal` itself) and `exportButtons.js` (tests
+rendering/state only — both buttons call `window.print()`/`document.title`
+from inside their `onClick` handler, never during render, so they're
+safely renderable without a DOM stub, but clicking them isn't exercised).
+`modal.test.js` tests `Modal` itself for real, DOM behavior included, and
+`shareMenus.test.js` renders through real `react-dom` rather than
+`react-test-renderer` — see below.
 
 Every batch since `matchDisplayAtoms.js`/`screenAtoms.js` has picked
 components specifically chosen to be fully renderable using only
@@ -373,19 +375,64 @@ Firebase SDK global) from their `pick()` handler; rather than leave that
 untested, one test stubs `globalThis.saveMatch` locally (same pattern as
 `Modal` in `formUiAtoms.test.js`) to exercise a real "Confirm" click.
 
-~56 components remain, including the large screen-level ones
+A thirteenth PR took on `MoveTeamMenu`/`ShareMenu`
+(`src/components/shareMenus.js`) — the two portal popover menus flagged
+above. They confirmed a real limit of `react-test-renderer` worth
+knowing before reaching for it again: **`react-test-renderer` cannot
+host a portal whose target is a real DOM node.** `ReactDOM.createPortal`
+still runs (it's just a function call), but react-test-renderer's own
+reconciler manages its own fake "instance" tree and has no host-config
+path for mutating a genuine `document.body` — trying it throws
+`parentInstance.children.indexOf is not a function` deep in its commit
+phase. So these two are the one pair of component tests in this repo
+that render through **real `react-dom`** (`createRoot` from
+`react-dom/client`, into a jsdom `container` appended to `document.body`)
+instead of `react-test-renderer` — this repo's fourth and fifth npm
+`devDependencies`, `react-dom` and (already covered above) `jsdom`, both
+still pinned to the same versions as `react`/`react-test-renderer`. Notes
+for next time a portal-based component comes up:
+
+- `globalThis.ReactDOM = ReactDOM` (the real npm package) so the
+  component's own bare `ReactDOM.createPortal` reference resolves —
+  same ambient-global pattern as everywhere else, just backed by the
+  real thing instead of react-test-renderer's stand-in.
+- `globalThis.IS_REACT_ACT_ENVIRONMENT = true` silences React's "not
+  configured to support act()" warning; interact through real DOM
+  events (`el.dispatchEvent(new window.MouseEvent("click", { bubbles:
+  true }))`) wrapped in `act()`, same discipline as `modal.test.js`.
+- An `async` handler's state update *after* its own `await` lands in a
+  later microtask, outside a synchronous `act(() => {...})` — wrap
+  those specific interactions in `await act(async () => { ...;  await
+  new Promise(r => setTimeout(r, 0)); })` instead, so the update is
+  still inside `act()` when it runs.
+- A real `setTimeout` a component itself schedules (`ShareMenu`'s
+  `flashCopied`, a 1.5s "Copied!" flash) will otherwise fire *after*
+  the test — and this file's `afterEach` — has already torn
+  `globalThis.window` down, throwing `ReferenceError: window is not
+  defined` from inside React's scheduler. Wait it out for real inside
+  the test (`await act(async () => { await new Promise(r =>
+  setTimeout(r, 1600)); })`) while `window` still exists, rather than
+  leave it to fire later into a deleted DOM.
+- Node has a built-in read-only `navigator` global (getter-only, no
+  setter, since Node 21) — a plain `globalThis.navigator = ...`
+  assignment throws; use `Object.defineProperty(globalThis,
+  "navigator", { value, configurable: true, writable: true })` instead.
+- `react-test-renderer`'s refs are never real DOM nodes, but plain
+  `react-dom` refs *are* — no `createNodeMock` needed here, but
+  `getBoundingClientRect()` still needs stubbing per-test (jsdom's own
+  layout engine always reports zeros), same idea as `Modal`'s
+  `createNodeMock` trick, simpler to apply since it's just a method on
+  a real element.
+
+~54 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. A few mid-sized ones are worth flagging
-for whoever picks this up next: `MoveTeamMenu`/`ShareMenu` are portal
-menus (`ReactDOM.createPortal(..., document.body)`) that also read
-`window.innerWidth`/`innerHeight` and `navigator.clipboard` for
-positioning/copy — another jsdom case, same pattern as `Modal`.
-`UpcomingFixtureCard` pulls in `FixtureDateTimeModal`, `VenueEditModal`,
-and `AvailabilityPollModal` (none extracted yet), so it wants a batch of
-its own once those come along together, per the usual rule about not
-extracting with an untested/unstubbed dependency. Continue through the
-rest now — the project owner has asked for the full extraction to be
-completed without pausing for confirmation between batches; only stop for
-a genuine blocker that needs the owner's own decision.
+mechanical repeat of this batch. `UpcomingFixtureCard` pulls in
+`FixtureDateTimeModal`, `VenueEditModal`, and `AvailabilityPollModal`
+(none extracted yet), so it wants a batch of its own once those come
+along together, per the usual rule about not extracting with an
+untested/unstubbed dependency. Continue through the rest now — the
+project owner has asked for the full extraction to be completed without
+pausing for confirmation between batches; only stop for a genuine
+blocker that needs the owner's own decision.
