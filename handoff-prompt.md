@@ -1,36 +1,40 @@
 # Club Scorer — session entry prompt
 
 I'm continuing work on Club Scorer (github.com/robinrajawat/club-scorer).
-Production ([www.clubscorer.com](https://www.clubscorer.com)) is `index.html`
-at the repo root — a single-file, browser-based cricket scoring PWA, served
-straight from GitHub Pages (see `CNAME`). There is no `dist/` and no CI
-workflow: whatever is on `main`'s `index.html` is what's live the moment
-it's pushed, so treat every push to `main` as an immediate production
-deploy.
+Production ([www.clubscorer.com](https://www.clubscorer.com)) is
+`docs/index.html` — a single-file, browser-based cricket scoring PWA,
+served straight from GitHub Pages with the source set to the `docs/`
+folder (see `docs/CNAME`). There is no separate build output beyond that
+and no CI workflow: whatever is on `main`'s `docs/index.html` is what's
+live the moment it's pushed, so treat every push to `main` as an
+immediate production deploy. `docs/sw.js`, `docs/manifest.json`, and
+`docs/icons/` are the rest of the deployed PWA — they ship as siblings of
+`docs/index.html` and its relative paths assume that.
 
 The scoring engine, Firestore pack/validation helpers, and tournament
-standings/DLS logic are no longer hand-edited inside `index.html` — they
-live in tested `src/core/*.js` modules and get spliced into `index.html` by
-`npm run generate` (see `scripts/generate.js`), replacing the content
-between each `// GENERATED-START: <name>` / `// GENERATED-END: <name>`
-marker pair. **Edit the `src/core/` file, never the generated block in
-`index.html` directly** — a hand-edit inside a marker span is silently
-overwritten by the next `npm run generate` and will look like it "reverted"
-for no reason. After editing `src/core/`, run `npm run generate` and commit
-both the source file and the regenerated `index.html` together. Run `npm run
-generate:verify` any time you're unsure whether they're in sync — it fails
-loudly if `index.html` doesn't match what `src/core/*.js` would produce.
-This still ships as a single `index.html` with no build step for
-deployment — `generate` is a local/dev-time sync step, not something CI or
-GitHub Pages runs.
+standings/DLS logic are no longer hand-edited inside `docs/index.html` —
+they live in tested `src/core/*.js` modules and get spliced into
+`docs/index.html` by `npm run generate` (see `scripts/generate.js`),
+replacing the content between each `// GENERATED-START: <name>` /
+`// GENERATED-END: <name>` marker pair. **Edit the `src/core/` file, never
+the generated block in `docs/index.html` directly** — a hand-edit inside a
+marker span is silently overwritten by the next `npm run generate` and
+will look like it "reverted" for no reason. After editing `src/core/`, run
+`npm run generate` and commit both the source file and the regenerated
+`docs/index.html` together. Run `npm run generate:verify` any time you're
+unsure whether they're in sync — it fails loudly if `docs/index.html`
+doesn't match what `src/core/*.js` would produce. This still ships as a
+single `index.html` with no build step for deployment — `generate` is a
+local/dev-time sync step, not something CI or GitHub Pages runs.
 
 The repo also contains `ios/` — a native SwiftUI rewrite that is explicitly
 **parked** in favor of the existing PWA (see `ios/STATUS.md`'s "Why parked"
 section for the reasoning). Nothing in it has been compiled, run, or tested
 on a device. Don't touch `ios/` or treat its STATUS.md priority list as live
 work unless the project owner explicitly asks to resume it — that hasn't
-happened. All real day-to-day work is on `index.html` (and `firestore.rules`
-/ `storage.rules` when scoring logic touches Firestore access patterns).
+happened. All real day-to-day work is on `docs/index.html` (and
+`firebase/firestore.rules` / `firebase/storage.rules` when scoring logic
+touches Firestore access patterns).
 
 Before touching anything, read:
 
@@ -39,15 +43,15 @@ Before touching anything, read:
   the source of truth for intended functionality, not just a description.
 - `tests/README.md` — how the regression suite (`npm test`, using Node's
   built-in test runner) works: it imports `src/core/*.js` directly — the
-  same modules `npm run generate` splices into `index.html` — so it always
-  tests exactly what's about to ship. Run it before pushing any change that
-  touches scoring, standings, or DLS logic, and add a case for any bug in
-  that logic before considering the fix done.
-- `firestore.rules` — the trust-model comment at the top explains the three
-  data tiers. These rules are **not auto-deployed**: a change here has zero
-  effect until it's manually pasted into Firebase Console → Firestore
-  Database → Rules → Publish. Say so explicitly if you touch this file, so
-  it doesn't get mistaken for something CI or a push handles.
+  same modules `npm run generate` splices into `docs/index.html` — so it
+  always tests exactly what's about to ship. Run it before pushing any
+  change that touches scoring, standings, or DLS logic, and add a case for
+  any bug in that logic before considering the fix done.
+- `firebase/firestore.rules` — the trust-model comment at the top explains
+  the three data tiers. These rules are **not auto-deployed**: a change
+  here has zero effect until it's manually pasted into Firebase Console →
+  Firestore Database → Rules → Publish. Say so explicitly if you touch this
+  file, so it doesn't get mistaken for something CI or a push handles.
 
 **Session-start check:** before starting new work, check for anything the
 previous session left mid-flight — an open PR
@@ -91,7 +95,10 @@ token. Default to non-destructive pushes, not amend/force.
 surface it directly. A branch-delete via the API chained after a local
 `git branch -d` can fail silently on a squash-merged branch (`-d` refuses
 since it isn't fast-forward-mergeable) — verify both actually happened,
-don't assume.
+don't assume. Remote branch deletion on this repo currently 403s due to a
+pre-existing branch-protection setting — a known, already-confirmed
+environment issue, not something to force around; report it and leave the
+remote branch for manual cleanup.
 
 **PR discipline:** feature branch → commit (`git commit -F <tempfile>`,
 never `-m` with backticks) → push → open PR
@@ -108,23 +115,61 @@ a separate follow-up PR.
 - Run `npm test` and confirm it passes if the change touches scoring,
   standings, or DLS logic.
 - If you touched anything in `src/core/`, run `npm run generate` and check
-  `git diff index.html` — it should contain only the change you intended
-  (plus whatever marker-span reformatting `generate` does); commit the
-  regenerated `index.html` alongside the source change. Run `npm run
-  generate:verify` if you want a hard pass/fail instead of eyeballing the
-  diff.
-- Since `index.html` is production the instant it's pushed to `main`,
+  `git diff docs/index.html` — it should contain only the change you
+  intended (plus whatever marker-span reformatting `generate` does);
+  commit the regenerated `docs/index.html` alongside the source change.
+  Run `npm run generate:verify` if you want a hard pass/fail instead of
+  eyeballing the diff.
+- Since `docs/index.html` is production the instant it's pushed to `main`,
   actually load the change in a real browser (headless Chromium is
   pre-installed) and click through the affected flow before calling any
   user-facing change done — passing the regression suite proves the
   scoring engine didn't regress, not that a UI change looks or behaves
-  right.
+  right. Note: sandboxed sessions may not have outbound network access to
+  the React/Firebase CDN scripts `docs/index.html` loads — if so, say so
+  explicitly rather than claiming a click-through that didn't actually
+  render the app, and fall back to a syntax/parity check (e.g. `npm run
+  generate:verify` plus re-parsing the script with `new Function(...)`).
+
+## Repo structure
+
+- `docs/` — the deployed PWA: `index.html`, `sw.js`, `manifest.json`,
+  `icons/`, and `CNAME` (GitHub Pages requires the custom-domain CNAME
+  file inside whatever folder is configured as the Pages source — that's
+  `docs/` here, not the repo root).
+- `src/core/` — tested logic modules spliced into `docs/index.html` by
+  `scripts/generate.js` (see above).
+- `tests/` — `tests/unit/*.test.js` (Node's built-in test runner, covers
+  `src/core/`) and `tests/README.md`.
+- `firebase/` — `firestore.rules` and `storage.rules`, manually pasted into
+  the Firebase Console (not auto-deployed).
+- `ios/` — parked native SwiftUI rewrite; don't touch without explicit
+  instruction (see above).
+- `scripts/generate.js` — splices `src/core/*.js` into `docs/index.html`.
+- `README.md`, `LICENSE`, `handoff-prompt.md`, `package.json` — repo-level
+  docs/config, deliberately kept at the root.
 
 ## Current state
 
 *(Update this section at the end of every session. If it looks stale or
 contradicts the docs above, trust the docs.)*
 
-**2026-09-01: this prompt was created as the day-to-day session entry
-point.** No specific task has been picked yet — check with the project
-owner for priorities if none are recorded here by the time you read this.
+**2026-09-01: three PRs landed this session.** #2 added this prompt. #3
+extracted the scoring engine/Firestore helpers/standings+DLS into tested
+`src/core/` modules with a `generate`/`generate:verify` splice-back
+pipeline (foundation pass — UI components and the rest of the app are
+still inside `index.html`). A follow-up PR moved the deploy-served files
+(`index.html`, `sw.js`, `manifest.json`, `icons/`, `CNAME`) into `docs/`
+and `firestore.rules`/`storage.rules` into `firebase/`, since classic
+GitHub Pages only serves from a repo's root or its `docs/` folder — **this
+requires a manual one-time step: go to Settings → Pages and change the
+source to "Deploy from a branch" → `main` → `/docs`, matching what's
+already in the repo.** If you're picking up a fresh session and
+`www.clubscorer.com` is 404ing, check that setting first before assuming
+something's actually broken.
+
+Possible next steps (not yet started, not committed to): extracting more
+of `index.html`'s ~93 React components into `src/` now that the
+generate/splice pipeline is proven out, or picking a specific feature/bug
+to work on — check with the project owner for priorities if none are
+recorded here by the time you read this.
