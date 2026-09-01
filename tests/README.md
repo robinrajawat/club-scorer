@@ -327,6 +327,16 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   no Firestore stubbing anywhere; the only stub needed is `Modal`, for
   the tests that open `ConfirmModal`/`EditPlayerModal`/
   `TransferPlayerModal`.
+- `src/components/followScreen.js` /
+  `tests/unit/components/followScreen.test.js` — `FollowScreen`, the
+  public live match-following page. Subscribes via
+  `db.collection("liveViews").doc(code).onSnapshot(onNext, onError)` —
+  a new stubbing shape (a fake `onSnapshot` that captures the success/
+  error callbacks and returns a tracked unsubscribe function, rather
+  than resolving a one-shot promise); tests drive updates by calling
+  the captured `onNext`/`onError` directly. Celebration/milestone-toast
+  tests call `onNext` twice and check `BallCelebration`/
+  `MilestoneToast`'s own props via `findByType`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

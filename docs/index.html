@@ -29855,6 +29855,7 @@ function ScorecardOverlay({
 // sharedMatches — so even if a viewer copies this code out of the URL and pastes it there,
 // there is nothing for it to match. That collection-level separation, not a hidden button, is the
 // entire access-control model for this screen.
+// GENERATED-FN-START: FollowScreen
 function FollowScreen({
   code,
   onExit
@@ -30137,6 +30138,7 @@ function FollowScreen({
     showOvers: true
   }));
 }
+// GENERATED-FN-END: FollowScreen
 // Public, no-auth availability response page — reached via a ?poll=CODE link (see
 // createAvailabilityPoll/buildPollUrl), the exact same "knowledge of the code is the credential"
 // model as a match view link. Anyone with the link can pick their name off the roster snapshot
