@@ -412,6 +412,12 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   "+ Invite a co-owner") when more than one button contains that
   substring — use an exact `b.props.children === "Invite"` match for
   the specific per-result action button instead.
+- `src/components/teamsScreen.js` /
+  `tests/unit/components/teamsScreen.test.js` — `TeamsScreen`, the
+  "Clubs" screen (Clubs/Federations tab, player pool, federation
+  co-owner invite-code redemption). No bare globals, no mount effect;
+  renders `ClubPanel`/`FederationsPanel` as tabs (each already tested
+  on its own), so these tests focus on `TeamsScreen`'s own logic.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
