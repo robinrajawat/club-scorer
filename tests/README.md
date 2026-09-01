@@ -307,6 +307,19 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   action is a prop; the one test that opens `AvailabilityPollModal`
   (tapping a poll item) stubs `Modal`/`loadTeamPolls`/`loadPollByCode`
   the same way `availabilityPollModal.test.js` does.
+- `src/components/resultScreen.js` /
+  `tests/unit/components/resultScreen.test.js` — `ResultScreen`, the
+  match-complete screen. `saveTransition`/`saveMatch`/`loadMatch` are
+  bare globals called only from button handlers, so each test stubs
+  just what its action needs; `ConfirmModal`'s own `Modal` bare global
+  also needs stubbing for the "Fix a mistake" test. First
+  already-extracted screen to render `ShareMenu` directly — since
+  `ShareMenu` only creates its `ReactDOM.createPortal` once its popover
+  is actually open, mounting it closed is fine under
+  `react-test-renderer`; tests exercise `onGetCode`/`onGetViewCode` by
+  grabbing the `ShareMenu` element (`findByType(ShareMenu)`) and calling
+  those props directly, without ever opening the popover (that's
+  `shareMenus.test.js`'s job).
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
