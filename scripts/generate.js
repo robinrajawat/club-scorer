@@ -206,7 +206,9 @@ const FUNCTIONS = [
   { name: "RunsPerOverChart", file: "src/components/matchInsightCards.js" },
   { name: "SyncConflictModal", file: "src/components/matchInsightCards.js" },
   { name: "PlayerOfMatchCard", file: "src/components/matchInsightCards.js" },
-  { name: "BestFielderCard", file: "src/components/matchInsightCards.js" }
+  { name: "BestFielderCard", file: "src/components/matchInsightCards.js" },
+  { name: "MoveTeamMenu", file: "src/components/shareMenus.js" },
+  { name: "ShareMenu", file: "src/components/shareMenus.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

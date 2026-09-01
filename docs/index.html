@@ -15152,6 +15152,7 @@ function InboxScreen({
 // into a club (or between clubs, or back to personal) instead of re-entering the whole roster.
 // This copies the team into the destination first, then deletes it from the source, so a failed
 // destination write never loses the team.
+// GENERATED-FN-START: MoveTeamMenu
 function MoveTeamMenu({
   team,
   clubs,
@@ -15258,6 +15259,8 @@ function MoveTeamMenu({
     size: 16
   })), menu);
 }
+// GENERATED-FN-END: MoveTeamMenu
+// GENERATED-FN-START: ShareMenu
 function ShareMenu({
   match,
   onGetCode,
@@ -15626,6 +15629,7 @@ function ShareMenu({
     size: 17
   })), menu);
 }
+// GENERATED-FN-END: ShareMenu
 
 
 

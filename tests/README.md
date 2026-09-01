@@ -101,6 +101,27 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   handler — one test stubs `globalThis.saveMatch` locally to exercise a
   real "Confirm" click without touching Firebase, same pattern as
   `Modal`'s stub in `formUiAtoms.test.js`.
+- `src/components/shareMenus.js` / `tests/unit/components/shareMenus.test.js`
+  — `MoveTeamMenu`/`ShareMenu`, two portal popover menus
+  (`ReactDOM.createPortal(..., document.body)`, plus
+  `getBoundingClientRect`/`window.innerWidth`/`innerHeight` and, for
+  `ShareMenu`, `navigator.clipboard`). **The one component test file in
+  this repo that renders through real `react-dom` instead of
+  `react-test-renderer`** — `react-test-renderer` can't host a portal
+  targeting a genuine DOM node (its own reconciler only understands its
+  own fake instance tree; confirmed by trying it, which throws
+  `parentInstance.children.indexOf is not a function` deep in the commit
+  phase). Uses `createRoot` (from the `react-dom`/`react-dom/client`
+  `devDependencies`, both pinned `18.3.1`) rendering into a jsdom
+  `container`, with `globalThis.ReactDOM` set to the real package so the
+  component's own bare `ReactDOM.createPortal` reference resolves, and
+  `globalThis.IS_REACT_ACT_ENVIRONMENT = true` to silence React's `act()`
+  warning. See the file's own comments for the rest of what's specific to
+  testing a portal this way (an async handler's post-`await` state update
+  needing its own `act()`, a real `setTimeout` needing to be waited out
+  before `afterEach` tears the DOM down, and Node's own read-only
+  `navigator` global needing `Object.defineProperty` instead of a plain
+  assignment).
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
