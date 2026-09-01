@@ -153,6 +153,7 @@ export function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
+  if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
   return bits.length ? bits.join(" · ") : null;
 }
 

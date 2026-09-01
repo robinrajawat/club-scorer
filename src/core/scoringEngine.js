@@ -3,7 +3,7 @@ import { DEFAULT_RULES } from "./appLogic.js";
 // The ball-by-ball scoring engine. Self-contained aside from DEFAULT_RULES (imported above) —
 // everything else it needs (ensureBatsman, ensureBowler, oversLabel, runsDisplay) is defined below
 // in this same file. Covered by tests/unit/scoringEngine.test.js.
-export function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
+export function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimit) {
   const r = {
     ...DEFAULT_RULES,
     ...rules
@@ -97,6 +97,15 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
+    wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
+    // The innings' total legal overs, baked in here purely so applyBall (which only ever sees this
+    // inning, never the match) can tell whether the ball it's about to score is in the final over —
+    // the one thing wideNoballCountsAsBall needs and nothing else here does. null for any caller
+    // that doesn't pass one (every test fixture, e.g.) simply means "no final-over cutoff", i.e.
+    // wideNoballCountsAsBall (if on at all) applies to every over uniformly. Same "baked in at
+    // innings start" caveat as every other house rule above: a mid-chase DLS overs revision won't
+    // retroactively change this.
+    oversLimit: oversLimit != null ? oversLimit : null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
     // lets applyBall (which has no access to the match object, only this inning) use the right
     // all-out threshold instead of a hardcoded 10. Falls back to 10 only if a caller genuinely
@@ -141,6 +150,22 @@ export function ensureBowler(inning, name) {
     };
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
+}
+// Whether a wide/no-ball counts as a legal (over-completing) delivery right now. Standard Laws:
+// always false, every wide/no-ball is re-bowled. The wideNoballCountsAsBall house rule flips that
+// to true everywhere EXCEPT the innings' final over, where it reverts to the standard illegal-ball
+// behavior -- the "final-over wide/no-ball illegal again" switch. Exported (not inlined in
+// applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
+// (matchScreen.js builds event.legal itself, since a wicket's legality also depends on the
+// dismissal, not just the extra) and needs the identical answer rather than a second copy of this
+// logic drifting out of sync.
+export function isWideNoballLegal(inning) {
+  if (!inning.wideNoballCountsAsBall) return false;
+  if (inning.oversLimit == null) return true;
+  const bpo = inning.ballsPerOver || 6;
+  const currentOver = Math.floor(inning.legalBalls / bpo);
+  const isFinalOver = currentOver >= Math.floor(inning.oversLimit) - 1;
+  return !isFinalOver;
 }
 export function oversLabel(legalBalls, ballsPerOver) {
   const bpo = ballsPerOver || 6;
@@ -297,7 +322,7 @@ export function applyBall(inning, event) {
     display = runsDisplay(event.runs, event.overthrow, event.shortRun);
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
-    legalBall = false;
+    legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.wideRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
@@ -305,7 +330,7 @@ export function applyBall(inning, event) {
     display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Wd";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
-    legalBall = false;
+    legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.noballRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;

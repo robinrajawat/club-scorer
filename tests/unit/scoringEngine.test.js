@@ -13,7 +13,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { newInning, applyBall, ensureBatsman, ensureBowler } from "../../src/core/scoringEngine.js";
+import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal } from "../../src/core/scoringEngine.js";
 
 const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
@@ -180,4 +180,48 @@ test("penalty still applies despite no striker/bowler (they don't need one)", ()
   const before = corrupted.runs || 0;
   const after = applyBall(corrupted, { kind: "penalty", runs: 5 });
   assert.equal(after.runs, before + 5);
+});
+
+// wideNoballCountsAsBall (final-over wide/no-ball illegal-again switch) -- a wide/no-ball is
+// always illegal (re-bowled) per the standard Laws unless this house rule is on, in which case
+// it counts as a legal ball everywhere EXCEPT the innings' final over, where it reverts to the
+// standard illegal behavior.
+function finalOverInning(overrides, oversLimit) {
+  const inn = newInning("TeamA", "TeamB", { ...rules, ...overrides }, 10, oversLimit);
+  inn.strikerName = "P1";
+  inn.nonStrikerName = "P2";
+  ensureBatsman(inn, "P1");
+  ensureBatsman(inn, "P2");
+  inn.bowlerName = "B1";
+  ensureBowler(inn, "B1");
+  return inn;
+}
+
+test("wideNoballCountsAsBall off (default): a wide never counts as a legal ball, in any over", () => {
+  const inn = finalOverInning({ wideNoballCountsAsBall: false }, 2);
+  const after = applyBall(inn, { kind: "wide", runs: 0 });
+  assert.equal(after.legalBalls, 0, "wide doesn't advance the over");
+});
+
+test("wideNoballCountsAsBall on: a wide counts as a legal ball in a non-final over", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "wide", runs: 0 });
+  assert.equal(inn.legalBalls, 1, "wide advances the over, over 1 of 2 isn't the final over");
+});
+
+test("wideNoballCountsAsBall on: a no-ball reverts to illegal (re-bowled) in the final over", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  // Complete the first (non-final) over with 6 legal runs balls.
+  for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
+  assert.equal(inn.legalBalls, 6, "first over complete, now bowling the final over");
+  inn.bowlerName = "B2";
+  ensureBowler(inn, "B2");
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.legalBalls, 6, "no-ball in the final over doesn't advance it, must be re-bowled");
+});
+
+test("isWideNoballLegal: with no oversLimit baked in, the house rule applies uniformly (no final-over cutoff)", () => {
+  const inn = finalOverInning({ wideNoballCountsAsBall: true }, undefined);
+  assert.equal(inn.oversLimit, null);
+  assert.equal(isWideNoballLegal(inn), true);
 });
