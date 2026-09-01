@@ -438,6 +438,21 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `Players`/etc.) only render once a query is typed or the scope isn't
   `"all"` — tests that need to click a chip type into the search box
   first, same as `q`-gated UI elsewhere in this suite.
+- `src/components/setupScreen.js` / `tests/unit/components/setupScreen.test.js`
+  — `SetupScreen`, the multi-page "New Match" flow (teams & format,
+  toss, match rules, playing XI when a saved squad is picked, opening
+  line-up, review). Every write is a prop (`onStart`/`onCancel`); the
+  one DOM touch is a page-change `useEffect` calling `window.scrollTo`
+  directly, stubbed with a minimal `globalThis.window = { scrollTo: ()
+  => {} }` rather than pulling in jsdom. `SETUP_PAGE_LABELS` (a
+  standalone top-level `const`, previously part of no module or
+  component) travels alongside `SetupScreen` in this same file as its
+  own `GENERATED-FN` export, since nothing else in the app uses it.
+  With no saved teams picked, `hasSquads` is false and the "xi" page is
+  skipped, so most tests walk teams → rules → openers → review. The
+  "Step N of M" progress text renders as four separate JSX children
+  (`"Step ", n, " of ", total`), not one string — match
+  `/"Step ","1"," of ","4"/`, not a plain substring.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

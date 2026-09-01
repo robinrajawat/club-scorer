@@ -958,15 +958,44 @@ passed to `HomeUtilityButton`, which a createElement-only grep misses):
 `Shield`/`Users` from `icons.js`, and `HELP_SECTIONS` (already in
 `infoScreens.js`) for the search's help-entries filter.
 
-~5 components remain: `SetupScreen`, `TeamEditScreen`, `AccountScreen`,
-`MatchScreen`, and the root `CricketScorer` component itself. All hold
-real application state via hooks — a different, harder case than a
+A forty-third PR extracted `src/components/setupScreen.js`
+(`SetupScreen` — the multi-page "New Match" flow: teams & format, toss,
+match rules, playing XI when a saved squad is picked, opening line-up,
+then a review page before handing everything to `onStart`). A clean
+extraction on the Firestore front — every write is a prop, no bare
+globals, no mount effect that reaches outside the component — but it
+surfaced one more instance of the "check before extracting as new" rule
+from `SeriesDetailScreen`'s batch, this time for something that *wasn't*
+already extracted anywhere: `SETUP_PAGE_LABELS`, a standalone top-level
+`const` sitting just after `// GENERATED-END: app-logic` in
+`docs/index.html`, used nowhere but this screen. Since nothing else
+references it, it was extracted as its own `GENERATED-FN` export
+alongside `SetupScreen` in the same file, rather than folded into
+`appLogic.js`'s wholesale module splice (which would work at
+runtime too, since everything ends up flat global scope either way,
+but would misattribute a screen-only constant to a shared core module
+for no reason). One page-change `useEffect` calls `window.scrollTo`
+directly (to reset scroll position between pages) — its test stubs a
+minimal `globalThis.window = { scrollTo: () => {} }` rather than pull
+in jsdom for one call, same pattern as `TournamentShareModal`'s own
+minimal window stub. Also worth remembering for the next screen with a
+paginated review step: JSX renders `"Step ", currentPageIndex + 1, "
+of ", pageOrder.length` as four separate children, not one
+concatenated string — the same `JSON.stringify`-split gotcha
+`PlayingXIPicker`/`FixturesSection` hit earlier, so tests match
+`/"Step ","1"," of ","4"/`, not a plain `/Step 1 of 4/` substring.
+
+~4 components remain: `TeamEditScreen`, `AccountScreen`, `MatchScreen`,
+and the root `CricketScorer` component itself. All hold real
+application state via hooks — a different, harder case than a
 presentational leaf: expect each one to need its own dependency read
-before starting, and to watch for the same kind of nested-closure helper
-`HomeScreen` just resolved. Continue through the rest now — the project
-owner has asked for the full extraction to be completed without pausing
-for confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+before starting, and to watch for the same kind of nested-closure
+helper `HomeScreen` resolved, or a standalone bare constant like
+`SETUP_PAGE_LABELS` that needs its own `GENERATED-FN` entry rather than
+folding into an existing module. Continue through the rest now — the
+project owner has asked for the full extraction to be completed
+without pausing for confirmation between batches; only stop for a
+genuine blocker that needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub

@@ -6169,6 +6169,7 @@ function dlsTarget(S, R1, R2, G50) {
 }
 // GENERATED-END: app-logic
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
+// GENERATED-FN-START: SETUP_PAGE_LABELS
 const SETUP_PAGE_LABELS = {
   teams: "Teams & Format",
   rules: "Match Rules",
@@ -6176,6 +6177,7 @@ const SETUP_PAGE_LABELS = {
   openers: "Opening Line-up",
   review: "Review"
 };
+// GENERATED-FN-END: SETUP_PAGE_LABELS
 // GENERATED-FN-START: nonStandardRulesText
 function nonStandardRulesText(rules) {
   if (!rules) return null;
@@ -18889,6 +18891,7 @@ function PlayingXIPicker({
   }, poolNames.map(renderPill)));
 }
 // GENERATED-FN-END: PlayingXIPicker
+// GENERATED-FN-START: SetupScreen
 function SetupScreen({
   onStart,
   onCancel,
@@ -20055,6 +20058,7 @@ function SetupScreen({
     }
   }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
 }
+// GENERATED-FN-END: SetupScreen
 
 
 
