@@ -244,6 +244,18 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `useEffect`, so every test stubs it and wraps the initial render in
   `act()`; `sendPasswordReset` (also a bare global) is only ever called
   from the "resend" button's handler.
+- `src/components/playingXIPicker.js` /
+  `tests/unit/components/playingXIPicker.test.js` — `PlayingXIPicker`,
+  the squad-to-playing-XI picker (with optional captain/keeper/jersey-
+  number controls, and a search box once the squad exceeds 15). Every
+  callback is a prop, no bare globals at all.
+- `src/components/myTeamsScreen.js` / `tests/unit/components/myTeamsScreen.test.js`
+  — `MyTeamsScreen`, the merged personal-and-club teams list. Every
+  write action is a prop too; its one Firestore-adjacent piece
+  (`AvailabilityPollModal`, for "poll availability") is already its own
+  tested module, so the one test that opens it just needs the same
+  `Modal`/`loadTeamPolls` stubs `availabilityPollModal.test.js` already
+  established.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
