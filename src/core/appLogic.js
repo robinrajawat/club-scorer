@@ -1098,6 +1098,21 @@ export function rosterFor(match, teamName) {
   const roster = teamName === match.teamA ? match.teamARoster : match.teamBRoster;
   return roster || [];
 }
+// Squad members named at match creation but not selected into the Playing XI -- the pool an
+// Impact Player substitution (impactPlayerEnabled) can bring on. Empty for any team entered as
+// free-form names with no saved squad, same as rosterFor's own "nothing to offer a picker"
+// fallback -- there's no wider pool to draw from when there was never a squad in the first place.
+export function benchFor(match, teamName) {
+  const bench = teamName === match.teamA ? match.teamABench : match.teamBBench;
+  return bench || [];
+}
+// Whether this team has already used its one Impact Player substitution -- the "one per team, no
+// return" rule is enforced entirely by this flag (gates the substitution UI from rendering again)
+// plus the outgoing player being dropped from rosterFor's pool at the point of substitution, never
+// by clearing the rest of the bench (see confirmImpactSub in inningsSetupScreens.js).
+export function impactSubUsedFor(match, teamName) {
+  return Boolean(teamName === match.teamA ? match.teamAImpactUsed : match.teamBImpactUsed);
+}
 export function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
 }
@@ -1164,7 +1179,8 @@ export const DEFAULT_RULES = {
   timeCapMinutes: null,
   playersPerSide: 11,
   retirementRuns: null,
-  wideNoballCountsAsBall: false
+  wideNoballCountsAsBall: false,
+  impactPlayerEnabled: false
 };
 // The number of batsmen a given team actually has for this match — NOT always 11. Uses the
 // playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to

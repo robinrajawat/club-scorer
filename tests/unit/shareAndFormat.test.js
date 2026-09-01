@@ -7,7 +7,7 @@ import {
   pad2, parseFixtureDateTime, buildFixtureIso, formatFixtureDateTime,
   icsEscape, icsLocalDateTime, buildTournamentICS, buildFixtureICS,
   csvCell, toCSV, multiSectionCSV, safeFilenamePart,
-  nonStandardRulesText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
+  nonStandardRulesText, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
   buildShareText, buildFixtureShareText, pollExpiryDateLabel, buildMapsUrl, resolvePollTeams,
   buildPollUrl, buildPollShareText, buildFollowUrl, buildLiveShareText
 } from "../../src/core/shareAndFormat.js";
@@ -119,6 +119,28 @@ test("nonStandardRulesText: null when every rule matches the default, lists only
   assert.match(text, /Free Hit enabled/);
   assert.match(text, /6-over powerplay/);
   assert.doesNotMatch(text, /ball overs/);
+});
+
+test("nonStandardRulesText: notes wideNoballCountsAsBall and impactPlayerEnabled when on", () => {
+  const text = nonStandardRulesText({ ...DEFAULT_RULES, wideNoballCountsAsBall: true, impactPlayerEnabled: true });
+  assert.match(text, /wide\/no-ball counts as a ball \(except final over\)/);
+  assert.match(text, /Impact Player substitution/);
+});
+
+test("impactSubsText: null with no substitutions, one line per sub joined with a dot", () => {
+  assert.equal(impactSubsText(null), null);
+  assert.equal(impactSubsText([]), null);
+  assert.equal(
+    impactSubsText([{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya" }]),
+    "Hardik Pandya on for Virat Kohli (Riverside CC)"
+  );
+  assert.equal(
+    impactSubsText([
+      { team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya" },
+      { team: "Oakwood CC", outName: "Ben Stokes", inName: "Jofra Archer" }
+    ]),
+    "Hardik Pandya on for Virat Kohli (Riverside CC) · Jofra Archer on for Ben Stokes (Oakwood CC)"
+  );
 });
 
 test("tossText: describes the toss decision, or just who won it if none was recorded", () => {

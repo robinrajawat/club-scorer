@@ -14,7 +14,9 @@ import { afterEach, beforeEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { SetupScreen } from "../../../src/components/setupScreen.js";
-import { Btn } from "../../../src/components/formUiAtoms.js";
+import { Btn, TeamChips } from "../../../src/components/formUiAtoms.js";
+import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
+import { Field } from "../../../src/components/screenAtoms.js";
 
 beforeEach(() => {
   globalThis.window = { scrollTo: () => {} };
@@ -215,4 +217,45 @@ test("SetupScreen: with no presetTournament (or no defaultOvers), Overs per inni
   const inst = render();
   const oversField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
   assert.equal(oversField.props.value, "20");
+});
+
+test("SetupScreen: with saved squads, teamABench/teamBBench (squad minus Playing XI) flow through to onStart", () => {
+  let started = null;
+  const teamARecord = { id: "t1", name: "Riverside CC", players: ["A. Sharma", "B. Kumar", "C. Patel"] };
+  const teamBRecord = { id: "t2", name: "Oakwood CC", players: ["D. Singh", "E. Rao"] };
+  const inst = render({
+    onStart: m => { started = m; },
+    teams: [teamARecord, teamBRecord],
+    rules: { playersPerSide: 2 }
+  });
+
+  const [teamAChips, teamBChips] = inst.root.findAllByType(TeamChips);
+  act(() => { teamAChips.props.onSelect(teamARecord); });
+  act(() => { teamBChips.props.onSelect(teamBRecord); });
+
+  // TeamChips' own chip buttons for saved teams also show "Riverside CC" as their label, so this
+  // scopes the search to the "Won the toss" Field specifically rather than matching the wrong
+  // (team-selection) button by text.
+  const tossField = inst.root.findAllByType(Field).find(f => f.props.label === "Won the toss");
+  const tossBtn = tossField.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  assert.equal(btn(inst, "Next").props.disabled, false); // rules page is always valid
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> xi
+  act(() => { btn(inst, "Next").props.onClick(); }); // xi -> openers
+
+  const [strikerPicker, nonStrikerPicker, bowlerPicker] = inst.root.findAllByType(PlayerPicker);
+  act(() => { strikerPicker.props.onChange("A. Sharma"); });
+  act(() => { nonStrikerPicker.props.onChange("B. Kumar"); });
+  act(() => { bowlerPicker.props.onChange("D. Singh"); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+
+  assert.ok(started);
+  assert.deepEqual(started.teamARoster, ["A. Sharma", "B. Kumar"]);
+  assert.deepEqual(started.teamABench, ["C. Patel"]);
+  assert.deepEqual(started.teamBRoster, ["D. Singh", "E. Rao"]);
+  assert.deepEqual(started.teamBBench, []); // squad exactly fills the XI, nothing left on the bench
 });

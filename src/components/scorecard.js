@@ -7,7 +7,7 @@ import { OversStrip } from "./scoreboardAtoms.js";
 import { RunRateChart, RunsPerOverChart } from "./matchInsightCards.js";
 import { ExportPdfButton } from "./exportButtons.js";
 import { oversLabel, crr } from "../core/scoringEngine.js";
-import { chasingInfo, matchResultText, tossText, umpiresText, nonStandardRulesText } from "../core/shareAndFormat.js";
+import { chasingInfo, matchResultText, tossText, umpiresText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
 import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Full ball-by-ball scorecard, built from smaller, already-extracted pieces: InningScorecard (one
@@ -795,7 +795,14 @@ export function PrintReport({
       marginBottom: 4,
       fontStyle: "italic"
     }
-  }, "House rules: ", nonStandardRulesText(match.rules)), resultText && /*#__PURE__*/React.createElement("div", {
+  }, "House rules: ", nonStandardRulesText(match.rules)), impactSubsText(match.impactSubs) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4,
+      fontStyle: "italic"
+    }
+  }, "Impact Player: ", impactSubsText(match.impactSubs)), resultText && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       fontWeight: 700,

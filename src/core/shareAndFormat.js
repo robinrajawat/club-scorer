@@ -154,9 +154,17 @@ export function nonStandardRulesText(rules) {
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
   if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
+  if (rules.impactPlayerEnabled) bits.push("Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
 }
 
+// One line per Impact Player substitution actually made this match (match.impactSubs -- see
+// confirmImpactSub in inningsSetupScreens.js), for the scorecard. null when none were made, same
+// "nothing happened, don't render anything" convention as nonStandardRulesText.
+export function impactSubsText(impactSubs) {
+  if (!impactSubs || impactSubs.length === 0) return null;
+  return impactSubs.map(s => `${s.inName} on for ${s.outName} (${s.team})`).join(" · ");
+}
 export function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;

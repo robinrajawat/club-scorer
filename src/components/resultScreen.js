@@ -7,7 +7,7 @@ import { PlayerOfMatchCard, BestFielderCard } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { InningScorecard } from "./scorecard.js";
 import { uid } from "../core/statsAndFixtures.js";
-import { matchResultText, tossText, nonStandardRulesText } from "../core/shareAndFormat.js";
+import { matchResultText, tossText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
 import { genMatchCode } from "../core/miscHelpers.js";
 import { newInning } from "../core/scoringEngine.js";
 import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
@@ -30,6 +30,7 @@ export function ResultScreen({
   const resultText = matchResultText(match);
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
+  const impactSubs = impactSubsText(match.impactSubs);
   const [startingSuperOver, setStartingSuperOver] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const isTied = resultText === "Match tied";
@@ -275,7 +276,7 @@ export function ResultScreen({
       fontSize: 21,
       lineHeight: 1.3
     }
-  }, resultText), (toss || houseRules) && /*#__PURE__*/React.createElement("div", {
+  }, resultText), (toss || houseRules || impactSubs) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -283,7 +284,7 @@ export function ResultScreen({
       marginTop: 10,
       lineHeight: 1.6
     }
-  }, toss, toss && houseRules && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", null, "House rules: ", houseRules))), match.isSuperOver && match.parentMatchId && /*#__PURE__*/React.createElement("button", {
+  }, toss, toss && (houseRules || impactSubs) && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", null, "House rules: ", houseRules), houseRules && impactSubs && /*#__PURE__*/React.createElement("br", null), impactSubs && /*#__PURE__*/React.createElement("span", null, "Impact Player: ", impactSubs))), match.isSuperOver && match.parentMatchId && /*#__PURE__*/React.createElement("button", {
     onClick: handleViewParentMatch,
     className: "cs-btn",
     style: {

@@ -224,6 +224,12 @@ export function SetupScreen({
   // squad is in play, otherwise empty (falls back to free-text entry via PlayerPicker)
   const teamARoster = teamASquad.length ? teamAPlayingXI : [];
   const teamBRoster = teamBSquad.length ? teamBPlayingXI : [];
+  // Whoever's in the saved squad but didn't make the XI -- the pool an Impact Player substitution
+  // can draw from at the innings break (see SecondInningsSetup). Empty for a team with no saved
+  // squad at all, same reasoning as teamARoster/teamBRoster above: there's no wider pool to bench
+  // players FROM when the team was only ever a free-typed name with an XI and nothing else.
+  const teamABench = teamASquad.length ? teamASquad.map(p => p.name).filter(n => !teamAPlayingXI.includes(n)) : [];
+  const teamBBench = teamBSquad.length ? teamBSquad.map(p => p.name).filter(n => !teamBPlayingXI.includes(n)) : [];
   // Numbers actually used for this match: whatever's been edited in the Setup screen (defaults
   // to the saved squad's numbers, but never writes back to the saved team).
   const teamANumbers = teamAMatchNumbers;
@@ -252,7 +258,7 @@ export function SetupScreen({
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? "Impact Player" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const umpiresSummaryText = umpiresText({
     umpire1: umpire1.trim(),
     umpire2: umpire2.trim()
@@ -714,6 +720,37 @@ export function SetupScreen({
       fontSize: 13
     }
   }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Impact Player substitution"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      impactPlayerEnabled: !r.impactPlayerEnabled
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.impactPlayerEnabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.impactPlayerEnabled ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.impactPlayerEnabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.impactPlayerEnabled ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1295,6 +1332,8 @@ export function SetupScreen({
         bowlerB: bowlerB.trim(),
         teamARoster,
         teamBRoster,
+        teamABench,
+        teamBBench,
         teamACaptain,
         teamAKeeper,
         teamAColor,
