@@ -706,7 +706,17 @@ markers, grep `src/core/*.js` and `src/components/*.js` for
 be part of an existing module or component extraction, especially for
 small pure-logic helpers that read as self-contained.
 
-~18 components remain, all of them screens now (`renderMatchCard`
+A twenty-ninth PR extracted `src/components/inboxScreen.js`
+(`InboxScreen` — the combined "inbox": availability polls waiting on a
+response, plus club-federation affiliation requests sent or received).
+A genuinely clean extraction: no mount effect at all, every write
+action (respond/cancel/complete-join) is a prop, and the one Firestore-
+adjacent piece — `AvailabilityPollModal`, opened when a poll item is
+tapped — is already its own tested module, so its tests only needed the
+same `Modal`/`loadTeamPolls`/`loadPollByCode` stubs
+`availabilityPollModal.test.js` already established, not anything new.
+
+~17 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`, and `FollowScreen`
 still deferred). Most hold real application state via hooks
 (`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,
