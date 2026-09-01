@@ -618,18 +618,40 @@ Firestore-adjacent piece (`AvailabilityPollModal`, for "poll
 availability") is already its own tested module — nothing new to stub
 here beyond what that module's own test file already covers.
 
-~23 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). Most hold real
-application state via hooks (`MatchScreen`, `TournamentsScreen`,
-`SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
-case than a presentational leaf: expect each one to need its own
-dependency read before starting, and to sometimes carry a nested-closure
-helper (like `renderMatchCard`) that has to be handled as part of that
-screen's own extraction rather than pulled out separately. Continue
-through the rest now — the project owner has asked for the full
-extraction to be completed without pausing for confirmation between
-batches; only stop for a genuine blocker that needs the owner's own
-decision.
+A twenty-sixth PR extracted two public share-link screens:
+`src/components/followTournamentScreen.js` (`FollowTournamentScreen` —
+read-only standings/fixtures view opened via a `?tournament=CODE` link)
+and `src/components/pollRespondScreen.js` (`PollRespondScreen` — the
+public availability-poll response screen opened via a poll link).
+`FollowTournamentScreen` reads its snapshot directly via
+`db.collection("tournamentViews").doc(code).get()` from a mount-time
+`useEffect` — the first extraction to stub the raw Firestore SDK
+instance itself (`db`, a bare global, not extracted) rather than one of
+the app's own Firestore-wrapper functions; the stub is a small mock
+object with a `.collection().doc().get()` chain resolving to a mock
+snapshot (`.exists`/`.data()`). `PollRespondScreen` calls
+`loadPollByCode` (mount effect) and `submitPollResponse` (submit
+handler), both matching the already-established bare-global
+Firestore-wrapper stubbing pattern from `AvailabilityPollModal`.
+`FollowScreen` (the *live*, `onSnapshot`-subscribed match-following
+screen — not to be confused with `FollowTournamentScreen`) was surveyed
+and deliberately deferred again: real-time snapshot diffing with
+multiple `useRef`s for ball-celebration/milestone toasts is a
+meaningfully different, harder case than either of this batch's two
+screens and deserves its own dedicated batch.
+
+~21 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`, and `FollowScreen`
+still deferred). Most hold real application state via hooks
+(`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,
+`HomeScreen`, etc.) — a different, harder case than a presentational
+leaf: expect each one to need its own dependency read before starting,
+and to sometimes carry a nested-closure helper (like `renderMatchCard`)
+that has to be handled as part of that screen's own extraction rather
+than pulled out separately. Continue through the rest now — the project
+owner has asked for the full extraction to be completed without pausing
+for confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
