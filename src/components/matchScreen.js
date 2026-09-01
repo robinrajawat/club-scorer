@@ -13,7 +13,7 @@ import { SyncConflictModal } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "./inningsSetupScreens.js";
 import { ResultScreen } from "./resultScreen.js";
-import { applyBall, crr, ensureBatsman, ensureBowler, newInning, oversLabel } from "../core/scoringEngine.js";
+import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
   decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isOverTimeCap, keeperFor,
@@ -376,8 +376,9 @@ export function MatchScreen({
           // the 2nd innings (e.g. a configured time cap would vanish the moment the break hit).
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
-          timeCapMinutes: inn.timeCapMinutes
-        }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1);
+          timeCapMinutes: inn.timeCapMinutes,
+          wideNoballCountsAsBall: inn.wideNoballCountsAsBall
+        }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
         updated.awaitingSecondInningsSetup = true;
       } else {
         updated.status = "complete";
@@ -589,7 +590,11 @@ export function MatchScreen({
     const payload = {
       kind: "wicket",
       wicketType,
-      legal: extraKind == null,
+      // A dismissal on an ordinary delivery is always legal. On a wide/no-ball, whether it's legal
+      // follows the exact same wideNoballCountsAsBall/final-over rule as a plain wide/no-ball ball
+      // — isWideNoballLegal is the single source of truth for that, so this can't drift out of sync
+      // with the plain-ball branches in applyBall.
+      legal: extraKind == null ? true : isWideNoballLegal(inning),
       extraKind,
       runsBeforeWicket,
       // Stays with whoever actually faced the ball even if Swap Strike was used in this same

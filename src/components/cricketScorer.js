@@ -908,7 +908,7 @@ export function CricketScorer() {
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
       // SetupScreen from the actual toss decision, defaulting to teamA if no toss was recorded)
       // is what makes this track reality instead.
-      innings: [newInning(battingFirstTeam, bowlingFirstTeam, setup.rules, battingFirstXISize - 1)],
+      innings: [newInning(battingFirstTeam, bowlingFirstTeam, setup.rules, battingFirstXISize - 1, setup.oversLimit)],
       awaitingSecondInningsSetup: false
     };
     m.innings[0].strikerName = setup.strikerA;

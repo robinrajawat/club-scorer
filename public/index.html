@@ -6039,7 +6039,8 @@ const DEFAULT_RULES = {
   powerplayOvers: null,
   timeCapMinutes: null,
   playersPerSide: 11,
-  retirementRuns: null
+  retirementRuns: null,
+  wideNoballCountsAsBall: false
 };
 // The number of batsmen a given team actually has for this match — NOT always 11. Uses the
 // playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to
@@ -6197,6 +6198,7 @@ function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
+  if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
   return bits.length ? bits.join(" · ") : null;
 }
 // GENERATED-FN-END: nonStandardRulesText
@@ -6835,7 +6837,7 @@ function allMatchPlayers(match) {
 // The ball-by-ball scoring engine. Self-contained aside from DEFAULT_RULES (imported above) —
 // everything else it needs (ensureBatsman, ensureBowler, oversLabel, runsDisplay) is defined below
 // in this same file. Covered by tests/unit/scoringEngine.test.js.
-function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
+function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimit) {
   const r = {
     ...DEFAULT_RULES,
     ...rules
@@ -6929,6 +6931,15 @@ function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
+    wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
+    // The innings' total legal overs, baked in here purely so applyBall (which only ever sees this
+    // inning, never the match) can tell whether the ball it's about to score is in the final over —
+    // the one thing wideNoballCountsAsBall needs and nothing else here does. null for any caller
+    // that doesn't pass one (every test fixture, e.g.) simply means "no final-over cutoff", i.e.
+    // wideNoballCountsAsBall (if on at all) applies to every over uniformly. Same "baked in at
+    // innings start" caveat as every other house rule above: a mid-chase DLS overs revision won't
+    // retroactively change this.
+    oversLimit: oversLimit != null ? oversLimit : null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
     // lets applyBall (which has no access to the match object, only this inning) use the right
     // all-out threshold instead of a hardcoded 10. Falls back to 10 only if a caller genuinely
@@ -6973,6 +6984,22 @@ function ensureBowler(inning, name) {
     };
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
+}
+// Whether a wide/no-ball counts as a legal (over-completing) delivery right now. Standard Laws:
+// always false, every wide/no-ball is re-bowled. The wideNoballCountsAsBall house rule flips that
+// to true everywhere EXCEPT the innings' final over, where it reverts to the standard illegal-ball
+// behavior -- the "final-over wide/no-ball illegal again" switch. Exported (not inlined in
+// applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
+// (matchScreen.js builds event.legal itself, since a wicket's legality also depends on the
+// dismissal, not just the extra) and needs the identical answer rather than a second copy of this
+// logic drifting out of sync.
+function isWideNoballLegal(inning) {
+  if (!inning.wideNoballCountsAsBall) return false;
+  if (inning.oversLimit == null) return true;
+  const bpo = inning.ballsPerOver || 6;
+  const currentOver = Math.floor(inning.legalBalls / bpo);
+  const isFinalOver = currentOver >= Math.floor(inning.oversLimit) - 1;
+  return !isFinalOver;
 }
 function oversLabel(legalBalls, ballsPerOver) {
   const bpo = ballsPerOver || 6;
@@ -7129,7 +7156,7 @@ function applyBall(inning, event) {
     display = runsDisplay(event.runs, event.overthrow, event.shortRun);
     if (event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
-    legalBall = false;
+    legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.wideRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
@@ -7137,7 +7164,7 @@ function applyBall(inning, event) {
     display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Wd";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "noball") {
-    legalBall = false;
+    legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.noballRuns || 1) + (event.runs || 0);
     cur.runs += runsThisBall;
     bowler.runs += runsThisBall;
@@ -19127,7 +19154,7 @@ function SetupScreen({
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const umpiresSummaryText = umpiresText({
     umpire1: umpire1.trim(),
     umpire2: umpire2.trim()
@@ -19558,6 +19585,37 @@ function SetupScreen({
       fontSize: 13
     }
   }, matchRules.freeHit ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Wide/no-ball counts as a ball (except final over)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      wideNoballCountsAsBall: !r.wideNoballCountsAsBall
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.wideNoballCountsAsBall ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.wideNoballCountsAsBall ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.wideNoballCountsAsBall ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -31346,8 +31404,9 @@ function MatchScreen({
           // the 2nd innings (e.g. a configured time cap would vanish the moment the break hit).
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
-          timeCapMinutes: inn.timeCapMinutes
-        }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1);
+          timeCapMinutes: inn.timeCapMinutes,
+          wideNoballCountsAsBall: inn.wideNoballCountsAsBall
+        }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
         updated.awaitingSecondInningsSetup = true;
       } else {
         updated.status = "complete";
@@ -31559,7 +31618,11 @@ function MatchScreen({
     const payload = {
       kind: "wicket",
       wicketType,
-      legal: extraKind == null,
+      // A dismissal on an ordinary delivery is always legal. On a wide/no-ball, whether it's legal
+      // follows the exact same wideNoballCountsAsBall/final-over rule as a plain wide/no-ball ball
+      // — isWideNoballLegal is the single source of truth for that, so this can't drift out of sync
+      // with the plain-ball branches in applyBall.
+      legal: extraKind == null ? true : isWideNoballLegal(inning),
       extraKind,
       runsBeforeWicket,
       // Stays with whoever actually faced the ball even if Swap Strike was used in this same
@@ -34338,7 +34401,7 @@ function ResultScreen({
       toss: null,
       playerOfMatch: null,
       bestFielder: null,
-      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules, 2), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules, 2)],
+      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules, 2, 1), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules, 2, 1)],
       awaitingSecondInningsSetup: false,
       awaitingFirstInningsSetup: true,
       isSuperOver: true,
@@ -35351,7 +35414,7 @@ function CricketScorer() {
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
       // SetupScreen from the actual toss decision, defaulting to teamA if no toss was recorded)
       // is what makes this track reality instead.
-      innings: [newInning(battingFirstTeam, bowlingFirstTeam, setup.rules, battingFirstXISize - 1)],
+      innings: [newInning(battingFirstTeam, bowlingFirstTeam, setup.rules, battingFirstXISize - 1, setup.oversLimit)],
       awaitingSecondInningsSetup: false
     };
     m.innings[0].strikerName = setup.strikerA;

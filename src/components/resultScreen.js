@@ -106,7 +106,7 @@ export function ResultScreen({
       toss: null,
       playerOfMatch: null,
       bestFielder: null,
-      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules, 2), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules, 2)],
+      innings: [newInning(i2.battingTeam, i2.bowlingTeam, superOverRules, 2, 1), newInning(i2.bowlingTeam, i2.battingTeam, superOverRules, 2, 1)],
       awaitingSecondInningsSetup: false,
       awaitingFirstInningsSetup: true,
       isSuperOver: true,
