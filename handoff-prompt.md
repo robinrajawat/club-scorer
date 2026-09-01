@@ -288,19 +288,32 @@ now it does, just that one line). This changes the pattern for
   component stays reachable as a global at its original textual
   position regardless of which file its own declaration now lives in.
 
-Both batches' components: `src/components/illustrations.js` (`AppMark`,
+Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `LoadingBallIllustration`, `LoadingNote`, `EmptyStateBallIllustration`),
 `src/components/scoringUiAtoms.js` (`RoleBadge`, `BallCelebration`,
 `MILESTONE_ICONS`, `MilestoneToast`, `OdometerScore`, `InningsTimer`,
 `SwipeableRow`), `src/components/formUiAtoms.js` (`PlayerAvatar`,
 `TextField`, `RuleChoice`, `TeamChips`, `PinnableChip`,
 `HomeUtilityButton`, `Btn`, `ConfirmModal`), `src/components/theme.js`
-(`COLORS`), `src/components/icons.js` (`Icon` + 38 icons) — all now with
-real `tests/unit/components/*.test.js` coverage using
-`react-test-renderer`, except `ConfirmModal` (tests its own prop wiring
-against a stubbed `Modal`, not `Modal` itself).
+(`COLORS`), `src/components/icons.js` (`Icon` + 38 icons),
+`src/components/matchDisplayAtoms.js` (`BallBadge`, `VisibilitySwitch`,
+`MatchInfoFold`), `src/components/screenAtoms.js` (`Field`,
+`InstallHintBanner`, `ClubSourceSelector`) — all now with real
+`tests/unit/components/*.test.js` coverage using `react-test-renderer`,
+except `ConfirmModal` (tests its own prop wiring against a stubbed
+`Modal`, not `Modal` itself).
 
-~75 components remain, including the large screen-level ones
+The `matchDisplayAtoms.js`/`screenAtoms.js` batch picked components
+specifically chosen to be fully renderable using only already-extracted
+pieces (`MatchInfoFold` imports real logic from `shareAndFormat.js`;
+`ClubSourceSelector` imports `withPinnedFirst` from `appLogic.js` and
+`PinnableChip` from `formUiAtoms.js`) — components that pull in siblings
+still living in `docs/index.html` (e.g. `ScorecardOverlay` needs
+`MatchStatsPanel` and `ExportPdfButton`, neither extracted yet) were set
+aside for a batch where those siblings come along too, rather than
+extracted with an untested/unstubbed dependency.
+
+~68 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
