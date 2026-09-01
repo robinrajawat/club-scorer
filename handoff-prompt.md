@@ -307,8 +307,9 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `BestFielderCard`), `src/components/shareMenus.js` (`MoveTeamMenu`,
 `ShareMenu`), `src/components/scoreboardAtoms.js` (`OversStrip`,
 `FixturePollSummary`, `SyncStatusBanner`), `src/components/scorecard.js`
-(`InningScorecard`, `MatchStatsPanel`, `ScorecardOverlay`) — all now with
-real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+(`InningScorecard`, `MatchStatsPanel`, `ScorecardOverlay`, `PrintReport`,
+`TournamentPrintReport`) — all now with real
+`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -453,7 +454,15 @@ batch** — a component set aside earlier for "needs siblings not
 extracted yet" can quietly become extractable once those siblings land
 for an unrelated reason, exactly what happened here.
 
-~48 components remain, including the large screen-level ones
+A sixteenth PR added `PrintReport`/`TournamentPrintReport` to the same
+`scorecard.js` file — the "print-only" CSS-class summary sheets that
+only render into the browser's print output. `PrintReport` reuses
+`InningScorecard`, which is why it belongs there rather than its own
+file. Both turned out fully self-contained once `matchResultText`/
+`tossText`/`umpiresText`/`nonStandardRulesText` (all in
+`shareAndFormat.js` already) were the only pieces still missing.
+
+~46 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a

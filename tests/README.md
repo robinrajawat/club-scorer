@@ -137,7 +137,9 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   — the full ball-by-ball scorecard: `InningScorecard` (one innings'
   batting/bowling tables), `MatchStatsPanel` (tabs between innings plus
   the live-summary card, overs strip, and charts), `ScorecardOverlay`
-  (the full-screen sheet wrapping it all with an export/close header).
+  (the full-screen sheet wrapping it all with an export/close header),
+  plus `PrintReport`/`TournamentPrintReport` (the "print-only" CSS-class
+  summary sheets rendered only into the browser's print output).
   All pure presentational, no DOM APIs — built entirely from
   already-extracted `src/components/`/`src/core/` pieces.
 

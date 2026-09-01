@@ -28368,6 +28368,7 @@ function InningScorecard({
   })));
 }
 // GENERATED-FN-END: InningScorecard
+// GENERATED-FN-START: PrintReport
 function PrintReport({
   match
 }) {
@@ -28461,6 +28462,8 @@ function PrintReport({
     bowlingNumbers: numbersFor(match, inn.bowlingTeam)
   })) : null));
 }
+// GENERATED-FN-END: PrintReport
+// GENERATED-FN-START: TournamentPrintReport
 function TournamentPrintReport({
   tournament,
   standings
@@ -28580,6 +28583,7 @@ function TournamentPrintReport({
     minute: "2-digit"
   }), " \u2014 ", f.teamA, " vs ", f.teamB))));
 }
+// GENERATED-FN-END: TournamentPrintReport
 // Small "N not synced yet" pill — shown on Home (so it's visible even after you've walked away
 // from a match) and in the live scoring header (so it's visible exactly when it matters most).
 // Silent no-op render when there's nothing pending, so it never adds visual noise on the common

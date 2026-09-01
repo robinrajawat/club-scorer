@@ -7,13 +7,16 @@ import { OversStrip } from "./scoreboardAtoms.js";
 import { RunRateChart, RunsPerOverChart } from "./matchInsightCards.js";
 import { ExportPdfButton } from "./exportButtons.js";
 import { oversLabel, crr } from "../core/scoringEngine.js";
-import { chasingInfo } from "../core/shareAndFormat.js";
+import { chasingInfo, matchResultText, tossText, umpiresText, nonStandardRulesText } from "../core/shareAndFormat.js";
 import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Full ball-by-ball scorecard, built from smaller, already-extracted pieces: InningScorecard (one
 // innings' batting/bowling tables), MatchStatsPanel (tabs between innings plus the two charts and
 // the overs strip), and ScorecardOverlay (the full-screen sheet that wraps MatchStatsPanel with a
-// header/export/close bar). Covered by tests/unit/components/scorecard.test.js.
+// header/export/close bar). Also PrintReport/TournamentPrintReport, the "print-only" CSS-class
+// summary sheets that only render into the browser's print output (see the app's print stylesheet)
+// -- PrintReport reuses InningScorecard, which is why these live in the same file. Covered by
+// tests/unit/components/scorecard.test.js.
 
 export function InningScorecard({
   inning,
@@ -736,4 +739,218 @@ export function ScorecardOverlay({
     setTab: setTab,
     showOvers: false
   }));
+}
+
+export function PrintReport({
+  match
+}) {
+  if (!match) return null;
+  // Was its own duplicated copy of this exact logic (matchResultText's inline predecessor) --
+  // easy to end up silently out of sync with the live result screen the moment either one changes
+  // and the other doesn't (e.g. a future "no result"/abandoned designation). Call the one shared
+  // function everyone else already uses instead of maintaining a second copy of it here.
+  const resultText = matchResultText(match);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "print-only",
+    style: {
+      padding: 24,
+      fontFamily: "'Inter', sans-serif",
+      color: "#000",
+      background: COLORS.surface
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      marginBottom: 2
+    }
+  }, match.teamA, " vs ", match.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, match.oversLimit, "-over match · exported ", new Date().toLocaleDateString()), match.venue && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, "\uD83D\uDCCD ", match.venue), tossText(match.toss) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, tossText(match.toss)), umpiresText(match) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4
+    }
+  }, umpiresText(match)), nonStandardRulesText(match.rules) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 4,
+      fontStyle: "italic"
+    }
+  }, "House rules: ", nonStandardRulesText(match.rules)), resultText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 14
+    }
+  }, resultText), match.playerOfMatch && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      marginBottom: match.bestFielder ? 4 : 14
+    }
+  }, "Player of the Match: ", /*#__PURE__*/React.createElement("strong", null, match.playerOfMatch)), match.bestFielder && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      marginBottom: 14
+    }
+  }, "Best Fielder: ", /*#__PURE__*/React.createElement("strong", null, match.bestFielder)), !resultText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 14,
+      fontStyle: "italic"
+    }
+  }, "Match in progress"), match.innings.map((inn, idx) => inn.battingOrder && inn.battingOrder.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    style: {
+      marginBottom: 20,
+      pageBreakInside: "avoid"
+    }
+  }, /*#__PURE__*/React.createElement(InningScorecard, {
+    inning: inn,
+    battingCaptain: captainFor(match, inn.battingTeam),
+    battingKeeper: keeperFor(match, inn.battingTeam),
+    bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingKeeper: keeperFor(match, inn.bowlingTeam),
+    battingNumbers: numbersFor(match, inn.battingTeam),
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
+  })) : null));
+}
+
+export function TournamentPrintReport({
+  tournament,
+  standings
+}) {
+  if (!tournament) return null;
+  const scheduledFixtures = (tournament.fixtures || []).filter(f => f.date);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "print-only",
+    style: {
+      padding: 24,
+      fontFamily: "'Inter', sans-serif",
+      color: "#000",
+      background: COLORS.surface
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      marginBottom: 2
+    }
+  }, tournament.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#555",
+      marginBottom: 16
+    }
+  }, tournament.teams.length, " teams \u00b7 exported ", new Date().toLocaleDateString()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 6
+    }
+  }, "Standings"), /*#__PURE__*/React.createElement("table", {
+    style: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 12,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
+    key: h,
+    style: {
+      textAlign: h === "Team" ? "left" : "center",
+      borderBottom: "1.5px solid #000",
+      padding: "4px 6px"
+    }
+  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.team
+  }, /*#__PURE__*/React.createElement("td", {
+    style: {
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontWeight: 700
+    }
+  }, r.team), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.played), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.won), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.lost), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.tied), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc"
+    }
+  }, r.noResult), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontWeight: 700
+    }
+  }, r.points), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center",
+      padding: "4px 6px",
+      borderBottom: "1px solid #ccc",
+      fontFamily: "'IBM Plex Mono', monospace"
+    }
+  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3)))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      fontWeight: 700,
+      marginBottom: 6
+    }
+  }, "Fixtures"), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      lineHeight: 1.9
+    }
+  }, scheduledFixtures.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id
+  }, new Date(`${f.date}:00`).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }), " \u2014 ", f.teamA, " vs ", f.teamB))));
 }
