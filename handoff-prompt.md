@@ -771,7 +771,21 @@ this call the captured `onNext` twice in a row and check
 directly via `findByType`, confirming the first snapshot never
 celebrates (nothing to diff against yet) and the second one does.
 
-~14 components remain, all of them screens now (`renderMatchCard`
+A thirty-third PR extracted `src/components/authBar.js` (`AuthBar` —
+the account button in the app header: "Sign in" or an avatar, opening a
+popover menu for account/shared-links/sign-out, theme toggle, help/
+feedback/about, and a "buy me a coffee" link). Like `ShareMenu`/
+`MoveTeamMenu`, its menu calls `ReactDOM.createPortal(..., document.body)`
+(a bare global) only once open, so it needed the real react-dom+jsdom
+rendering `shareMenus.test.js` already established rather than
+`react-test-renderer`. Every write action is a prop; the only bare
+global besides `ReactDOM` itself is `Modal` (for the sign-out
+`ConfirmModal`). One easy test mistake caught and fixed here: the menu
+header shows the *first name only* (`label`, split off `displayName`),
+not the person's full name — a test asserting on `"Robin Singh"`
+correctly failed until narrowed to `"Robin"`.
+
+~13 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder

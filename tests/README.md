@@ -337,6 +337,13 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   the captured `onNext`/`onError` directly. Celebration/milestone-toast
   tests call `onNext` twice and check `BallCelebration`/
   `MilestoneToast`'s own props via `findByType`.
+- `src/components/authBar.js` / `tests/unit/components/authBar.test.js`
+  — `AuthBar`, the account button + popover menu in the app header.
+  Like `ShareMenu`/`MoveTeamMenu`, its menu only calls
+  `ReactDOM.createPortal(..., document.body)` once open, so this test
+  file uses the same real react-dom+jsdom rendering `shareMenus.test.js`
+  established, not `react-test-renderer`. Also stubs `Modal` (a
+  separate bare global) for the sign-out `ConfirmModal`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
