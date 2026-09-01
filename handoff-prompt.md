@@ -674,7 +674,39 @@ either match the file's existing no-per-function-comment convention, or
 put the new export first/last with nothing following it in the file if
 a leading comment is really wanted.
 
-~19 components remain, all of them screens now (`renderMatchCard`
+A twenty-eighth PR extracted `src/components/seriesDetailScreen.js`
+(`SeriesDetailScreen` — the "series" detail screen: teamA vs teamB over
+N fixtures, e.g. a 3-match ODI series; running score, each fixture via
+`FixtureRow`, Player of the Series, delete). `loadTournamentMatches`
+(mount-effect, bare global) needed the usual stubbing; since it also
+renders one `FixtureRow` per fixture, its tests additionally stub
+`FixtureRow`'s own `Modal`/`loadFixturePollSummary` dependencies —
+exactly `fixtureRow.test.js`'s own setup, reused here.
+
+This batch also caught a real mistake before it went anywhere near a
+commit: `computeSeriesScore` (which `SeriesDetailScreen` calls) and its
+own helper `matchWinner` looked like fresh, never-extracted pure logic,
+so the first pass added them as new `GENERATED-FN` entries in
+`src/core/statsAndFixtures.js`. They aren't new — both already live
+inside `src/core/appLogic.js`, part of its **module**-level splice (the
+whole `docs/index.html` span from `// GENERATED-START: app-logic` to
+`// GENERATED-END: app-logic`, lines ~4871–6174, gets replaced wholesale
+from `appLogic.js` on every `generate` run). Adding `GENERATED-FN`
+markers *inside* a span a module splice already owns doesn't work — the
+module replacement wipes them out before the function-level splice ever
+runs, and generate.js failed loudly with a clear "could not find
+markers" error on the very first `npm run generate` of the batch, before
+any test was written. Fixed by dropping the duplicate `GENERATED-FN`
+entries and re-pointing `SeriesDetailScreen`'s import of
+`computeSeriesScore` at `src/core/appLogic.js`, where it already lived.
+**Rule for every future batch:** before wrapping a "new" top-level
+function's `docs/index.html` declaration in `GENERATED-FN-START`/`END`
+markers, grep `src/core/*.js` and `src/components/*.js` for
+`export function <name>`/`export const <name>` first — it may already
+be part of an existing module or component extraction, especially for
+small pure-logic helpers that read as self-contained.
+
+~18 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`, and `FollowScreen`
 still deferred). Most hold real application state via hooks
 (`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,
