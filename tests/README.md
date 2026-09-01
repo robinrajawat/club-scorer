@@ -39,12 +39,28 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   grab-bag of small, pure helpers: admin-email checks, match/invite
   codes, address/weather formatting, CSV parsing for bulk player import,
   club/federation ownership checks, date labels, tournament status,
-  player avatars, and over-label parsing.
+  player avatars, over-label parsing, feedback/auth-error copy, and
+  `window.location` query-param readers (same try/catch fallback pattern
+  as `buildPollUrl`/`buildFollowUrl` above).
+- `src/core/liveMatchRegistry.js` / `tests/unit/liveMatchRegistry.test.js`
+  — the in-memory registry a background sync uses to update a live-open
+  match's `writeSeq` outside React's normal render path. Pure closures
+  over a plain object, no DOM.
+- `src/core/localStorageOutbox.js` /
+  `tests/unit/localStorageOutbox.test.js` — the localStorage-backed match
+  index, offline write outbox, and per-match undo history. Every
+  localStorage access goes through a `try`/`catch`, which is what makes
+  it testable in Node: the bare `localStorage` global throws a
+  `ReferenceError` there, caught the same way a real
+  `QuotaExceededError` would be — so the test file installs a small
+  in-memory `localStorage` polyfill (and, for one case, a throwing one)
+  on `globalThis` to exercise the real success and quota-exceeded paths.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
 (`// GENERATED-START: <name>` / `// GENERATED-END: <name>`).
-`statsAndFixtures.js`, `shareAndFormat.js`, and `miscHelpers.js` (plus
+`statsAndFixtures.js`, `shareAndFormat.js`, `miscHelpers.js`,
+`liveMatchRegistry.js`, and `localStorageOutbox.js` (plus
 `unpackMatchFromFirestore` in `packUtils.js`) are different: their
 functions are scattered as individual, non-contiguous declarations among
 `docs/index.html`'s React components, so each one is wrapped in place with

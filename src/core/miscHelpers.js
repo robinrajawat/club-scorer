@@ -320,3 +320,124 @@ export function ballLabelsForOver(overIndex, balls) {
     return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
   });
 }
+
+// Feedback/auth-error copy, and window.location query-param readers (each guarded by its own
+// try/catch, so -- like buildPollUrl/buildFollowUrl in shareAndFormat.js -- they fall back cleanly
+// anywhere window isn't available, including Node).
+
+export function buildClaudeFixPrompt(item) {
+  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/cricket-scorer):`, "", `"${item.message}"`, ""];
+  if (item.url) lines.push(`Page: ${item.url}`);
+  if (item.userAgent) lines.push(`Browser: ${item.userAgent}`);
+  if (item.createdAt) lines.push(`Reported: ${new Date(item.createdAt).toLocaleString()}`);
+  if (item.resolutionNote && item.resolutionNote.trim()) lines.push("", `My own note on this so far: "${item.resolutionNote.trim()}"`);
+  lines.push("", "Please investigate index.html and fix the underlying issue.");
+  return lines.join("\n");
+}
+
+export function accountExistsLinkInfo(err) {
+  if (err.code !== "auth/account-exists-with-different-credential") return null;
+  return {
+    email: err.email,
+    credential: err.credential
+  };
+}
+
+export function friendlyEmailAuthError(err) {
+  switch (err.code) {
+    case "auth/email-already-in-use":
+      return "That email already has an account \u2014 try signing in instead. If you originally signed up with Google, use \u201cContinue with Google\u201d rather than a password.";
+    case "auth/weak-password":
+      return "Password must be at least 6 characters.";
+    case "auth/invalid-email":
+      return "That doesn't look like a valid email address.";
+    case "auth/missing-password":
+      return "Enter a password.";
+    // Current Firebase Auth SDKs return this single generic code for both "no such user" and
+    // "wrong password" (a deliberate change on Google's part, to avoid leaking which emails have
+    // accounts) — older SDKs may still surface them separately, so both are handled the same way.
+    // This is also exactly what you get if the email only ever signed in via Google — Firebase
+    // treats that as a completely separate credential with no password set at all, so any password
+    // "fails" the same way a wrong one would. Can't distinguish the two cases reliably (Firebase's
+    // email-enumeration protection makes fetchSignInMethodsForEmail unreliable for this on newer
+    // projects), so the message covers both rather than confidently guessing wrong.
+    case "auth/invalid-credential":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+      return "Email or password didn't match \u2014 double-check them, use \u201cForgot password?\u201d, or if you originally signed up with Google, use \u201cContinue with Google\u201d instead.";
+    case "auth/too-many-requests":
+      return "Too many attempts \u2014 wait a bit and try again.";
+    case "auth/network-request-failed":
+      return "Couldn't reach the server \u2014 check your connection and try again.";
+    case "auth/operation-not-allowed":
+      return "Email/password sign-in isn't turned on for this app yet.";
+    // Codes below are specific to the email action-code flow (password reset / verify email /
+    // recover email links) rather than the sign-in/sign-up flows above, but share this same
+    // switch since the messaging style should match.
+    case "auth/expired-action-code":
+      return "This link has expired \u2014 request a new one and try again.";
+    case "auth/invalid-action-code":
+      return "This link has already been used or is no longer valid \u2014 request a new one.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    default:
+      return err.message || "Something went wrong.";
+  }
+}
+
+export function getFollowCodeFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("follow");
+    if (!raw) return null;
+    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function getTournamentFollowCodeFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("tournament");
+    if (!raw) return null;
+    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function getPollCodeFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("poll");
+    if (!raw) return null;
+    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function getShortcutActionFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("action");
+    return raw === "new-match" ? raw : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function getAuthActionFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get("mode");
+    const oobCode = params.get("oobCode");
+    if (!oobCode || !["resetPassword", "verifyEmail", "recoverEmail"].includes(mode)) return null;
+    return {
+      mode,
+      oobCode
+    };
+  } catch (e) {
+    return null;
+  }
+}

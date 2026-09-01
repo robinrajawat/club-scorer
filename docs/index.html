@@ -877,6 +877,7 @@ async function deleteFeedback(feedbackId) {
 // retyping the same "here's what a user reported" framing by hand every time from the Feedback
 // Inbox. Deliberately just the report's own fields (message/kind/url/agent/timestamp), no attempt
 // to pre-diagnose or point at a file/function -- that's the point of the fix session itself.
+// GENERATED-FN-START: buildClaudeFixPrompt
 function buildClaudeFixPrompt(item) {
   const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/cricket-scorer):`, "", `"${item.message}"`, ""];
   if (item.url) lines.push(`Page: ${item.url}`);
@@ -886,6 +887,7 @@ function buildClaudeFixPrompt(item) {
   lines.push("", "Please investigate index.html and fix the underlying issue.");
   return lines.join("\n");
 }
+// GENERATED-FN-END: buildClaudeFixPrompt
 // Best-effort automatic crash report — called from ErrorBoundary (React render crashes) and the
 // window-level error/unhandledrejection handlers below (everything else: event handlers, async
 // code, code outside any component tree). Session-scoped dedupe + a hard cap guard against a
@@ -942,6 +944,7 @@ window.addEventListener("unhandledrejection", e => {
 // same email). e.email/e.credential are exactly what's needed to complete the link once they
 // prove ownership via their existing method — shared by both the popup and redirect paths below,
 // and by the mount-time getRedirectResult() handler for the same error arriving after a reload.
+// GENERATED-FN-START: accountExistsLinkInfo
 function accountExistsLinkInfo(err) {
   if (err.code !== "auth/account-exists-with-different-credential") return null;
   return {
@@ -949,6 +952,7 @@ function accountExistsLinkInfo(err) {
     credential: err.credential
   };
 }
+// GENERATED-FN-END: accountExistsLinkInfo
 async function signInGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
   function friendlyError(err) {
@@ -1034,6 +1038,7 @@ async function signOutUser() {
 }
 // Turns a Firebase Auth error code into copy someone who isn't a developer can act on. Shared by
 // sign-up, sign-in, and password reset since the same handful of codes show up across all three.
+// GENERATED-FN-START: friendlyEmailAuthError
 function friendlyEmailAuthError(err) {
   switch (err.code) {
     case "auth/email-already-in-use":
@@ -1075,6 +1080,7 @@ function friendlyEmailAuthError(err) {
       return err.message || "Something went wrong.";
   }
 }
+// GENERATED-FN-END: friendlyEmailAuthError
 async function signUpEmail(email, password) {
   try {
     await auth.createUserWithEmailAndPassword(email.trim(), password);
@@ -1495,6 +1501,7 @@ function safeFilenamePart(name) {
   return String(name || "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "export";
 }
 // GENERATED-FN-END: safeFilenamePart
+// GENERATED-FN-START: getFollowCodeFromUrl
 function getFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("follow");
@@ -1505,6 +1512,8 @@ function getFollowCodeFromUrl() {
     return null;
   }
 }
+// GENERATED-FN-END: getFollowCodeFromUrl
+// GENERATED-FN-START: getTournamentFollowCodeFromUrl
 function getTournamentFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("tournament");
@@ -1515,6 +1524,8 @@ function getTournamentFollowCodeFromUrl() {
     return null;
   }
 }
+// GENERATED-FN-END: getTournamentFollowCodeFromUrl
+// GENERATED-FN-START: getPollCodeFromUrl
 function getPollCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("poll");
@@ -1525,11 +1536,13 @@ function getPollCodeFromUrl() {
     return null;
   }
 }
+// GENERATED-FN-END: getPollCodeFromUrl
 // Backs the installed PWA's home-screen shortcut menu (manifest.json's "shortcuts") — e.g.
 // long-pressing the app icon offers "New match" as a quick action. Deliberately tiny/allow-listed
 // (unlike the follow/tournament/poll codes above, this never reaches Firestore or any other
 // user-controlled destination) since, unlike those, this value could end up in a shortcut
 // bookmarked or shared outside the app's own control.
+// GENERATED-FN-START: getShortcutActionFromUrl
 function getShortcutActionFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("action");
@@ -1538,12 +1551,14 @@ function getShortcutActionFromUrl() {
     return null;
   }
 }
+// GENERATED-FN-END: getShortcutActionFromUrl
 // Firebase Auth appends `mode` and `oobCode` (plus apiKey/lang, which the SDK reads on its own)
 // to whatever "Custom action URL" is set in the Console's email templates -- see
 // AuthActionScreen for what handles each mode. Only recognizes the 3 modes that action actually
 // gets used for here (password reset, email verify, email-change recovery); anything else (e.g.
 // a stray mode= from some other source) is deliberately ignored rather than hijacking normal
 // navigation on a false match.
+// GENERATED-FN-START: getAuthActionFromUrl
 function getAuthActionFromUrl() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -1558,6 +1573,7 @@ function getAuthActionFromUrl() {
     return null;
   }
 }
+// GENERATED-FN-END: getAuthActionFromUrl
 // Writes/refreshes the read-only snapshot at /tournamentViews/{code} — see firestore.rules for why
 // this is a point-in-time snapshot rather than a live mirror. Reuses the tournament's own code
 // once one exists (persisted onto the tournament doc via the caller's onUpdateTournament) rather
@@ -1620,7 +1636,9 @@ async function stopSharingTournament(code) {
 //  3. Otherwise: localStorage, exactly as before — device-local, no login needed.
 // A lightweight pointer for every match (wherever it lives) is always mirrored into the local
 // index so the Home screen can render the list instantly without a network round trip.
+// GENERATED-FN-START: LS_PREFIX
 const LS_PREFIX = "cricket-scorer:";
+// GENERATED-FN-END: LS_PREFIX
 // Every localStorage.setItem in this file goes through here instead of calling it directly. A
 // full device (years of ball-by-ball history is not a small amount of JSON, and localStorage caps
 // out around 5-10MB depending on the browser) throws QuotaExceededError on write, and until this
@@ -1631,6 +1649,7 @@ const LS_PREFIX = "cricket-scorer:";
 // save" (savePrimaryMatch) can, while callers where a quiet console.error was always the right
 // level of concern (index bookkeeping, undo history) can keep ignoring the result exactly as
 // before.
+// GENERATED-FN-START: lsSetItem
 function lsSetItem(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -1647,6 +1666,8 @@ function lsSetItem(key, value) {
     };
   }
 }
+// GENERATED-FN-END: lsSetItem
+// GENERATED-FN-START: lsGetIndex
 function lsGetIndex() {
   try {
     return JSON.parse(localStorage.getItem(`${LS_PREFIX}matches-index`) || "[]");
@@ -1654,10 +1675,14 @@ function lsGetIndex() {
     return [];
   }
 }
+// GENERATED-FN-END: lsGetIndex
+// GENERATED-FN-START: lsSetIndex
 function lsSetIndex(idx) {
   const result = lsSetItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
   if (!result.ok) console.error("index save failed", result.error);
 }
+// GENERATED-FN-END: lsSetIndex
+// GENERATED-FN-START: upsertLocalPointer
 function upsertLocalPointer(match, extra) {
   let idx = lsGetIndex().filter(m => m.id !== match.id);
   idx.unshift({
@@ -1682,6 +1707,7 @@ function upsertLocalPointer(match, extra) {
   });
   lsSetIndex(idx);
 }
+// GENERATED-FN-END: upsertLocalPointer
 // GENERATED-START: pack-utils
 // Firestore write-shaping and validation helpers. Self-contained — no dependencies outside this
 // file — and covered by tests/unit/packUtils.test.js.
@@ -1781,7 +1807,10 @@ function unpackMatchFromFirestore(match) {
 // yet" — no event log, no replay. Piggybacks on the same LS_PREFIX localStorage convention used
 // everywhere else in this file rather than introducing IndexedDB for what's a small, single JSON
 // blob per in-progress match.
+// GENERATED-FN-START: PENDING_PREFIX
 const PENDING_PREFIX = `${LS_PREFIX}pending:`;
+// GENERATED-FN-END: PENDING_PREFIX
+// GENERATED-FN-START: lsPendingIds
 function lsPendingIds() {
   try {
     return JSON.parse(localStorage.getItem(`${LS_PREFIX}pending-ids`) || "[]");
@@ -1789,10 +1818,14 @@ function lsPendingIds() {
     return [];
   }
 }
+// GENERATED-FN-END: lsPendingIds
+// GENERATED-FN-START: lsSetPendingIds
 function lsSetPendingIds(ids) {
   const result = lsSetItem(`${LS_PREFIX}pending-ids`, JSON.stringify(ids));
   if (!result.ok) console.error("save pending-ids failed", result.error);
 }
+// GENERATED-FN-END: lsSetPendingIds
+// GENERATED-FN-START: queuePendingWrite
 function queuePendingWrite(match) {
   try {
     const result = lsSetItem(PENDING_PREFIX + match.id, JSON.stringify(match));
@@ -1806,6 +1839,8 @@ function queuePendingWrite(match) {
     console.error("queue pending write failed", e);
   }
 }
+// GENERATED-FN-END: queuePendingWrite
+// GENERATED-FN-START: clearPendingWrite
 function clearPendingWrite(id) {
   try {
     localStorage.removeItem(PENDING_PREFIX + id);
@@ -1814,9 +1849,12 @@ function clearPendingWrite(id) {
     console.error("clear pending write failed", e);
   }
 }
+// GENERATED-FN-END: clearPendingWrite
+// GENERATED-FN-START: pendingWriteCount
 function pendingWriteCount() {
   return lsPendingIds().length;
 }
+// GENERATED-FN-END: pendingWriteCount
 // A match deleted BEFORE this fix shipped can leave an orphaned outbox entry behind — deleteMatch
 // now clears its own pending write, but that's only for deletes going forward; an entry queued and
 // then orphaned earlier (e.g. the match kept failing the empty-key pre-flight check, someone
@@ -1825,6 +1863,7 @@ function pendingWriteCount() {
 // since a reload doesn't touch localStorage at all. Run once at startup: anything queued for a
 // match that no longer has a local index entry (i.e. was deleted) is safe to drop — there's
 // nothing left to reconcile it against.
+// GENERATED-FN-START: pruneOrphanedPendingWrites
 function pruneOrphanedPendingWrites() {
   try {
     const ids = lsPendingIds();
@@ -1848,6 +1887,7 @@ function pruneOrphanedPendingWrites() {
     console.error("prune orphaned pending writes failed", e);
   }
 }
+// GENERATED-FN-END: pruneOrphanedPendingWrites
 let flushInFlight = false;
 // Retries every queued match once. Safe to call as often as you like (on 'online', on a timer, or
 // opportunistically right after any other successful save) — it's a no-op re-entrancy guard plus
@@ -1944,17 +1984,24 @@ async function transactionalMatchWrite(ref, match) {
 // outdated expected sequence number and gets treated as a conflict with "another device" — even
 // though it's the same single device, just this device's own background sync racing its live UI.
 // See MatchScreen's registerLiveMatch effect and notifyLiveMatchSynced below.
+// GENERATED-FN-START: liveMatchSetters
 const liveMatchSetters = {};
+// GENERATED-FN-END: liveMatchSetters
 // Tracks which matches have already had their /tournamentMatches pointer written this session, so
 // a match being saved on every single ball (the normal case) doesn't also re-write an unchanging
 // pointer doc every single ball. Cleared for a given id on write failure so the next save retries.
 const tournamentPointerWritten = new Set();
+// GENERATED-FN-START: registerLiveMatch
 function registerLiveMatch(id, setMatch) {
   liveMatchSetters[id] = setMatch;
 }
+// GENERATED-FN-END: registerLiveMatch
+// GENERATED-FN-START: unregisterLiveMatch
 function unregisterLiveMatch(id) {
   delete liveMatchSetters[id];
 }
+// GENERATED-FN-END: unregisterLiveMatch
+// GENERATED-FN-START: notifyLiveMatchSynced
 function notifyLiveMatchSynced(id, writeSeq) {
   if (writeSeq == null) return;
   const setMatch = liveMatchSetters[id];
@@ -1963,6 +2010,7 @@ function notifyLiveMatchSynced(id, writeSeq) {
     writeSeq
   } : cur);
 }
+// GENERATED-FN-END: notifyLiveMatchSynced
 async function savePrimaryMatch(match) {
   // Pre-flight check against the SAME transform Firestore will actually receive (packMatchForFirestore),
   // not the raw in-memory match — so this catches exactly what would otherwise reach the server and
@@ -2309,9 +2357,12 @@ async function deleteMatch(id) {
 // few balls" tool, not something that needs to follow the match across devices, and capping the
 // depth (see MAX_UNDO_HISTORY below) keeps it bounded regardless of how long the innings runs.
 const MAX_UNDO_HISTORY = 30;
+// GENERATED-FN-START: undoHistoryKey
 function undoHistoryKey(matchId) {
   return `${LS_PREFIX}undoHistory:${matchId}`;
 }
+// GENERATED-FN-END: undoHistoryKey
+// GENERATED-FN-START: loadUndoHistory
 function loadUndoHistory(matchId) {
   try {
     return JSON.parse(localStorage.getItem(undoHistoryKey(matchId)) || "[]");
@@ -2319,10 +2370,14 @@ function loadUndoHistory(matchId) {
     return [];
   }
 }
+// GENERATED-FN-END: loadUndoHistory
+// GENERATED-FN-START: saveUndoHistory
 function saveUndoHistory(matchId, history) {
   const result = lsSetItem(undoHistoryKey(matchId), JSON.stringify(history));
   if (!result.ok) console.error("save undo history failed", result.error);
 }
+// GENERATED-FN-END: saveUndoHistory
+// GENERATED-FN-START: clearUndoHistory
 function clearUndoHistory(matchId) {
   try {
     localStorage.removeItem(undoHistoryKey(matchId));
@@ -2330,6 +2385,7 @@ function clearUndoHistory(matchId) {
     /* noop */
   }
 }
+// GENERATED-FN-END: clearUndoHistory
 
 // ---------- Players (shared cross-club directory, keyed by email) ----------
 // A roster entry is still just {name, number} by default — nothing here is required. Giving a
@@ -7516,6 +7572,10 @@ function ballLabelsForOver(overIndex, balls) {
     return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
   });
 }
+
+// Feedback/auth-error copy, and window.location query-param readers (each guarded by its own
+// try/catch, so -- like buildPollUrl/buildFollowUrl in shareAndFormat.js -- they fall back cleanly
+// anywhere window isn't available, including Node).
 // GENERATED-FN-END: ballLabelsForOver
 
 // Ticking wall-clock timer since the innings began (inning.startedAt) — a simple elapsed-time
