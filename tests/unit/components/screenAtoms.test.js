@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
-import { Field, InstallHintBanner, ClubSourceSelector } from "../../../src/components/screenAtoms.js";
+import { Field, InstallHintBanner, ClubSourceSelector, NavWrap } from "../../../src/components/screenAtoms.js";
 
 test("Field: renders the label above its children", () => {
   const tree = renderer.create(React.createElement(Field, { label: "Team name" }, "content")).toJSON();
@@ -38,4 +38,13 @@ test("ClubSourceSelector: pinned clubs sort first (via withPinnedFirst)", () => 
   }));
   const text = JSON.stringify(inst.toJSON());
   assert.ok(text.indexOf("Hawks CC") < text.indexOf("Eagles CC"), "pinned Hawks CC should render before Eagles CC");
+});
+
+test("NavWrap: renders its children, keyed by navKey, using the 'back' animation only when direction is 'back'", () => {
+  const forward = renderer.create(React.createElement(NavWrap, { navKey: "a", direction: "forward" }, "content")).toJSON();
+  assert.equal(forward.children[0], "content");
+  assert.match(forward.props.style.animation, /cs-navInRight/);
+
+  const back = renderer.create(React.createElement(NavWrap, { navKey: "b", direction: "back" }, "content")).toJSON();
+  assert.match(back.props.style.animation, /cs-navInLeft/);
 });

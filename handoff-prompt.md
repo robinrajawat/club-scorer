@@ -640,7 +640,41 @@ multiple `useRef`s for ball-celebration/milestone toasts is a
 meaningfully different, harder case than either of this batch's two
 screens and deserves its own dedicated batch.
 
-~21 components remain, all of them screens now (`renderMatchCard`
+A twenty-seventh PR extracted three more, closing out the last of the
+small/presentational leftovers before the remaining large screens:
+`Cap` (an icon — folded into the existing `src/components/icons.js`)
+and `NavWrap` (the screen-transition wrapper — folded into the existing
+`src/components/screenAtoms.js`), plus the first real signed-out screen,
+`src/components/welcomeScreen.js` (`WelcomeScreen` — Google/email
+sign-in, sign-up, and password reset). `WelcomeScreen` calls
+`signUpEmail`/`signInEmail`/`sendPasswordReset` (bare-global Firebase
+Auth wrappers, not extracted) only from its email-submit handler, never
+during render or a mount effect, so no `act()`-wrapped-mount stubbing
+was needed — just a plain per-test stub, same shape as
+`authActionScreen.test.js`'s `sendPasswordReset` case.
+
+This batch also surfaced a real bug in the splice tooling worth noting
+for every future batch that adds a new export to an **existing**
+multi-export `src/components/*.js` file (as opposed to a brand-new
+file with one export): `scripts/generate.js`'s `findNamedExport` slices
+each declaration from its own `export function/const` line up to the
+*next* `export` match in the file (or EOF) — so any comment placed
+**above** a newly-added export, when that export isn't first in the
+file, gets glued onto the end of the *previous* export's spliced text
+instead, silently duplicating (and misplacing) the comment in
+`docs/index.html` at the previous export's location. First caught here
+via the mandatory pre-test byte-diff check against the pre-batch
+snapshot, before any test was written — exactly what that check exists
+to catch. Fixed by dropping the per-export leading comment entirely for
+`Cap`/`NavWrap` (matching `icons.js`'s and `screenAtoms.js`'s own
+existing convention of no per-function comments, file-level header
+only). Rule going forward: never put an explanatory comment directly
+above a newly-added export in a file that already has other exports —
+either match the file's existing no-per-function-comment convention, or
+put the new export first/last with nothing following it in the file if
+a leading comment is really wanted.
+
+~19 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`, and `FollowScreen`
 still deferred). Most hold real application state via hooks
 (`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,

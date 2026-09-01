@@ -145,3 +145,20 @@ export function ClubSourceSelector({
     onTogglePin: () => onTogglePinClub(c.id)
   }))));
 }
+
+export function NavWrap({
+  navKey,
+  direction,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    key: navKey,
+    style: {
+      // fill-mode is 'backwards' only (not 'both'/'forwards'): once this animation ends, transform
+      // must fully clear back to none. A lingering transform (even translateX(0), which is a no-op
+      // visually) creates a new containing block and silently breaks position:fixed on every
+      // descendant — which is what was hiding the match screen's fixed bottom scoring panel.
+      animation: `${direction === "back" ? "cs-navInLeft" : "cs-navInRight"} 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards`
+    }
+  }, children);
+}
