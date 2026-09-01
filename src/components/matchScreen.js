@@ -135,6 +135,25 @@ export function MatchScreen({
   // Same fix as checkInningEnd's allOut: was hardcoded to `< 10`, which is what actually let a
   // 9-a-side match keep prompting for an 11th/10th batsman that doesn't exist in the roster.
   const needsNewBatsman = inning && !inning.strikerName && inning.wickets < maxWicketsFor(match, inning) && !inning.complete;
+  // Tracks the striker name a mandatory retirement-cap prompt was last dismissed for, so "Not now"
+  // can actually close the modal instead of it reopening on the very next render (needsCapRetirement
+  // below is otherwise a pure derived value, recomputed every render). Reset in commit() -- every
+  // committed change (another ball, a wicket, an undo) re-nags if the striker is still over the cap
+  // and still hasn't actually retired, matching the rule's "must retire immediately" intent while
+  // still leaving a one-tap way to reach Undo if the total needs correcting instead.
+  const [dismissedCapRetireFor, setDismissedCapRetireFor] = useState(null);
+  // Derived, not stored state (same pattern as needsNewBatsman above) -- purely a function of live
+  // totals vs. the retirementRuns rule, so it can't drift out of sync with the actual score the way
+  // a separately-tracked boolean could. Checks BOTH ends, not just the striker: an odd-run delivery
+  // rotates strike, so the batsman who just crossed the cap may no longer be the one currently on
+  // strike by the time this renders -- missing that would mean someone who reached the cap while at
+  // the non-striker's end could go the rest of the innings without ever being prompted. Prefers the
+  // striker when (rare) both happen to qualify at once, since that's the one retireBatsman can act
+  // on directly with no swap needed.
+  const strikerRunsForCap = inning && inning.strikerName && inning.batsmen[inning.strikerName] ? inning.batsmen[inning.strikerName].runs : 0;
+  const nonStrikerRunsForCap = inning && inning.nonStrikerName && inning.batsmen[inning.nonStrikerName] ? inning.batsmen[inning.nonStrikerName].runs : 0;
+  const capRetireName = inning && inning.retirementRuns && !inning.complete ? inning.strikerName && strikerRunsForCap >= inning.retirementRuns && dismissedCapRetireFor !== inning.strikerName ? inning.strikerName : inning.nonStrikerName && nonStrikerRunsForCap >= inning.retirementRuns && dismissedCapRetireFor !== inning.nonStrikerName ? inning.nonStrikerName : null : null;
+  const needsCapRetirement = !!capRetireName;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   // Same revised-values fallback as checkInningEnd -- see there for the full reasoning. Both need
   // to agree on what "the target" and "the overs limit" actually are right now, or the live
@@ -250,6 +269,7 @@ export function MatchScreen({
     checkInningEnd(updated, force);
     setMatch(updated);
     queueSave(updated);
+    setDismissedCapRetireFor(null);
     // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
     // above for why this doesn't just set milestoneToast directly (a single ball can produce more
     // than one, and only showing the last one silently dropped the rest from the toast). Includes
@@ -618,6 +638,50 @@ export function MatchScreen({
     setJustRetiredName(null);
     setNewBatsmanName("");
   }
+  // A player who never actually reaches the crease -- given out for failing to be ready within the
+  // rule's time limit, before facing a ball. Structurally closer to retireBatsman's "out" branch
+  // than to applyBall's wicket handling: no ball is bowled for this, so it's built directly rather
+  // than going through applyBall, same reasoning as retireBatsman. Deliberately does NOT set
+  // strikerName -- they were never actually in, so needsNewBatsman stays true and the same prompt
+  // reopens asking who's coming in next, exactly as if this player had simply never been offered.
+  // If a wicket is still pending (this player was named as the new batsman right after a dismissal,
+  // and THEY were the one not ready), that pending wicket is resolved first with no one taking
+  // strike (applyBall tolerates newBatsman: "" -- see its wicket branch), merged into the same
+  // single commit rather than two, so undo/history stays one step per real event.
+  function timedOutBatsman(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    pushHistory();
+    const base = pendingWicket ? applyBall(inning, {
+      ...pendingWicket,
+      newBatsman: ""
+    }) : inning;
+    if (pendingWicket) setPendingWicket(null);
+    const updated = {
+      ...base,
+      batsmen: {
+        ...base.batsmen,
+        [trimmed]: {
+          runs: 0,
+          balls: 0,
+          out: true,
+          how: "Timed out",
+          fours: 0,
+          sixes: 0
+        }
+      },
+      battingOrder: base.battingOrder.includes(trimmed) ? base.battingOrder : [...base.battingOrder, trimmed],
+      wickets: base.wickets + 1,
+      fallOfWickets: [...base.fallOfWickets, {
+        score: base.runs,
+        wicket: base.wickets + 1,
+        over: oversLabel(base.legalBalls, base.ballsPerOver),
+        batsman: trimmed
+      }]
+    };
+    commit(updated);
+    setNewBatsmanName("");
+  }
   // null | "stuck" (no batsman available to fill the slot) | "voluntary" (chosen to close the
   // innings out early with play still otherwise able to continue — weather, time, a forfeit, a
   // hopeless mismatch). Both funnel into the same endInningEarly below; this only decides which
@@ -886,7 +950,8 @@ export function MatchScreen({
       how: "retired out"
     } : {
       ...inning.batsmen[name],
-      retiredHurt: true
+      retiredHurt: true,
+      retiredAtCap: kind === "cap" ? inning.retirementRuns : false
     };
     const updated = {
       ...inning,
@@ -1842,7 +1907,24 @@ export function MatchScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm"), (pendingWicket || history.length > 0) && /*#__PURE__*/React.createElement("button", {
+  }, "Confirm"), newBatsmanName.trim() && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => timedOutBatsman(newBatsmanName),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer",
+      padding: "8px 4px 0"
+    }
+  }, `Declare ${newBatsmanName.trim()} Timed Out — not ready in time`), (pendingWicket || history.length > 0) && /*#__PURE__*/React.createElement("button", {
     type: "button",
     // Nothing's actually been committed yet if there's a pendingWicket (the wicket only lands via
     // confirmNewBatsman/endInningEarly, below) — so backing out here is a plain in-memory
@@ -1906,7 +1988,77 @@ export function MatchScreen({
     confirmLabel: "Abandon \u2014 No Result",
     onConfirm: declareNoResult,
     onCancel: () => setConfirmNoResult(false)
-  }), showRetireModal && inning.strikerName && /*#__PURE__*/React.createElement(Modal, {
+  }), needsCapRetirement && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setDismissedCapRetireFor(capRetireName)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 8
+    }
+  }, capRetireName, " must retire"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 16
+    }
+  }, `Reached ${inning.retirementRuns} runs — this tournament's rules require retiring at that point (not out, not a dismissal). They can return later once the rest of the batting order has had a turn.`), capRetireName !== inning.strikerName ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 12
+    }
+  }, capRetireName, " is currently at the non-striker's end — swap strike first so the retirement can be recorded against them."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: swapStrike,
+    className: "cs-btn cs-shine",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "9px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      width: "100%",
+      justifyContent: "center",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 14
+  }), "Swap Strike")) : /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => retireBatsman("cap"),
+    style: {
+      width: "100%",
+      marginBottom: 10
+    }
+  }, "Confirm retirement (not out)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setDismissedCapRetireFor(capRetireName),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      cursor: "pointer"
+    }
+  }, "Not now")), showRetireModal && inning.strikerName && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowRetireModal(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {

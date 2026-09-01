@@ -512,6 +512,22 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
     inside an open modal (the Extra amount picker, the custom-runs
     overthrow buttons) collides with them by text. A `modalBtn` helper
     scopes the search to inside the stubbed `Modal` itself.
+  - The retirement-cap prompt (`needsCapRetirement`/`capRetireName`,
+    tournament Phase 1) renders as a plain `Modal`, not `ConfirmModal`
+    — it needs a conditional third state (the batsman over the cap is
+    at the non-striker's end, so it shows Swap Strike instead of a
+    direct confirm) `ConfirmModal`'s fixed confirm/cancel API can't
+    express. `capRetireModal(ctx)` scopes to it the same way `modalBtn`
+    does. One test's title text (`` `${capRetireName} must retire` ``)
+    hit the classic split-JSX-text gotcha the hard way: `needsCapRetirement`
+    was confirmed `true` and the stubbed modal confirmed present in the
+    tree (both checked directly, not assumed) before it became clear the
+    actual problem was a `/B must retire/` regex expecting one
+    contiguous string against two separate JSX children — needed
+    `/"B"," must retire"/` instead, same as "Step 1 of 4" elsewhere in
+    this suite. Worth checking for this gotcha specifically before
+    assuming a component itself is broken when text-content assertions
+    fail despite everything else about the render looking correct.
 
 - `src/components/cricketScorer.js` / `tests/unit/components/cricketScorer.test.js`
   — `CricketScorer`, the root app-shell: screen routing/history, the

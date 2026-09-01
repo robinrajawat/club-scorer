@@ -152,6 +152,7 @@ export function nonStandardRulesText(rules) {
   if (rules.superOver) bits.push("Super Over on a tie");
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
+  if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
   return bits.length ? bits.join(" · ") : null;
 }
 

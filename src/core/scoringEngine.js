@@ -96,6 +96,7 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
     maxOversPerBowler: r.maxOversPerBowler || null,
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
+    retirementRuns: r.retirementRuns || null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
     // lets applyBall (which has no access to the match object, only this inning) use the right
     // all-out threshold instead of a hardcoded 10. Falls back to 10 only if a caller genuinely
@@ -124,7 +125,8 @@ export function ensureBatsman(inning, name) {
     // Next batsman picker's excludeList for what makes a retired player selectable again at all.
     inning.batsmen[name] = {
       ...inning.batsmen[name],
-      retiredHurt: false
+      retiredHurt: false,
+      retiredAtCap: false
     };
   }
 }

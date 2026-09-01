@@ -368,3 +368,146 @@ test("MatchScreen: renders SuperOverOpenersSetup/SecondInningsSetup/ResultScreen
   const doneCtx = renderMatch(baseMatch({ status: "complete", innings: [i1, i2] }));
   assert.ok(doneCtx.inst.root.findByType(ResultScreen));
 });
+
+// The retirement-cap prompt renders as a plain (bare-global-stubbed) Modal, not ConfirmModal --
+// it needs a conditional third state (striker over the cap / non-striker over the cap, needing a
+// swap first) that ConfirmModal's fixed confirm/cancel API can't express. Scoped the same way
+// modalBtn does, since more than one stubbed modal can exist in the tree across a test.
+function capRetireModal(ctx) {
+  return ctx.inst.root.findAllByProps({ "data-stub-modal": true }).pop();
+}
+
+test("MatchScreen: reaching the retirement run cap (while on strike) opens a mandatory retire prompt, confirming retires them not out", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", {
+    retirementRuns: 25,
+    batsmen: { A: { runs: 23, balls: 10, out: false, how: "", fours: 0, sixes: 0 } }
+  });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  // An even number of runs, deliberately -- an odd run rotates strike, which is exactly the
+  // separate scenario the next test below covers.
+  const twoBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 2);
+  await act(async () => {
+    twoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const modalText = JSON.stringify(ctx.inst.toJSON());
+  assert.match(modalText, /A/);
+  assert.match(modalText, /must retire/);
+  assert.match(modalText, /25 runs/);
+  const confirmBtn = capRetireModal(ctx).findAllByType(Btn).find(b => b.props.children === "Confirm retirement (not out)");
+  await act(async () => {
+    confirmBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.batsmen.A.out, false);
+  assert.equal(ctx.inning.batsmen.A.retiredHurt, true);
+  assert.equal(ctx.inning.batsmen.A.retiredAtCap, 25);
+  assert.equal(ctx.inning.strikerName, "");
+});
+
+test("MatchScreen: when the NON-striker is over the retirement cap, the prompt offers Swap Strike instead of a direct confirm", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  // B is at the non-striker's end already over the cap -- purely derived from initial state, no
+  // ball needs to be scored to trigger this.
+  const i1 = buildInning("Riverside CC", "Oakwood CC", {
+    retirementRuns: 25,
+    batsmen: {
+      A: { runs: 0, balls: 0, out: false, how: "", fours: 0, sixes: 0 },
+      B: { runs: 26, balls: 20, out: false, how: "", fours: 0, sixes: 0 }
+    }
+  });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const modalText = JSON.stringify(ctx.inst.toJSON());
+  // capRetireName and " must retire" render as separate JSX children, not one concatenated
+  // string -- same split-text gotcha as "Step 1 of 4" elsewhere in this suite.
+  assert.match(modalText, /"B"," must retire"/);
+  assert.doesNotMatch(modalText, /Confirm retirement/);
+  const swapBtn = capRetireModal(ctx).findAllByType("button").find(b => hasText(b.props.children, "Swap Strike"));
+  act(() => { swapBtn.props.onClick(); });
+  assert.equal(ctx.inning.strikerName, "B");
+
+  // B is now actually on strike -- the same prompt (still open, B still over the cap) should have
+  // switched to the direct confirm button.
+  const confirmBtn = capRetireModal(ctx).findAllByType(Btn).find(b => b.props.children === "Confirm retirement (not out)");
+  await act(async () => {
+    confirmBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.batsmen.B.out, false);
+  assert.equal(ctx.inning.batsmen.B.retiredHurt, true);
+});
+
+test("MatchScreen: dismissing the retirement cap prompt with 'Not now' lets scoring continue, and it reopens on the next ball if still over the cap", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", {
+    retirementRuns: 25,
+    batsmen: { A: { runs: 25, balls: 10, out: false, how: "", fours: 0, sixes: 0 } }
+  });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const notNowBtn = capRetireModal(ctx).findAllByType("button").find(b => b.props.children === "Not now");
+  act(() => { notNowBtn.props.onClick(); });
+  assert.equal(ctx.inst.root.findAllByProps({ "data-stub-modal": true }).length, 0);
+
+  // Still over the cap, not yet retired -- the next committed ball (a leg bye here, so A's own
+  // total doesn't even need to change) re-nags, since commit() resets the dismissal. Checking
+  // BOTH ends (see needsCapRetirement/capRetireName) is what makes this robust even if the leg
+  // bye's own run count happens to rotate strike -- A stays over the cap whichever end they're at.
+  act(() => { btn(ctx, "Extra").props.onClick(); });
+  act(() => { modalBtn(ctx, "Leg Bye").props.onClick(); });
+  await act(async () => {
+    modalBtn(ctx, 1).props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(ctx.inst.root.findAllByProps({ "data-stub-modal": true }).length > 0);
+});
+
+test("MatchScreen: Timed Out on the Next batsman prompt records a wicket for the named player without them taking strike", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { strikerName: "", nonStrikerName: "B" });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Next batsman/);
+
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  await act(async () => {
+    timedOutBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.batsmen.C.out, true);
+  assert.equal(ctx.inning.batsmen.C.how, "Timed out");
+  assert.equal(ctx.inning.batsmen.C.balls, 0);
+  assert.equal(ctx.inning.wickets, 1);
+  // C never actually took strike -- the prompt should still be open, asking for someone else.
+  assert.equal(ctx.inning.strikerName, "");
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Next batsman/);
+});
+
+test("MatchScreen: Timed Out also resolves a pending wicket (the outgoing batsman still gets recorded) in the same commit", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  // maxWickets raised above the default 2 -- A's dismissal plus C's timed-out wicket is 2 down,
+  // which would otherwise genuinely complete the innings and switch ctx.inning to a fresh innings
+  // 2 by the time this test checks it, unrelated to what's actually being tested here.
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { maxWickets: 5 });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  act(() => { btn(ctx, "Wicket").props.onClick(); });
+  const bowledBtn = ctx.inst.root.findAllByType("button").find(b => b.props.children === "Bowled");
+  act(() => { bowledBtn.props.onClick(); });
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Next batsman/);
+
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  await act(async () => {
+    timedOutBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  // The original wicket (A, bowled) is resolved, and C is separately timed out -- two wickets down.
+  assert.equal(ctx.inning.batsmen.A.out, true);
+  assert.equal(ctx.inning.batsmen.A.how, "b X");
+  assert.equal(ctx.inning.batsmen.C.out, true);
+  assert.equal(ctx.inning.batsmen.C.how, "Timed out");
+  assert.equal(ctx.inning.wickets, 2);
+  assert.equal(ctx.inning.strikerName, "");
+});

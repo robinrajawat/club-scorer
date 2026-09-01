@@ -1162,7 +1162,8 @@ export const DEFAULT_RULES = {
   maxOversPerBowler: null,
   powerplayOvers: null,
   timeCapMinutes: null,
-  playersPerSide: 11
+  playersPerSide: 11,
+  retirementRuns: null
 };
 // The number of batsmen a given team actually has for this match — NOT always 11. Uses the
 // playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to
