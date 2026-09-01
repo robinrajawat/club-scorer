@@ -2,8 +2,10 @@
 // player avatar, a plain text input, a single-choice pill row, a team-selector chip row, a
 // pinnable filter chip, an icon+label utility button, a generic button, and a generic confirm
 // dialog. Covered by tests/unit/components/formUiAtoms.test.js using react-test-renderer.
-// ConfirmModal's own test stubs Modal (not yet extracted -- it reads window.visualViewport with
-// no guard, a bigger lift than a plain presentational leaf) rather than skipping the component.
+// ConfirmModal's own test stubs Modal (extracted separately to src/components/modal.js, since it
+// reads window.visualViewport/document directly and needs a real jsdom-backed DOM to test
+// meaningfully -- see tests/unit/components/modal.test.js) so this file's tests keep running under
+// plain Node with no DOM, exercising only ConfirmModal's own prop wiring.
 
 import React from "react";
 import { COLORS } from "./theme.js";

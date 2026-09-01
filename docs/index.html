@@ -27482,6 +27482,7 @@ function PlayersScreen({
 // the sheet on open, restored to whatever triggered it on close, so a screen-reader or
 // keyboard/switch-control user isn't left stranded on a background element they can no longer
 // reach while the sheet is open.
+// GENERATED-FN-START: Modal
 function Modal({
   children,
   onClose
@@ -27606,6 +27607,7 @@ function Modal({
     }
   }), children));
 }
+// GENERATED-FN-END: Modal
 // App-specific stand-in for window.confirm(): a bottom-sheet modal with a clear Cancel/Confirm
 // pair, styled to match the rest of the app instead of the OS chrome. Used for every destructive
 // or hard-to-undo action (removing a member, deleting a club, leaving a federation, etc.) so the

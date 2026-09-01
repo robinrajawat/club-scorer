@@ -200,7 +200,8 @@ const FUNCTIONS = [
   { name: "PlayerPicker", file: "src/components/pickerAtoms.js" },
   { name: "JoinCodeBar", file: "src/components/pickerAtoms.js" },
   { name: "ExportPdfButton", file: "src/components/exportButtons.js" },
-  { name: "ExportTournamentPdfButton", file: "src/components/exportButtons.js" }
+  { name: "ExportTournamentPdfButton", file: "src/components/exportButtons.js" },
+  { name: "Modal", file: "src/components/modal.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

@@ -65,16 +65,33 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `./icons.js`, and any already-extracted `src/core/`/sibling
   `src/components/` module a component needs) — stripped the same way at
   splice time, but needed here so a test can actually render the
-  component rather than just parse it. A component that still depends on
-  something *not yet extracted* (e.g. `ConfirmModal` needs `Modal`, which
-  reads `window.visualViewport` with no guard and hasn't been pulled out
-  yet) gets a local stub in its own test file rather than a real import —
-  see `formUiAtoms.test.js` for the pattern. **A component using
-  `useEffect` to start a timer/subscription must be `.unmount()`-ed after
-  each render in its test** — react-test-renderer only runs cleanup
-  functions on unmount, and a live `setInterval` left running keeps the
-  test process alive indefinitely instead of exiting (see
-  `InningsTimer`'s tests in `scoringUiAtoms.test.js`).
+  component rather than just parse it. A component whose test only needs to
+  check its own prop wiring, not a real DOM dependency it uses (e.g.
+  `ConfirmModal`, which uses `Modal`), gets a local stub set on
+  `globalThis` in that test file instead of a real import — see
+  `formUiAtoms.test.js` for the pattern. **A component using `useEffect`
+  to start a timer/subscription must be `.unmount()`-ed after each render
+  in its test** — react-test-renderer only runs cleanup functions on
+  unmount, and a live `setInterval` left running keeps the test process
+  alive indefinitely instead of exiting (see `InningsTimer`'s tests in
+  `scoringUiAtoms.test.js`).
+- `src/components/modal.js` / `tests/unit/components/modal.test.js` —
+  `Modal` calls real DOM APIs (`window.visualViewport`, `window.scrollY`/
+  `scrollTo`, `document.body.style`, `document.activeElement`,
+  `document.addEventListener`) directly in its effects, for scroll-lock
+  and focus-trap behavior, so this is the one component test file that
+  needs a real DOM: `jsdom` (a `devDependency`, pinned to `30.0.1`) is
+  installed on `globalThis.window`/`globalThis.document` in `beforeEach`
+  and removed in `afterEach`, scoped to this file only — every other test
+  file in this suite deliberately runs under plain Node with no DOM.
+  Every mount/unmount/interaction is wrapped in `act()` (from
+  `react-test-renderer`) — without it, Modal's passive effects can flush
+  *after* the test function returns, sometimes inside a later test after
+  `afterEach` has already deleted `globalThis.window`. jsdom doesn't
+  implement `window.scrollTo()` or a writable `window.scrollY`, and
+  `react-test-renderer` doesn't mount refs to real DOM nodes, so the test
+  stubs both directly (see the file's own comments for specifics) rather
+  than skip the behavior they gate.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

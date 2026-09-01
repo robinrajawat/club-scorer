@@ -92,12 +92,11 @@ test("Btn: applies the variant's styling and disabled state, renders children", 
 });
 
 test("ConfirmModal: renders title/message and wires confirm/cancel through to the two buttons", () => {
-  // Modal itself isn't extracted yet (it reads window.visualViewport with no guard -- a real DOM
-  // dependency, not just an ambient global) -- stub it here to test ConfirmModal's own prop
-  // wiring without pretending to test Modal's real windowing/focus-trap behavior too. ConfirmModal
-  // references Modal as a bare, unimported identifier (same as it does in docs/index.html, where
-  // splicing puts the real Modal in the same global scope), so setting it on globalThis is enough
-  // for the reference to resolve.
+  // Modal itself needs a real jsdom-backed DOM to test meaningfully (see modal.test.js) -- stub it
+  // here to test ConfirmModal's own prop wiring without a DOM dependency or pretending to also
+  // test Modal's real windowing/focus-trap behavior. ConfirmModal references Modal as a bare,
+  // unimported identifier (same as it does in docs/index.html, where splicing puts the real Modal
+  // in the same global scope), so setting it on globalThis is enough for the reference to resolve.
   const StubModal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   let confirmed = false, cancelled = false;
   globalThis.Modal = StubModal;
