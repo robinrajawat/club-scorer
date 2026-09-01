@@ -418,6 +418,26 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   co-owner invite-code redemption). No bare globals, no mount effect;
   renders `ClubPanel`/`FederationsPanel` as tabs (each already tested
   on its own), so these tests focus on `TeamsScreen`'s own logic.
+- `src/components/homeScreen.js` / `tests/unit/components/homeScreen.test.js`
+  — `HomeScreen`, the app's landing screen (matches by status, unified
+  search across matches/teams/players/tournaments/clubs/federations/
+  help, account bar, entry points into every other screen).
+  `onLoadPublicPlayers` runs lazily from a `useEffect` gated on the
+  "Players" search chip being picked, not on mount — a prop, not a bare
+  global. `Modal` (bare global) backs the delete-match confirm dialog.
+  Its nested `renderMatchCard(m, i)` closed over `HomeScreen`'s own
+  state/props, so — unlike every other nested helper this repo has
+  extracted, which simply travel along verbatim because they have no
+  call sites outside their parent — it was refactored to take those
+  values (`onOpen`, `setConfirmDeleteId`, `setShowSwipeHint`,
+  `tournamentNameById`, `onGetShareCode`, `onGetViewCode`) as an
+  explicit third parameter, with all four in-`HomeScreen` call sites
+  updated to match; purely mechanical and behavior-preserving, verified
+  against both the post-refactor splice snapshot and the true
+  pre-refactor `docs/index.html`. Search chips (`Teams`/`Cups`/`Clubs`/
+  `Players`/etc.) only render once a query is typed or the scope isn't
+  `"all"` — tests that need to click a chip type into the search box
+  first, same as `q`-gated UI elsewhere in this suite.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
