@@ -317,7 +317,9 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `QualificationCalculatorModal`), `src/components/venueAndDateModals.js`
 (`VenueEditModal`, `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`),
 `src/components/availabilityPollModal.js` (`AvailabilityPollModal`),
-`src/components/upcomingFixtureCard.js` (`UpcomingFixtureCard`)
+`src/components/upcomingFixtureCard.js` (`UpcomingFixtureCard`),
+`src/components/tournamentStatus.js` (`TOURNAMENT_STATUS_LABELS`,
+`TOURNAMENT_STATUS_COLORS`), `src/components/fixtureRow.js` (`FixtureRow`)
 — all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
@@ -559,21 +561,39 @@ Firestore/network functions (`loadFixturePollSummary`,
 `BetaTestersScreen`; its own "which team?" picker uses `Modal` as a bare
 global too.
 
-~32 components remain — almost entirely screens now, plus a handful of
-small leftovers still worth a quick look first (`TOURNAMENT_STATUS_LABELS`/
-`TOURNAMENT_STATUS_COLORS`, `FixtureRow`, `renderMatchCard`) since a
-small piece can still turn out to be exactly what unblocks one of the
-screens, the same way `Modal` unblocked a whole cluster earlier. Most of
-what's left, though, is the large screen-level components that hold
-real application state via hooks (`MatchScreen`, `TournamentsScreen`,
+A twenty-second PR picked up the remaining small leftovers:
+`src/components/tournamentStatus.js` (`TOURNAMENT_STATUS_LABELS`,
+`TOURNAMENT_STATUS_COLORS`) and `src/components/fixtureRow.js`
+(`FixtureRow` — a sibling of `UpcomingFixtureCard` for the tournament
+fixtures list, same shape and same jsdom-free `Modal`-stub pattern).
+
+**`renderMatchCard` turned out not to be independently extractable**,
+worth recording so it isn't attempted the same way again: despite
+sitting at column 0 with no visible indentation (an artifact of
+whatever produced this file, not a reliable signal), it's a function
+declared *inside* `HomeScreen`'s own body, closing over `HomeScreen`'s
+local state and props (`onOpen`, `tournamentNameById`,
+`setConfirmDeleteId`, `setShowSwipeHint`, `onGetShareCode`,
+`onGetViewCode`) rather than receiving them as parameters. Extracting
+it alone would need those closed-over names turned into explicit
+parameters — a real (if small) behavior-preserving refactor of every
+call site inside `HomeScreen`, not the same kind of verbatim
+lift-and-splice this session has done everywhere else. It has to come
+out together with `HomeScreen` itself, or as a deliberate refactor
+pass, not as its own quick batch.
+
+~29 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). Most hold real
+application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
 case than a presentational leaf: expect each one to need its own
-dependency read before starting, since these are exactly the components
-that call the most not-yet-extracted Firestore functions and hold the
-most local state. Continue through the rest now — the project owner
-has asked for the full extraction to be completed without pausing for
-confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+dependency read before starting, and to sometimes carry a nested-closure
+helper (like `renderMatchCard`) that has to be handled as part of that
+screen's own extraction rather than pulled out separately. Continue
+through the rest now — the project owner has asked for the full
+extraction to be completed without pausing for confirmation between
+batches; only stop for a genuine blocker that needs the owner's own
+decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
