@@ -202,6 +202,7 @@ const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
 // emoji. Unlike the other icons here, this is filled (not stroked via the shared Icon wrapper) —
 // a thin outline didn't read as "a cap" at a glance (tried it, looked wrong); a solid silhouette
 // does. Colors via `fill: currentColor`, same as the rest of the icon set colors via `color`.
+// GENERATED-FN-START: Cap
 function Cap({
   size = 18,
   style
@@ -219,6 +220,7 @@ function Cap({
     d: "M4 14A8 8 0 0 1 20 14C21.5 14.3 23 15.3 23 16.8C22.5 18 17 17.8 13 16.3Q8 17 4 15.3Z"
   }));
 }
+// GENERATED-FN-END: Cap
 // BookOpen: for the Record Book entry point (clubs and federations).
 // GENERATED-FN-START: BookOpen
 const BookOpen = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
@@ -691,6 +693,7 @@ const GLOBAL_CSS = `
     .print-only * { visibility: visible !important; box-shadow: none !important; animation: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;
+// GENERATED-FN-START: NavWrap
 function NavWrap({
   navKey,
   direction,
@@ -707,6 +710,7 @@ function NavWrap({
     }
   }, children);
 }
+// GENERATED-FN-END: NavWrap
 // GENERATED-FN-START: COLORS
 const COLORS = {
   pitch: "var(--cs-pitch)",
@@ -15940,6 +15944,7 @@ function AppMark({
   }));
 }
 // GENERATED-FN-END: AppMark
+// GENERATED-FN-START: WelcomeScreen
 function WelcomeScreen({
   onSignIn,
   onSkip
@@ -16265,6 +16270,7 @@ function WelcomeScreen({
     }
   }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
 }
+// GENERATED-FN-END: WelcomeScreen
 // "Today" / "Yesterday" / "Sat, 14 Jun" (plus year if not this year) — used on the saved-matches
 // list. Falls back to null for matches saved before `createdAt` existed, so old matches just skip
 // the caption instead of showing a wrong or made-up date.

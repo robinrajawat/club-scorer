@@ -273,6 +273,22 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `useEffect` and `submitPollResponse` from the submit handler — both
   bare globals, not extracted, stubbed the same way
   `availabilityPollModal.test.js` stubs them.
+- `src/components/screenAtoms.js` (`NavWrap` case, in the same
+  `tests/unit/components/screenAtoms.test.js`) — the screen-transition
+  wrapper. No bare globals; the test just checks it renders its children
+  and switches which CSS animation it applies based on `direction`.
+- `src/components/icons.js` (`Cap`, folded into the existing icon set) —
+  no dedicated test, matching the file's established convention: icons
+  are pure/stateless leaves covered only transitively, through whatever
+  screen renders them.
+- `src/components/welcomeScreen.js` /
+  `tests/unit/components/welcomeScreen.test.js` — `WelcomeScreen`, the
+  signed-out landing screen (Google sign-in, email sign-in/sign-up/
+  reset, or continue without an account). `signUpEmail`/`signInEmail`/
+  `sendPasswordReset` are bare-global Firebase Auth wrappers, called
+  only from the email-submit handler — never during render or a mount
+  effect — so each test just stubs the one it needs, no `act()`-wrapped
+  mount required.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
