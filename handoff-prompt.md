@@ -316,7 +316,8 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`TOUR_SLIDES`, `FirstLaunchTour`, `TournamentShareModal`,
 `QualificationCalculatorModal`), `src/components/venueAndDateModals.js`
 (`VenueEditModal`, `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`),
-`src/components/availabilityPollModal.js` (`AvailabilityPollModal`)
+`src/components/availabilityPollModal.js` (`AvailabilityPollModal`),
+`src/components/upcomingFixtureCard.js` (`UpcomingFixtureCard`)
 — all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
@@ -549,15 +550,30 @@ dependency `UpcomingFixtureCard` needed (`FixtureDateTimeModal`/
 `VenueEditModal`/`AvailabilityPollModal`/`FixturePollSummary` are now
 all extracted), so it's unblocked and ready for its own batch next.
 
-~33 components remain. Beyond `UpcomingFixtureCard`, what's left is
-mostly the large screen-level components (`MatchScreen`,
-`TournamentsScreen`, `SetupScreen`, `TeamsScreen`, etc.) that hold real
-application state via hooks — a different, harder case than a
-presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. Continue through the rest now — the
-project owner has asked for the full extraction to be completed without
-pausing for confirmation between batches; only stop for a genuine
-blocker that needs the owner's own decision.
+A twenty-first PR extracted `UpcomingFixtureCard` itself
+(`src/components/upcomingFixtureCard.js`) — the Home-screen fixture
+card with inline date/venue-edit/availability-poll modals and a weather
+forecast. Two mount-time `useEffect`s call not-yet-extracted
+Firestore/network functions (`loadFixturePollSummary`,
+`fetchFixtureWeather`), stubbed the same way as `AvailabilityPollModal`/
+`BetaTestersScreen`; its own "which team?" picker uses `Modal` as a bare
+global too.
+
+~32 components remain — almost entirely screens now, plus a handful of
+small leftovers still worth a quick look first (`TOURNAMENT_STATUS_LABELS`/
+`TOURNAMENT_STATUS_COLORS`, `FixtureRow`, `renderMatchCard`) since a
+small piece can still turn out to be exactly what unblocks one of the
+screens, the same way `Modal` unblocked a whole cluster earlier. Most of
+what's left, though, is the large screen-level components that hold
+real application state via hooks (`MatchScreen`, `TournamentsScreen`,
+`SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
+case than a presentational leaf: expect each one to need its own
+dependency read before starting, since these are exactly the components
+that call the most not-yet-extracted Firestore functions and hold the
+most local state. Continue through the rest now — the project owner
+has asked for the full extraction to be completed without pausing for
+confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub

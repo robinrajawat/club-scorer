@@ -201,6 +201,16 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `loadPollByCode`/`createAvailabilityPoll`/`deleteAvailabilityPoll`,
   the other bare-global Firestore calls it uses — and wraps the initial
   render in `act()`, same pattern as `BetaTestersScreen`.
+- `src/components/upcomingFixtureCard.js` /
+  `tests/unit/components/upcomingFixtureCard.test.js` —
+  `UpcomingFixtureCard`, the Home-screen fixture card with inline
+  date/venue-edit/availability-poll modals and a weather forecast. Two
+  mount-time `useEffect`s call `loadFixturePollSummary`/
+  `fetchFixtureWeather` (bare-global Firestore/network calls, not
+  extracted) — stubbed and wrapped in `act()` the same way as
+  `AvailabilityPollModal`/`BetaTestersScreen`. Its own "which team?"
+  picker (shown when both fixture sides resolve to a team this person
+  manages) uses `Modal` as a bare global too.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
