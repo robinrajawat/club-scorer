@@ -751,18 +751,38 @@ Firestore stubbing was needed anywhere — the only stub any test needed
 was `Modal`, for the three tests that open `ConfirmModal`/
 `EditPlayerModal`/`TransferPlayerModal`.
 
-~15 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`, and `FollowScreen`
-still deferred). Most hold real application state via hooks
-(`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,
-`HomeScreen`, etc.) — a different, harder case than a presentational
-leaf: expect each one to need its own dependency read before starting,
-and to sometimes carry a nested-closure helper (like `renderMatchCard`)
-that has to be handled as part of that screen's own extraction rather
-than pulled out separately. Continue through the rest now — the project
-owner has asked for the full extraction to be completed without pausing
-for confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+A thirty-second PR finally took on `FollowScreen` (`src/components/followScreen.js`)
+— the public *live* match-following page (distinct from
+`FollowTournamentScreen`'s one-time snapshot read), deferred twice
+earlier in this session for its real-time complexity. Subscribes via
+`db.collection("liveViews").doc(code).onSnapshot(onNext, onError)` — a
+new stubbing shape, since every prior mount-effect Firestore call in
+this session was a one-shot `.then()`/`.get()`. The stub's fake
+`onSnapshot` captures the success/error callbacks instead of resolving
+a promise, so tests drive updates by calling the captured callback
+directly with a fake snapshot (`{ exists, data() }`), and the stub
+returns an unsubscribe function whose call is tracked too (confirmed
+called on unmount). The screen infers boundary/wicket celebrations and
+milestone toasts by diffing each new snapshot against the previous one
+(ball count +1 and the last ball's kind/runs; `toastMilestones` array
+growing) rather than reacting to a specific scoring event — tests for
+this call the captured `onNext` twice in a row and check
+`BallCelebration`/`MilestoneToast`'s own `celebration`/`toast` props
+directly via `findByType`, confirming the first snapshot never
+celebrates (nothing to diff against yet) and the second one does.
+
+~14 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). Most hold real
+application state via hooks (`MatchScreen`, `TournamentsScreen`,
+`SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
+case than a presentational leaf: expect each one to need its own
+dependency read before starting, and to sometimes carry a nested-closure
+helper (like `renderMatchCard`) that has to be handled as part of that
+screen's own extraction rather than pulled out separately. Continue
+through the rest now — the project owner has asked for the full
+extraction to be completed without pausing for confirmation between
+batches; only stop for a genuine blocker that needs the owner's own
+decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
