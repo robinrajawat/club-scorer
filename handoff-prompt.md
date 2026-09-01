@@ -300,19 +300,25 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `MatchInfoFold`), `src/components/screenAtoms.js` (`Field`,
 `InstallHintBanner`, `ClubSourceSelector`), `src/components/tableAtoms.js`
 (`StandingsTable`, `RecordTable`), `src/components/pickerAtoms.js`
-(`PlayerPicker`, `JoinCodeBar`) — all now with real
+(`PlayerPicker`, `JoinCodeBar`), `src/components/exportButtons.js`
+(`ExportPdfButton`, `ExportTournamentPdfButton`) — all now with real
 `tests/unit/components/*.test.js` coverage using `react-test-renderer`,
 except `ConfirmModal` (tests its own prop wiring against a stubbed
-`Modal`, not `Modal` itself).
+`Modal`, not `Modal` itself) and `exportButtons.js` (tests rendering/
+state only — both buttons call `window.print()`/`document.title` from
+inside their `onClick` handler, never during render, so they're safely
+renderable without a DOM stub, but clicking them isn't exercised).
 
 Every batch since `matchDisplayAtoms.js`/`screenAtoms.js` has picked
 components specifically chosen to be fully renderable using only
 already-extracted pieces (e.g. `PlayerPicker` imports `RoleBadge` from
 `scoringUiAtoms.js` and `TextField` from `formUiAtoms.js`) — components
 that pull in siblings still living in `docs/index.html` (e.g.
-`ScorecardOverlay` needs `MatchStatsPanel` and `ExportPdfButton`, neither
-extracted yet) are set aside for a batch where those siblings come along
-too, rather than extracted with an untested/unstubbed dependency.
+`ScorecardOverlay` needs `MatchStatsPanel`, which itself needs
+`RunRateChart`/`RunsPerOverChart`/`OversStrip`, none extracted yet) are
+set aside for a batch where those siblings come along too, rather than
+extracted with an untested/unstubbed dependency. `ExportPdfButton` is
+now available for whenever `ScorecardOverlay` is tackled.
 
 **`Modal` specifically was tried and set aside**: unlike `ConfirmModal`
 (which only *uses* `Modal`, so stubbing it was enough), `Modal` itself
@@ -326,7 +332,7 @@ real jsdom-or-similar dependency decision on its own, separate from the
 `react`/`react-test-renderer` one already made — raise it explicitly
 rather than reaching for it mid-batch.
 
-~64 components remain, including the large screen-level ones
+~62 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
