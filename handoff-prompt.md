@@ -308,8 +308,10 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `ShareMenu`), `src/components/scoreboardAtoms.js` (`OversStrip`,
 `FixturePollSummary`, `SyncStatusBanner`), `src/components/scorecard.js`
 (`InningScorecard`, `MatchStatsPanel`, `ScorecardOverlay`, `PrintReport`,
-`TournamentPrintReport`) — all now with real
-`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+`TournamentPrintReport`), `src/components/infoScreens.js`
+(`highlightMatch`, `HELP_SECTIONS`, `HelpScreen`, `AboutScreen`,
+`FeedbackScreen`, `SharedLinksScreen`, `BetaTestersScreen`) — all now
+with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -462,7 +464,26 @@ file. Both turned out fully self-contained once `matchResultText`/
 `tossText`/`umpiresText`/`nonStandardRulesText` (all in
 `shareAndFormat.js` already) were the only pieces still missing.
 
-~46 components remain, including the large screen-level ones
+A seventeenth PR extracted the secondary, mostly-static account/info
+screens into `src/components/infoScreens.js`: `HelpScreen` (searchable
+FAQ — brought `highlightMatch` and its `HELP_SECTIONS` data array along,
+since both were only ever used there and had no other reason to stay
+behind), `AboutScreen`, `FeedbackScreen`, `SharedLinksScreen` (revoke a
+match's active share/view codes), and `BetaTestersScreen` (admin
+approve/decline/revoke beta access). Two things worth flagging for
+next time: (1) **a data literal's own bare identifiers are easy to miss**
+— `HELP_SECTIONS`' copy text interpolates `POLL_TTL_DAYS` in a template
+literal, which the usual `React.createElement(X` grep for component/icon
+references doesn't catch, and only surfaced as a `ReferenceError` when
+the test file actually imported and ran it; (2) `BetaTestersScreen` is
+the first screen whose `useEffect` calls a not-yet-extracted Firestore
+function (`loadBetaRequests`/`loadBetaTesters`) on **mount**, not just
+from an event handler — its test stubs those on `globalThis` before
+rendering and wraps the initial render itself in `act()`, not just the
+later interactions, since the effect's state update happens right after
+mount.
+
+~44 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a

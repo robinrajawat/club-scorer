@@ -10339,6 +10339,7 @@ function AccountScreen({
 // find it. Keep this in sync with README.md and the first-launch tour whenever a covered feature
 // changes; a stale help entry is worse than none, since it actively misleads instead of just
 // not helping.
+// GENERATED-FN-START: HELP_SECTIONS
 const HELP_SECTIONS = [{
   title: "Scoring",
   entries: [{
@@ -10448,6 +10449,7 @@ const HELP_SECTIONS = [{
     a: "No \u2014 it's saved per device, on purpose, same as house rules default to being local-first. Switch it separately on each device from the account menu \u2192 Appearance."
   }]
 }];
+// GENERATED-FN-END: HELP_SECTIONS
 // Shown once per device (see hasSeenTour/markTourSeen), only on the Home screen so it never
 // interrupts an auth redirect or a deep link into a shared match. Deliberately narrow — just the
 // handful of things someone genuinely wouldn't discover by exploring (score codes, borrowing a
@@ -10631,6 +10633,7 @@ function FirstLaunchTour({
 // free-typed search text, not a pattern -- a query like "9-a-side" or "(over)" must be matched
 // literally, not interpreted. Returns the plain string unchanged when there's no query or no match,
 // so this is safe to call unconditionally rather than needing a separate no-query code path.
+// GENERATED-FN-START: highlightMatch
 function highlightMatch(text, query) {
   if (!query) return text;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -10646,6 +10649,8 @@ function highlightMatch(text, query) {
     }
   }, part) : part);
 }
+// GENERATED-FN-END: highlightMatch
+// GENERATED-FN-START: HelpScreen
 function HelpScreen({
   onBack,
   onReplayTour,
@@ -10775,6 +10780,8 @@ function HelpScreen({
     }
   }, "Replay the welcome tour")));
 }
+// GENERATED-FN-END: HelpScreen
+// GENERATED-FN-START: FeedbackScreen
 function FeedbackScreen({
   onBack,
   userEmail
@@ -10899,6 +10906,7 @@ function FeedbackScreen({
     }
   }, error))));
 }
+// GENERATED-FN-END: FeedbackScreen
 // Admin-only triage view for /feedback -- see loadFeedback/updateFeedbackStatus and the
 // firestore.rules comment on /feedback for why this is gated to one email rather than any signed
 // -in user. Filters client-side (kind, status) since 300 rows is small enough that a second round
@@ -11335,6 +11343,7 @@ function FeedbackInboxScreen({
 // beta access" card) with Approve/Decline, and current beta testers with Revoke -- same shell/
 // header pattern as FeedbackInboxScreen right above, no filters needed given the expected volume
 // here is small (this isn't a public signup flow, just people who found the request button).
+// GENERATED-FN-START: BetaTestersScreen
 function BetaTestersScreen({
   onBack
 }) {
@@ -11561,6 +11570,8 @@ function BetaTestersScreen({
     onCancel: () => setConfirmRevoke(null)
   }));
 }
+// GENERATED-FN-END: BetaTestersScreen
+// GENERATED-FN-START: AboutScreen
 function AboutScreen({
   onBack
 }) {
@@ -11756,6 +11767,8 @@ function AboutScreen({
     }
   }, "Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone. Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side. Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."))));
 }
+// GENERATED-FN-END: AboutScreen
+// GENERATED-FN-START: SharedLinksScreen
 function SharedLinksScreen({
   matches,
   onRevokeShareCode,
@@ -11956,6 +11969,7 @@ function SharedLinksScreen({
     onCancel: () => setConfirmTarget(null)
   }));
 }
+// GENERATED-FN-END: SharedLinksScreen
 // GENERATED-FN-START: JoinCodeBar
 function JoinCodeBar({
   onJoin
