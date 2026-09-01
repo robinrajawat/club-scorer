@@ -681,9 +681,11 @@ const PLAYER_HANDS = [{
   value: "left",
   label: "Left"
 }];
+// GENERATED-FN-START: uid
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
+// GENERATED-FN-END: uid
 
 // ---------- Feedback & error reporting: rolling console buffer ----------
 // Wraps console.error (installed as early as possible, before anything else can throw) to keep a
@@ -4602,6 +4604,7 @@ async function loadTournamentMatches(tournamentId) {
 // tournament's actual scheduling (grounds, weekends, weather) rarely maps cleanly onto anything a
 // generator could guess at anyway — but filled in later via a native datetime picker (FixtureRow)
 // rather than free text, so they sort/display consistently.
+// GENERATED-FN-START: generateRoundRobinFixtures
 function generateRoundRobinFixtures(teamNames, double) {
   const fixtures = [];
   for (let i = 0; i < teamNames.length; i++) {
@@ -4624,6 +4627,7 @@ function generateRoundRobinFixtures(teamNames, double) {
   }
   return fixtures;
 }
+// GENERATED-FN-END: generateRoundRobinFixtures
 // tournament.groups, when set, is [{label, teams: [...]}, ...] in display order — a multi-pool
 // tournament (e.g. "Group A" / "Group B", each playing round-robin only within itself, then a
 // cross-group knockout) instead of one combined round-robin. Absent/null groups means the
@@ -4634,6 +4638,7 @@ function generateRoundRobinFixtures(teamNames, double) {
 // Generates round-robin fixtures WITHIN each group only (a team never meets a team from another
 // group here — cross-group matches only happen in the knockout stage) — tags each fixture with
 // its group's label so the fixture list and standings can partition by it later.
+// GENERATED-FN-START: generateGroupRoundRobinFixtures
 function generateGroupRoundRobinFixtures(groups, double) {
   const fixtures = [];
   for (const g of groups) {
@@ -4646,6 +4651,7 @@ function generateGroupRoundRobinFixtures(groups, double) {
   }
   return fixtures;
 }
+// GENERATED-FN-END: generateGroupRoundRobinFixtures
 // GENERATED-START: app-logic
 // Tournament standings/DLS/bracket-placement logic, plus a grab-bag of smaller app-wide helpers
 // (localStorage-backed prefs, theme/tour/install-hint flags, a couple of small UI hooks) that
@@ -6214,6 +6220,7 @@ function shareText(text) {
   const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
+// GENERATED-FN-START: computePlayerStats
 function computePlayerStats(matches) {
   const players = {}; // name -> { runs, balls, dismissals, innings, wickets, ballsBowled, runsConceded, matches: Set }
   function get(name) {
@@ -6302,6 +6309,7 @@ function computePlayerStats(matches) {
     bestBowlingLabel: p.bestBowlingWickets === null ? null : `${p.bestBowlingWickets}/${p.bestBowlingRuns}`
   }));
 }
+// GENERATED-FN-END: computePlayerStats
 // Record Book aggregation — aggregates every completed match across ALL of a club's or
 // federation's tournaments (not just one) into individual, team, and milestone records. Takes a
 // plain match list so the caller decides where those matches came from (loadClubTournaments vs
@@ -6313,6 +6321,7 @@ function computePlayerStats(matches) {
 // (centuries, 5-wicket hauls) and team-total/win-margin records are computed fresh here since
 // those need per-innings context (team names, opponent, date) that the flattened player-stats
 // shape doesn't carry.
+// GENERATED-FN-START: computeClubRecords
 function computeClubRecords(matches, sinceTs) {
   const completed = (matches || []).filter(m => m && m.status === "complete" && m.innings && m.innings.length && (!sinceTs || (m.createdAt || 0) >= sinceTs));
   const centuries = [];
@@ -6452,6 +6461,7 @@ function computeClubRecords(matches, sinceTs) {
     mostMatchesUmpired
   };
 }
+// GENERATED-FN-END: computeClubRecords
 // Best-effort "career" stats, deliberately scoped to just the player's HOME CLUB's own
 // tournaments — matches are stored per-scorer's account and only mirrored to a queryable
 // collection when explicitly shared (see loadTournamentMatches's own comment), so there's no way
@@ -6468,6 +6478,7 @@ async function computePlayerCareerStats(name, homeClubId) {
   const stats = computePlayerStats(allMatches);
   return stats.find(p => p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
 }
+// GENERATED-FN-START: suggestPlayerOfMatch
 function suggestPlayerOfMatch(match) {
   // simple, transparent heuristic: runs scored + 20 per wicket taken, combined across both innings
   const scores = {};
@@ -6489,6 +6500,7 @@ function suggestPlayerOfMatch(match) {
   });
   return best;
 }
+// GENERATED-FN-END: suggestPlayerOfMatch
 // Counts fielding dismissals (catches and run outs, parsed from the same "how" text conventions
 // as computePlayerStats's catches tally -- "c Fielder b Bowler", "c & b Bowler", and
 // "run out (Fielder)") credited to each fielder across both innings of a single match, and
@@ -6496,6 +6508,7 @@ function suggestPlayerOfMatch(match) {
 // computePlayerStats: that's the keeper's dismissal, not a fielding play. Returns null rather than
 // a name if nobody in the match actually took a catch or effected a run out, since "0 dismissals"
 // isn't a meaningful Best Fielder.
+// GENERATED-FN-START: suggestBestFielder
 function suggestBestFielder(match) {
   const counts = {};
   match.innings.forEach(inn => {
@@ -6518,6 +6531,8 @@ function suggestBestFielder(match) {
   });
   return bestCount > 0 ? best : null;
 }
+// GENERATED-FN-END: suggestBestFielder
+// GENERATED-FN-START: suggestPlayerOfTournament
 function suggestPlayerOfTournament(matches) {
   // same transparent heuristic as suggestPlayerOfMatch, aggregated across every completed
   // match in the tournament: runs scored + 20 per wicket taken.
@@ -6543,6 +6558,8 @@ function suggestPlayerOfTournament(matches) {
   });
   return best;
 }
+// GENERATED-FN-END: suggestPlayerOfTournament
+// GENERATED-FN-START: allMatchPlayers
 function allMatchPlayers(match) {
   const names = new Set();
   match.innings.forEach(inn => {
@@ -6551,6 +6568,7 @@ function allMatchPlayers(match) {
   });
   return Array.from(names);
 }
+// GENERATED-FN-END: allMatchPlayers
 // GENERATED-START: scoring-engine
 // The ball-by-ball scoring engine. Self-contained aside from DEFAULT_RULES (imported above) —
 // everything else it needs (ensureBatsman, ensureBowler, oversLabel, runsDisplay) is defined below
