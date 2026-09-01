@@ -10927,6 +10927,7 @@ function FeedbackScreen({
 // firestore.rules comment on /feedback for why this is gated to one email rather than any signed
 // -in user. Filters client-side (kind, status) since 300 rows is small enough that a second round
 // -trip per filter change isn't worth it; loadFeedback's own cap is the thing keeping this bounded.
+// GENERATED-FN-START: FeedbackInboxScreen
 function FeedbackInboxScreen({
   onBack
 }) {
@@ -11355,6 +11356,7 @@ function FeedbackInboxScreen({
     onCancel: () => setConfirmDeleteItem(null)
   }));
 }
+// GENERATED-FN-END: FeedbackInboxScreen
 // Admin-only. Two lists: pending requests (from submitBetaRequest, Account screen's own "Request
 // beta access" card) with Approve/Decline, and current beta testers with Revoke -- same shell/
 // header pattern as FeedbackInboxScreen right above, no filters needed given the expected volume
