@@ -194,7 +194,11 @@ const FUNCTIONS = [
   { name: "MatchInfoFold", file: "src/components/matchDisplayAtoms.js" },
   { name: "Field", file: "src/components/screenAtoms.js" },
   { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
-  { name: "ClubSourceSelector", file: "src/components/screenAtoms.js" }
+  { name: "ClubSourceSelector", file: "src/components/screenAtoms.js" },
+  { name: "StandingsTable", file: "src/components/tableAtoms.js" },
+  { name: "RecordTable", file: "src/components/tableAtoms.js" },
+  { name: "PlayerPicker", file: "src/components/pickerAtoms.js" },
+  { name: "JoinCodeBar", file: "src/components/pickerAtoms.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

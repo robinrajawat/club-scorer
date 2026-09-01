@@ -8495,6 +8495,7 @@ function TextField({
   });
 }
 // GENERATED-FN-END: TextField
+// GENERATED-FN-START: PlayerPicker
 function PlayerPicker({
   roster,
   value,
@@ -8563,6 +8564,7 @@ function PlayerPicker({
     placeholder: placeholder
   });
 }
+// GENERATED-FN-END: PlayerPicker
 
 // ---------- Account sync: sign-in, match codes ----------
 // GENERATED-FN-START: GoogleGLogo
@@ -11952,6 +11954,7 @@ function SharedLinksScreen({
     onCancel: () => setConfirmTarget(null)
   }));
 }
+// GENERATED-FN-START: JoinCodeBar
 function JoinCodeBar({
   onJoin
 }) {
@@ -12056,6 +12059,7 @@ function JoinCodeBar({
     }
   }, error));
 }
+// GENERATED-FN-END: JoinCodeBar
 // Chip row for switching between "My Teams" (private) and any club the user belongs to.
 // A slim, read-only-ish source picker for the Teams screen's Teams tab — chips to switch which
 // roster you're viewing/editing (personal, or one of your clubs). Used to also carry a "Manage
@@ -22175,6 +22179,7 @@ function FixturesSection({
 // table — the JSX here is unchanged from what used to be inline in TournamentDetailScreen, just
 // parameterized on `standings` (tableTopper now derives from the prop instead of an outer
 // closure variable, since each group's topper is its own group's #1, not the whole tournament's).
+// GENERATED-FN-START: StandingsTable
 function StandingsTable({
   standings
 }) {
@@ -22265,6 +22270,7 @@ function StandingsTable({
     }
   }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3)))))));
 }
+// GENERATED-FN-END: StandingsTable
 function TournamentDetailScreen({
   tournament,
   onBack,
@@ -23153,6 +23159,7 @@ function TournamentDetailScreen({
 // Generic leaderboard/records table shared by every section of RecordsScreen below — takes
 // plain string/number cells rather than raw player objects so the same renderer works for player
 // leaderboards, team totals, and win-margin/milestone lists alike.
+// GENERATED-FN-START: RecordTable
 function RecordTable({
   title,
   columns,
@@ -23237,6 +23244,7 @@ function RecordTable({
     }
   }, cell))))));
 }
+// GENERATED-FN-END: RecordTable
 // Record Book — pulls together completed matches from every tournament a club OR federation has
 // ever run (not just one) and hands them to computeClubRecords (the aggregation logic is
 // identical either way; only which tournament list gets loaded differs). Deliberately its own

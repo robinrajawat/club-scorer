@@ -298,22 +298,35 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`COLORS`), `src/components/icons.js` (`Icon` + 38 icons),
 `src/components/matchDisplayAtoms.js` (`BallBadge`, `VisibilitySwitch`,
 `MatchInfoFold`), `src/components/screenAtoms.js` (`Field`,
-`InstallHintBanner`, `ClubSourceSelector`) — all now with real
+`InstallHintBanner`, `ClubSourceSelector`), `src/components/tableAtoms.js`
+(`StandingsTable`, `RecordTable`), `src/components/pickerAtoms.js`
+(`PlayerPicker`, `JoinCodeBar`) — all now with real
 `tests/unit/components/*.test.js` coverage using `react-test-renderer`,
 except `ConfirmModal` (tests its own prop wiring against a stubbed
 `Modal`, not `Modal` itself).
 
-The `matchDisplayAtoms.js`/`screenAtoms.js` batch picked components
-specifically chosen to be fully renderable using only already-extracted
-pieces (`MatchInfoFold` imports real logic from `shareAndFormat.js`;
-`ClubSourceSelector` imports `withPinnedFirst` from `appLogic.js` and
-`PinnableChip` from `formUiAtoms.js`) — components that pull in siblings
-still living in `docs/index.html` (e.g. `ScorecardOverlay` needs
-`MatchStatsPanel` and `ExportPdfButton`, neither extracted yet) were set
-aside for a batch where those siblings come along too, rather than
-extracted with an untested/unstubbed dependency.
+Every batch since `matchDisplayAtoms.js`/`screenAtoms.js` has picked
+components specifically chosen to be fully renderable using only
+already-extracted pieces (e.g. `PlayerPicker` imports `RoleBadge` from
+`scoringUiAtoms.js` and `TextField` from `formUiAtoms.js`) — components
+that pull in siblings still living in `docs/index.html` (e.g.
+`ScorecardOverlay` needs `MatchStatsPanel` and `ExportPdfButton`, neither
+extracted yet) are set aside for a batch where those siblings come along
+too, rather than extracted with an untested/unstubbed dependency.
 
-~68 components remain, including the large screen-level ones
+**`Modal` specifically was tried and set aside**: unlike `ConfirmModal`
+(which only *uses* `Modal`, so stubbing it was enough), `Modal` itself
+calls real DOM APIs directly in its body and effects —
+`window.visualViewport`, `window.scrollY`/`scrollTo`, `document.body`,
+`document.activeElement`, `document.addEventListener` — for scroll-lock
+and focus-trap behavior. Manually stubbing enough of `window`/`document`
+to exercise that for real (not just avoid a crash) is a much bigger
+surface than the ambient-global pattern used everywhere else, and is a
+real jsdom-or-similar dependency decision on its own, separate from the
+`react`/`react-test-renderer` one already made — raise it explicitly
+rather than reaching for it mid-batch.
+
+~64 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
