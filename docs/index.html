@@ -28039,6 +28039,7 @@ function TournamentShareModal({
     }
   }, busy ? "Creating\u2026" : "Create share link")));
 }
+// GENERATED-FN-START: InningScorecard
 function InningScorecard({
   inning,
   battingCaptain,
@@ -28366,6 +28367,7 @@ function InningScorecard({
     }, econ));
   })));
 }
+// GENERATED-FN-END: InningScorecard
 function PrintReport({
   match
 }) {
@@ -29377,6 +29379,7 @@ function MatchInfoFold({
 // Shared by ScorecardOverlay (live, scorer-side) and FollowScreen (read-only live-follow) — both
 // want the exact same body: foldable match details, an innings switcher, the scoreboard, then the
 // charts. Keeping one copy means the chart-order/labeling fixes above only ever need to happen once.
+// GENERATED-FN-START: MatchStatsPanel
 function MatchStatsPanel({
   match,
   tab,
@@ -29705,6 +29708,8 @@ function MatchStatsPanel({
     match: match
   })));
 }
+// GENERATED-FN-END: MatchStatsPanel
+// GENERATED-FN-START: ScorecardOverlay
 function ScorecardOverlay({
   match,
   onClose
@@ -29770,6 +29775,7 @@ function ScorecardOverlay({
     showOvers: false
   }));
 }
+// GENERATED-FN-END: ScorecardOverlay
 // Read-only live view opened via a "?follow=CODE" link. No scoring controls of any kind live
 // here — this component only ever reads liveViews/{code}, a document that is structurally
 // separate from sharedMatches/{code} (the full-write co-scoring code). A view code is never

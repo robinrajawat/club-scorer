@@ -306,8 +306,9 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `RunsPerOverChart`, `SyncConflictModal`, `PlayerOfMatchCard`,
 `BestFielderCard`), `src/components/shareMenus.js` (`MoveTeamMenu`,
 `ShareMenu`), `src/components/scoreboardAtoms.js` (`OversStrip`,
-`FixturePollSummary`, `SyncStatusBanner`) — all now with real
-`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+`FixturePollSummary`, `SyncStatusBanner`), `src/components/scorecard.js`
+(`InningScorecard`, `MatchStatsPanel`, `ScorecardOverlay`) — all now with
+real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -439,7 +440,20 @@ approach `shareMenus.test.js` needed). Its `handleTap` calls
 extracted), stubbed on `globalThis` the same way `saveMatch` was for
 `PlayerOfMatchCard`/`BestFielderCard`.
 
-~51 components remain, including the large screen-level ones
+A fifteenth PR unblocked and extracted the full scorecard:
+`ScorecardOverlay` (the full-screen sheet a scorer opens from the match
+header) needed `MatchStatsPanel`, which itself needed `InningScorecard`
+plus `MatchInfoFold`/`OversStrip`/`RunRateChart`/`RunsPerOverChart` —
+all of which the last three batches happened to have already extracted,
+so this batch pulled in the two that were still missing
+(`InningScorecard`, `MatchStatsPanel`) and `ScorecardOverlay` itself
+together, into `src/components/scorecard.js`. Worth remembering:
+**re-check a previously-blocked component's dependency list after each
+batch** — a component set aside earlier for "needs siblings not
+extracted yet" can quietly become extractable once those siblings land
+for an unrelated reason, exactly what happened here.
+
+~48 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
