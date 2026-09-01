@@ -488,6 +488,30 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   the row's own (dialog-reopening) button; fixed by driving
   `ConfirmModal`'s `onConfirm` prop directly via `findByType(ConfirmModal)`
   instead.
+- `src/components/matchScreen.js` / `tests/unit/components/matchScreen.test.js`
+  — `MatchScreen`, the live scoring screen (run/extra/wicket entry,
+  undo, swap strike, retire, end-innings-early/no-result/revised-target,
+  next-batsman/next-bowler prompts, sync-conflict resolution). The one
+  bare global is `saveMatch`; delegates to `SuperOverOpenersSetup`/
+  `SecondInningsSetup`/`ResultScreen` via real imports. Three things
+  specific to this file:
+  - `match` is a genuinely controlled prop, not internal state — the
+    render helper's `setMatch` calls `renderer.update(...)` with the
+    latest match on every commit so the UI actually reflects it,
+    instead of just capturing the latest value in a variable (enough
+    for every prior screen's tests, since none needed a post-interaction
+    UI check).
+  - This screen renders `InningsTimer` (a live 30s `setInterval`), and
+    with 15 tests each mounting their own instance, leaving even one
+    unmounted keeps `node --test` alive for minutes after every test
+    finishes — the event loop won't drain with a live interval pending.
+    A shared `mountedInstances` array, unmounted in `afterEach`, fixes
+    it for the whole file at once rather than per test.
+  - The main 0/1/2/3/4/6 run buttons stay mounted behind every modal
+    (`Modal` is an overlay, not a replacement) — a same-numbered `Btn`
+    inside an open modal (the Extra amount picker, the custom-runs
+    overthrow buttons) collides with them by text. A `modalBtn` helper
+    scopes the search to inside the stubbed `Modal` itself.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
