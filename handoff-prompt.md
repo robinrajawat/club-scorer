@@ -1154,17 +1154,42 @@ module, spliced back in by `npm run generate`. `npm test` is at 449
 passing tests (437 before this batch, +7 for `cricketScorer.test.js`,
 +5 for `errorBoundary.test.js`).
 
-**Follow-up, not yet started (queued by the project owner — now that
-extraction is done, this is next):** switch this repo's GitHub
-Pages deployment from "Deploy from a branch" (source restricted to the
-repo root or a folder literally named `/docs`, which is why the
-deployed site lives in `docs/` despite having nothing to do with
-documentation) to GitHub Actions-based deployment, which has no folder-
-name restriction — then rename `docs/` to something sensible (`public/`
-or `site/`). Needs a `.github/workflows/deploy.yml` that builds/uploads
-the site as a Pages artifact, `generate.js`'s hardcoded `docs/index.html`
-path updated, and the project owner flipping Settings → Pages → Source
-to "GitHub Actions" once the workflow is ready (same manual-Settings-
-change pattern as the original `docs/` switch earlier this session).
-Take this on once the component extraction reaches a stopping point,
-not before.
+## GitHub Pages deploy-mode switch (in progress)
+
+Switching this repo's GitHub Pages deployment from "Deploy from a
+branch" (source restricted to the repo root or a folder literally named
+`/docs`, which is why the deployed site lives in `docs/` despite having
+nothing to do with documentation) to GitHub Actions-based deployment,
+which has no folder-name restriction. Done as two separate, deliberately
+ordered PRs to avoid any live-site downtime — **doing the folder rename
+before Pages source is switched to Actions would 404 the live site**,
+since branch-deploy mode would suddenly find no `docs/` folder to serve
+from, and there's no API access available in this environment to flip
+that Settings toggle for the user.
+
+**Step one (done):** added `.github/workflows/deploy.yml` —
+`actions/checkout` → `actions/configure-pages` →
+`actions/upload-pages-artifact` (path `docs`, so `CNAME` ships with the
+artifact and the custom domain carries over automatically) →
+`actions/deploy-pages`. No build step, since `docs/index.html` is
+already the complete deployable artifact (kept in sync with
+`src/core/*.js`/`src/components/*.js` by `npm run generate` before every
+commit, same as always). This PR is safe to merge on its own: as long as
+Settings → Pages → Source is still "Deploy from a branch", this workflow
+has zero effect on the live site — it either doesn't run relevantly or
+its `deploy-pages` step fails loudly (a red Actions run, not a broken
+site) telling whoever looks that Pages needs to be switched to "GitHub
+Actions" first.
+
+**Step two (blocked on the project owner):** the project owner needs to
+manually flip Settings → Pages → Source to "GitHub Actions" (same
+manual-Settings-change pattern as the original `docs/` folder switch
+earlier this session) and confirm the workflow run went green / the live
+site still loads correctly. **Only after that confirmation** should the
+follow-up rename PR land: `docs/` → `public/` (or another sensible
+name), `scripts/generate.js`'s hardcoded `docs/index.html` path updated,
+`.github/workflows/deploy.yml`'s artifact `path` updated to match, and a
+sweep of `README.md`/`handoff-prompt.md`/`tests/README.md` for any
+remaining `docs/` references. Do not do the rename before that
+confirmation lands — it's the one step in this whole switch with real
+production-downtime risk if sequenced wrong.
