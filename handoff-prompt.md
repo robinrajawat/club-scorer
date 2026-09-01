@@ -850,10 +850,31 @@ smoothly — everything it touches (`withPinnedFirst`,
 `TOURNAMENT_STATUS_LABELS`/`COLORS`) was already extracted from earlier
 batches, and all 8 tests passed on the first run.
 
-~9 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). Most hold real
-application state via hooks (`MatchScreen`, `SetupScreen`,
-`TeamsScreen`, `HomeScreen`, etc.) — a different, harder case than a
+A thirty-eighth PR extracted `src/components/tournamentDetailScreen.js`
+(`TournamentDetailScreen` — a single tournament's own screen: schedule/
+standings/stats/matches tabs, Player of the Tournament, Orange/Purple
+Cap and Table Topper callouts, share, PDF export, a qualification-
+scenario calculator, and delete). `loadTournamentMatches` runs from a
+mount-time `useEffect`; `downloadCSV` (a bare global, distinct from
+`RecordsScreen`'s `downloadMultiSectionCSV` — a single-table export
+rather than multi-section) is called only from its own button handler.
+`TournamentShareModal`/`QualificationCalculatorModal` (both already
+extracted) reference `Modal` as a bare global internally, so tests that
+open either stub it too — same for `ConfirmModal`'s delete-confirm
+dialog. Caught two missing icon imports (`Trophy`, then `CalendarClock`/
+`Cap`/`Pencil`) via the same `ReferenceError`-on-first-render pattern
+seen before — worth grepping the *entire* `React.createElement(X` list
+up front next time rather than fixing them one crash at a time.
+
+~8 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). Two of the
+remaining ones — `TeamsScreen` and (implicitly) whichever screen needs
+it — themselves render `ClubPanel` (1486 lines) and `FederationsPanel`
+(1162 lines) as tabs, neither extracted yet; those two need to come out
+*before* `TeamsScreen` can cleanly import them, rather than treating
+them as new bare-global dependencies. The rest (`MatchScreen`,
+`SetupScreen`, `HomeScreen`, `TeamEditScreen`, `AccountScreen`) hold
+real application state via hooks — a different, harder case than a
 presentational leaf: expect each one to need its own dependency read
 before starting, and to sometimes carry a nested-closure helper (like
 `renderMatchCard`) that has to be handled as part of that screen's own

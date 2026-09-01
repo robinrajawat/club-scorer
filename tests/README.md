@@ -380,6 +380,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   with an optional group split, create-series, status/search filter).
   Every write is a prop; the only bare global is `Modal`, for the
   create-series dialog.
+- `src/components/tournamentDetailScreen.js` /
+  `tests/unit/components/tournamentDetailScreen.test.js` —
+  `TournamentDetailScreen`, a single tournament's own screen (schedule/
+  standings/stats/matches tabs, Player of the Tournament, Orange/Purple
+  Cap, share, PDF export, qualification calculator, delete).
+  `loadTournamentMatches` runs from a mount-time `useEffect`;
+  `downloadCSV` (a bare global, distinct from `RecordsScreen`'s
+  `downloadMultiSectionCSV`) is stubbed only in the export test.
+  `TournamentShareModal`/`QualificationCalculatorModal`/`ConfirmModal`
+  all reference `Modal` as a bare global, so tests that open any of
+  them stub it too.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
