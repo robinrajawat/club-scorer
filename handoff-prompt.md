@@ -310,7 +310,10 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`InningScorecard`, `MatchStatsPanel`, `ScorecardOverlay`, `PrintReport`,
 `TournamentPrintReport`), `src/components/infoScreens.js`
 (`highlightMatch`, `HELP_SECTIONS`, `HelpScreen`, `AboutScreen`,
-`FeedbackScreen`, `SharedLinksScreen`, `BetaTestersScreen`) — all now
+`FeedbackScreen`, `SharedLinksScreen`, `BetaTestersScreen`),
+`src/components/playerModals.js` (`PLAYER_ROLES`, `PLAYER_HANDS`,
+`EditPlayerModal`, `TransferPlayerModal`), `src/components/miscModals.js`
+(`TOUR_SLIDES`, `FirstLaunchTour`, `TournamentShareModal`) — all now
 with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
@@ -483,15 +486,48 @@ rendering and wraps the initial render itself in `act()`, not just the
 later interactions, since the effect's state update happens right after
 mount.
 
-~44 components remain, including the large screen-level ones
-(`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
-state via hooks — those are a different, harder case than a
+An eighteenth PR noticed that `Modal` landing (PR #14) quietly unblocked
+a whole cluster of `Modal`-wrapped screens that had nothing left
+stopping their extraction, and took the smaller half of that cluster:
+`src/components/playerModals.js` (`PLAYER_ROLES`, `PLAYER_HANDS`,
+`EditPlayerModal`, `TransferPlayerModal`) and
+`src/components/miscModals.js` (`TOUR_SLIDES`, `FirstLaunchTour`,
+`TournamentShareModal`). Three things worth carrying forward:
+
+- **New `Modal`-using files should keep referencing `Modal` as a bare,
+  unimported global, not a real `import { Modal } from "./modal.js"`**
+  — a real import binds the identifier at module load, so
+  `globalThis.Modal = StubModal` (the established no-jsdom testing
+  trick) silently has no effect and the test hits `Modal`'s real
+  `window`-dependent effects instead, with a `ReferenceError: window is
+  not defined` the first sign something's wrong. `ConfirmModal` in
+  `formUiAtoms.js` got this right from the start (per its own comment);
+  these two files initially imported for real and had to be walked
+  back once the tests explained why.
+- **A cross-module bare-global reference can go two levels deep and
+  still need stubbing.** `FirstLaunchTour`'s `finish()` calls
+  `markTourSeen()` (`src/core/appLogic.js`), which itself calls
+  `lsSetItem`/reads `LS_PREFIX` — both bare globals belonging to
+  `localStorageOutbox.js`, real in `docs/index.html`'s single scope but
+  not in `appLogic.js`'s own module scope under test. Its test stubs
+  both on `globalThis` before clicking anything that reaches `finish()`.
+- `TournamentShareModal` reads `window.location.origin`/`pathname`
+  directly during **render**, not just from a handler — its test stubs
+  a minimal `globalThis.window = { location: { origin, pathname } }`
+  rather than pulling in jsdom, since nothing else in the file touches
+  a real DOM API.
+
+~39 components remain. The other half of the `Modal`-unblocked cluster
+— `VenueEditModal`, `FixtureDateTimeModal`, `AvailabilityPollModal`,
+`QualificationCalculatorModal` — is next; extracting those three
+non-`AvailabilityPollModal` ones also finally clears `UpcomingFixtureCard`
+to come along too (it needs `FixtureDateTimeModal`/`VenueEditModal`/
+`AvailabilityPollModal`/`FixturePollSummary`, and now only the first
+three are still outstanding). Beyond that, the large screen-level
+components (`MatchScreen`, `TournamentsScreen`, etc.) that hold real
+application state via hooks are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. `UpcomingFixtureCard` pulls in
-`FixtureDateTimeModal`, `VenueEditModal`, and `AvailabilityPollModal`
-(none extracted yet), so it wants a batch of its own once those come
-along together, per the usual rule about not extracting with an
-untested/unstubbed dependency. Continue through the rest now — the
+mechanical repeat of this batch. Continue through the rest now — the
 project owner has asked for the full extraction to be completed without
 pausing for confirmation between batches; only stop for a genuine
 blocker that needs the owner's own decision.
