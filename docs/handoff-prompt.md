@@ -164,6 +164,25 @@ a separate follow-up PR.
   wrong. Ported from a sibling project (`sakura`) that hit this for real
   in production; run manually with `python3
   scripts/validate_html_structure.py`, wired into `ci.yml`.
+- `.githooks/pre-commit` + `scripts/setup-git-identity.sh` — a local
+  safety net for the two rules above ("Git identity — no unwanted
+  contributors" and the HTML structure check), also ported from `sakura`.
+  `setup-git-identity.sh` sets the git identity and enables the hook
+  (`git config core.hooksPath .githooks`) in one step — **run it once at
+  the start of any session working on this repo**
+  (`sh scripts/setup-git-identity.sh`). Once enabled, the hook blocks any
+  commit whose author email isn't `robinsinghrajawat@gmail.com` (closes
+  the "forgot to run `git config` first" gap the identity rule otherwise
+  depends on remembering), and re-runs
+  `scripts/validate_html_structure.py` whenever `public/index.html` is
+  staged — catching a corrupted file *before* it's committed, not just
+  before it merges. This is local-only (git hooks aren't enforced by
+  GitHub itself), so `ci.yml`'s own check stays the real, unavoidable
+  gate — this just catches the same two classes of mistake earlier, and
+  for anyone who hasn't set up signing/CI locally at all. Verified by
+  deliberately triggering both failure paths (wrong author email; a
+  simulated `<title>` hijack on a scratch copy) and confirming each
+  blocks with `exit 1`, then confirming the real, clean file passes.
 - `src/core/` — tested logic modules spliced into `public/index.html` by
   `scripts/generate.js` (see above).
 - `src/components/` — presentational React components, also spliced by
