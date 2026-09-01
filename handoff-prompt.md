@@ -302,9 +302,11 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 (`StandingsTable`, `RecordTable`), `src/components/pickerAtoms.js`
 (`PlayerPicker`, `JoinCodeBar`), `src/components/exportButtons.js`
 (`ExportPdfButton`, `ExportTournamentPdfButton`), `src/components/modal.js`
-(`Modal`) — all now with real `tests/unit/components/*.test.js` coverage
-using `react-test-renderer`, except `ConfirmModal` (tests its own prop
-wiring against a stubbed `Modal`, not `Modal` itself) and
+(`Modal`), `src/components/matchInsightCards.js` (`RunRateChart`,
+`RunsPerOverChart`, `SyncConflictModal`, `PlayerOfMatchCard`,
+`BestFielderCard`) — all now with real `tests/unit/components/*.test.js`
+coverage using `react-test-renderer`, except `ConfirmModal` (tests its own
+prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
 never during render, so they're safely renderable without a DOM stub, but
@@ -360,11 +362,30 @@ next DOM-dependent component:
   removeEventListener }`) assigned directly to `window.visualViewport`,
   covering both the with- and without-the-API code paths.
 
-~61 components remain, including the large screen-level ones
+A twelfth PR picked off five more components with no dependency on any
+not-yet-extracted sibling: `src/components/matchInsightCards.js`
+(`RunRateChart`, `RunsPerOverChart` — pure SVG charts, no DOM APIs at all;
+`SyncConflictModal` — builds its own overlay rather than using `Modal`,
+so needed no DOM stub either; `PlayerOfMatchCard`/`BestFielderCard` — the
+two post-match award-picker cards). The two award cards call `saveMatch`
+(a Firestore write, still in `docs/index.html`, unextracted — needs the
+Firebase SDK global) from their `pick()` handler; rather than leave that
+untested, one test stubs `globalThis.saveMatch` locally (same pattern as
+`Modal` in `formUiAtoms.test.js`) to exercise a real "Confirm" click.
+
+~56 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. Continue through them now — the project
-owner has asked for the full extraction to be completed without pausing
-for confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+mechanical repeat of this batch. A few mid-sized ones are worth flagging
+for whoever picks this up next: `MoveTeamMenu`/`ShareMenu` are portal
+menus (`ReactDOM.createPortal(..., document.body)`) that also read
+`window.innerWidth`/`innerHeight` and `navigator.clipboard` for
+positioning/copy — another jsdom case, same pattern as `Modal`.
+`UpcomingFixtureCard` pulls in `FixtureDateTimeModal`, `VenueEditModal`,
+and `AvailabilityPollModal` (none extracted yet), so it wants a batch of
+its own once those come along together, per the usual rule about not
+extracting with an untested/unstubbed dependency. Continue through the
+rest now — the project owner has asked for the full extraction to be
+completed without pausing for confirmation between batches; only stop for
+a genuine blocker that needs the owner's own decision.

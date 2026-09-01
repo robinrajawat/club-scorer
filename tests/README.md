@@ -92,6 +92,15 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `react-test-renderer` doesn't mount refs to real DOM nodes, so the test
   stubs both directly (see the file's own comments for specifics) rather
   than skip the behavior they gate.
+- `src/components/matchInsightCards.js` /
+  `tests/unit/components/matchInsightCards.test.js` — post-match insight
+  charts/cards (`RunRateChart`, `RunsPerOverChart`, `SyncConflictModal`,
+  `PlayerOfMatchCard`, `BestFielderCard`). All pure presentational, no DOM
+  APIs. The two award-picker cards call `saveMatch` (a Firestore write
+  still living in `docs/index.html`, not extracted) from their `pick()`
+  handler — one test stubs `globalThis.saveMatch` locally to exercise a
+  real "Confirm" click without touching Firebase, same pattern as
+  `Modal`'s stub in `formUiAtoms.test.js`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

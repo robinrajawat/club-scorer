@@ -28669,6 +28669,7 @@ function SyncStatusBanner({
 // history, since a wrong automatic guess is worse than asking. Blocks scoring until resolved
 // (unlike SyncStatusBanner) because continuing to score on top of a stale base only makes the
 // eventual reconciliation harder.
+// GENERATED-FN-START: SyncConflictModal
 function SyncConflictModal({
   local,
   remote,
@@ -28800,6 +28801,7 @@ function SyncConflictModal({
     }
   }, "Use the other device\u2019s version"))));
 }
+// GENERATED-FN-END: SyncConflictModal
 // GENERATED-FN-START: ExportPdfButton
 function ExportPdfButton({
   match,
@@ -28894,6 +28896,7 @@ function parseOverLabel(label, ballsPerOver) {
   return whole + (balls || 0) / (ballsPerOver || 6);
 }
 // GENERATED-FN-END: parseOverLabel
+// GENERATED-FN-START: RunRateChart
 function RunRateChart({
   match
 }) {
@@ -29107,7 +29110,9 @@ function RunRateChart({
     }) : null;
   })));
 }
+// GENERATED-FN-END: RunRateChart
 
+// GENERATED-FN-START: RunsPerOverChart
 function RunsPerOverChart({
   match
 }) {
@@ -29302,6 +29307,7 @@ function RunsPerOverChart({
     }, overNum));
   }))));
 }
+// GENERATED-FN-END: RunsPerOverChart
 // Folded-by-default toss/house-rules line — most matches use standard rules, so this stays out
 // of the way until someone actually wants to check what was agreed.
 // GENERATED-FN-START: MatchInfoFold
@@ -33401,6 +33407,7 @@ function SecondInningsSetup({
     onCancel: () => setConfirmGoBack(false)
   }));
 }
+// GENERATED-FN-START: PlayerOfMatchCard
 function PlayerOfMatchCard({
   match,
   setMatch
@@ -33550,10 +33557,12 @@ function PlayerOfMatchCard({
     }
   }, "Cancel")));
 }
+// GENERATED-FN-END: PlayerOfMatchCard
 // Same shape as PlayerOfMatchCard just above (suggest-then-confirm, or pick manually), for the
 // fielding-side award instead of the overall one. Reuses allMatchPlayers for the picker too --
 // deliberately not narrowed to "players who actually fielded," since anyone in the XI could in
 // principle be credited and a fixed suggestion shouldn't also constrain the manual picker.
+// GENERATED-FN-START: BestFielderCard
 function BestFielderCard({
   match,
   setMatch
@@ -33703,6 +33712,7 @@ function BestFielderCard({
     }
   }, "Cancel")));
 }
+// GENERATED-FN-END: BestFielderCard
 function ResultScreen({
   match,
   setMatch,
