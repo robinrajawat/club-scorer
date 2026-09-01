@@ -7583,6 +7583,7 @@ function ballLabelsForOver(overIndex, balls) {
 // time passing, same as it would to someone glancing at their watch. Updates once a minute (via
 // a low-frequency interval, not every render) since second-level precision adds nothing useful
 // for an innings that runs for an hour or more.
+// GENERATED-FN-START: InningsTimer
 function InningsTimer({
   startedAt,
   overCap
@@ -7611,6 +7612,7 @@ function InningsTimer({
     size: 12
   }), label);
 }
+// GENERATED-FN-END: InningsTimer
 function OversStrip({
   overs,
   ballsPerOver
@@ -7748,6 +7750,7 @@ function OversStrip({
 }
 
 
+// GENERATED-FN-START: RoleBadge
 function RoleBadge({
   isCaptain,
   isKeeper
@@ -7770,6 +7773,8 @@ function RoleBadge({
     }
   }, label);
 }
+// GENERATED-FN-END: RoleBadge
+// GENERATED-FN-START: BallCelebration
 function BallCelebration({
   celebration
 }) {
@@ -7805,11 +7810,13 @@ function BallCelebration({
     }
   }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
 }
+// GENERATED-FN-END: BallCelebration
 // A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments —
 // individual/partnership 50s, 5-fors, hat-tricks — plus team-total milestones, maiden overs, and
 // ducks, which get the same toast treatment but are deliberately kept OUT of inning.milestones
 // (see applyBall's milestone-detection section and inning.toastMilestones) so the permanent
 // scorecard/commentary log doesn't get cluttered with things the scoreboard already shows.
+// GENERATED-FN-START: MILESTONE_ICONS
 const MILESTONE_ICONS = {
   batting: "\u{1F3CF}",
   hatTrick: "\u{1F3A9}",
@@ -7826,6 +7833,8 @@ const MILESTONE_ICONS = {
   breakthrough: "\u{26A1}",
   boundaryDrought: "\u{1F387}"
 };
+// GENERATED-FN-END: MILESTONE_ICONS
+// GENERATED-FN-START: MilestoneToast
 function MilestoneToast({
   toast
 }) {
@@ -7876,6 +7885,8 @@ function MilestoneToast({
     }
   }, MILESTONE_ICONS[m.type] || "\u2728"), m.text));
 }
+// GENERATED-FN-END: MilestoneToast
+// GENERATED-FN-START: OdometerScore
 function OdometerScore({
   text,
   style
@@ -7899,6 +7910,8 @@ function OdometerScore({
     }
   }, ch))));
 }
+// GENERATED-FN-END: OdometerScore
+// GENERATED-FN-START: SwipeableRow
 function SwipeableRow({
   children,
   onDelete,
@@ -8001,6 +8014,8 @@ function SwipeableRow({
     }
   }, children));
 }
+// GENERATED-FN-END: SwipeableRow
+// GENERATED-FN-START: EmptyStateBallIllustration
 function EmptyStateBallIllustration() {
   return /*#__PURE__*/React.createElement("svg", {
     width: "52",
@@ -8032,6 +8047,8 @@ function EmptyStateBallIllustration() {
     strokeLinecap: "round"
   }));
 }
+// GENERATED-FN-END: EmptyStateBallIllustration
+// GENERATED-FN-START: LoadingBallIllustration
 function LoadingBallIllustration({
   size = 44,
   style
@@ -8080,11 +8097,13 @@ function LoadingBallIllustration({
     stopColor: COLORS.ball
   }))));
 }
+// GENERATED-FN-END: LoadingBallIllustration
 // One shared "still loading" row — the spinning ball + a label — for every in-place loading state
 // in the app (standings, tournament/live-score follow screens, the federation manage panel, the
 // clubs & federations list, etc.), instead of each spot inventing its own plain "Loading…" text
 // with no animation at all. Small inline footprint by default; callers that want it centered in a
 // bigger empty state (like a full-screen "Loading tournament…") wrap it themselves.
+// GENERATED-FN-START: LoadingNote
 function LoadingNote({
   label = "Loading\u2026",
   size = 16,
@@ -8104,6 +8123,7 @@ function LoadingNote({
     size
   }), label);
 }
+// GENERATED-FN-END: LoadingNote
 function Btn({
   children,
   onClick,
@@ -8344,6 +8364,7 @@ function SearchAndRequestPanel({
     }, already ? linkedLabelById[id] || alreadyLinkedLabel : busyId === id ? "\u2026" : actionLabel));
   }));
 }
+// GENERATED-FN-START: TextField
 function TextField({
   value,
   onChange,
@@ -8387,6 +8408,7 @@ function TextField({
     }
   });
 }
+// GENERATED-FN-END: TextField
 function PlayerPicker({
   roster,
   value,
@@ -8892,6 +8914,7 @@ function AuthBar({
     }
   }));
 }
+// GENERATED-FN-START: RuleChoice
 function RuleChoice({
   label,
   value,
@@ -8938,6 +8961,7 @@ function RuleChoice({
     }, opt.label);
   })));
 }
+// GENERATED-FN-END: RuleChoice
 function AccountScreen({
   user,
   profile,
@@ -11950,6 +11974,7 @@ function JoinCodeBar({
 // place for the press-and-hold-to-pin behavior and the pinned-icon treatment instead of
 // triplicating it per screen. `dashed` switches to the gold/dashed federation look Cups already
 // used before pinning existed; clubs keep the plain solid willow/pitch look everywhere.
+// GENERATED-FN-START: PinnableChip
 function PinnableChip({
   label,
   active,
@@ -11985,6 +12010,7 @@ function PinnableChip({
     fill: "currentColor"
   }), label);
 }
+// GENERATED-FN-END: PinnableChip
 function ClubSourceSelector({
   clubs,
   activeClubId,
@@ -15755,6 +15781,7 @@ function AuthActionScreen({
 // ball just floating small in empty space. Cropping to the content box and scaling it back up to
 // fill the circle here is what makes this the same mark as the installed icon instead of a
 // smaller, oddly-padded copy of it.
+// GENERATED-FN-START: AppMark
 function AppMark({
   size
 }) {
@@ -15782,6 +15809,7 @@ function AppMark({
     }
   }));
 }
+// GENERATED-FN-END: AppMark
 function WelcomeScreen({
   onSignIn,
   onSkip
@@ -16891,6 +16919,7 @@ function UpcomingFixtureCard({
 // everything else on the page (which is what they had before) made three secondary shortcuts
 // visually compete with the primary action instead of receding behind it. Icon keeps a spot of
 // brand color so the row doesn't go fully flat/dead, label stays quiet ink-soft text.
+// GENERATED-FN-START: HomeUtilityButton
 function HomeUtilityButton({
   icon: IconComp,
   label,
@@ -16927,6 +16956,7 @@ function HomeUtilityButton({
     }
   }, label));
 }
+// GENERATED-FN-END: HomeUtilityButton
 function HomeScreen({
   matches,
   onNew,
@@ -18380,6 +18410,7 @@ function MyTeamsScreen({
     onClose: () => setPollingTeam(null)
   }))
 }
+// GENERATED-FN-START: TeamChips
 function TeamChips({
   teams,
   selectedId,
@@ -18428,6 +18459,7 @@ function TeamChips({
     }
   }, "+ One-off"));
 }
+// GENERATED-FN-END: TeamChips
 function PlayingXIPicker({
   label,
   squad,
@@ -26575,6 +26607,7 @@ function playerAvatarColor(name) {
 // Photo if the player has one (only ever set via linkPlayerIfMatch, when they've signed in with
 // the exact email they were published under — most roster entries never will), otherwise a
 // colored initials circle instead of leaving blank space.
+// GENERATED-FN-START: PlayerAvatar
 function PlayerAvatar({
   name,
   photoURL,
@@ -26610,6 +26643,7 @@ function PlayerAvatar({
     }
   }, playerInitials(name));
 }
+// GENERATED-FN-END: PlayerAvatar
 
 // Edit a player's own details (name/age/role/hands). The single shared editor for every place
 // this app lets someone edit a player: a published player's own profile on the Players screen,
@@ -27472,6 +27506,7 @@ function Modal({
 // pair, styled to match the rest of the app instead of the OS chrome. Used for every destructive
 // or hard-to-undo action (removing a member, deleting a club, leaving a federation, etc.) so the
 // confirmation itself is on-brand and works the same everywhere.
+// GENERATED-FN-START: ConfirmModal
 function ConfirmModal({
   title,
   message,
@@ -27519,6 +27554,7 @@ function ConfirmModal({
     }
   }, busy ? "\u2026" : confirmLabel)));
 }
+// GENERATED-FN-END: ConfirmModal
 // Standalone calculator (and, via onSave, the setup step for MatchScreen's live banner) for the
 // "what does my team need to do THIS match to have a higher NRR than a specific rival" question.
 // See computeQualificationTarget for the actual math and its assumptions.
