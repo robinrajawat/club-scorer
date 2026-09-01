@@ -128,7 +128,7 @@ export function InningScorecard({
         color: COLORS.inkSoft,
         fontStyle: b.out ? "normal" : "italic"
       }
-    }, b.out ? b.how : b.retiredHurt && !isBatting ? "retired hurt" : "not out"), /*#__PURE__*/React.createElement("span", {
+    }, b.out ? b.how : b.retiredHurt && !isBatting ? b.retiredAtCap ? `retired — ${b.retiredAtCap}` : "retired hurt" : "not out"), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
         fontFamily: "'IBM Plex Mono', monospace",

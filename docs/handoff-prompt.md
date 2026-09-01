@@ -1316,7 +1316,7 @@ TypeScript and a Playwright e2e suite were discussed and deliberately
 parked as bigger, lower-urgency investments (see the session's own
 discussion, not repeated here) — not started, not forgotten.
 
-## Tournament special rules (Phase 0 done)
+## Tournament special rules (Phase 0 and Phase 1 done)
 
 A club asked whether the app could host a tournament with a specific
 set of "special rules" (8-over matches, 8-a-side, 2 runs for a
@@ -1385,3 +1385,80 @@ configured rules on `TournamentDetailScreen`, and no way to edit them
 after creation — both easy, natural follow-ups if actually wanted, but
 not part of what was asked for here. Tiers 2–4 above remain open,
 tracked for whenever they're picked up next.
+
+**Phase 1 closed tier 2's two smaller items** — the 25-run retirement
+(with the user's explicitly chosen simplified return semantics, not the
+strict "wait for everyone else" ordering, which was scoped out as its
+own bigger, separate decision — see the session's own discussion) and
+Timed Out. Both surfaced real design questions only visible once
+actually built, not obvious from the rule text alone:
+
+- **`retirementRuns`** (new `DEFAULT_RULES` field, editable in
+  `SetupScreen`'s match-rules editor same as `timeCapMinutes`/
+  `powerplayOvers`, and folded into `nonStandardRulesText`) is baked
+  into the inning at `newInning` time, same pattern as every other rule.
+  `MatchScreen` derives `capRetireName` — **not** just "is the current
+  striker over the cap": an odd-run delivery rotates strike, so the
+  batsman who actually crossed the threshold may no longer be the one
+  currently facing by the time this renders. Checking only
+  `inning.strikerName` would mean a batsman who reached the cap while
+  at the non-striker's end could go the rest of the innings without
+  ever being prompted — caught by the second test written for this,
+  not by inspection. Fixed by checking both ends and, when it's the
+  non-striker who's over the cap, showing a "Swap Strike" action first
+  (mirroring the voluntary retire modal's own existing pattern) instead
+  of a direct confirm, since `retireBatsman` can only ever act on
+  whoever's currently on strike.
+- The mandatory prompt (a plain bare-global `Modal`, not `ConfirmModal`
+  — it needs the conditional third swap-strike state ConfirmModal's
+  fixed confirm/cancel API can't express) auto-shows whenever
+  `needsCapRetirement` is true, purely derived like `needsNewBatsman`
+  already is — no separate tracked boolean to drift out of sync with
+  the score. Its one piece of real state, `dismissedCapRetireFor`, only
+  exists so "Not now" can close the prompt without it reopening on the
+  very next render; it's reset inside `commit()` itself, so the *next*
+  committed ball (any of them — another run, a wicket, an undo) re-nags
+  if the batsman is still over the cap and still hasn't retired,
+  matching "must retire immediately" without the app being unable to
+  reach Undo to fix a wrong entry that pushed someone over the cap by
+  mistake.
+- **A real bug caught mid-build, not by a test:** the new
+  `dismissedCapRetireFor` `useState` was first declared later in the
+  component (near the existing `showRetireModal`), but the derived
+  `needsCapRetirement` computation that reads it sits much earlier —
+  a temporal-dead-zone `ReferenceError` on every render. Moved the
+  declaration up to right where it's first used. A good reminder that
+  this component is ~2500 lines with hooks declared throughout, not
+  all at the top — check where a new piece of state is actually read
+  before assuming it's safe to declare it near thematically-related
+  state further down.
+- **Timed Out** doesn't fit the existing wicket-type picker at all —
+  that picker is for a batsman already at the crease facing a ball;
+  Timed Out is the *incoming* batsman failing to arrive before ever
+  facing one. Modeled as a new `timedOutBatsman(name)` in the Next
+  batsman prompt instead: builds the dismissal directly (0 runs, 0
+  balls, no bowler credited — same reasoning as "retired out" and
+  "run out"/"obstructing the field" not crediting the bowler) rather
+  than going through `applyBall` (no actual delivery happens), and
+  deliberately never sets `strikerName` — the same "who's next" prompt
+  just reopens, exactly as if this player had never been offered.  If a
+  wicket was already pending (the timed-out player was named right
+  after an ordinary dismissal), that pending wicket is resolved first
+  (`applyBall(inning, {...pendingWicket, newBatsman: ""})` — `applyBall`
+  already tolerates an empty `newBatsman`, leaving nobody on strike) and
+  merged into the **same** commit as the timed-out entry, so undo/
+  history stays one step per real event instead of two.
+- **A test-writing lesson, not a product bug:** the very first version
+  of the "non-striker over the cap" test failed in a genuinely
+  confusing way — `needsCapRetirement` provably `true` at the exact
+  point of the JSX conditional (confirmed by temporarily logging
+  inline), the stubbed modal provably present in the rendered tree
+  (confirmed the same way), yet a `/B must retire/` regex against the
+  dumped JSON kept failing. The cause was the same split-JSX-text
+  gotcha documented elsewhere in this suite ("Step 1 of 4", etc.):
+  `capRetireName` and `" must retire"` are two separate JSX children,
+  not one concatenated string, so the dumped JSON never contains "B
+  must retire" as one contiguous substring — it needs
+  `/"B"," must retire"/`. Worth remembering next time a test failure
+  looks like a genuine rendering mystery: check for this gotcha before
+  assuming the component itself is broken.
