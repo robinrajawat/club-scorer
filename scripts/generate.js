@@ -188,7 +188,13 @@ const FUNCTIONS = [
   { name: "User", file: "src/components/icons.js" },
   { name: "Users", file: "src/components/icons.js" },
   { name: "WhatsAppIcon", file: "src/components/icons.js" },
-  { name: "Btn", file: "src/components/formUiAtoms.js" }
+  { name: "Btn", file: "src/components/formUiAtoms.js" },
+  { name: "BallBadge", file: "src/components/matchDisplayAtoms.js" },
+  { name: "VisibilitySwitch", file: "src/components/matchDisplayAtoms.js" },
+  { name: "MatchInfoFold", file: "src/components/matchDisplayAtoms.js" },
+  { name: "Field", file: "src/components/screenAtoms.js" },
+  { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
+  { name: "ClubSourceSelector", file: "src/components/screenAtoms.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

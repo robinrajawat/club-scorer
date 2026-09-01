@@ -7554,6 +7554,7 @@ function applyBall(inning, event) {
 // GENERATED-END: scoring-engine
 
 // ---------- UI atoms ----------
+// GENERATED-FN-START: BallBadge
 function BallBadge({
   ev,
   label
@@ -7637,6 +7638,7 @@ function BallBadge({
     }
   }, label));
 }
+// GENERATED-FN-END: BallBadge
 // Computes each ball's "over.ball" label within a single over — e.g. the 3rd legal delivery of
 // over 5 is "5.3". A wide or no-ball doesn't consume a legal-ball slot (see applyBall's
 // `legalBall` flag, mirrored here since individual ball log entries don't carry that flag
@@ -8270,6 +8272,7 @@ function Btn({
 // GENERATED-FN-END: Btn
 // Small public/private toggle used on a club or federation's own admin card. Owner-only —
 // callers are expected to only render this when the viewer already passed an isOwner check.
+// GENERATED-FN-START: VisibilitySwitch
 function VisibilitySwitch({
   isPublic,
   busy,
@@ -8323,6 +8326,7 @@ function VisibilitySwitch({
     }
   })), busy ? "\u2026" : isPublic ? "Public" : "Private");
 }
+// GENERATED-FN-END: VisibilitySwitch
 // Search-and-request UI shared by both directions of federation affiliation: a club owner
 // searching federationDirectory to request joining one, or a federation owner searching
 // clubDirectory to invite one. `items` are the raw directory entries ({name, ownerName, id}) —
@@ -10467,6 +10471,7 @@ const TOUR_SLIDES = [{
 // Renders only when the caller's already confirmed isIOSSafari() && !isStandalone() &&
 // !hasSeenInstallHint() -- this component itself doesn't re-check any of that, it just draws
 // whatever the caller decided to show.
+// GENERATED-FN-START: InstallHintBanner
 function InstallHintBanner({
   onDismiss
 }) {
@@ -10531,6 +10536,7 @@ function InstallHintBanner({
     }
   }, "\u00d7"));
 }
+// GENERATED-FN-END: InstallHintBanner
 function FirstLaunchTour({
   onDone
 }) {
@@ -12097,6 +12103,7 @@ function PinnableChip({
   }), label);
 }
 // GENERATED-FN-END: PinnableChip
+// GENERATED-FN-START: ClubSourceSelector
 function ClubSourceSelector({
   clubs,
   activeClubId,
@@ -12149,6 +12156,7 @@ function ClubSourceSelector({
     onTogglePin: () => onTogglePinClub(c.id)
   }))));
 }
+// GENERATED-FN-END: ClubSourceSelector
 function ClubPanel({
   clubs,
   activeClubId,
@@ -19977,6 +19985,7 @@ function SetupScreen({
 
 
 
+// GENERATED-FN-START: Field
 function Field({
   label,
   children
@@ -19995,6 +20004,7 @@ function Field({
     }
   }, label), children);
 }
+// GENERATED-FN-END: Field
 // Source-scoped list of tournaments (personal or a specific club's), mirroring TeamsScreen's
 // My-Teams/club switcher exactly — same chip row, same mental model, so nothing new to learn.
 // Doesn't offer club create/join here since ClubPanel (on the Teams screen) already owns that;
@@ -29280,6 +29290,7 @@ function RunsPerOverChart({
 }
 // Folded-by-default toss/house-rules line — most matches use standard rules, so this stays out
 // of the way until someone actually wants to check what was agreed.
+// GENERATED-FN-START: MatchInfoFold
 function MatchInfoFold({
   match
 }) {
@@ -29330,6 +29341,7 @@ function MatchInfoFold({
     }
   }, "House rules: ", houseRules), houseRules && umpires && /*#__PURE__*/React.createElement("br", null), umpires));
 }
+// GENERATED-FN-END: MatchInfoFold
 
 
 // Shared by ScorecardOverlay (live, scorer-side) and FollowScreen (read-only live-follow) — both
