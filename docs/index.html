@@ -17111,6 +17111,7 @@ function HomeUtilityButton({
   }, label));
 }
 // GENERATED-FN-END: HomeUtilityButton
+// GENERATED-FN-START: HomeScreen
 function HomeScreen({
   matches,
   onNew,
@@ -17272,7 +17273,14 @@ function HomeScreen({
   // collapsed) would just be extra taps to find the one match being searched for.
   const inProgressMatches = filteredMatches.filter(m => m.status !== "complete");
   const completedMatches = filteredMatches.filter(m => m.status === "complete");
-function renderMatchCard(m, i) {
+function renderMatchCard(m, i, {
+  onOpen,
+  setConfirmDeleteId,
+  setShowSwipeHint,
+  tournamentNameById,
+  onGetShareCode,
+  onGetViewCode
+}) {
     return /*#__PURE__*/React.createElement("div", {
     key: m.id,
     style: {
@@ -17795,7 +17803,7 @@ function renderMatchCard(m, i) {
       fontStyle: "italic"
     }
   }, "No matches match \u201c", query.trim(), "\u201d.") : (() => {
-    if (q) return /*#__PURE__*/React.createElement(React.Fragment, null, filteredMatches.map((m, i) => renderMatchCard(m, i)), filteredUpcoming.length > 0 && /*#__PURE__*/React.createElement("div", {
+    if (q) return /*#__PURE__*/React.createElement(React.Fragment, null, filteredMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), filteredUpcoming.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: filteredMatches.length > 0 ? 18 : 0
       }
@@ -17861,7 +17869,7 @@ function renderMatchCard(m, i) {
         transition: "transform 0.15s ease",
         flexShrink: 0
       }
-    }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i)), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: inProgressMatches.length > 0 ? 18 : 0
       }
@@ -17959,7 +17967,7 @@ function renderMatchCard(m, i) {
         transition: "transform 0.15s ease",
         flexShrink: 0
       }
-    }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i))));
+    }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode }))));
   })()) : /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -18119,7 +18127,7 @@ function renderMatchCard(m, i) {
     style: {
       marginBottom: 18
     }
-  }, categorySectionLabel("Matches"), filteredMatches.slice(0, ALL_SCOPE_CAP).map((m, i) => renderMatchCard(m, i)), filteredUpcoming.slice(0, ALL_SCOPE_CAP).map(({
+  }, categorySectionLabel("Matches"), filteredMatches.slice(0, ALL_SCOPE_CAP).map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), filteredUpcoming.slice(0, ALL_SCOPE_CAP).map(({
     tournament: t,
     fixture: f
   }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
@@ -18228,6 +18236,7 @@ function renderMatchCard(m, i) {
     }
   }, "Delete"))));
 }
+// GENERATED-FN-END: HomeScreen
 // GENERATED-FN-START: MyTeamsScreen
 function MyTeamsScreen({
   teams = [],

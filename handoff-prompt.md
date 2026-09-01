@@ -924,17 +924,49 @@ bare globals, no mount effect. Now that `ClubPanel`/`FederationsPanel`
 both exist, this was a clean prop-passthrough extraction: all 9 tests
 passed on the first run.
 
-~5 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). `MatchScreen`,
-`SetupScreen`, `HomeScreen`, `TeamEditScreen`, and `AccountScreen` all
-hold real application state via hooks — a different, harder case than a
+A forty-second PR finally extracted `src/components/homeScreen.js`
+(`HomeScreen` — the app's landing screen: saved matches by status,
+unified search across matches/teams/players/tournaments/clubs/
+federations/help, the account bar, and entry points into every other
+top-level screen). This is the batch that resolved the `renderMatchCard`
+blocker flagged back when it first turned up: rather than leave
+`HomeScreen` stuck, its nested `renderMatchCard(m, i)` was given a
+deliberate, disclosed, behavior-preserving refactor — the six values it
+used to close over (`onOpen`, `setConfirmDeleteId`, `setShowSwipeHint`,
+`tournamentNameById`, `onGetShareCode`, `onGetViewCode`) became an
+explicit third parameter, destructured right in the parameter list so
+the function body needed zero changes, and all four call sites (all
+still inside `HomeScreen` itself) were updated to pass that object
+explicitly. This was verified two ways: first that the marker-wrapped
+splice step itself stays byte-identical against a post-refactor
+snapshot (same discipline as every other batch), and separately that
+the refactor commit against the true pre-refactor `docs/index.html`
+touches *only* the signature and the four call sites, nothing else. The
+other nested helpers in the same body (`renderClubRow`, `renderCupRow`,
+`renderFederationRow`, `renderHelpRow`, `renderTeamRow`,
+`searchResultRow`, `seeAllLink`, `roleLabel`, `categorySectionLabel`)
+needed no such treatment and simply traveled along verbatim — they have
+no call sites outside `HomeScreen`'s own render, unlike `renderMatchCard`
+which is called from four places within it. **Rule for any future nested
+helper blocking an extraction:** it only needs the parameter-object
+refactor if something *outside* the parent still needs to call it
+directly; if every call site is inside the same parent being extracted,
+it travels for free. Two easy import misses caught by a broader
+dependency sweep (not just `React.createElement(X` — icon components can
+also arrive as plain prop *values*, e.g. `icon: Users`/`icon: Shield`
+passed to `HomeUtilityButton`, which a createElement-only grep misses):
+`Shield`/`Users` from `icons.js`, and `HELP_SECTIONS` (already in
+`infoScreens.js`) for the search's help-entries filter.
+
+~5 components remain: `SetupScreen`, `TeamEditScreen`, `AccountScreen`,
+`MatchScreen`, and the root `CricketScorer` component itself. All hold
+real application state via hooks — a different, harder case than a
 presentational leaf: expect each one to need its own dependency read
-before starting, and to sometimes carry a nested-closure helper (like
-`renderMatchCard`) that has to be handled as part of that screen's own
-extraction rather than pulled out separately. Continue through the rest
-now — the project owner has asked for the full extraction to be
-completed without pausing for confirmation between batches; only stop
-for a genuine blocker that needs the owner's own decision.
+before starting, and to watch for the same kind of nested-closure helper
+`HomeScreen` just resolved. Continue through the rest now — the project
+owner has asked for the full extraction to be completed without pausing
+for confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
