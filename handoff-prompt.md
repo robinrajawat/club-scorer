@@ -323,8 +323,9 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `src/components/inningsSetupScreens.js` (`SuperOverOpenersSetup`,
 `SecondInningsSetup`), `src/components/searchAndRequestPanel.js`
 (`SearchAndRequestPanel`), `src/components/authActionScreen.js`
-(`AuthActionScreen`) — all now with real
-`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+(`AuthActionScreen`), `src/components/playingXIPicker.js`
+(`PlayingXIPicker`), `src/components/myTeamsScreen.js` (`MyTeamsScreen`)
+— all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -607,7 +608,17 @@ screen for a Firebase Auth email action link). `AuthActionScreen` calls
 directly from a mount-time `useEffect`, same stubbing pattern as
 `AvailabilityPollModal`/`BetaTestersScreen`.
 
-~25 components remain, all of them screens now (`renderMatchCard`
+A twenty-fifth PR extracted `src/components/playingXIPicker.js`
+(`PlayingXIPicker` — squad-to-playing-XI picker with optional captain/
+keeper/jersey-number controls, every callback a prop, no bare globals
+at all) and `src/components/myTeamsScreen.js` (`MyTeamsScreen` — the
+merged personal-and-club teams list). `MyTeamsScreen` is a genuinely
+clean screen extraction: every write action is a prop too, and its one
+Firestore-adjacent piece (`AvailabilityPollModal`, for "poll
+availability") is already its own tested module — nothing new to stub
+here beyond what that module's own test file already covers.
+
+~23 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
