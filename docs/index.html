@@ -21671,6 +21671,7 @@ function FixtureRow({
 // than their own subcollection — even a full double round-robin plus a bracket among a dozen club
 // teams is well under any Firestore document size concern, and keeping it inline means one save
 // covers the whole schedule.
+// GENERATED-FN-START: FixturesSection
 function FixturesSection({
   tournament,
   matches,
@@ -22241,6 +22242,7 @@ function FixturesSection({
     onCancel: () => setConfirmClearAll(false)
   }));
 }
+// GENERATED-FN-END: FixturesSection
 // Extracted so a grouped tournament can render one of these per group instead of one combined
 // table — the JSX here is unchanged from what used to be inline in TournamentDetailScreen, just
 // parameterized on `standings` (tableTopper now derives from the prop instead of an outer
