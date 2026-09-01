@@ -273,7 +273,12 @@ const FUNCTIONS = [
   { name: "TeamEditScreen", file: "src/components/teamEditScreen.js" },
   { name: "AccountScreen", file: "src/components/accountScreen.js" },
   { name: "MAX_UNDO_HISTORY", file: "src/components/matchScreen.js" },
-  { name: "MatchScreen", file: "src/components/matchScreen.js" }
+  { name: "MatchScreen", file: "src/components/matchScreen.js" },
+  { name: "FONT_LINK", file: "src/components/cricketScorer.js" },
+  { name: "GLOBAL_CSS", file: "src/components/cricketScorer.js" },
+  { name: "SCREEN_DEPTH", file: "src/components/cricketScorer.js" },
+  { name: "CricketScorer", file: "src/components/cricketScorer.js" },
+  { name: "ErrorBoundary", file: "src/components/errorBoundary.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's
@@ -313,19 +318,22 @@ function spliceModule(html, name, moduleSource) {
   );
 }
 
-// Finds a single `export function <name>` or `export const <name> =` declaration at column 0 in a
-// src/core/ file (declarations are assumed non-overlapping and not nested) and returns its text
-// with `export ` stripped, ready to splice back into a `GENERATED-FN` marker pair.
+// Finds a single `export function <name>`, `export const <name> =`, or `export class <name>`
+// declaration at column 0 in a src/core/ or src/components/ file (declarations are assumed
+// non-overlapping and not nested) and returns its text with `export ` stripped, ready to splice
+// back into a `GENERATED-FN` marker pair. `export class` support was added for ErrorBoundary, the
+// one class-based component in this codebase (a React error boundary, which can only be a class —
+// componentDidCatch/getDerivedStateFromError have no hook equivalent).
 const namedExportCache = new Map();
 function findNamedExport(file, name) {
   let exports = namedExportCache.get(file);
   if (!exports) {
     const source = fs.readFileSync(path.join(ROOT, file), "utf8");
     exports = new Map();
-    const re = /^export (?:function (\w+)|const (\w+) =)/gm;
+    const re = /^export (?:function (\w+)|const (\w+) =|class (\w+))/gm;
     const matches = [...source.matchAll(re)];
     matches.forEach((m, i) => {
-      const declName = m[1] || m[2];
+      const declName = m[1] || m[2] || m[3];
       const start = m.index;
       const end = i + 1 < matches.length ? matches[i + 1].index : source.length;
       // `\s*$` (not `\s+$`) so this still appends exactly one trailing newline even when the
