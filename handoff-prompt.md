@@ -785,7 +785,21 @@ header shows the *first name only* (`label`, split off `displayName`),
 not the person's full name — a test asserting on `"Robin Singh"`
 correctly failed until narrowed to `"Robin"`.
 
-~13 components remain, all of them screens now (`renderMatchCard`
+A thirty-fourth PR extracted `src/components/feedbackInboxScreen.js`
+(`FeedbackInboxScreen` — the admin-only feedback/crash-report inbox:
+filter by kind/status, expand a row for its full details, cycle
+priority/status, jot a private resolution note, copy a ready-to-paste
+Claude fix prompt, or delete). `loadFeedback` runs from a mount-time
+`useEffect`; `updateFeedbackStatus`/`updateFeedbackPriority`/
+`deleteFeedback` (bare globals) are called from their respective button
+handlers. `navigator.clipboard.writeText` needed the same
+`Object.defineProperty` workaround for Node's read-only `navigator`
+global other tests in this suite already use. One easy layout mistake
+caught early: several action buttons (priority/status/copy/delete) only
+render once a row is expanded — three tests initially failed trying to
+find them before clicking the row header to open it first.
+
+~12 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder

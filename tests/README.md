@@ -344,6 +344,16 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   file uses the same real react-dom+jsdom rendering `shareMenus.test.js`
   established, not `react-test-renderer`. Also stubs `Modal` (a
   separate bare global) for the sign-out `ConfirmModal`.
+- `src/components/feedbackInboxScreen.js` /
+  `tests/unit/components/feedbackInboxScreen.test.js` —
+  `FeedbackInboxScreen`, the admin-only feedback/crash-report inbox.
+  `loadFeedback` runs from a mount-time `useEffect`;
+  `updateFeedbackStatus`/`updateFeedbackPriority`/`deleteFeedback` are
+  bare globals from button handlers, stubbed per test.
+  `navigator.clipboard.writeText` (for "Copy prompt") uses the same
+  `Object.defineProperty` workaround for Node's read-only `navigator`
+  as `shareMenus.test.js`. Several action buttons only render once a
+  row is expanded, so most tests click the row header first.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
