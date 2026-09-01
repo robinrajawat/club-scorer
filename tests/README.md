@@ -142,6 +142,23 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   summary sheets rendered only into the browser's print output).
   All pure presentational, no DOM APIs — built entirely from
   already-extracted `src/components/`/`src/core/` pieces.
+- `src/components/infoScreens.js` /
+  `tests/unit/components/infoScreens.test.js` — secondary, mostly-static
+  account/info screens: `HelpScreen` (searchable FAQ, using
+  `highlightMatch`/`HELP_SECTIONS` — both extracted alongside it since
+  neither was used anywhere else), `AboutScreen`, `FeedbackScreen`,
+  `SharedLinksScreen`, `BetaTestersScreen`. Most call a not-yet-extracted
+  Firestore function only from an event handler (`submitFeedback`,
+  `onRevokeShareCode`/`onRevokeViewCode` as props) — but
+  `BetaTestersScreen` calls `loadBetaRequests`/`loadBetaTesters` from a
+  **mount-time** `useEffect`, so its test stubs those on `globalThis`
+  *before* rendering and wraps the initial `renderer.create()` itself in
+  `act()`, not just later interactions, since the effect's state update
+  follows immediately after mount. Also worth knowing: a data literal's
+  own bare identifier (`HELP_SECTIONS`' copy interpolates `POLL_TTL_DAYS`
+  in a template string) won't show up in a `React.createElement(X` grep
+  for dependencies — it only surfaces as a `ReferenceError` once a test
+  actually imports and runs the file.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
