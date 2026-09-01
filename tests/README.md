@@ -222,6 +222,14 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   of `UpcomingFixtureCard` for the tournament fixtures list (rather than
   the Home screen's upcoming-fixtures view). Same shape, same
   `Modal`-as-bare-global and mount-effect-stub patterns.
+- `src/components/inningsSetupScreens.js` /
+  `tests/unit/components/inningsSetupScreens.test.js` — the first two
+  actual screens extracted (`SuperOverOpenersSetup`, `SecondInningsSetup`,
+  the between-innings opener-picker screens). Both call `saveTransition`
+  (a bare global wrapping `saveMatch`, a Firestore write, not extracted)
+  only from their own button handlers, never during render, so it's
+  stubbed on `globalThis` only in the tests that click those buttons —
+  no mount-time effect here, unlike the last several batches.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

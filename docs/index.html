@@ -33152,6 +33152,7 @@ function MatchScreen({
 // Opening-batters/bowler picker for the very first innings of a fresh Super Over match — same
 // shape as SecondInningsSetup's job, just for innings[0] of a brand-new match instead of
 // innings[1] of an existing one, and with no "target" framing since nobody's chasing yet.
+// GENERATED-FN-START: SuperOverOpenersSetup
 function SuperOverOpenersSetup({
   match,
   setMatch
@@ -33260,6 +33261,7 @@ function SuperOverOpenersSetup({
     }
   }, "Start Super Over"));
 }
+// GENERATED-FN-END: SuperOverOpenersSetup
 // Best-effort self-heal for one-time transition saves (second-innings setup, super-over openers)
 // where a conflict is never expected to reflect a genuine second scorer — nobody else should be
 // racing a transition only one person can trigger — so it's safe to just retry once against the
@@ -33281,6 +33283,7 @@ async function saveTransition(updatedMatch, setMatch) {
     console.error("[saveTransition] failed after retry:", result.error);
   }
 }
+// GENERATED-FN-START: SecondInningsSetup
 function SecondInningsSetup({
   match,
   setMatch
@@ -33475,6 +33478,7 @@ function SecondInningsSetup({
     onCancel: () => setConfirmGoBack(false)
   }));
 }
+// GENERATED-FN-END: SecondInningsSetup
 // GENERATED-FN-START: PlayerOfMatchCard
 function PlayerOfMatchCard({
   match,
