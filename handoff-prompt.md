@@ -985,17 +985,43 @@ concatenated string — the same `JSON.stringify`-split gotcha
 `PlayingXIPicker`/`FixturesSection` hit earlier, so tests match
 `/"Step ","1"," of ","4"/`, not a plain `/Step 1 of 4/` substring.
 
-~4 components remain: `TeamEditScreen`, `AccountScreen`, `MatchScreen`,
-and the root `CricketScorer` component itself. All hold real
-application state via hooks — a different, harder case than a
-presentational leaf: expect each one to need its own dependency read
-before starting, and to watch for the same kind of nested-closure
-helper `HomeScreen` resolved, or a standalone bare constant like
-`SETUP_PAGE_LABELS` that needs its own `GENERATED-FN` entry rather than
-folding into an existing module. Continue through the rest now — the
-project owner has asked for the full extraction to be completed
-without pausing for confirmation between batches; only stop for a
-genuine blocker that needs the owner's own decision.
+A forty-fourth PR extracted `src/components/teamEditScreen.js`
+(`TeamEditScreen` — create/edit a team's roster: name, jersey color,
+add/remove players typed/borrowed-from-another-club/copied-from-the-
+club-pool, captain/keeper toggles, per-player publish/unpublish to the
+shared player directory). Every Firestore-reaching write is a prop;
+the one bare global is `checkDeletedBorrowedPlayers` (flags a borrowed
+roster row whose source player doc was since deleted outright), called
+from a mount-time `useEffect` only when the roster already has a
+borrowed player with an email — most tests never trigger it. One real
+mistake caught by the mandatory pre-test byte-diff check, not a test
+failure: the first pass imported `Modal` for real
+(`import { Modal } from "./modal.js"`) since this screen also renders
+it directly for its own borrow/pool-picker dialogs, not just via
+`ConfirmModal`. That's exactly the mistake flagged when
+`playerModals.js`/`miscModals.js` were extracted — a real import binds
+`Modal` at module load, so a test's `globalThis.Modal = StubModal`
+silently does nothing and the real DOM-dependent `Modal` runs instead.
+Fixed before any test was written by dropping the import and keeping
+`Modal` as a bare, unimported global, matching every other
+`Modal`-using file in this repo. Also worth remembering:
+`JSON.stringify` on a *live* React element (as opposed to a
+`renderer.toJSON()` tree) throws on the `_owner` circular reference —
+one test needed the hand-rolled `hasText` walker (checking
+`.props.children` directly) instead of `JSON.stringify(...).includes(...)`
+to search a live `findAllByType("button")` result.
+
+~3 components remain: `AccountScreen`, `MatchScreen`, and the root
+`CricketScorer` component itself. All hold real application state via
+hooks — a different, harder case than a presentational leaf: expect
+each one to need its own dependency read before starting, and to watch
+for the same kind of nested-closure helper `HomeScreen` resolved, a
+standalone bare constant like `SETUP_PAGE_LABELS` that needs its own
+`GENERATED-FN` entry, or a `Modal` real-import mistake like this
+batch's. Continue through the rest now — the project owner has asked
+for the full extraction to be completed without pausing for
+confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub

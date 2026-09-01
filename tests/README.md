@@ -453,6 +453,21 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   "Step N of M" progress text renders as four separate JSX children
   (`"Step ", n, " of ", total`), not one string — match
   `/"Step ","1"," of ","4"/`, not a plain substring.
+- `src/components/teamEditScreen.js` / `tests/unit/components/teamEditScreen.test.js`
+  — `TeamEditScreen`, create/edit a team's roster (name, jersey color,
+  add/remove players — typed, borrowed from another club, or copied
+  from the club pool — captain/keeper, publish/unpublish to the shared
+  player directory). Every Firestore-reaching write is a prop; the one
+  bare global is `checkDeletedBorrowedPlayers`, stubbed only where a
+  test's roster has a borrowed player with an email. `Modal` stays a
+  bare, unimported global here too (this screen renders it directly
+  for its own borrow/pool dialogs, not just via `ConfirmModal`) — a
+  real `import { Modal } from "./modal.js"` was caught and reverted
+  before any test ran, per the rule from `playerModals.js`/
+  `miscModals.js`'s own batch. One test needed a hand-rolled `hasText`
+  walker instead of `JSON.stringify` to search a *live* React element
+  (as opposed to a `renderer.toJSON()` tree) — `JSON.stringify` throws
+  on a live element's circular `_owner` reference.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
