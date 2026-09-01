@@ -468,6 +468,26 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   walker instead of `JSON.stringify` to search a *live* React element
   (as opposed to a `renderer.toJSON()` tree) — `JSON.stringify` throws
   on a live element's circular `_owner` reference.
+- `src/components/accountScreen.js` / `tests/unit/components/accountScreen.test.js`
+  — `AccountScreen`, the signed-in-or-not account/settings screen
+  (profile name, player-profile summary, sign-in method linking, sign
+  out, admin tools, beta-tester tools, export/import backup, account
+  deletion, or the signed-out sign-in form). Eight bare-global Auth/
+  Firestore calls (`submitBetaRequest`, `loadFeedback`,
+  `loadBetaRequests` — an admin-only mount effect —
+  `linkPasswordCredential`, `linkGoogleCredential`, `signUpEmail`,
+  `signInEmail`, `sendPasswordReset`), same pattern as
+  `WelcomeScreen`/`AuthActionScreen`. `Modal` backs the delete-account
+  dialog. `handleExport`/`handleImportFile` touch real browser-only
+  APIs (`Blob`, `URL.createObjectURL`, `FileReader`) from inside their
+  click handlers — tests confirm those buttons render/gate correctly
+  without clicking through, same disclosed gap as `ExportPdfButton`'s
+  untested `window.print()`. The sign-out row's own button and
+  `ConfirmModal`'s confirm button both render the text "Sign out" —
+  searching by button text after opening the dialog silently re-matched
+  the row's own (dialog-reopening) button; fixed by driving
+  `ConfirmModal`'s `onConfirm` prop directly via `findByType(ConfirmModal)`
+  instead.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
