@@ -914,18 +914,27 @@ This unblocks `TeamsScreen` (882 lines), which renders both `ClubPanel`
 and `FederationsPanel` as tabs — now that both exist, `TeamsScreen`
 itself is next.
 
-~6 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). `TeamsScreen`,
-`MatchScreen`, `SetupScreen`, `HomeScreen`, `TeamEditScreen`, and
-`AccountScreen` all hold real application state via hooks — a
-different, harder case than a presentational leaf: expect each one to
-need its own dependency read before starting, and to sometimes carry a
-nested-closure helper (like `renderMatchCard`) that has to be handled
-as part of that screen's own extraction rather than pulled out
-separately. Continue through the rest now — the project owner has asked
-for the full extraction to be completed without pausing for
-confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+A forty-first PR extracted `src/components/teamsScreen.js`
+(`TeamsScreen` — the "Clubs" screen: a Clubs/Federations tab rendering
+`ClubPanel`/`FederationsPanel`, plus, once a club is active, its player
+pool — quick-add, bulk paste/upload preview, active/inactive toggle,
+edit, remove, "create a team from everyone tagged X" — and a federation
+co-owner invite-code redemption box). Every write action is a prop, no
+bare globals, no mount effect. Now that `ClubPanel`/`FederationsPanel`
+both exist, this was a clean prop-passthrough extraction: all 9 tests
+passed on the first run.
+
+~5 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). `MatchScreen`,
+`SetupScreen`, `HomeScreen`, `TeamEditScreen`, and `AccountScreen` all
+hold real application state via hooks — a different, harder case than a
+presentational leaf: expect each one to need its own dependency read
+before starting, and to sometimes carry a nested-closure helper (like
+`renderMatchCard`) that has to be handled as part of that screen's own
+extraction rather than pulled out separately. Continue through the rest
+now — the project owner has asked for the full extraction to be
+completed without pausing for confirmation between batches; only stop
+for a genuine blocker that needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
