@@ -391,6 +391,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `TournamentShareModal`/`QualificationCalculatorModal`/`ConfirmModal`
   all reference `Modal` as a bare global, so tests that open any of
   them stub it too.
+- `src/components/clubPanel.js` / `tests/unit/components/clubPanel.test.js`
+  — `ClubPanel`, full club administration (create/join, owner-only
+  Manage mode, self-service edit-details form). The sole bare global is
+  `searchAddress`, not exercised here. Most of the Manage UI is gated
+  on `activeIsOwner && manageOpen`, so tests click "Manage" first; a
+  hidden `<input type="file">` for the logo sits ahead of other inputs
+  once Manage is open, so tests filter `i.props.type !== "file"`;
+  `VisibilitySwitch` is identified by `aria-label`
+  ("Make public"/"Make private"), not text; `SearchAndRequestPanel`
+  (used for the federation-affiliation search) needs an explicit
+  "Search" button click before results appear.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
