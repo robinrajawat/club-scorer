@@ -1,30 +1,30 @@
 #!/usr/bin/env node
-// Splices the tested src/core/*.js modules into docs/index.html.
+// Splices the tested src/core/*.js modules into public/index.html.
 //
 // Two marker shapes, both replaced from src/core/ on every run:
 //  - `// GENERATED-START: <name>` / `// GENERATED-END: <name>` — a whole module (MODULES below)
 //    spliced in as one contiguous block.
 //  - `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>` — a single function, wrapped
 //    in place around its existing declaration (FUNCTIONS below). Used for logic that's pure and
-//    worth testing but lives scattered among docs/index.html's React components rather than in one
+//    worth testing but lives scattered among public/index.html's React components rather than in one
 //    contiguous span — this splices just that one function back in without relocating anything
 //    else in the file.
 //
-// docs/index.html is production (served by GitHub Pages from the docs/ folder) — there is no
-// separate build output — so this script edits it in place. The modules in src/core/ are the
-// source of truth for the logic they cover; docs/index.html's copy is regenerated from them,
-// never hand-edited within a marker span.
+// public/index.html is production (deployed to GitHub Pages via .github/workflows/deploy.yml) —
+// there is no separate build output — so this script edits it in place. The modules in src/core/
+// are the source of truth for the logic they cover; public/index.html's copy is regenerated from
+// them, never hand-edited within a marker span.
 //
 // Usage:
-//   node scripts/generate.js            # regenerate docs/index.html in place
-//   node scripts/generate.js --verify   # exit 1 if docs/index.html would change (CI/pre-push check)
+//   node scripts/generate.js            # regenerate public/index.html in place
+//   node scripts/generate.js --verify   # exit 1 if public/index.html would change (CI/pre-push check)
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const INDEX_HTML = path.join(ROOT, "docs", "index.html");
+const INDEX_HTML = path.join(ROOT, "public", "index.html");
 
 const MODULES = [
   { name: "pack-utils", file: "src/core/packUtils.js" },
@@ -33,7 +33,7 @@ const MODULES = [
 ];
 
 // Each of these names must be an `export function <name>` or `export const <name> =` at column 0
-// in the given file. Add a name here after wrapping its existing docs/index.html declaration in
+// in the given file. Add a name here after wrapping its existing public/index.html declaration in
 // `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>` and moving its body into the
 // src/core/ file (see src/core/statsAndFixtures.js for the pattern).
 const FUNCTIONS = [
@@ -282,9 +282,9 @@ const FUNCTIONS = [
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's
-// left is plain global-scope script — exactly what docs/index.html's inline (non-module) <script> can
+// left is plain global-scope script — exactly what public/index.html's inline (non-module) <script> can
 // run. Local imports (`import { X } from "./other.js"`) are dropped entirely: by the time a
-// spliced block runs in docs/index.html, everything from every other module is already declared in the
+// spliced block runs in public/index.html, everything from every other module is already declared in the
 // same global scope, at whatever earlier point in the file that module was spliced in.
 function toGlobalScript(source) {
   return source
@@ -298,7 +298,7 @@ function splice(html, startMarker, endMarker, replacement, label) {
   const endIdx = html.indexOf(endMarker);
   if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
     throw new Error(
-      `Could not find ${label} markers in docs/index.html — expected ` +
+      `Could not find ${label} markers in public/index.html — expected ` +
       `"${startMarker}" ... "${endMarker}". If it was renamed or the markers were moved, update ` +
       `scripts/generate.js to match.`
     );
@@ -379,16 +379,16 @@ function run() {
   if (verify) {
     if (original !== html) {
       console.error(
-        "docs/index.html is out of sync with src/core/*.js — run `npm run generate` and commit the result."
+        "public/index.html is out of sync with src/core/*.js — run `npm run generate` and commit the result."
       );
       process.exit(1);
     }
-    console.log("docs/index.html matches src/core/*.js — up to date.");
+    console.log("public/index.html matches src/core/*.js — up to date.");
     return;
   }
 
   fs.writeFileSync(INDEX_HTML, html);
-  console.log("Regenerated docs/index.html from src/core/*.js.");
+  console.log("Regenerated public/index.html from src/core/*.js.");
 }
 
 run();

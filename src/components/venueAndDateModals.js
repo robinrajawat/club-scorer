@@ -10,7 +10,7 @@ import { parseFixtureDateTime, buildFixtureIso } from "../core/shareAndFormat.js
 //
 // Both reference Modal as a bare, unimported global (same pattern as ConfirmModal/playerModals.js)
 // so tests can stub globalThis.Modal without pulling in jsdom. VenueEditModal's address search
-// (`searchAddress`, a debounced Nominatim fetch call, defined in docs/index.html, not extracted --
+// (`searchAddress`, a debounced Nominatim fetch call, defined in public/index.html, not extracted --
 // network-touching and side-effecting) is gated behind a 400ms setTimeout and a 3-character
 // minimum; tests exercise venue.length < 3 and the independent club-address-shortcut path
 // (clubMatches, computed with no debounce at all) without ever reaching that timer, since

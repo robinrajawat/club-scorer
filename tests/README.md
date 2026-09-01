@@ -5,13 +5,13 @@ npm test
 ```
 
 Run this before pushing any change that touches scoring, standings, or
-DLS logic. The tested logic lives in `src/core/` — `docs/index.html` is
+DLS logic. The tested logic lives in `src/core/` — `public/index.html` is
 generated from those modules (see `scripts/generate.js`), so testing
-`src/core/` directly and keeping `docs/index.html` in sync via
+`src/core/` directly and keeping `public/index.html` in sync via
 `npm run generate` is what tests exactly what's about to ship, without
-`docs/index.html` and its logic ever being able to silently drift apart.
+`public/index.html` and its logic ever being able to silently drift apart.
 Run `npm run generate:verify` to check that they haven't (it fails loudly
-if `docs/index.html` doesn't match what `src/core/*.js` would produce).
+if `public/index.html` doesn't match what `src/core/*.js` would produce).
 
 - `src/core/scoringEngine.js` / `tests/unit/scoringEngine.test.js` —
   the ball-by-ball scoring engine (`newInning`, `applyBall`,
@@ -59,7 +59,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   presentational React components (see `handoff-prompt.md`'s "React
   component extraction" section for the splice mechanism). Rendered with
   `react-test-renderer` (a `devDependency`, pinned to `18.3.1` — the
-  exact React version `docs/index.html` loads from CDN, so tests exercise
+  exact React version `public/index.html` loads from CDN, so tests exercise
   the real thing, not a version-skewed stand-in). Unlike the `src/core/`
   modules, files here **do** use real `import`s (`react`, `./theme.js`,
   `./icons.js`, and any already-extracted `src/core/`/sibling
@@ -97,7 +97,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   charts/cards (`RunRateChart`, `RunsPerOverChart`, `SyncConflictModal`,
   `PlayerOfMatchCard`, `BestFielderCard`). All pure presentational, no DOM
   APIs. The two award-picker cards call `saveMatch` (a Firestore write
-  still living in `docs/index.html`, not extracted) from their `pick()`
+  still living in `public/index.html`, not extracted) from their `pick()`
   handler — one test stubs `globalThis.saveMatch` locally to exercise a
   real "Confirm" click without touching Firebase, same pattern as
   `Modal`'s stub in `formUiAtoms.test.js`.
@@ -131,7 +131,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `modal.test.js` (`react-test-renderer` this time, no portal, so no need
   for the real-`react-dom` approach `shareMenus.test.js` needed). Its
   `handleTap` calls `flushPendingWrites` (a Firestore write, still in
-  `docs/index.html`, not extracted) — stubbed on `globalThis` the same
+  `public/index.html`, not extracted) — stubbed on `globalThis` the same
   way `saveMatch` was for `matchInsightCards.test.js`.
 - `src/components/scorecard.js` / `tests/unit/components/scorecard.test.js`
   — the full ball-by-ball scorecard: `InningScorecard` (one innings'
@@ -172,7 +172,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   also needed two more bare-global stubs (`lsSetItem`, `LS_PREFIX`, both
   really from `localStorageOutbox.js`) because its `finish()` calls
   `markTourSeen()` (`appLogic.js`), which calls those — real in
-  `docs/index.html`'s single scope, not in `appLogic.js`'s own module
+  `public/index.html`'s single scope, not in `appLogic.js`'s own module
   scope under test. `TournamentShareModal` reads
   `window.location.origin`/`pathname` directly during render, so its
   test stubs a minimal `globalThis.window` object rather than pulling in
@@ -183,7 +183,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   (a small custom date/time picker, using `WEEKDAY_LABELS`/`MONTH_LABELS`).
   Same `Modal`-as-bare-global stub pattern. `VenueEditModal`'s address
   search (`searchAddress`, a debounced Nominatim fetch, still in
-  `docs/index.html`, not extracted) is gated behind a 400ms `setTimeout`
+  `public/index.html`, not extracted) is gated behind a 400ms `setTimeout`
   and a 3-character minimum — tests exercise the venue-length-under-3
   path and the independent, non-debounced club-address-shortcut path
   without ever reaching that timer, rather than waiting it out or
@@ -434,7 +434,7 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   explicit third parameter, with all four in-`HomeScreen` call sites
   updated to match; purely mechanical and behavior-preserving, verified
   against both the post-refactor splice snapshot and the true
-  pre-refactor `docs/index.html`. Search chips (`Teams`/`Cups`/`Clubs`/
+  pre-refactor `public/index.html`. Search chips (`Teams`/`Cups`/`Clubs`/
   `Players`/etc.) only render once a query is typed or the scope isn't
   `"all"` — tests that need to click a chip type into the search box
   first, same as `q`-gated UI elsewhere in this suite.
@@ -551,20 +551,20 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   with `getDerivedStateFromError`/`componentDidCatch`, which have no
   hook equivalent. `reportErrorAuto`/`submitFeedback` (bare globals,
   Firestore writes) and `RECENT_CONSOLE_ERRORS` (a bare-global ring
-  buffer, populated elsewhere in `docs/index.html`, not specific to this
+  buffer, populated elsewhere in `public/index.html`, not specific to this
   component) are stubbed per test; no jsdom needed — a minimal
   `globalThis.window = { location: { reload: () => {} } }` covers the
   Reload button's one DOM touch, since nothing else in the file reads a
   real DOM API.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
-span of `docs/index.html`, spliced in as a block
+span of `public/index.html`, spliced in as a block
 (`// GENERATED-START: <name>` / `// GENERATED-END: <name>`).
 `statsAndFixtures.js`, `shareAndFormat.js`, `miscHelpers.js`,
 `liveMatchRegistry.js`, and `localStorageOutbox.js` (plus
 `unpackMatchFromFirestore` in `packUtils.js`) are different: their
 functions are scattered as individual, non-contiguous declarations among
-`docs/index.html`'s React components, so each one is wrapped in place with
+`public/index.html`'s React components, so each one is wrapped in place with
 its own `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>`
 pair instead of being physically relocated — see `scripts/generate.js`'s
 `FUNCTIONS` list for the pattern to follow when pulling out the next

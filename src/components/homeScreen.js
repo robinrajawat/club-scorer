@@ -24,7 +24,7 @@ import { hasSeenSwipeHint } from "../core/appLogic.js";
 // suite) backs one dialog. Covered by tests/unit/components/homeScreen.test.js.
 //
 // `renderMatchCard`, the per-match-card renderer, stays nested inside HomeScreen exactly as it was
-// in docs/index.html, but its signature was refactored here (before this extraction) to take the
+// in public/index.html, but its signature was refactored here (before this extraction) to take the
 // values it used to close over -- onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById,
 // onGetShareCode, onGetViewCode -- as an explicit third argument instead, since a module-level
 // function obviously can't close over another function's local state/props the way a truly nested

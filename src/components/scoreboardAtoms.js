@@ -11,7 +11,7 @@ import { ballLabelsForOver } from "../core/miscHelpers.js";
 //
 // SyncStatusBanner reads navigator.onLine and window's online/offline events directly, so like
 // Modal it needs a real jsdom-backed DOM to test meaningfully. Its handleTap calls
-// `flushPendingWrites` (a Firestore write, defined in docs/index.html, not extracted -- needs the
+// `flushPendingWrites` (a Firestore write, defined in public/index.html, not extracted -- needs the
 // Firebase SDK global) from an onClick handler, same pattern as saveMatch elsewhere in this app.
 
 export function OversStrip({

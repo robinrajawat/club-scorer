@@ -114,12 +114,12 @@ If you use none of the above, everything stays local, and clearing your browser'
 This is a static site with a Firebase backend for the optional sync/sharing features (Google sign-in and Firestore). If you fork this to run your own instance:
 
 1. Create a Firebase project, enable **Authentication** (Google provider) and **Firestore Database**.
-2. Update the `firebaseConfig` object near the top of `docs/index.html` with your project's config.
+2. Update the `firebaseConfig` object near the top of `public/index.html` with your project's config.
 3. Paste [`firebase/firestore.rules`](firebase/firestore.rules) into **Firebase Console → Firestore Database → Rules → Publish**. The app will still load and score matches locally without this, but score codes, view links, account sync, clubs, federations, and the public player/club/federation directories all depend on it — none of that is optional plumbing, it's the actual access-control model, so don't skip it.
 4. (Optional, but recommended) Enable native TTL policies on the `expiresAt` field for the **`availabilityPolls`**, **`liveViews`**, **`tournamentViews`**, and **`clubJoinCodes`** collections — **Firebase Console → Firestore Database → TTL → Create policy**, one per collection, all pointing at the field named `expiresAt`. The app already writes that field on every doc in those four collections; this step is what actually turns it into automatic deletion once the timestamp passes, rather than a field nobody ever acts on. Deliberately not offered for `sharedMatches`: for a guest scoring with no account, that collection is the *only* copy of their match data, so nothing there ever carries an expiry.
-5. Serve `docs/index.html`, `docs/sw.js`, and `docs/manifest.json` from the same origin (GitHub Pages with the source set to the `docs/` folder, or any static host pointed at `docs/`) — the service worker and manifest paths assume they're siblings of `index.html`.
+5. Serve `public/index.html`, `public/sw.js`, and `public/manifest.json` from the same origin (GitHub Pages deployed via Actions from the `public/` folder, or any static host pointed at `public/`) — the service worker and manifest paths assume they're siblings of `index.html`.
 
-No build step and no `npm install` needed to **run** the app — it's plain React and Firebase loaded from CDN `<script>` tags. `npm install` is only needed for **development**: running the test suite (`npm test`) or regenerating `docs/index.html` from `src/` after an edit (`npm run generate`) — see `tests/README.md`.
+No build step and no `npm install` needed to **run** the app — it's plain React and Firebase loaded from CDN `<script>` tags. `npm install` is only needed for **development**: running the test suite (`npm test`) or regenerating `public/index.html` from `src/` after an edit (`npm run generate`) — see `tests/README.md`.
 
 ## License
 

@@ -15,7 +15,7 @@ import { tossText, umpiresText } from "../core/shareAndFormat.js";
 // complete (pageValid). Every write is a prop (onStart/onCancel) -- no bare Firestore globals,
 // no mount-time effect that reaches outside the component. SETUP_PAGE_LABELS travels alongside
 // it here (shared between the top and bottom progress indicators) even though it was a bare
-// top-level const in docs/index.html, not part of any module or component before -- it's used
+// top-level const in public/index.html, not part of any module or component before -- it's used
 // nowhere else, so it lives here as its own export rather than in a shared core module. No
 // per-export comment above it below, to avoid generate.js's findNamedExport comment-glue bug
 // (see handoff-prompt.md) since it isn't the file's first export.

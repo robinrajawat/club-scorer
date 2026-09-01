@@ -13,7 +13,7 @@ import { rosterFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.j
 // look-back and a "fix a mistake" reopen-first-innings escape hatch). Covered by
 // tests/unit/components/inningsSetupScreens.test.js.
 //
-// Both call `saveTransition` (a bare global, defined in docs/index.html, not extracted -- it wraps
+// Both call `saveTransition` (a bare global, defined in public/index.html, not extracted -- it wraps
 // `saveMatch`, a Firestore write) only from their own `start()`/`goBackToFirstInnings()` handlers,
 // never during render, so it's stubbed on `globalThis` only in the tests that click those buttons.
 

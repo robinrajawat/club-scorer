@@ -5,7 +5,7 @@ import { COLORS } from "./theme.js";
 // a caught render error via reportErrorAuto (a bare global, not extracted -- a Firestore write),
 // and lets the person add a free-text follow-up note via submitFeedback (also bare). Both read
 // RECENT_CONSOLE_ERRORS, a small in-memory ring buffer of recent console.error calls populated
-// elsewhere in docs/index.html (a shared bare global, not specific to this component, so it
+// elsewhere in public/index.html (a shared bare global, not specific to this component, so it
 // stays unextracted rather than moving here). Covered by tests/unit/components/errorBoundary.test.js.
 
 export class ErrorBoundary extends React.Component {

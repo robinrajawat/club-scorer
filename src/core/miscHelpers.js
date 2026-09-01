@@ -1,7 +1,7 @@
 import { ISO_DATETIME_RE } from "./shareAndFormat.js";
 import { uid } from "./statsAndFixtures.js";
 
-// A grab-bag of small, pure, standalone helpers scattered through docs/index.html's React
+// A grab-bag of small, pure, standalone helpers scattered through public/index.html's React
 // components: admin-email checks, match/invite codes, address/weather formatting, CSV parsing for
 // bulk player import, club/federation ownership checks, date labels, tournament status, player
 // avatars, and over-label parsing. No Firestore, no DOM. Covered by

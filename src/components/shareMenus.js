@@ -12,7 +12,7 @@ import { buildFollowUrl, buildLiveShareText, buildShareText } from "../core/shar
 // meaningfully; see tests/unit/components/shareMenus.test.js.
 //
 // ShareMenu's handleShareLive/handleShareDetails call `shareText` (navigator.share/clipboard,
-// defined in docs/index.html, not extracted -- browser-only and side-effecting, nothing to
+// defined in public/index.html, not extracted -- browser-only and side-effecting, nothing to
 // unit-test in the function itself) from their onClick handlers, same as elsewhere in this app.
 
 export function MoveTeamMenu({
