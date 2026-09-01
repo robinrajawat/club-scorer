@@ -13694,6 +13694,7 @@ function ClubPanel({
 // It lists every federation the account currently knows about (any federation one of the user's
 // clubs is affiliated with, or the user owns/co-owns directly), with management actions gated to
 // that federation's own owner/co-owner — completely independent of club ownership.
+// GENERATED-FN-START: FederationsPanel
 function FederationsPanel({
   federationsById = {},
   clubs,
@@ -14856,6 +14857,7 @@ function FederationsPanel({
     onCancel: () => setConfirmCancelInvite(null)
   }));
 }
+// GENERATED-FN-END: FederationsPanel
 // GENERATED-FN-START: InboxScreen
 function InboxScreen({
   requests,
