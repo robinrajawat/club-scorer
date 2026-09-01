@@ -121,6 +121,16 @@ This is a static site with a Firebase backend for the optional sync/sharing feat
 
 No build step and no `npm install` needed to **run** the app — it's plain React and Firebase loaded from CDN `<script>` tags. `npm install` is only needed for **development**: running the test suite (`npm test`) or regenerating `public/index.html` from `src/` after an edit (`npm run generate`) — see `tests/README.md`.
 
+## Contributing
+
+Start with [`docs/handoff-prompt.md`](docs/handoff-prompt.md) — the
+repo's own workflow rules, structure, and history. Run `sh
+scripts/setup-git-identity.sh` once per clone before committing (sets
+the git identity and enables `.githooks/pre-commit`, which also
+re-validates `public/index.html`'s HTML structure on every commit that
+touches it). `.github/workflows/ci.yml` runs the same checks — tests,
+`generate:verify`, structure validation — on every push and PR.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

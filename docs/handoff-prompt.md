@@ -65,17 +65,22 @@ finish or explicitly abandon it first.
 
 ## Workflow rules (apply exactly, unchanged across every session)
 
-**Git identity — no unwanted contributors.** Before any commit:
+**Git identity — no unwanted contributors.** Before any commit, run once
+per session/clone:
 
 ```
-git config user.name "robinrajawat"
-git config user.email "robinsinghrajawat@gmail.com"
+sh scripts/setup-git-identity.sh
 ```
 
-in the local clone — never let it fall back to a sandbox default. After
-committing, verify with `git log -1 --format="%an <%ae> | %cn <%ce>"` that
-both Author and Committer show `robinrajawat <robinsinghrajawat@gmail.com>`
-before pushing.
+— sets `user.name`/`user.email` to `robinrajawat
+<robinsinghrajawat@gmail.com>` and enables `.githooks/pre-commit` (`git
+config core.hooksPath .githooks`) in one step. Never let identity fall
+back to a sandbox default. The hook is a local backstop, not a substitute
+for checking: after committing, still verify with `git log -1
+--format="%an <%ae> | %cn <%ce>"` that both Author and Committer show
+`robinrajawat <robinsinghrajawat@gmail.com>` before pushing. (The hook
+also re-runs `scripts/validate_html_structure.py` whenever
+`public/index.html` is staged — see "Repo structure" below.)
 
 **No Co-authored-by/model-identifier trailer, ever.** Commit messages must
 NOT include a `Co-authored-by: <Claude/model name> <...>` trailer, a
@@ -271,7 +276,7 @@ effects, nothing to unit-test); `resizeImageToDataURL`
 (browser-only APIs, side-effecting); `highlightMatch`/`renderMatchCard`
 (produce React elements, not data).
 
-## React component extraction (started)
+## React component extraction (complete)
 
 A ninth PR started pulling the ~93 React components out of
 `public/index.html` into `src/components/`, using the same `GENERATED-FN`
@@ -1266,3 +1271,47 @@ The deploy-mode switch is now fully complete: `public/index.html` is
 production, deployed by `.github/workflows/deploy.yml` via GitHub
 Actions, with no folder-name restriction left over from the old
 branch-deploy setup.
+
+## Tooling learnings ported from `sakura` (done)
+
+With extraction and the deploy-mode switch both finished, this session
+compared this repo's splice-from-`src/`-into-one-file pattern against a
+sibling project (`sakura`) running a more mature version of the same
+approach, and ported over the pieces that were genuinely cheap and
+actually applicable — three PRs:
+
+- **PR #53** added `.github/workflows/ci.yml` (the real verification
+  gate this repo was missing — runs `npm test` +
+  `npm run generate:verify` + the new structure check on every push/PR)
+  and `scripts/validate_html_structure.py` (an HTML5-parser-based check
+  guarding against a RAWTEXT-tag hijack — a stray `<title`/`</script`
+  landing somewhere it shouldn't silently corrupting the main script;
+  `sakura` hit this for real in production). Caught its own bug on the
+  very first real run: the workflow's Node 20 pin crashed every
+  jsdom-dependent test file, since `jsdom@30.0.1` only supports Node
+  `^22.22.2 || ^24.15.0 || >=26.0.0` — fixed by bumping to Node 22 and
+  adding an `engines` field to `package.json` so the constraint is
+  documented, not just tribal knowledge.
+- **PR #54** moved `handoff-prompt.md` into a new `docs/` folder — now
+  that `docs/` no longer means "the deployed PWA" (freed up by the
+  earlier `public/` rename), it's finally free to mean what its name
+  says: project documentation, with room for more to land alongside it.
+- **PR #55** added `.githooks/pre-commit` + `scripts/setup-git-identity.sh`
+  (see "Git identity" above) — a local backstop for the same two things
+  `ci.yml` already gates, catching a bad commit before it exists rather
+  than before it merges.
+
+**One item was explicitly evaluated and skipped, not overlooked:**
+adopting Vite's `publicDir` convention for static assets. It exists to
+stop a *bundler* from silently dropping/mis-hashing assets during a
+build — `sakura` hit exactly that with `sw.js`/its manifest. This repo
+has no bundler at all: `public/` deploys to Pages verbatim via
+`actions/upload-pages-artifact`, so there's no equivalent risk for Vite
+to guard against, and introducing one now would add complexity (and a
+new risk surface) for a problem that doesn't exist here. Worth
+re-evaluating only if this repo ever adopts a real build step for
+another reason — not as a standalone change.
+
+TypeScript and a Playwright e2e suite were discussed and deliberately
+parked as bigger, lower-urgency investments (see the session's own
+discussion, not repeated here) — not started, not forgotten.
