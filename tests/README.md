@@ -55,6 +55,14 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `QuotaExceededError` would be — so the test file installs a small
   in-memory `localStorage` polyfill (and, for one case, a throwing one)
   on `globalThis` to exercise the real success and quota-exceeded paths.
+- `src/components/*.js` — presentational React components (see
+  `handoff-prompt.md`'s "React component extraction" section for the
+  mechanism and why they need no `import`s). **Not covered by any test
+  file, deliberately** — rendering/asserting on a component meaningfully
+  needs a React test renderer, which this repo hasn't added. Their
+  round-trip is still verified the same way as everything else
+  (`npm run generate`/`generate:verify`, a syntax re-parse, a
+  headless-browser local-asset check) — just not unit-tested.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

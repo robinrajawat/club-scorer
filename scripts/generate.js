@@ -129,7 +129,25 @@ const FUNCTIONS = [
   { name: "undoHistoryKey", file: "src/core/localStorageOutbox.js" },
   { name: "loadUndoHistory", file: "src/core/localStorageOutbox.js" },
   { name: "saveUndoHistory", file: "src/core/localStorageOutbox.js" },
-  { name: "clearUndoHistory", file: "src/core/localStorageOutbox.js" }
+  { name: "clearUndoHistory", file: "src/core/localStorageOutbox.js" },
+  { name: "AppMark", file: "src/components/illustrations.js" },
+  { name: "LoadingBallIllustration", file: "src/components/illustrations.js" },
+  { name: "LoadingNote", file: "src/components/illustrations.js" },
+  { name: "EmptyStateBallIllustration", file: "src/components/illustrations.js" },
+  { name: "RoleBadge", file: "src/components/scoringUiAtoms.js" },
+  { name: "BallCelebration", file: "src/components/scoringUiAtoms.js" },
+  { name: "MILESTONE_ICONS", file: "src/components/scoringUiAtoms.js" },
+  { name: "MilestoneToast", file: "src/components/scoringUiAtoms.js" },
+  { name: "OdometerScore", file: "src/components/scoringUiAtoms.js" },
+  { name: "InningsTimer", file: "src/components/scoringUiAtoms.js" },
+  { name: "SwipeableRow", file: "src/components/scoringUiAtoms.js" },
+  { name: "PlayerAvatar", file: "src/components/formUiAtoms.js" },
+  { name: "TextField", file: "src/components/formUiAtoms.js" },
+  { name: "RuleChoice", file: "src/components/formUiAtoms.js" },
+  { name: "TeamChips", file: "src/components/formUiAtoms.js" },
+  { name: "PinnableChip", file: "src/components/formUiAtoms.js" },
+  { name: "HomeUtilityButton", file: "src/components/formUiAtoms.js" },
+  { name: "ConfirmModal", file: "src/components/formUiAtoms.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

@@ -199,16 +199,64 @@ index / offline outbox / undo-history cluster (`lsSetItem` and 15 more)
 became `src/core/localStorageOutbox.js`, tested against an in-memory
 `localStorage` polyfill installed on `globalThis`.
 
-**What's actually left in `docs/index.html` now** (verified, not
-estimated — nothing else fits the `GENERATED-FN` pattern without a real
-code change first):
-- `ttlTimestamp` — needs the Firebase SDK global (`firebase.firestore.Timestamp`); no Node-side mock exists, not worth adding one for a one-line wrapper.
-- `downloadTextFile`, `downloadCSV`, `downloadMultiSectionCSV` — DOM Blob/anchor-click side effects, nothing to unit-test.
-- `resizeImageToDataURL` (FileReader/canvas), `shareText` (`navigator.share`/clipboard) — browser-only APIs, side-effecting.
-- `highlightMatch`, `renderMatchCard` — produce React elements, not data.
-- The ~93 React components — a separate, much larger and riskier undertaking (closures over shared app state, not standalone pure functions).
+**What's left of the standalone (non-component) functions** — genuinely
+not worth extracting, not just unstarted: `ttlTimestamp` (needs the
+Firebase SDK global, no Node-side mock exists); `downloadTextFile`/
+`downloadCSV`/`downloadMultiSectionCSV` (DOM Blob/anchor-click side
+effects, nothing to unit-test); `resizeImageToDataURL`
+(FileReader/canvas) and `shareText` (`navigator.share`/clipboard)
+(browser-only APIs, side-effecting); `highlightMatch`/`renderMatchCard`
+(produce React elements, not data).
 
-Don't start on the components without deciding on an approach first,
-given how much rides on `docs/index.html` staying correct. Check with the
-project owner for priorities if none are recorded here by the time you
-read this.
+## React component extraction (started)
+
+A ninth PR started pulling the ~93 React components out of
+`docs/index.html` into `src/components/`, using the same `GENERATED-FN`
+per-function marker mechanism — components turned out to need it just
+like the scattered functions did (they're not one contiguous span
+either). Key differences from the logic extraction above, worth knowing
+before continuing:
+
+- **No imports needed, ever, in a `src/components/*.js` file.**
+  Components reference `React`, hooks (`useState`/`useEffect`/`useRef`),
+  `COLORS`, icon components (themselves `const Name = props => ...`
+  arrow functions defined early in the script, not `function`
+  declarations — not hoisted, but already evaluated by the time any
+  component actually renders, since all rendering happens after the
+  whole script has run), and other components — all as ambient globals.
+  Splicing puts everything back in the same global scope at the same
+  position, so none of this needs wiring up. Do **not** add `import`
+  lines to a components file; there's nothing to import for.
+- **No component-level tests in this pass, and that's a real gap, not
+  an oversight to fix reflexively.** Rendering/asserting on a component
+  meaningfully needs a React test renderer, which is a real dependency
+  decision (this repo has added zero npm dependencies so far, only
+  Node's own `node --test`) — raise it explicitly with the project owner
+  rather than adding one unprompted. Until then, verification for a
+  components PR is the same rigor as every extraction so far
+  (`npm run generate` reproduces `docs/index.html` byte-for-byte outside
+  the new marker lines, `npm run generate:verify`, the `new Function(...)`
+  syntax re-parse, and the headless-browser local-asset check) — no
+  more, no less honestly claimed.
+- Components can be extracted in any order/grouping — cross-component
+  references don't need to travel together, since every component stays
+  reachable as a global at its original textual position regardless of
+  which file its own declaration now lives in.
+
+First batch done: `src/components/illustrations.js` (`AppMark`,
+`LoadingBallIllustration`, `LoadingNote`, `EmptyStateBallIllustration`),
+`src/components/scoringUiAtoms.js` (`RoleBadge`, `BallCelebration`,
+`MILESTONE_ICONS`, `MilestoneToast`, `OdometerScore`, `InningsTimer`,
+`SwipeableRow`), `src/components/formUiAtoms.js` (`PlayerAvatar`,
+`TextField`, `RuleChoice`, `TeamChips`, `PinnableChip`,
+`HomeUtilityButton`, `ConfirmModal`) — 18 of the smallest, purely
+presentational leaf components, picked first specifically to prove the
+mechanism extends to components before taking on anything bigger or more
+interconnected. ~75 components remain, including the large screen-level
+ones (`MatchScreen`, `TournamentsScreen`, etc.) that hold real
+application state via hooks — those are a different, harder case than a
+presentational leaf and deserve their own look before extracting, not a
+mechanical repeat of this batch.
+
+Check with the project owner for priorities if none are recorded here by
+the time you read this.
