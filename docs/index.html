@@ -7695,6 +7695,7 @@ function InningsTimer({
   }), label);
 }
 // GENERATED-FN-END: InningsTimer
+// GENERATED-FN-START: OversStrip
 function OversStrip({
   overs,
   ballsPerOver
@@ -7830,6 +7831,7 @@ function OversStrip({
     }))));
   })));
 }
+// GENERATED-FN-END: OversStrip
 
 
 // GENERATED-FN-START: RoleBadge
@@ -16502,6 +16504,7 @@ function VenueEditModal({
 // for what it's built from and why it only ever shows once a poll has responses. Team-name prefix
 // only appears when there's more than one matching team (both fixture sides tracked by the same
 // person) — the common single-team case stays as plain "5 yes · 1 no" with nothing to disambiguate.
+// GENERATED-FN-START: FixturePollSummary
 function FixturePollSummary({
   items
 }) {
@@ -16546,6 +16549,7 @@ function FixturePollSummary({
     }
   }, it.maybe, " maybe"))));
 }
+// GENERATED-FN-END: FixturePollSummary
 // An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
 // section both use this). Own component rather than a plain render function -- it needs its own
 // pickerOpen state for the inline date/time modal (letting a fixture be scheduled right from Home
@@ -28578,6 +28582,7 @@ function TournamentPrintReport({
 // from a match) and in the live scoring header (so it's visible exactly when it matters most).
 // Silent no-op render when there's nothing pending, so it never adds visual noise on the common
 // path where every save reaches the server immediately.
+// GENERATED-FN-START: SyncStatusBanner
 function SyncStatusBanner({
   count,
   dark,
@@ -28668,6 +28673,7 @@ function SyncStatusBanner({
     }
   }, lastError));
 }
+// GENERATED-FN-END: SyncStatusBanner
 // Shown when a scored ball's save collides with a newer write from another device — the two
 // devices' local states have genuinely diverged and nothing here tries to auto-merge ball-by-ball
 // history, since a wrong automatic guess is worse than asking. Blocks scoring until resolved
