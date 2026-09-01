@@ -441,3 +441,5 @@ export function getAuthActionFromUrl() {
     return null;
   }
 }
+
+export const CLUB_LOGO_UPLOAD_ENABLED = true;

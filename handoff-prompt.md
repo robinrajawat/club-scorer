@@ -866,22 +866,49 @@ dialog. Caught two missing icon imports (`Trophy`, then `CalendarClock`/
 seen before — worth grepping the *entire* `React.createElement(X` list
 up front next time rather than fixing them one crash at a time.
 
-~8 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). Two of the
-remaining ones — `TeamsScreen` and (implicitly) whichever screen needs
-it — themselves render `ClubPanel` (1486 lines) and `FederationsPanel`
-(1162 lines) as tabs, neither extracted yet; those two need to come out
-*before* `TeamsScreen` can cleanly import them, rather than treating
-them as new bare-global dependencies. The rest (`MatchScreen`,
-`SetupScreen`, `HomeScreen`, `TeamEditScreen`, `AccountScreen`) hold
-real application state via hooks — a different, harder case than a
-presentational leaf: expect each one to need its own dependency read
-before starting, and to sometimes carry a nested-closure helper (like
-`renderMatchCard`) that has to be handled as part of that screen's own
-extraction rather than pulled out separately. Continue through the rest
-now — the project owner has asked for the full extraction to be
-completed without pausing for confirmation between batches; only stop
-for a genuine blocker that needs the owner's own decision.
+A thirty-ninth PR extracted `src/components/clubPanel.js` (`ClubPanel` —
+full club administration: create/join, an owner-only "Manage" mode
+covering invite-a-member, invite-a-co-owner, umpires, members,
+federation-affiliation search, and delete, plus a self-service "Edit
+club details" form with a debounced Nominatim address search). At
+~1487 lines this is now the single biggest component extracted this
+session — bigger even than `TournamentsScreen`. Every write action is a
+prop; the sole bare global is `searchAddress` (also used independently
+by `VenueEditModal`), from the debounced address-search effect, not
+exercised by any test since none of them touch the address field. Along
+the way, `CLUB_LOGO_UPLOAD_ENABLED` (a standalone `const ... = true`
+feature flag, sitting between the `app-logic` and `scoring-engine`
+module spans — not itself part of either) got its own first-ever
+`GENERATED-FN` extraction into `miscHelpers.js`, appended at the very
+end of the file to avoid the leading-comment glue bug documented
+earlier. Nearly every test initially failed on subtle layout
+assumptions, all fixed by reading the actual JSX rather than guessing:
+most of "Manage club"'s owner-only UI (the edit-details form, invite
+sections, umpires, members, danger zone) is gated on `activeIsOwner &&
+manageOpen`, so it isn't visible until a "Manage" click; a hidden
+`<input type="file">` for the logo upload sits ahead of every other
+`<input>` once `manageOpen` is true, breaking naive `findByType("input")`
+lookups; `VisibilitySwitch` is a single toggle button identified by
+`aria-label` ("Make public"/"Make private"), not text; and
+`SearchAndRequestPanel` requires an explicit "Search" button click
+before results (and their "Request" buttons) appear — typing alone
+doesn't trigger a search.
+
+~7 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). `TeamsScreen`
+(882 lines) still needs `FederationsPanel` (1162 lines, not yet
+extracted) before it can cleanly import both of its tab panels — take
+`FederationsPanel` on next, then `TeamsScreen` becomes unblocked. The
+rest (`MatchScreen`, `SetupScreen`, `HomeScreen`, `TeamEditScreen`,
+`AccountScreen`) hold real application state via hooks — a different,
+harder case than a presentational leaf: expect each one to need its own
+dependency read before starting, and to sometimes carry a nested-closure
+helper (like `renderMatchCard`) that has to be handled as part of that
+screen's own extraction rather than pulled out separately. Continue
+through the rest now — the project owner has asked for the full
+extraction to be completed without pausing for confirmation between
+batches; only stop for a genuine blocker that needs the owner's own
+decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub

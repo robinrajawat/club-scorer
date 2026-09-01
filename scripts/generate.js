@@ -110,6 +110,7 @@ const FUNCTIONS = [
   { name: "getPollCodeFromUrl", file: "src/core/miscHelpers.js" },
   { name: "getShortcutActionFromUrl", file: "src/core/miscHelpers.js" },
   { name: "getAuthActionFromUrl", file: "src/core/miscHelpers.js" },
+  { name: "CLUB_LOGO_UPLOAD_ENABLED", file: "src/core/miscHelpers.js" },
   { name: "liveMatchSetters", file: "src/core/liveMatchRegistry.js" },
   { name: "registerLiveMatch", file: "src/core/liveMatchRegistry.js" },
   { name: "unregisterLiveMatch", file: "src/core/liveMatchRegistry.js" },
@@ -262,7 +263,8 @@ const FUNCTIONS = [
   { name: "RecordsScreen", file: "src/components/recordsScreen.js" },
   { name: "FixturesSection", file: "src/components/fixturesSection.js" },
   { name: "TournamentsScreen", file: "src/components/tournamentsScreen.js" },
-  { name: "TournamentDetailScreen", file: "src/components/tournamentDetailScreen.js" }
+  { name: "TournamentDetailScreen", file: "src/components/tournamentDetailScreen.js" },
+  { name: "ClubPanel", file: "src/components/clubPanel.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

@@ -6348,7 +6348,9 @@ function pollExpiryDateLabel(createdAt) {
 // Firestore document as a small base64 JPEG instead of Firebase Storage -- Storage now requires
 // the Blaze (pay-as-you-go) plan as of Feb 2026, and this project is staying on Spark. This
 // sidesteps that entirely (no Storage bucket involved at all), so the feature is fully enabled.
+// GENERATED-FN-START: CLUB_LOGO_UPLOAD_ENABLED
 const CLUB_LOGO_UPLOAD_ENABLED = true;
+// GENERATED-FN-END: CLUB_LOGO_UPLOAD_ENABLED
 // Opens the venue in the person's own maps app (Google Maps on Android, falls back to Apple Maps
 // or a browser tab elsewhere -- this URL scheme is the one Google documents as working across
 // all of those). Searches the address text itself rather than lat,lng -- a verified address (see
@@ -12195,6 +12197,7 @@ function ClubSourceSelector({
   }))));
 }
 // GENERATED-FN-END: ClubSourceSelector
+// GENERATED-FN-START: ClubPanel
 function ClubPanel({
   clubs,
   activeClubId,
@@ -13681,6 +13684,7 @@ function ClubPanel({
     onCancel: () => setConfirmRevokeInvite(null)
   }));
 }
+// GENERATED-FN-END: ClubPanel
 // Full club/federation administration lives here, off the Account screen — creating, joining,
 // renaming, member/admin management, and federation affiliation. The Teams screen only ever
 // needs a lightweight source picker (see ClubSourceSelector); this is where you actually manage
