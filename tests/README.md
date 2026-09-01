@@ -133,6 +133,13 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `handleTap` calls `flushPendingWrites` (a Firestore write, still in
   `docs/index.html`, not extracted) — stubbed on `globalThis` the same
   way `saveMatch` was for `matchInsightCards.test.js`.
+- `src/components/scorecard.js` / `tests/unit/components/scorecard.test.js`
+  — the full ball-by-ball scorecard: `InningScorecard` (one innings'
+  batting/bowling tables), `MatchStatsPanel` (tabs between innings plus
+  the live-summary card, overs strip, and charts), `ScorecardOverlay`
+  (the full-screen sheet wrapping it all with an export/close header).
+  All pure presentational, no DOM APIs — built entirely from
+  already-extracted `src/components/`/`src/core/` pieces.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
