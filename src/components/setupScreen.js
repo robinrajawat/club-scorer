@@ -18,7 +18,7 @@ import { tossText, umpiresText } from "../core/shareAndFormat.js";
 // top-level const in public/index.html, not part of any module or component before -- it's used
 // nowhere else, so it lives here as its own export rather than in a shared core module. No
 // per-export comment above it below, to avoid generate.js's findNamedExport comment-glue bug
-// (see docs/handoff-prompt.md) since it isn't the file's first export.
+// (see docs/history.md) since it isn't the file's first export.
 // Covered by tests/unit/components/setupScreen.test.js.
 
 export const SETUP_PAGE_LABELS = {
