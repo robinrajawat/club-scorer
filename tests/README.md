@@ -28,6 +28,12 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   round-robin fixture generation, player/club stats aggregation, and the
   Player-of-the-Match / Best-Fielder / Player-of-the-Tournament suggestion
   heuristics.
+- `src/core/shareAndFormat.js` / `tests/unit/shareAndFormat.test.js` —
+  fixture date/time parsing & formatting, `.ics`/CSV export, and match/poll
+  share-text & URL builders (`buildPollUrl`/`buildFollowUrl` read
+  `window.location` in the browser but fall back to a relative URL via
+  `try`/`catch` anywhere that isn't available, including Node — that
+  fallback branch is what's tested here).
 
 The first three modules above are each one contiguous span of
 `docs/index.html`, spliced in as a block (`// GENERATED-START: <name>` /

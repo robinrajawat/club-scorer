@@ -1203,7 +1203,9 @@ function genMatchCode() {
 // is the ONLY copy of their match data (see saveMatch's own module comment above it) — an expiring
 // match history would silently destroy something nobody could ever get back. Revoking a share
 // code already deletes it immediately (revokeShareCode) for anyone who wants it gone sooner.
+// GENERATED-FN-START: POLL_TTL_DAYS
 const POLL_TTL_DAYS = 120;
+// GENERATED-FN-END: POLL_TTL_DAYS
 const LIVE_VIEW_TTL_DAYS = 180;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
 // clubJoinCodes (club member/co-owner email invites) already had a 7-day expiry — just as a plain
@@ -1239,21 +1241,26 @@ function inviteExpiryLabel(expiresAt) {
 }
 // Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
 // TEXT values, or some calendar apps (Outlook especially) mis-parse the field boundary.
+// GENERATED-FN-START: icsEscape
 function icsEscape(text) {
   return String(text || "").replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
 }
+// GENERATED-FN-END: icsEscape
 // Fixture dates are stored as a floating local "YYYY-MM-DDTHH:MM" with no timezone (see
 // ISO_DATETIME_RE / parseFixtureDateTime) — deliberately not converted to/from UTC here either, so
 // the exported event lands at the same wall-clock time in whichever calendar app imports it,
 // rather than shifting by the difference between the scorer's timezone and the importer's.
+// GENERATED-FN-START: icsLocalDateTime
 function icsLocalDateTime(iso) {
   return iso.replace(/[-:]/g, "").slice(0, 15) + "00"; // YYYY-MM-DDTHH:MM -> YYYYMMDDTHHMM + seconds
 }
+// GENERATED-FN-END: icsLocalDateTime
 // One VEVENT block for a fixture — shared by buildTournamentICS (a whole schedule, looped) and
 // buildFixtureICS (a single fixture, for the Home screen's per-card "add to calendar") so the
 // event shape can't drift between the two. venue/lat/lng are optional -- a tournament's venue
 // (see t.venue/venueLat/venueLng, the same fields the in-app Maps link already uses) so the
 // exported event actually carries a location instead of just team names and a time.
+// GENERATED-FN-START: fixtureIcsEvent
 function fixtureIcsEvent(f, stamp, contextName, venue, lat, lng) {
   const start = icsLocalDateTime(f.date);
   // Two-hour placeholder duration — the app has no fixed match length independent of overs/
@@ -1270,6 +1277,8 @@ function fixtureIcsEvent(f, stamp, contextName, venue, lat, lng) {
   lines.push("END:VEVENT");
   return lines;
 }
+// GENERATED-FN-END: fixtureIcsEvent
+// GENERATED-FN-START: buildTournamentICS
 function buildTournamentICS(tournament) {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -1286,14 +1295,17 @@ function buildTournamentICS(tournament) {
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
 }
+// GENERATED-FN-END: buildTournamentICS
 // Single-fixture variant — same event shape as buildTournamentICS's loop, just one VEVENT, for
 // adding just this one game to a calendar without pulling in the tournament's whole schedule.
+// GENERATED-FN-START: buildFixtureICS
 function buildFixtureICS(fixture, contextName, venue, lat, lng) {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Scorer//Tournament Export//EN", "CALSCALE:GREGORIAN", ...fixtureIcsEvent(fixture, stamp, contextName, venue, lat, lng), "END:VCALENDAR"];
   return lines.join("\r\n");
 }
+// GENERATED-FN-END: buildFixtureICS
 function downloadTextFile(filename, mimeType, text) {
   const blob = new Blob([text], {
     type: mimeType
@@ -1421,23 +1433,28 @@ async function fetchFixtureWeather(lat, lng, dateStr) {
 // newline), doubling any internal quotes -- the common convention every spreadsheet app (Excel,
 // Sheets, Numbers) already expects, so "download as CSV" opens cleanly as a real table rather than
 // one mangled column.
+// GENERATED-FN-START: csvCell
 function csvCell(value) {
   const s = value == null ? "" : String(value);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
+// GENERATED-FN-END: csvCell
 // headers is a flat array of column names; rows is an array of arrays, same length/order as
 // headers. Leading \uFEFF (UTF-8 BOM) is deliberate: without it, Excel on Windows mis-reads
 // non-ASCII names (accented characters, etc.) as garbled text instead of guessing UTF-8.
+// GENERATED-FN-START: toCSV
 function toCSV(headers, rows) {
   const lines = [headers.map(csvCell).join(","), ...rows.map(r => r.map(csvCell).join(","))];
   return "\uFEFF" + lines.join("\r\n");
 }
+// GENERATED-FN-END: toCSV
 function downloadCSV(filename, headers, rows) {
   downloadTextFile(filename.endsWith(".csv") ? filename : `${filename}.csv`, "text/csv;charset=utf-8", toCSV(headers, rows));
 }
 // Bundles several named tables into ONE csv, each preceded by a blank line and its own title row
 // -- used by the Record Book's "Export CSV" (11 tables at once) rather than making someone
 // download 11 separate tiny files. sections: [{ title, headers, rows }, ...].
+// GENERATED-FN-START: multiSectionCSV
 function multiSectionCSV(sections) {
   const lines = [];
   sections.forEach((sec, i) => {
@@ -1448,15 +1465,18 @@ function multiSectionCSV(sections) {
   });
   return "\uFEFF" + lines.join("\r\n");
 }
+// GENERATED-FN-END: multiSectionCSV
 function downloadMultiSectionCSV(filename, sections) {
   downloadTextFile(filename.endsWith(".csv") ? filename : `${filename}.csv`, "text/csv;charset=utf-8", multiSectionCSV(sections));
 }
 // Filesystem/URL-unsafe-character stripping for a download filename built from a person-entered
 // name (a team, tournament, or club name) -- same idea as the .ics export just above already
 // applies inline, pulled out here since CSV export needs it in several different places.
+// GENERATED-FN-START: safeFilenamePart
 function safeFilenamePart(name) {
   return String(name || "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "export";
 }
+// GENERATED-FN-END: safeFilenamePart
 function getFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("follow");
@@ -5956,6 +5976,7 @@ const SETUP_PAGE_LABELS = {
   openers: "Opening Line-up",
   review: "Review"
 };
+// GENERATED-FN-START: nonStandardRulesText
 function nonStandardRulesText(rules) {
   if (!rules) return null;
   const bits = [];
@@ -5968,15 +5989,21 @@ function nonStandardRulesText(rules) {
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   return bits.length ? bits.join(" · ") : null;
 }
+// GENERATED-FN-END: nonStandardRulesText
+// GENERATED-FN-START: tossText
 function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
 }
+// GENERATED-FN-END: tossText
+// GENERATED-FN-START: umpiresText
 function umpiresText(match) {
   const names = [match.umpire1, match.umpire2].filter(Boolean);
   if (names.length === 0) return null;
   return `Umpire${names.length === 1 ? "" : "s"}: ${names.join(", ")}`;
 }
+// GENERATED-FN-END: umpiresText
+// GENERATED-FN-START: matchResultText
 function matchResultText(match) {
   const [i1, i2] = match.innings;
   if (match.status !== "complete") return null;
@@ -6000,6 +6027,7 @@ function matchResultText(match) {
   const margin = target - 1 - i2.runs;
   return `${i1.battingTeam} won by ${margin} run${margin === 1 ? "" : "s"}`;
 }
+// GENERATED-FN-END: matchResultText
 // One-line score summary for the Home screen match list -- "Team A won by 4 wickets" once
 // complete, or "Team B 86-3 (10.2 ov)" (whichever innings is actually live) while in progress.
 // Returns null before any ball's been bowled (nothing meaningful to show yet), matching
@@ -6007,6 +6035,7 @@ function matchResultText(match) {
 // inning's own line, not both innings' scores plus a chase context -- this has to fit on a
 // list-item row shared with the team names and overs/status caption, not the full detail a
 // spectator gets from MatchStatsPanel once they've actually opened the match.
+// GENERATED-FN-START: matchScoreLine
 function matchScoreLine(match) {
   if (!match || !match.innings || match.innings.length === 0) return null;
   if (match.status === "complete") return matchResultText(match);
@@ -6014,6 +6043,7 @@ function matchScoreLine(match) {
   if (!inn || !inn.battingOrder || inn.battingOrder.length === 0) return null;
   return `${inn.battingTeam} ${inn.runs}-${inn.wickets} (${oversLabel(inn.legalBalls, inn.ballsPerOver)} ov)`;
 }
+// GENERATED-FN-END: matchScoreLine
 // Shared between MatchScreen (the live scoring screen, which used to compute this inline) and
 // MatchStatsPanel (the read-only panel FollowScreen/ScorecardOverlay both use, which never had
 // this at all -- a spectator watching a match live had to do the "runs needed off how many balls"
@@ -6021,6 +6051,7 @@ function matchScoreLine(match) {
 // fallback as checkInningEnd -- see there for the full reasoning on why a revised target only
 // ever applies to innings 2, never innings 1. Returns null whenever there's nothing to show: no
 // second innings yet, or it's already finished.
+// GENERATED-FN-START: chasingInfo
 function chasingInfo(match) {
   const inn = match.innings[1];
   if (!inn || inn.complete) return null;
@@ -6036,6 +6067,8 @@ function chasingInfo(match) {
     reqRate
   };
 }
+// GENERATED-FN-END: chasingInfo
+// GENERATED-FN-START: buildShareText
 function buildShareText(match) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
   const toss = tossText(match.toss);
@@ -6053,6 +6086,8 @@ function buildShareText(match) {
   if (match.shareCode) lines.push(`Match code: ${match.shareCode}`);
   return lines.join("\n");
 }
+// GENERATED-FN-END: buildShareText
+// GENERATED-FN-START: buildPollUrl
 function buildPollUrl(code) {
   try {
     const {
@@ -6064,16 +6099,20 @@ function buildPollUrl(code) {
     return `?poll=${code}`;
   }
 }
+// GENERATED-FN-END: buildPollUrl
+// GENERATED-FN-START: buildPollShareText
 function buildPollShareText(question, fixtureDate, code) {
   const lines = [question];
   if (fixtureDate) lines.push(fixtureDate);
   lines.push(buildPollUrl(code));
   return lines.join("\n");
 }
+// GENERATED-FN-END: buildPollShareText
 // Upcoming-fixture equivalent of buildShareText/buildLiveShareText -- there's no match object yet
 // (nothing's been started), just a tournament fixture, so this reads straight off the fixture/
 // tournament fields instead: teams, tournament name, scheduled date/time, and venue, skipping
 // anything not yet set rather than showing empty placeholders.
+// GENERATED-FN-START: buildFixtureShareText
 function buildFixtureShareText(tournamentName, fixture, venue) {
   const lines = [`\uD83C\uDFCF ${fixture.teamA} vs ${fixture.teamB}`];
   if (tournamentName) lines.push(tournamentName);
@@ -6082,10 +6121,12 @@ function buildFixtureShareText(tournamentName, fixture, venue) {
   if (venue) lines.push(`\uD83D\uDCCD ${venue}`);
   return lines.join("\n");
 }
+// GENERATED-FN-END: buildFixtureShareText
 // createdAt is a plain millis number (see createAvailabilityPoll) -- expiresAt itself is a
 // Firestore Timestamp only on the full poll doc, not the lightweight list pointer, so this is
 // computed from createdAt + the fixed TTL rather than read off expiresAt, working the same way
 // whichever shape of poll object it's given (list pointer or full doc).
+// GENERATED-FN-START: pollExpiryDateLabel
 function pollExpiryDateLabel(createdAt) {
   if (!createdAt) return null;
   const d = new Date(createdAt + POLL_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -6095,6 +6136,7 @@ function pollExpiryDateLabel(createdAt) {
     year: "numeric"
   });
 }
+// GENERATED-FN-END: pollExpiryDateLabel
 // A fixture/match only ever stores its two sides as plain name strings, never a link to an actual
 // club-managed roster team -- so anything that wants to send/show a poll for "this team" first has
 // to find which of the two names corresponds to a real team the signed-in person can manage, among
@@ -6115,6 +6157,7 @@ const CLUB_LOGO_UPLOAD_ENABLED = true;
 // pair shows up in Maps as just numbers rather than the venue's actual name, which is a worse
 // destination label to be navigating toward. Falls back to lat,lng only in the unlikely case
 // coordinates exist with no venue text at all.
+// GENERATED-FN-START: buildMapsUrl
 function buildMapsUrl(venue, lat, lng) {
   if (venue) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`;
@@ -6124,6 +6167,8 @@ function buildMapsUrl(venue, lat, lng) {
   }
   return `https://www.google.com/maps/search/?api=1&query=`;
 }
+// GENERATED-FN-END: buildMapsUrl
+// GENERATED-FN-START: resolvePollTeams
 function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   const a = (nameA || "").toLowerCase();
   const b = (nameB || "").toLowerCase();
@@ -6140,6 +6185,7 @@ function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
   });
   return out;
 }
+// GENERATED-FN-END: resolvePollTeams
 // Every still-active poll, across every team across every club someone has access to, that still
 // has at least one roster name who hasn't responded -- the Inbox's poll section and its badge
 // count both come from this same list, so what the badge promises is exactly what's waiting there.
@@ -6178,6 +6224,7 @@ async function loadPendingPollItems(clubs, clubTeamsById) {
   });
   return items;
 }
+// GENERATED-FN-START: buildFollowUrl
 function buildFollowUrl(code) {
   try {
     const {
@@ -6189,6 +6236,8 @@ function buildFollowUrl(code) {
     return `?follow=${code}`;
   }
 }
+// GENERATED-FN-END: buildFollowUrl
+// GENERATED-FN-START: buildLiveShareText
 function buildLiveShareText(match, code) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
   match.innings.forEach(inn => {
@@ -6204,6 +6253,7 @@ function buildLiveShareText(match, code) {
   lines.push(buildFollowUrl(code));
   return lines.join("\n");
 }
+// GENERATED-FN-END: buildLiveShareText
 // Opens the OS's own share sheet (WhatsApp, iMessage, Mail, whatever the person actually has and
 // prefers) instead of assuming WhatsApp for everyone -- navigator.share needs a user gesture and
 // isn't available on every browser (mainly desktop), so this falls back to the WhatsApp link only
@@ -20577,16 +20627,23 @@ function TournamentsScreen({
 // ISO-ish "YYYY-MM-DDTHH:mm" value. Older fixtures may still carry a free-text date from before
 // this existed (e.g. "Sat 14 Jun 3pm"); those can't populate the picker, so they're shown as a
 // small caption underneath until replaced.
+// GENERATED-FN-START: ISO_DATETIME_RE
 const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+// GENERATED-FN-END: ISO_DATETIME_RE
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_LABELS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// GENERATED-FN-START: FIXTURE_DEFAULT_HOUR
 const FIXTURE_DEFAULT_HOUR = 11; // most club fixtures kick off mid-morning, so this is the sane default rather than midnight
+// GENERATED-FN-END: FIXTURE_DEFAULT_HOUR
+// GENERATED-FN-START: pad2
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
+// GENERATED-FN-END: pad2
 // Breaks an ISO-ish fixture datetime into calendar/time-picker pieces. When there's nothing to
 // read yet (new fixture, or one that only ever had a bare date) the time half defaults to 11:00 AM
 // rather than forcing the person to set it themselves.
+// GENERATED-FN-START: parseFixtureDateTime
 function parseFixtureDateTime(iso) {
   if (ISO_DATETIME_RE.test(iso)) {
     const [datePart, timePart] = iso.split("T");
@@ -20613,12 +20670,16 @@ function parseFixtureDateTime(iso) {
     period: "AM"
   };
 }
+// GENERATED-FN-END: parseFixtureDateTime
+// GENERATED-FN-START: buildFixtureIso
 function buildFixtureIso(year, month, day, hour12, minute, period) {
   if (!day) return "";
   let hh = hour12 % 12;
   if (period === "PM") hh += 12;
   return `${year}-${pad2(month + 1)}-${pad2(day)}T${pad2(hh)}:${minute}`;
 }
+// GENERATED-FN-END: buildFixtureIso
+// GENERATED-FN-START: formatFixtureDateTime
 function formatFixtureDateTime(iso) {
   if (!ISO_DATETIME_RE.test(iso)) return null;
   const [datePart, timePart] = iso.split("T");
@@ -20634,6 +20695,7 @@ function formatFixtureDateTime(iso) {
   const period = hh >= 12 ? "PM" : "AM";
   return `${dateLabel} \u00b7 ${hour12}:${pad2(mm)} ${period}`;
 }
+// GENERATED-FN-END: formatFixtureDateTime
 // A compact calendar-grid + hour/minute/AM-PM picker, styled to match the rest of the app instead
 // of falling back on the browser's own date/time widgets. Opens with the time defaulted to 11 AM
 // whenever the fixture doesn't already carry a specific time.
