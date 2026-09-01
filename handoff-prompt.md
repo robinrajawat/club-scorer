@@ -1011,13 +1011,43 @@ one test needed the hand-rolled `hasText` walker (checking
 `.props.children` directly) instead of `JSON.stringify(...).includes(...)`
 to search a live `findAllByType("button")` result.
 
-~3 components remain: `AccountScreen`, `MatchScreen`, and the root
-`CricketScorer` component itself. All hold real application state via
-hooks — a different, harder case than a presentational leaf: expect
-each one to need its own dependency read before starting, and to watch
-for the same kind of nested-closure helper `HomeScreen` resolved, a
-standalone bare constant like `SETUP_PAGE_LABELS` that needs its own
-`GENERATED-FN` entry, or a `Modal` real-import mistake like this
+A forty-fifth PR extracted `src/components/accountScreen.js`
+(`AccountScreen` — the signed-in-or-not account/settings screen:
+profile display name, own public player-profile summary, sign-in
+method linking, sign out, admin tools with Feedback Inbox/Beta Testers
+counts, beta-tester tools including dummy sandbox data, export/import a
+JSON backup, account deletion — or, signed out, the Google/email
+sign-in form). At ~1273 lines this is the largest non-`Modal`-blocked
+screen extracted so far. Every one of its eight Firebase Auth/
+Firestore calls (`submitBetaRequest`, `loadFeedback`, `loadBetaRequests`
+— an admin-only mount effect — `linkPasswordCredential`,
+`linkGoogleCredential`, `signUpEmail`, `signInEmail`,
+`sendPasswordReset`) is a bare global, the same pattern
+`WelcomeScreen`/`AuthActionScreen` already established; `Modal` (kept
+bare and unimported, per the rule from `TeamEditScreen`'s batch) backs
+the delete-account dialog. `handleExport`/`handleImportFile` touch real
+browser-only APIs (`Blob`, `URL.createObjectURL`, `FileReader`) from
+inside their own click handlers — tests confirm those two buttons
+render and gate correctly (disabled/enabled, busy label) without
+clicking through them, the same disclosed-gap shape as
+`ExportPdfButton`'s untested `window.print()`. One test mistake caught
+and fixed here: the sign-out row's own button and `ConfirmModal`'s
+confirm button both render the text "Sign out" (the row's label and
+`ConfirmModal`'s `confirmLabel` happen to match) — a
+`findAllByType(Btn).find(b => b.props.children === "Sign out")` search
+after opening the dialog silently matched the *first* one again
+(reopening the same dialog, not confirming); fixed by grabbing
+`ConfirmModal`'s own `onConfirm` prop directly via `findByType(ConfirmModal)`
+instead of searching by ambiguous button text.
+
+~2 components remain: `MatchScreen` and the root `CricketScorer`
+component itself. Both hold real application state via hooks — a
+different, harder case than a presentational leaf: expect each one to
+need its own dependency read before starting, and to watch for the
+same kind of nested-closure helper `HomeScreen` resolved, a standalone
+bare constant like `SETUP_PAGE_LABELS` that needs its own
+`GENERATED-FN` entry, a `Modal` real-import mistake like
+`TeamEditScreen`'s batch, or an ambiguous-button-text mistake like this
 batch's. Continue through the rest now — the project owner has asked
 for the full extraction to be completed without pausing for
 confirmation between batches; only stop for a genuine blocker that
