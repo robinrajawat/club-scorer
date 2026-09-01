@@ -300,6 +300,13 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   a new export — see the note in `handoff-prompt.md` about not
   re-extracting a function that's already inside an existing module
   splice).
+- `src/components/inboxScreen.js` /
+  `tests/unit/components/inboxScreen.test.js` — `InboxScreen`, the
+  combined inbox (availability polls awaiting a response, plus club-
+  federation affiliation requests). No mount effect and every write
+  action is a prop; the one test that opens `AvailabilityPollModal`
+  (tapping a poll item) stubs `Modal`/`loadTeamPolls`/`loadPollByCode`
+  the same way `availabilityPollModal.test.js` does.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
