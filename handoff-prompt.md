@@ -315,7 +315,8 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `EditPlayerModal`, `TransferPlayerModal`), `src/components/miscModals.js`
 (`TOUR_SLIDES`, `FirstLaunchTour`, `TournamentShareModal`,
 `QualificationCalculatorModal`), `src/components/venueAndDateModals.js`
-(`VenueEditModal`, `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`)
+(`VenueEditModal`, `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`),
+`src/components/availabilityPollModal.js` (`AvailabilityPollModal`)
 — all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
@@ -539,13 +540,36 @@ fully unblocked (it needs `FixtureDateTimeModal`/`VenueEditModal`/
 `AvailabilityPollModal`/`FixturePollSummary`, and the first, second, and
 fourth are now all extracted).
 
-~34 components remain. `AvailabilityPollModal` (the last big piece of
-that cluster, ~470 lines) is a reasonable next target, and clears
-`UpcomingFixtureCard` too once it lands. Beyond that, the large
-screen-level components (`MatchScreen`, `TournamentsScreen`, etc.) that
-hold real application state via hooks are a different, harder case than
-a presentational leaf and deserve their own look before extracting, not
-a mechanical repeat of this batch. Continue through the rest now — the
+A twentieth PR finished the `Modal`-unblocked cluster entirely:
+`src/components/availabilityPollModal.js` (`AvailabilityPollModal` —
+the team availability-poll sheet: list/create/view-responses, ~470
+lines). Its `loadTeamPolls` runs from a mount-time `useEffect`, same
+stubbing pattern as `BetaTestersScreen`. This was also the last
+dependency `UpcomingFixtureCard` needed (`FixtureDateTimeModal`/
+`VenueEditModal`/`AvailabilityPollModal`/`FixturePollSummary` are now
+all extracted), so it's unblocked and ready for its own batch next.
+
+~33 components remain. Beyond `UpcomingFixtureCard`, what's left is
+mostly the large screen-level components (`MatchScreen`,
+`TournamentsScreen`, `SetupScreen`, `TeamsScreen`, etc.) that hold real
+application state via hooks — a different, harder case than a
+presentational leaf and deserve their own look before extracting, not a
+mechanical repeat of this batch. Continue through the rest now — the
 project owner has asked for the full extraction to be completed without
 pausing for confirmation between batches; only stop for a genuine
 blocker that needs the owner's own decision.
+
+**Follow-up, not yet started (queued by the project owner, low
+priority relative to the extraction):** switch this repo's GitHub
+Pages deployment from "Deploy from a branch" (source restricted to the
+repo root or a folder literally named `/docs`, which is why the
+deployed site lives in `docs/` despite having nothing to do with
+documentation) to GitHub Actions-based deployment, which has no folder-
+name restriction — then rename `docs/` to something sensible (`public/`
+or `site/`). Needs a `.github/workflows/deploy.yml` that builds/uploads
+the site as a Pages artifact, `generate.js`'s hardcoded `docs/index.html`
+path updated, and the project owner flipping Settings → Pages → Source
+to "GitHub Actions" once the workflow is ready (same manual-Settings-
+change pattern as the original `docs/` switch earlier this session).
+Take this on once the component extraction reaches a stopping point,
+not before.

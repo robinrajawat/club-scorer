@@ -192,6 +192,15 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   against a tied rival — its test exercises the real
   `computeQualificationTarget` math end to end, not just the component's
   own rendering.
+- `src/components/availabilityPollModal.js` /
+  `tests/unit/components/availabilityPollModal.test.js` —
+  `AvailabilityPollModal`, the team availability-poll sheet
+  (list/create/view-responses). Same `Modal`-as-bare-global stub
+  pattern. Its `loadTeamPolls` runs from a mount-time `useEffect` (not
+  just a handler), so every test stubs it — along with
+  `loadPollByCode`/`createAvailabilityPoll`/`deleteAvailabilityPoll`,
+  the other bare-global Firestore calls it uses — and wraps the initial
+  render in `act()`, same pattern as `BetaTestersScreen`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
