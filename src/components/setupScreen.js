@@ -55,7 +55,7 @@ export function SetupScreen({
   // team is picked, but editable here without touching the saved team roster.
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
-  const [overs, setOvers] = useState("20");
+  const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // Deliberately not inherited from presetTournament the way venue is -- a ground tends to stay
   // the same across a tournament/series, but who's umpiring rarely does, so defaulting to the

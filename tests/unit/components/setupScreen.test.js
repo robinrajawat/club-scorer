@@ -199,3 +199,20 @@ test("SetupScreen: presetTournament shows a 'Playing in' banner and locks the te
   // Fixture teams are shown as static text, not pickable -- no TeamChips/TextField for either side.
   assert.equal(input(inst, "e.g. Willow CC"), undefined);
 });
+
+test("SetupScreen: presetTournament.defaultOvers pre-fills the Overs per innings field", () => {
+  const inst = render({
+    presetTournament: { id: "t1", name: "Billund Cup", fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC", defaultOvers: 8 }
+  });
+  // The overs TextField's own placeholder is "20" -- its value is the pre-filled string, not the
+  // placeholder, so this finds it by the field immediately after the "Overs per innings" label
+  // rather than by placeholder (which stays "20" regardless of the actual value).
+  const oversField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
+  assert.equal(oversField.props.value, "8");
+});
+
+test("SetupScreen: with no presetTournament (or no defaultOvers), Overs per innings still defaults to 20", () => {
+  const inst = render();
+  const oversField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
+  assert.equal(oversField.props.value, "20");
+});

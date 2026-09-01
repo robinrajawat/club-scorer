@@ -1315,3 +1315,73 @@ another reason — not as a standalone change.
 TypeScript and a Playwright e2e suite were discussed and deliberately
 parked as bigger, lower-urgency investments (see the session's own
 discussion, not repeated here) — not started, not forgotten.
+
+## Tournament special rules (Phase 0 done)
+
+A club asked whether the app could host a tournament with a specific
+set of "special rules" (8-over matches, 8-a-side, 2 runs for a
+wide/no-ball, Free Hit, etc.) without re-entering them for all 7
+matches. Assessed against the actual scoring engine and app logic (not
+guessed), the rules split into four tiers by how much work they'd need:
+
+1. **Already supported by existing rule fields** — overs, squad size,
+   wide/no-ball run value, Free Hit, and the group-stage-into-Final
+   bracket shape all already exist as configurable match rules or
+   tournament group settings. The only real gap was *where* to set
+   them: a tournament's `defaultRules` only ever got backfilled
+   implicitly from whichever fixture happened to be scored first — there
+   was no way to configure them **before** the first match, so the very
+   first fixture couldn't inherit anything.
+2. **Needs a manual scorer workaround today** — a 25-run auto-retirement
+   with a specific return-order, a 20-second timed-out dismissal, and an
+   escalating time-based run penalty (2 runs/minute past a cap) are all
+   real gaps, not yet built.
+3. **Structurally unsupported** — the final over's wides/no-balls
+   becoming illegal again (re-bowled) is a genuine scoring-engine change:
+   `applyBall` hardcodes `legalBall = false` for every wide/no-ball,
+   unconditionally, for the whole innings, with zero over-number
+   awareness anywhere in that code path (verified by reading
+   `scoringEngine.js` directly, not assumed).
+4. **A real new feature** — Impact Player substitution (a bench pool,
+   swap-at-the-innings-break, max 2 swaps, no return) has no
+   representation in the data model at all.
+
+**Phase 0 closes the gap in tier 1** — an explicit rules editor at
+tournament **creation** time, so an organiser sets things up once,
+before any match exists, rather than relying on the first fixture's
+choices becoming the accidental default:
+
+- `TournamentsScreen`'s create-tournament form gained a collapsed-by-
+  default "Match rules (optional)" section (same "Customize" pattern as
+  `SetupScreen`'s own match-level rules editor, reusing the same
+  `RuleChoice` component) covering **Overs per innings**, **Players per
+  side**, **Runs on a wide**, **Runs on a no-ball**, and **Free hit
+  after a no-ball** — deliberately not the full match-level rule set
+  (`ballsPerOver`/`superOver`/`powerplayOvers`/`timeCapMinutes`/
+  `maxOversPerBowler` stayed out): those are match-level knobs a
+  tournament organiser doesn't typically set once up front, and keeping
+  the form small mattered more than parity with every match-level field.
+- `onCreateTournament` gained two new, optional, backward-compatible
+  trailing params: `defaultOvers` and `defaultRules`. `null` when the
+  section was never customized, matching the pre-existing behavior
+  exactly — every existing call site/test kept working unchanged.
+- `handleCreateTournament` (`cricketScorer.js`) stores both on the
+  tournament doc. `linkFixtureToMatch` (the pre-existing implicit-
+  backfill mechanism used when a tournament's rules were never set
+  explicitly) now backfills `defaultOvers` the same only-if-unset way it
+  already did `defaultRules`/`venue` — this was a **real pre-existing
+  gap** independent of Phase 0: even the old "first fixture becomes the
+  default" mechanism never carried the overs count at all, only rules
+  and venue, so it's fixed here rather than left half-done alongside the
+  new explicit path.
+- `SetupScreen` now seeds its own `overs` state from
+  `presetTournament.defaultOvers` (mirroring how it already seeds
+  `venue` from `presetTournament.venue`) — this is the actual "copied to
+  matches/fixtures" delivery: once a tournament's rules are set, every
+  fixture scored from it starts pre-filled, no re-entry needed.
+
+Not touched in this phase, deliberately: no display of a tournament's
+configured rules on `TournamentDetailScreen`, and no way to edit them
+after creation — both easy, natural follow-ups if actually wanted, but
+not part of what was asked for here. Tiers 2–4 above remain open,
+tracked for whenever they're picked up next.
