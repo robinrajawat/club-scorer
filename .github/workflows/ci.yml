@@ -1,0 +1,39 @@
+name: CI
+
+# Verification only -- see .github/workflows/deploy.yml for the separate publish workflow
+# (production is deployed from main's public/index.html via GitHub Actions). This workflow's
+# job is to make sure every change is verified before it can reach main: unit tests, the
+# generated-code drift check, and an HTML structure validation pass that would catch a RAWTEXT
+# tag hijack (see scripts/validate_html_structure.py for what that is and why it matters for a
+# single-file app like this one).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Verify public/index.html matches src/core/*.js and src/components/*.js
+        run: npm run generate:verify
+
+      - name: HTML structure validation
+        run: |
+          pip install html5lib --break-system-packages --quiet
+          python3 scripts/validate_html_structure.py
