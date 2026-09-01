@@ -20062,16 +20062,20 @@ function tournamentStatus(t) {
   return "ongoing";
 }
 // GENERATED-FN-END: tournamentStatus
+// GENERATED-FN-START: TOURNAMENT_STATUS_LABELS
 const TOURNAMENT_STATUS_LABELS = {
   upcoming: "Upcoming",
   ongoing: "Ongoing",
   completed: "Completed"
 };
+// GENERATED-FN-END: TOURNAMENT_STATUS_LABELS
+// GENERATED-FN-START: TOURNAMENT_STATUS_COLORS
 const TOURNAMENT_STATUS_COLORS = {
   upcoming: COLORS.gold,
   ongoing: COLORS.turf,
   completed: COLORS.inkSoft
 };
+// GENERATED-FN-END: TOURNAMENT_STATUS_COLORS
 // Earliest-to-latest scheduled fixture date, e.g. "12 Jun – 20 Jul". Falls back to a relative
 // "Created 3 days ago" when no fixture has a date yet (fixtures are often added after creation).
 // GENERATED-FN-START: tournamentDateRangeLabel
@@ -21244,6 +21248,7 @@ function FixtureDateTimeModal({
   }, "Save")));
 }
 // GENERATED-FN-END: FixtureDateTimeModal
+// GENERATED-FN-START: FixtureRow
 function FixtureRow({
   fixture,
   tournament,
@@ -21640,6 +21645,7 @@ function FixtureRow({
     }
   }));
 }
+// GENERATED-FN-END: FixtureRow
 // Round-robin generation, manual add/remove, date/time fields, and knockout-stage proposals for a
 // tournament's schedule. Fixtures live inline on the tournament doc (tournament.fixtures) rather
 // than their own subcollection — even a full double round-robin plus a bracket among a dozen club

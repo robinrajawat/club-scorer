@@ -237,7 +237,10 @@ const FUNCTIONS = [
   { name: "MONTH_LABELS", file: "src/components/venueAndDateModals.js" },
   { name: "FixtureDateTimeModal", file: "src/components/venueAndDateModals.js" },
   { name: "AvailabilityPollModal", file: "src/components/availabilityPollModal.js" },
-  { name: "UpcomingFixtureCard", file: "src/components/upcomingFixtureCard.js" }
+  { name: "UpcomingFixtureCard", file: "src/components/upcomingFixtureCard.js" },
+  { name: "TOURNAMENT_STATUS_LABELS", file: "src/components/tournamentStatus.js" },
+  { name: "TOURNAMENT_STATUS_COLORS", file: "src/components/tournamentStatus.js" },
+  { name: "FixtureRow", file: "src/components/fixtureRow.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

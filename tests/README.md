@@ -211,6 +211,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `AvailabilityPollModal`/`BetaTestersScreen`. Its own "which team?"
   picker (shown when both fixture sides resolve to a team this person
   manages) uses `Modal` as a bare global too.
+- `src/components/tournamentStatus.js` /
+  `tests/unit/components/tournamentStatus.test.js` —
+  `TOURNAMENT_STATUS_LABELS`/`TOURNAMENT_STATUS_COLORS`, the display
+  lookup tables for `tournamentStatus()`'s (`miscHelpers.js`) return
+  values; the test checks every status that function can actually
+  return has an entry in both.
+- `src/components/fixtureRow.js` /
+  `tests/unit/components/fixtureRow.test.js` — `FixtureRow`, a sibling
+  of `UpcomingFixtureCard` for the tournament fixtures list (rather than
+  the Home screen's upcoming-fixtures view). Same shape, same
+  `Modal`-as-bare-global and mount-effect-stub patterns.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
