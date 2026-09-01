@@ -180,8 +180,14 @@ a separate follow-up PR.
 - `ios/` — parked native SwiftUI rewrite; don't touch without explicit
   instruction (see above).
 - `scripts/generate.js` — splices `src/core/*.js` into `public/index.html`.
-- `README.md`, `LICENSE`, `handoff-prompt.md`, `package.json` — repo-level
-  docs/config, deliberately kept at the root.
+- `docs/` — project documentation: `handoff-prompt.md` (this file) and
+  anywhere else project-level docs land going forward. Not to be confused
+  with the old `docs/` — that name used to be reserved for the deployed
+  PWA itself (see "GitHub Pages deploy-mode switch" below for why it no
+  longer needs to be), so this is the same folder name doing its actually
+  intended job for the first time.
+- `README.md`, `LICENSE`, `package.json` — repo-level config, deliberately
+  kept at the root (GitHub's own UI expects both there).
 
 ## Current state
 
