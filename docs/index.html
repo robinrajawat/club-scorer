@@ -23317,6 +23317,7 @@ function RecordTable({
 // screen rather than folded into TournamentsScreen: the per-tournament Stats tab is already
 // scoped to one tournament's leaderboard, and records here are explicitly an all-time view across
 // everything the club/federation has run.
+// GENERATED-FN-START: RecordsScreen
 function RecordsScreen({
   sourceType,
   // "club" | "federation"
@@ -23924,6 +23925,7 @@ function RecordsScreen({
     emptyText: "No results decided by wickets yet."
   })));
 }
+// GENERATED-FN-END: RecordsScreen
 // A head-to-head series between exactly two teams — deliberately a much lighter screen than
 // TournamentDetailScreen (no points table, no NRR, no knockout bracket, no qualification
 // calculator — none of that means anything for two teams playing each other repeatedly). Reuses
