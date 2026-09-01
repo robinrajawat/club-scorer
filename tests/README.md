@@ -402,6 +402,16 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   ("Make public"/"Make private"), not text; `SearchAndRequestPanel`
   (used for the federation-affiliation search) needs an explicit
   "Search" button click before results appear.
+- `src/components/federationsPanel.js` /
+  `tests/unit/components/federationsPanel.test.js` —
+  `FederationsPanel`, `ClubPanel`'s sibling (create/find-and-request-
+  to-join, owner-only Manage mode). No bare globals; "Manage" loads its
+  member-club list via three props from its own click handler, not a
+  mount effect. Note: `findAllByType("button").find(b => hasText(...))`
+  with a loose substring like "Invite" can match the wrong button (e.g.
+  "+ Invite a co-owner") when more than one button contains that
+  substring — use an exact `b.props.children === "Invite"` match for
+  the specific per-result action button instead.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

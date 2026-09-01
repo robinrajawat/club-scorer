@@ -894,21 +894,38 @@ lookups; `VisibilitySwitch` is a single toggle button identified by
 before results (and their "Request" buttons) appear — typing alone
 doesn't trigger a search.
 
-~7 components remain, all of them screens now (`renderMatchCard`
-included, since it can only come out with `HomeScreen`). `TeamsScreen`
-(882 lines) still needs `FederationsPanel` (1162 lines, not yet
-extracted) before it can cleanly import both of its tab panels — take
-`FederationsPanel` on next, then `TeamsScreen` becomes unblocked. The
-rest (`MatchScreen`, `SetupScreen`, `HomeScreen`, `TeamEditScreen`,
-`AccountScreen`) hold real application state via hooks — a different,
-harder case than a presentational leaf: expect each one to need its own
-dependency read before starting, and to sometimes carry a nested-closure
-helper (like `renderMatchCard`) that has to be handled as part of that
-screen's own extraction rather than pulled out separately. Continue
-through the rest now — the project owner has asked for the full
-extraction to be completed without pausing for confirmation between
-batches; only stop for a genuine blocker that needs the owner's own
-decision.
+A fortieth PR extracted `src/components/federationsPanel.js`
+(`FederationsPanel` — `ClubPanel`'s sibling: create/find-and-request-
+to-join a federation, and per-federation owner-only "Manage" mode —
+edit name/description, invite a club by search or by email, invite/
+remove a co-owner, remove a member club, cancel a pending outgoing
+invite, delete once no clubs remain affiliated). Every write action is
+a prop, no bare globals, no mount effect — "Manage" loads its member-
+club list via `onLoadFederationMembers`/`onLoadFederationTeams`/
+`onSearchPublicClubs`, all props, from its own click handler rather
+than `useEffect`. The dependency read paid off directly this time: 9 of
+10 tests passed on the very first run, the best first-pass rate of any
+large screen this session — the one miss was a `findAllByType("button").find(...)`
+substring match ("Invite") accidentally matching "+ Invite a co-owner"
+before the actual per-search-result "Invite" button; fixed with an
+exact `===` match instead of `hasText`.
+
+This unblocks `TeamsScreen` (882 lines), which renders both `ClubPanel`
+and `FederationsPanel` as tabs — now that both exist, `TeamsScreen`
+itself is next.
+
+~6 components remain, all of them screens now (`renderMatchCard`
+included, since it can only come out with `HomeScreen`). `TeamsScreen`,
+`MatchScreen`, `SetupScreen`, `HomeScreen`, `TeamEditScreen`, and
+`AccountScreen` all hold real application state via hooks — a
+different, harder case than a presentational leaf: expect each one to
+need its own dependency read before starting, and to sometimes carry a
+nested-closure helper (like `renderMatchCard`) that has to be handled
+as part of that screen's own extraction rather than pulled out
+separately. Continue through the rest now — the project owner has asked
+for the full extraction to be completed without pausing for
+confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
