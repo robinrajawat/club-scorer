@@ -1642,9 +1642,9 @@ function upsertLocalPointer(match, extra) {
   });
   lsSetIndex(idx);
 }
-// TEST-EXTRACT-START: pack-utils — tests/run.js pulls this exact block out by these markers, so
-// keep packMatchForFirestore and findEmptyKeyPath contiguous and self-contained (no references to
-// anything outside this span) or the extraction breaks.
+// GENERATED-START: pack-utils
+// Firestore write-shaping and validation helpers. Self-contained — no dependencies outside this
+// file — and covered by tests/unit/packUtils.test.js.
 function packMatchForFirestore(match) {
   // Firestore rejects any array that directly contains another array ("nested arrays").
   // inning.overs is exactly that: an array of per-over ball-event arrays. Every previous fix in
@@ -1685,7 +1685,7 @@ function findEmptyKeyPath(obj, path) {
   }
   return null;
 }
-// TEST-EXTRACT-END: pack-utils
+// GENERATED-END: pack-utils
 function unpackMatchFromFirestore(match) {
   if (!match || !match.innings) return match;
   return {
@@ -4646,11 +4646,15 @@ function generateGroupRoundRobinFixtures(groups, double) {
   }
   return fixtures;
 }
-// TEST-EXTRACT-START: standings-and-dls — tests/run.js pulls computeStandings through
-// maxWicketsFor (and everything harmlessly declared in between) plus the DLS block right after
-// it, out by these markers. Keep this contiguous: the extraction is a single textual slice, not a
-// dependency graph, so computeStandings' call to maxWicketsFor only resolves if maxWicketsFor's
-// own declaration is somewhere inside this same slice too.
+// GENERATED-START: app-logic
+// Tournament standings/DLS/bracket-placement logic, plus a grab-bag of smaller app-wide helpers
+// (localStorage-backed prefs, theme/tour/install-hint flags, a couple of small UI hooks) that
+// happened to live in the same stretch of index.html. Kept as one file rather than split further
+// for now — these have no dependencies on each other or on anything outside this file, so grouping
+// is just about not having proven out the splice pipeline on more than one module shape yet.
+// computeStandings/dlsTarget/dlsResourcePercent/oversLeftTrueDecimal are covered by
+// tests/unit/appLogic.test.js; the rest (DOM/localStorage-dependent) isn't unit-testable in Node
+// and is unchanged from before this refactor.
 function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {
@@ -5937,7 +5941,7 @@ function dlsTarget(S, R1, R2, G50) {
     par: target - 1
   };
 }
-// TEST-EXTRACT-END: standings-and-dls
+// GENERATED-END: app-logic
 // Shared between the top and bottom progress indicators in SetupScreen, so the two never drift.
 const SETUP_PAGE_LABELS = {
   teams: "Teams & Format",
@@ -6547,10 +6551,10 @@ function allMatchPlayers(match) {
   });
   return Array.from(names);
 }
-// TEST-EXTRACT-START: scoring-engine — tests/run.js pulls newInning through the end of applyBall
-// out by these markers, so keep this whole span self-contained (only DEFAULT_RULES, ensureBatsman,
-// ensureBowler, oversLabel, runsDisplay as external deps — all defined in between and covered by
-// the same markers) or the extraction breaks.
+// GENERATED-START: scoring-engine
+// The ball-by-ball scoring engine. Self-contained aside from DEFAULT_RULES (imported above) —
+// everything else it needs (ensureBatsman, ensureBowler, oversLabel, runsDisplay) is defined below
+// in this same file. Covered by tests/unit/scoringEngine.test.js.
 function newInning(battingTeam, bowlingTeam, rules, maxWickets) {
   const r = {
     ...DEFAULT_RULES,
@@ -7287,7 +7291,7 @@ function applyBall(inning, event) {
   }
   return cur;
 }
-// TEST-EXTRACT-END: scoring-engine
+// GENERATED-END: scoring-engine
 
 // ---------- UI atoms ----------
 function BallBadge({
