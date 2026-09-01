@@ -374,6 +374,12 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   renders `champion` and `" won the tournament"` as two separate JSX
   children, so its assertion matches
   `/"Riverside CC"," won the tournament"/`, not a plain substring.
+- `src/components/tournamentsScreen.js` /
+  `tests/unit/components/tournamentsScreen.test.js` —
+  `TournamentsScreen`, the "Cups" list (source chips, create-tournament
+  with an optional group split, create-series, status/search filter).
+  Every write is a prop; the only bare global is `Modal`, for the
+  create-series dialog.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

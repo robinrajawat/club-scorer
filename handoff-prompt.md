@@ -837,18 +837,30 @@ separate JSX children, not one concatenated string, so
 the same two-array-elements gotcha `PlayingXIPicker`'s tests hit
 earlier this session with `"0","/","2"`.
 
-~10 components remain, all of them screens now (`renderMatchCard`
+A thirty-seventh PR extracted `src/components/tournamentsScreen.js`
+(`TournamentsScreen` — the "Cups" list: club/federation source chips,
+create-tournament with an optional group-stage split, create-series,
+a status/search filter, and each tournament as a tappable row). Every
+write action is a prop (`onCreateTournament`/`onCreateSeries`); the
+only bare global is `Modal`, backing the create-series dialog only
+(create-tournament is an inline card). At ~820 lines this is the
+biggest component extracted so far, but the dependency read went
+smoothly — everything it touches (`withPinnedFirst`,
+`knockoutStagesPreview`, `tournamentStatus`, `tournamentDateRangeLabel`,
+`TOURNAMENT_STATUS_LABELS`/`COLORS`) was already extracted from earlier
+batches, and all 8 tests passed on the first run.
+
+~9 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
-application state via hooks (`MatchScreen`, `TournamentsScreen`,
-`SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
-case than a presentational leaf: expect each one to need its own
-dependency read before starting, and to sometimes carry a nested-closure
-helper (like `renderMatchCard`) that has to be handled as part of that
-screen's own extraction rather than pulled out separately. Continue
-through the rest now — the project owner has asked for the full
-extraction to be completed without pausing for confirmation between
-batches; only stop for a genuine blocker that needs the owner's own
-decision.
+application state via hooks (`MatchScreen`, `SetupScreen`,
+`TeamsScreen`, `HomeScreen`, etc.) — a different, harder case than a
+presentational leaf: expect each one to need its own dependency read
+before starting, and to sometimes carry a nested-closure helper (like
+`renderMatchCard`) that has to be handled as part of that screen's own
+extraction rather than pulled out separately. Continue through the rest
+now — the project owner has asked for the full extraction to be
+completed without pausing for confirmation between batches; only stop
+for a genuine blocker that needs the owner's own decision.
 
 **Follow-up, not yet started (queued by the project owner, low
 priority relative to the extraction):** switch this repo's GitHub
