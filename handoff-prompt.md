@@ -1088,16 +1088,74 @@ the standard bare-function-call grep):
   text alone. A `modalBtn` helper scopes the search to inside the
   stubbed `Modal` itself rather than the whole tree.
 
-**Extraction is now complete for every screen except the root
-`CricketScorer` component itself** (the top-level router/app-shell that
-was always going to be last, since everything else had to exist first
-for it to delegate to). Continue straight to it now — the project owner
-has asked for the full extraction to be completed without pausing for
-confirmation between batches; only stop for a genuine blocker that
-needs the owner's own decision.
+A forty-seventh PR extracted the last two pieces and **finished the
+entire component-extraction task**: `src/components/cricketScorer.js`
+(`CricketScorer` — the root app-shell: screen routing/history,
+Firebase Auth session lifecycle, and essentially every Firestore/Auth
+handler the app has, ~85 local nested handlers plus ~80 bare-global
+SDK calls, none of it extracted further since none are called from
+outside the component; plus `FONT_LINK`/`GLOBAL_CSS`/`SCREEN_DEPTH`,
+three standalone top-level consts with nowhere else to live, given the
+same `SETUP_PAGE_LABELS`/`MAX_UNDO_HISTORY` treatment) and
+`src/components/errorBoundary.js` (`ErrorBoundary` — the top-level
+crash boundary wrapping `<CricketScorer />` at the bootstrap
+`root.render()` call; a real `class ... extends React.Component`,
+since `componentDidCatch`/`getDerivedStateFromError` have no hook
+equivalent — the first class component this session extracted, and it
+needed a genuine `generate.js` fix: `findNamedExport`'s regex only
+recognized `export function`/`export const`, not `export class`, fixed
+by extending it to `/^export (?:function (\w+)|const (\w+) =|class
+(\w+))/gm`).
 
-**Follow-up, not yet started (queued by the project owner, low
-priority relative to the extraction):** switch this repo's GitHub
+Two things worth carrying forward for any future work touching this
+pipeline:
+
+- **`wrap_markers.js`'s brace-counting has no awareness of template
+  literals.** Wrapping `GLOBAL_CSS` (a `` const NAME = `...` `` whose
+  value is a large CSS template literal full of its own `{`/`}`
+  characters) inserted the `GENERATED-FN-END` marker mid-string a few
+  lines in, corrupting the actual runtime CSS rather than just
+  producing diff noise — caught by the mandatory byte-diff check
+  before any test ran, not by anything in the script itself. Fixed by
+  restoring from the pre-batch snapshot and inserting both `GLOBAL_CSS`'s
+  and `ErrorBoundary`'s markers by hand (`Edit`, anchored on unique
+  surrounding text) instead of trusting the script. **Rule: never trust
+  `wrap_markers.js` for a `const` whose value is a template literal —
+  insert its markers manually and confirm via diff that only marker
+  lines changed.**
+- **Deleting `window`/`document` between tests is unsafe for a
+  component whose render body unconditionally reads `window` and whose
+  mount effect leaves async work outstanding.** `CricketScorer`'s
+  `refreshClubs` (three levels of `Promise.all`, one an intentionally
+  un-awaited inner IIFE) can still have a continuation pending well
+  after a test's own `act()`-wrapped waits return — harmless on its
+  own, just a stale `setState` on an already-unmounted tree. But
+  `cricketScorer.test.js` followed every other DOM-touching test
+  file's per-test `delete globalThis.window` pattern (`modal.test.js`'s
+  own convention) and that turned the harmless straggler into a real
+  crash (`window.location` read on every render) that wedged Node's
+  process exit for minutes — confirmed via `process._getActiveHandles()`/
+  `process._getActiveRequests()` logging that no timer/interval was the
+  cause, then confirmed the actual cause via a controlled A/B (removing
+  the `after()` deletion alone made the hang and its three React
+  warnings disappear, process exiting cleanly in ~1.2s). **Fixed by
+  installing jsdom's `window`/`document`/`navigator`/`localStorage` ONCE
+  in a file-level `before()` and deliberately never tearing them down —
+  safe because `node --test` runs each test file in its own subprocess,
+  so nothing leaks to other files.** This is a different, and more
+  fragile, gotcha than the standard per-test jsdom teardown pattern
+  every other DOM-dependent test file in this suite uses — check
+  whether a future component's mount effect leaves comparable async
+  work outstanding before defaulting to per-test teardown.
+
+**Component extraction is now 100% complete** — every component that
+was in `docs/index.html` now lives in a tested `src/components/*.js`
+module, spliced back in by `npm run generate`. `npm test` is at 449
+passing tests (437 before this batch, +7 for `cricketScorer.test.js`,
++5 for `errorBoundary.test.js`).
+
+**Follow-up, not yet started (queued by the project owner — now that
+extraction is done, this is next):** switch this repo's GitHub
 Pages deployment from "Deploy from a branch" (source restricted to the
 repo root or a folder literally named `/docs`, which is why the
 deployed site lives in `docs/` despite having nothing to do with

@@ -513,6 +513,50 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
     overthrow buttons) collides with them by text. A `modalBtn` helper
     scopes the search to inside the stubbed `Modal` itself.
 
+- `src/components/cricketScorer.js` / `tests/unit/components/cricketScorer.test.js`
+  — `CricketScorer`, the root app-shell: screen routing/history, the
+  Firebase Auth session lifecycle, and essentially every Firestore/Auth
+  handler the app has (~85 local nested handlers, ~80 bare-global SDK
+  calls — none stubbed individually; a shared `render()` helper stubs
+  the handful that fire unconditionally at mount, plus whatever a given
+  test's scenario needs on top). **Unlike every other DOM-touching test
+  file in this suite, jsdom's `window`/`document`/`navigator`/
+  `localStorage` are installed ONCE in a file-level `before()` and
+  deliberately never torn down** — `CricketScorer`'s mount effect
+  (`refreshClubs`, three levels of `Promise.all`, one an intentionally
+  un-awaited inner IIFE) can leave a continuation pending well past a
+  test's own `act()`-wrapped waits, and since `CricketScorer`'s very
+  first render-body line reads `window.location` unconditionally, the
+  usual per-test `delete globalThis.window` (see `modal.test.js`) turns
+  that harmless straggler into a real crash that wedges Node's process
+  exit for minutes. `node --test` runs each test file in its own
+  subprocess, so leaving those globals defined for the rest of this
+  file's process is harmless — same as a real browser tab never tearing
+  its own `window` down mid-session. Bare-global function stubs and
+  mounted `CricketScorer` instances are still reset every test (any test
+  reaching the match screen mounts `MatchScreen`, whose live
+  `InningsTimer` interval needs the same `mountedInstances`-array
+  unmount-in-`afterEach` pattern `matchScreen.test.js` established).
+  This is a deliberately practical slice, not exhaustive coverage of all
+  ~80 handlers — most are simple, mechanically similar CRUD wrappers
+  already exercised in spirit by whichever screen's own test suite
+  covers the props they populate; what's tested here is specific to
+  `CricketScorer` itself: initial-screen routing from the URL, the
+  auth-state lifecycle, browser-history navigation, and a couple of
+  representative handlers.
+- `src/components/errorBoundary.js` / `tests/unit/components/errorBoundary.test.js`
+  — `ErrorBoundary`, the top-level crash boundary wrapping
+  `<CricketScorer />` at the bootstrap `root.render()` call. The first
+  (and only) class component extracted this session — `React.Component`
+  with `getDerivedStateFromError`/`componentDidCatch`, which have no
+  hook equivalent. `reportErrorAuto`/`submitFeedback` (bare globals,
+  Firestore writes) and `RECENT_CONSOLE_ERRORS` (a bare-global ring
+  buffer, populated elsewhere in `docs/index.html`, not specific to this
+  component) are stubbed per test; no jsdom needed — a minimal
+  `globalThis.window = { location: { reload: () => {} } }` covers the
+  Reload button's one DOM touch, since nothing else in the file reads a
+  real DOM API.
+
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
 (`// GENERATED-START: <name>` / `// GENERATED-END: <name>`).

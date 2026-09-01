@@ -572,7 +572,10 @@ const Hash = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
 // Display: "DM Serif Display" (scorebook headers) / Numbers: "IBM Plex Mono" (the signature scoreboard digits)
 // Body/UI: "Inter"
 
+// GENERATED-FN-START: FONT_LINK
 const FONT_LINK = "https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap";
+// GENERATED-FN-END: FONT_LINK
+// GENERATED-FN-START: GLOBAL_CSS
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
   /* Theme tokens. Every COLORS.* value below resolves to one of these instead of a literal hex,
@@ -693,6 +696,7 @@ const GLOBAL_CSS = `
     .print-only * { visibility: visible !important; box-shadow: none !important; animation: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;
+// GENERATED-FN-END: GLOBAL_CSS
 // GENERATED-FN-START: NavWrap
 function NavWrap({
   navKey,
@@ -34219,6 +34223,7 @@ function ResultScreen({
 
 
 // ---------- Root ----------
+// GENERATED-FN-START: SCREEN_DEPTH
 const SCREEN_DEPTH = {
   home: 0,
   login: 0,
@@ -34237,6 +34242,8 @@ const SCREEN_DEPTH = {
   "inbox": 1,
   "tournament-detail": 2
 };
+// GENERATED-FN-END: SCREEN_DEPTH
+// GENERATED-FN-START: CricketScorer
 function CricketScorer() {
   const initialAuthAction = useRef(getAuthActionFromUrl()).current;
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
@@ -36711,6 +36718,8 @@ function CricketScorer() {
     }
   }, "Opening match\u2026"))));
 }
+// GENERATED-FN-END: CricketScorer
+// GENERATED-FN-START: ErrorBoundary
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -36862,6 +36871,7 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+// GENERATED-FN-END: ErrorBoundary
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(/*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(CricketScorer, null)));
 if ("serviceWorker" in navigator) {
