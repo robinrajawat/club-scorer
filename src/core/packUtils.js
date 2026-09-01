@@ -40,3 +40,29 @@ export function findEmptyKeyPath(obj, path) {
   }
   return null;
 }
+
+// The read-side counterpart to packMatchForFirestore above -- undoes its overs-wrapping and
+// defensively normalizes any overs entry that isn't already a plain array (a genuine production
+// crash: a malformed historical write left a non-array overs entry, which then crashed
+// OversStrip's render downstream). Covered by tests/unit/packUtils.test.js.
+export function unpackMatchFromFirestore(match) {
+  if (!match || !match.innings) return match;
+  return {
+    ...match,
+    innings: match.innings.map(inn => ({
+      ...inn,
+      // `o.balls || []` only guarded against o.balls being falsy -- if it was truthy but NOT
+      // actually an array (an empty object from some malformed historical write, say), it passed
+      // straight through unchanged. That silently produced a non-array "balls" entry in overs,
+      // which then crashed OversStrip's render later (balls.reduce/.filter is not a function) --
+      // a genuine reported crash on FollowScreen, not a hypothetical. Also guards `o` itself being
+      // null/undefined, which the old ternary's else-branch would have thrown on immediately
+      // (Cannot read properties of null (reading 'balls')) rather than falling back to [].
+      overs: (inn.overs || []).map(o => {
+        if (Array.isArray(o)) return o;
+        const balls = o && o.balls;
+        return Array.isArray(balls) ? balls : [];
+      })
+    }))
+  };
+}

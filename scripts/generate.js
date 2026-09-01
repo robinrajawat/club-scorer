@@ -76,7 +76,32 @@ const FUNCTIONS = [
   { name: "buildPollUrl", file: "src/core/shareAndFormat.js" },
   { name: "buildPollShareText", file: "src/core/shareAndFormat.js" },
   { name: "buildFollowUrl", file: "src/core/shareAndFormat.js" },
-  { name: "buildLiveShareText", file: "src/core/shareAndFormat.js" }
+  { name: "buildLiveShareText", file: "src/core/shareAndFormat.js" },
+  { name: "unpackMatchFromFirestore", file: "src/core/packUtils.js" },
+  { name: "FEEDBACK_ADMIN_EMAIL", file: "src/core/miscHelpers.js" },
+  { name: "isFeedbackAdmin", file: "src/core/miscHelpers.js" },
+  { name: "genMatchCode", file: "src/core/miscHelpers.js" },
+  { name: "expiresAtMillis", file: "src/core/miscHelpers.js" },
+  { name: "inviteExpiryLabel", file: "src/core/miscHelpers.js" },
+  { name: "formatAddressLabel", file: "src/core/miscHelpers.js" },
+  { name: "WMO_WEATHER_CODES", file: "src/core/miscHelpers.js" },
+  { name: "weatherCodeInfo", file: "src/core/miscHelpers.js" },
+  { name: "parseCsvLine", file: "src/core/miscHelpers.js" },
+  { name: "parseBulkPlayers", file: "src/core/miscHelpers.js" },
+  { name: "normalizeEmail", file: "src/core/miscHelpers.js" },
+  { name: "isClubOwner", file: "src/core/miscHelpers.js" },
+  { name: "isFederationOwner", file: "src/core/miscHelpers.js" },
+  { name: "SHORT_WEEKDAYS", file: "src/core/miscHelpers.js" },
+  { name: "SHORT_MONTHS", file: "src/core/miscHelpers.js" },
+  { name: "relativeDayLabel", file: "src/core/miscHelpers.js" },
+  { name: "greetingPrefix", file: "src/core/miscHelpers.js" },
+  { name: "tournamentStatus", file: "src/core/miscHelpers.js" },
+  { name: "tournamentDateRangeLabel", file: "src/core/miscHelpers.js" },
+  { name: "TEAM_COLOR_PRESETS", file: "src/core/miscHelpers.js" },
+  { name: "playerInitials", file: "src/core/miscHelpers.js" },
+  { name: "playerAvatarColor", file: "src/core/miscHelpers.js" },
+  { name: "parseOverLabel", file: "src/core/miscHelpers.js" },
+  { name: "ballLabelsForOver", file: "src/core/miscHelpers.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's

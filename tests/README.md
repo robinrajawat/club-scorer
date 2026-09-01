@@ -17,8 +17,9 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   the ball-by-ball scoring engine (`newInning`, `applyBall`,
   `ensureBatsman`, `ensureBowler`).
 - `src/core/packUtils.js` / `tests/unit/packUtils.test.js` — Firestore
-  write-shaping and validation (`packMatchForFirestore`,
-  `findEmptyKeyPath`).
+  write-shaping, validation, and read-side normalization
+  (`packMatchForFirestore`, `findEmptyKeyPath`,
+  `unpackMatchFromFirestore`).
 - `src/core/appLogic.js` / `tests/unit/appLogic.test.js` — tournament
   standings and DLS (`computeStandings`, `dlsTarget`,
   `dlsResourcePercent`, `oversLeftTrueDecimal`); the file also carries
@@ -34,10 +35,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `window.location` in the browser but fall back to a relative URL via
   `try`/`catch` anywhere that isn't available, including Node — that
   fallback branch is what's tested here).
+- `src/core/miscHelpers.js` / `tests/unit/miscHelpers.test.js` — a
+  grab-bag of small, pure helpers: admin-email checks, match/invite
+  codes, address/weather formatting, CSV parsing for bulk player import,
+  club/federation ownership checks, date labels, tournament status,
+  player avatars, and over-label parsing.
 
-The first three modules above are each one contiguous span of
-`docs/index.html`, spliced in as a block (`// GENERATED-START: <name>` /
-`// GENERATED-END: <name>`). `statsAndFixtures.js` is different: its
+`pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
+span of `docs/index.html`, spliced in as a block
+(`// GENERATED-START: <name>` / `// GENERATED-END: <name>`).
+`statsAndFixtures.js`, `shareAndFormat.js`, and `miscHelpers.js` (plus
+`unpackMatchFromFirestore` in `packUtils.js`) are different: their
 functions are scattered as individual, non-contiguous declarations among
 `docs/index.html`'s React components, so each one is wrapped in place with
 its own `// GENERATED-FN-START: <name>` / `// GENERATED-FN-END: <name>`

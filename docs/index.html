@@ -663,7 +663,9 @@ const COLORS = {
 // leaving people to the raw native color picker for the common case, since a handful of
 // well-separated, readable-on-white options is faster to pick from and harder to end up with two
 // teams that are nearly indistinguishable on a chart.
+// GENERATED-FN-START: TEAM_COLOR_PRESETS
 const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
+// GENERATED-FN-END: TEAM_COLOR_PRESETS
 const PLAYER_ROLES = [{
   value: "batsman",
   label: "Batsman"
@@ -780,10 +782,14 @@ async function submitFeedback({
 // hardcoded identity) -- this was the one place that wasn't. Keeping this constant as an OR,
 // rather than replacing it outright, means this account can never get locked out even if the
 // admins collection is empty, misconfigured, or a rules deploy lags behind.
+// GENERATED-FN-START: FEEDBACK_ADMIN_EMAIL
 const FEEDBACK_ADMIN_EMAIL = "robinsinghrajawat@gmail.com";
+// GENERATED-FN-END: FEEDBACK_ADMIN_EMAIL
+// GENERATED-FN-START: isFeedbackAdmin
 function isFeedbackAdmin(user) {
   return !!user && !!user.email && user.email.toLowerCase() === FEEDBACK_ADMIN_EMAIL;
 }
+// GENERATED-FN-END: isFeedbackAdmin
 // Data-driven admin check: does an /admins/{uid} doc exist for this person? See firestore.rules
 // for the collection's own rule (a user may only read their OWN doc there, existence-only, no
 // listing) -- adding or removing an admin becomes a Firestore document instead of a code change +
@@ -1181,6 +1187,7 @@ async function linkGoogleCredential() {
 // generated from it is the ENTIRE credential for full read/write on a shared match — worth the
 // one extra API call to get an actually-unpredictable one. 256 is evenly divisible by the
 // 32-character alphabet below, so `byte % 32` introduces no modulo bias.
+// GENERATED-FN-START: genMatchCode
 function genMatchCode() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I ambiguity
   const bytes = crypto.getRandomValues(new Uint8Array(8));
@@ -1188,6 +1195,7 @@ function genMatchCode() {
   for (let i = 0; i < 8; i++) s += chars[bytes[i] % chars.length];
   return s;
 }
+// GENERATED-FN-END: genMatchCode
 // Firestore TTL windows for the collections that carry a native TTL policy on their `expiresAt`
 // field — see README's "Running your own copy" for the one-time Firebase Console step that
 // actually enables auto-deletion off this field; writing it here alone does nothing without that.
@@ -1223,14 +1231,17 @@ function ttlTimestamp(days) {
 // .toMillis() on it expecting a Timestamp. Existing invites are short-lived (7 days) so this
 // window is brief, but crashing on someone's still-valid pending invite mid-transition would be
 // a worse failure than this one extra branch.
+// GENERATED-FN-START: expiresAtMillis
 function expiresAtMillis(expiresAt) {
   if (!expiresAt) return null;
   return typeof expiresAt === "number" ? expiresAt : expiresAt.toMillis();
 }
+// GENERATED-FN-END: expiresAtMillis
 // "Expires in Nd" / "Expires tomorrow" / "Expired" for a club invite's pending-invites row — the
 // one place in the UI that surfaces the 7-day window someone has to redeem it, so an owner isn't
 // left guessing why a code they sent last week stopped working. Not shown at all when there's
 // nothing to compute from (older data, or the field genuinely missing).
+// GENERATED-FN-START: inviteExpiryLabel
 function inviteExpiryLabel(expiresAt) {
   const ms = expiresAtMillis(expiresAt);
   if (ms == null) return null;
@@ -1239,6 +1250,7 @@ function inviteExpiryLabel(expiresAt) {
   if (daysLeft === 1) return "Expires tomorrow";
   return `Expires in ${daysLeft}d`;
 }
+// GENERATED-FN-END: inviteExpiryLabel
 // Escapes per RFC 5545 §3.3.11 — commas, semicolons, backslashes, and newlines all need it inside
 // TEXT values, or some calendar apps (Outlook especially) mis-parse the field boundary.
 // GENERATED-FN-START: icsEscape
@@ -1342,6 +1354,7 @@ function downloadTextFile(filename, mimeType, text) {
 // and the place name is what a person actually recognizes. Falls back to the raw display_name
 // when the pieces needed for that don't come back at all (e.g. a landmark/POI result with no
 // street address, or a country whose Nominatim data doesn't populate these fields the same way).
+// GENERATED-FN-START: formatAddressLabel
 function formatAddressLabel(r) {
   const addr = r.address || {};
   const street = [addr.road, addr.house_number].filter(Boolean).join(" ");
@@ -1356,6 +1369,7 @@ function formatAddressLabel(r) {
   // street address with nothing to confirm it's the right place.
   return r.name && r.name !== street ? `${r.name}, ${simplified}` : simplified;
 }
+// GENERATED-FN-END: formatAddressLabel
 async function searchAddress(query) {
   const q = (query || "").trim();
   if (q.length < 3) return [];
@@ -1375,6 +1389,7 @@ async function searchAddress(query) {
 // WMO weather interpretation codes (the `weather_code` Open-Meteo returns) -> a short label and an
 // emoji rather than a hand-authored SVG icon, consistent with how venue already uses a plain pin
 // emoji rather than a custom icon component on this card.
+// GENERATED-FN-START: WMO_WEATHER_CODES
 const WMO_WEATHER_CODES = {
   0: { emoji: "\u2600\uFE0F", label: "Clear" },
   1: { emoji: "\uD83C\uDF24\uFE0F", label: "Mostly clear" },
@@ -1405,9 +1420,12 @@ const WMO_WEATHER_CODES = {
   96: { emoji: "\u26C8\uFE0F", label: "Thunderstorm" },
   99: { emoji: "\u26C8\uFE0F", label: "Thunderstorm" }
 };
+// GENERATED-FN-END: WMO_WEATHER_CODES
+// GENERATED-FN-START: weatherCodeInfo
 function weatherCodeInfo(code) {
   return WMO_WEATHER_CODES[code] || { emoji: "\uD83C\uDF21\uFE0F", label: "\u2014" };
 }
+// GENERATED-FN-END: weatherCodeInfo
 // Daily forecast for one fixture's ground and date, via Open-Meteo's free, no-key forecast API.
 // Only useful within its ~16-day forecast horizon -- callers are expected to check the fixture's
 // date is both in the future and within that window before calling this, since a request for a
@@ -1707,7 +1725,11 @@ function findEmptyKeyPath(obj, path) {
   }
   return null;
 }
-// GENERATED-END: pack-utils
+
+// The read-side counterpart to packMatchForFirestore above -- undoes its overs-wrapping and
+// defensively normalizes any overs entry that isn't already a plain array (a genuine production
+// crash: a malformed historical write left a non-array overs entry, which then crashed
+// OversStrip's render downstream). Covered by tests/unit/packUtils.test.js.
 function unpackMatchFromFirestore(match) {
   if (!match || !match.innings) return match;
   return {
@@ -1729,6 +1751,30 @@ function unpackMatchFromFirestore(match) {
     }))
   };
 }
+// GENERATED-END: pack-utils
+// GENERATED-FN-START: unpackMatchFromFirestore
+function unpackMatchFromFirestore(match) {
+  if (!match || !match.innings) return match;
+  return {
+    ...match,
+    innings: match.innings.map(inn => ({
+      ...inn,
+      // `o.balls || []` only guarded against o.balls being falsy -- if it was truthy but NOT
+      // actually an array (an empty object from some malformed historical write, say), it passed
+      // straight through unchanged. That silently produced a non-array "balls" entry in overs,
+      // which then crashed OversStrip's render later (balls.reduce/.filter is not a function) --
+      // a genuine reported crash on FollowScreen, not a hypothetical. Also guards `o` itself being
+      // null/undefined, which the old ternary's else-branch would have thrown on immediately
+      // (Cannot read properties of null (reading 'balls')) rather than falling back to [].
+      overs: (inn.overs || []).map(o => {
+        if (Array.isArray(o)) return o;
+        const balls = o && o.balls;
+        return Array.isArray(balls) ? balls : [];
+      })
+    }))
+  };
+}
+// GENERATED-FN-END: unpackMatchFromFirestore
 // ---------- Offline outbox ----------
 // Every saveMatch() call already writes a full match snapshot (not a diff), so the only thing an
 // offline queue needs to remember per match is "the latest state that hasn't reached the server
@@ -2291,9 +2337,11 @@ function clearUndoHistory(matchId) {
 // so the SAME person resolves consistently no matter which club's roster references them, and
 // other clubs can borrow them into their own rosters via loadPublicPlayers. See firestore.rules
 // for the full permission model (home club administers; auto-links to an account on sign-in).
+// GENERATED-FN-START: normalizeEmail
 function normalizeEmail(email) {
   return (email || "").trim().toLowerCase();
 }
+// GENERATED-FN-END: normalizeEmail
 // Publishes a player (creates the shared doc if this is the first time anyone has, or just
 // returns the existing one otherwise — deliberately doesn't overwrite an already-published
 // player's name/homeClubId, since whichever club got there first keeps administering them).
@@ -2558,9 +2606,11 @@ async function saveTeams(teams) {
 // only be redeemed by someone signed in as that exact email. This replaces the old anonymous
 // "share this code with your team" pattern; a code is still what gets pasted in to redeem, but
 // it's now bound to a person, not just a click.
+// GENERATED-FN-START: isClubOwner
 function isClubOwner(club, uid) {
   return !!club && !!uid && (club.ownerUid === uid || (club.coOwnerUids || []).includes(uid));
 }
+// GENERATED-FN-END: isClubOwner
 async function loadClubs() {
   if (!auth.currentUser) return [];
   try {
@@ -2885,6 +2935,7 @@ async function removePoolPlayer(clubId, playerId) {
 // Denmark") or because the spreadsheet app that saved it just quotes every field regardless. Only
 // used for the comma-delimited branch below; a tab-separated paste from Excel/Sheets never quotes
 // fields this way, so it's handled by a plain split there.
+// GENERATED-FN-START: parseCsvLine
 function parseCsvLine(line) {
   const cells = [];
   let cur = "";
@@ -2914,6 +2965,7 @@ function parseCsvLine(line) {
   cells.push(cur);
   return cells;
 }
+// GENERATED-FN-END: parseCsvLine
 // Parses pasted player rows for the club pool's bulk-add box — accepts tab-separated input
 // (pasted straight from Excel/Sheets/Numbers) or comma-separated (a .csv opened in a text
 // editor), one player per line.
@@ -2950,6 +3002,7 @@ function parseCsvLine(line) {
 // designation set from the roster row itself, see TeamEditScreen's keeper picker, not a
 // batting/bowling category), so those rows come back flagged via isKeeperNote instead of
 // silently losing the role.
+// GENERATED-FN-START: parseBulkPlayers
 function parseBulkPlayers(text) {
   const ROLE_SYNONYMS = {
     "batsman": "batsman",
@@ -3063,6 +3116,7 @@ function parseBulkPlayers(text) {
   }
   return rows;
 }
+// GENERATED-FN-END: parseBulkPlayers
 // Owner-only. Mints a time-limited invite addressed to one email. Whoever redeems it while signed
 // in as that exact email is added to memberUids only — no ownership rights.
 async function inviteClubMemberByEmail(clubId, email) {
@@ -3576,9 +3630,11 @@ async function deleteTeamPolls(clubId, teamId) {
 // creator (createdBy) and anyone granted co-ownership (coOwnerUids). Every invite — a club
 // affiliating, or someone becoming a co-owner — is addressed to one email and only redeemable by
 // that exact signed-in email.
+// GENERATED-FN-START: isFederationOwner
 function isFederationOwner(federation, uid) {
   return !!federation && !!uid && (federation.createdBy === uid || (federation.coOwnerUids || []).includes(uid));
 }
+// GENERATED-FN-END: isFederationOwner
 async function createFederation(name) {
   if (!auth.currentUser) return {
     ok: false,
@@ -7451,6 +7507,7 @@ function BallBadge({
 // themselves), so it's labelled with the SAME number as whichever legal ball hasn't happened yet
 // — e.g. over 2 ball 2 struck as a wide shows "2.2", and so does the legal delivery that
 // eventually completes it, rather than the wide consuming its own number.
+// GENERATED-FN-START: ballLabelsForOver
 function ballLabelsForOver(overIndex, balls) {
   let legalCount = 0;
   return balls.map(ev => {
@@ -7459,6 +7516,7 @@ function ballLabelsForOver(overIndex, balls) {
     return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
   });
 }
+// GENERATED-FN-END: ballLabelsForOver
 
 // Ticking wall-clock timer since the innings began (inning.startedAt) — a simple elapsed-time
 // readout, not a stopwatch with pause/resume; drinks breaks, rain delays etc. just show up as
@@ -15992,8 +16050,13 @@ function WelcomeScreen({
 // "Today" / "Yesterday" / "Sat, 14 Jun" (plus year if not this year) — used on the saved-matches
 // list. Falls back to null for matches saved before `createdAt` existed, so old matches just skip
 // the caption instead of showing a wrong or made-up date.
+// GENERATED-FN-START: SHORT_WEEKDAYS
 const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// GENERATED-FN-END: SHORT_WEEKDAYS
+// GENERATED-FN-START: SHORT_MONTHS
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// GENERATED-FN-END: SHORT_MONTHS
+// GENERATED-FN-START: relativeDayLabel
 function relativeDayLabel(ts) {
   if (!ts) return null;
   const d = new Date(ts);
@@ -16005,16 +16068,19 @@ function relativeDayLabel(ts) {
   const base = `${SHORT_WEEKDAYS[d.getDay()]}, ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
+// GENERATED-FN-END: relativeDayLabel
 // Local device time, not UTC -- a greeting is only warm if it matches when the person is actually
 // looking at the screen. Three bands rather than a finer split (e.g. a separate "late night") since
 // the boundaries themselves don't need to be precise; nobody's checking a clock to see which one
 // they're in, they're just glancing at whether it feels right.
+// GENERATED-FN-START: greetingPrefix
 function greetingPrefix() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+// GENERATED-FN-END: greetingPrefix
 // Venue lives on the tournament, not the individual fixture — so this edits "this tournament's
 // ground" even though it's opened from one specific fixture's card, same as how the tournament's
 // venue is otherwise only ever set as a side effect of scoring its first fixture. Small enough
@@ -19760,6 +19826,7 @@ function Field({
 // does the heavier, fully-accurate isFixturePlayed check once you're actually inside one).
 // "matchId set" is treated as a light proxy for "this fixture has been started" — good enough to
 // bucket a list of many tournaments at a glance, not meant to be as precise as the detail screen.
+// GENERATED-FN-START: tournamentStatus
 function tournamentStatus(t) {
   const fixtures = t.fixtures || [];
   if (fixtures.length === 0) return "upcoming";
@@ -19768,6 +19835,7 @@ function tournamentStatus(t) {
   if (playedCount === fixtures.length) return "completed";
   return "ongoing";
 }
+// GENERATED-FN-END: tournamentStatus
 const TOURNAMENT_STATUS_LABELS = {
   upcoming: "Upcoming",
   ongoing: "Ongoing",
@@ -19780,6 +19848,7 @@ const TOURNAMENT_STATUS_COLORS = {
 };
 // Earliest-to-latest scheduled fixture date, e.g. "12 Jun – 20 Jul". Falls back to a relative
 // "Created 3 days ago" when no fixture has a date yet (fixtures are often added after creation).
+// GENERATED-FN-START: tournamentDateRangeLabel
 function tournamentDateRangeLabel(t) {
   const dates = (t.fixtures || []).filter(f => ISO_DATETIME_RE.test(f.date || "")).map(f => f.date.slice(0, 10)).sort();
   if (dates.length === 0) {
@@ -19797,6 +19866,7 @@ function tournamentDateRangeLabel(t) {
     last = dates[dates.length - 1];
   return first === last ? fmt(first) : `${fmt(first)} \u2013 ${fmt(last)}`;
 }
+// GENERATED-FN-END: tournamentDateRangeLabel
 function TournamentsScreen({
   tournaments,
   clubs,
@@ -26423,21 +26493,25 @@ function TeamEditScreen({
 
 // Up to 2 letters: first+last name initials, or just the one letter for a single-word name.
 // "?" only for a genuinely empty name, which shouldn't happen in practice (every player has one).
+// GENERATED-FN-START: playerInitials
 function playerInitials(name) {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
+// GENERATED-FN-END: playerInitials
 // Deterministic pick from the same TEAM_COLOR_PRESETS palette jersey colors already use, so two
 // players with different names reliably land on different (but stable across reloads) colors,
 // rather than every initials-avatar in a list being the same flat color.
+// GENERATED-FN-START: playerAvatarColor
 function playerAvatarColor(name) {
   const s = name || "";
   let hash = 0;
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   return TEAM_COLOR_PRESETS[hash % TEAM_COLOR_PRESETS.length];
 }
+// GENERATED-FN-END: playerAvatarColor
 // Photo if the player has one (only ever set via linkPlayerIfMatch, when they've signed in with
 // the exact email they were published under — most roster entries never will), otherwise a
 // colored initials circle instead of leaving blank space.
@@ -28608,10 +28682,12 @@ function ExportTournamentPdfButton({
     size: 14
   }), " ", preparing ? "Preparing\u2026" : "Export PDF");
 }
+// GENERATED-FN-START: parseOverLabel
 function parseOverLabel(label, ballsPerOver) {
   const [whole, balls] = String(label).split(".").map(Number);
   return whole + (balls || 0) / (ballsPerOver || 6);
 }
+// GENERATED-FN-END: parseOverLabel
 function RunRateChart({
   match
 }) {
