@@ -24180,6 +24180,7 @@ function SeriesDetailScreen({
 // editing a poll after it's sent, no push notifications (the app doesn't have those yet at all).
 // Sending a poll produces exactly one thing, a link, the same distribution model "Share live
 // score" already established: copy it, paste it into WhatsApp or wherever the team actually talks.
+// GENERATED-FN-START: AvailabilityPollModal
 function AvailabilityPollModal({
   clubId,
   clubName,
@@ -24654,6 +24655,7 @@ function AvailabilityPollModal({
     onCancel: () => setConfirmDeleteCode(null)
   }));
 }
+// GENERATED-FN-END: AvailabilityPollModal
 function TeamsScreen({
   onManageTeams,
   onBack,
