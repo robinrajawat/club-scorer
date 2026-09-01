@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer from "react-test-renderer";
-import { TOUR_SLIDES, FirstLaunchTour, TournamentShareModal } from "../../../src/components/miscModals.js";
-import { Btn } from "../../../src/components/formUiAtoms.js";
+import { TOUR_SLIDES, FirstLaunchTour, TournamentShareModal, QualificationCalculatorModal } from "../../../src/components/miscModals.js";
+import { Btn, TextField } from "../../../src/components/formUiAtoms.js";
 
 beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
@@ -97,4 +97,27 @@ test("TournamentShareModal: shows the link and Refresh/Stop sharing once a share
     delete globalThis.window;
     delete globalThis.stopSharingTournament;
   }
+});
+
+test("QualificationCalculatorModal: prompts to pick a team, then computes a restrict-them-to target once inputs are filled", () => {
+  const tournament = { teams: ["Riverside CC", "Oakwood CC"], qualificationScenario: null };
+  const standings = [
+    { team: "Riverside CC", runsFor: 0, oversFor: 0, runsAgainst: 0, oversAgainst: 0, nrr: 0 },
+    { team: "Oakwood CC", runsFor: 0, oversFor: 0, runsAgainst: 0, oversAgainst: 0, nrr: 0.5 }
+  ];
+  const inst = renderer.create(React.createElement(QualificationCalculatorModal, {
+    tournament, standings, onClose: () => {}, onSave: () => {}
+  }));
+  assert.match(JSON.stringify(inst.toJSON()), /Pick your team/);
+
+  const [myTeamSelect, rivalSelect] = inst.root.findAllByType("select");
+  myTeamSelect.props.onChange({ target: { value: "Riverside CC" } });
+  rivalSelect.props.onChange({ target: { value: "Oakwood CC" } });
+  const [rivalNrrField, oversField, knownRunsField] = inst.root.findAllByType(TextField);
+  assert.equal(rivalNrrField.props.value, "0.500"); // auto-filled from the rival's own NRR
+  oversField.props.onChange("20");
+  knownRunsField.props.onChange("180");
+
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Restrict Oakwood CC to 169 or fewer/);
 });

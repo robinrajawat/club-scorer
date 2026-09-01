@@ -313,8 +313,10 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `FeedbackScreen`, `SharedLinksScreen`, `BetaTestersScreen`),
 `src/components/playerModals.js` (`PLAYER_ROLES`, `PLAYER_HANDS`,
 `EditPlayerModal`, `TransferPlayerModal`), `src/components/miscModals.js`
-(`TOUR_SLIDES`, `FirstLaunchTour`, `TournamentShareModal`) — all now
-with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+(`TOUR_SLIDES`, `FirstLaunchTour`, `TournamentShareModal`,
+`QualificationCalculatorModal`), `src/components/venueAndDateModals.js`
+(`VenueEditModal`, `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`)
+— all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -517,17 +519,33 @@ stopping their extraction, and took the smaller half of that cluster:
   rather than pulling in jsdom, since nothing else in the file touches
   a real DOM API.
 
-~39 components remain. The other half of the `Modal`-unblocked cluster
-— `VenueEditModal`, `FixtureDateTimeModal`, `AvailabilityPollModal`,
-`QualificationCalculatorModal` — is next; extracting those three
-non-`AvailabilityPollModal` ones also finally clears `UpcomingFixtureCard`
-to come along too (it needs `FixtureDateTimeModal`/`VenueEditModal`/
-`AvailabilityPollModal`/`FixturePollSummary`, and now only the first
-three are still outstanding). Beyond that, the large screen-level
-components (`MatchScreen`, `TournamentsScreen`, etc.) that hold real
-application state via hooks are a different, harder case than a
-presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. Continue through the rest now — the
+A nineteenth PR finished the rest of that `Modal`-unblocked cluster:
+`src/components/venueAndDateModals.js` (`VenueEditModal`,
+`WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`) and, appended
+to `miscModals.js`, `QualificationCalculatorModal`. `VenueEditModal`'s
+own address search (`searchAddress`, a debounced Nominatim fetch,
+still in `docs/index.html`, not extracted — network-touching and
+side-effecting) is gated behind a 400ms `setTimeout` and a 3-character
+minimum; its tests exercise the venue-length-under-3 path and the
+independent club-address-shortcut path (computed with no debounce at
+all) without ever reaching that timer, since triggering it for real
+would mean either waiting out 400ms per test or risking a leaked timer
+if a test doesn't unmount before it fires — the same category of
+disclosed gap as `ExportPdfButton`'s untested click, just for a fetch
+instead of `window.print()`.
+
+`UpcomingFixtureCard` now only needs `AvailabilityPollModal` to be
+fully unblocked (it needs `FixtureDateTimeModal`/`VenueEditModal`/
+`AvailabilityPollModal`/`FixturePollSummary`, and the first, second, and
+fourth are now all extracted).
+
+~34 components remain. `AvailabilityPollModal` (the last big piece of
+that cluster, ~470 lines) is a reasonable next target, and clears
+`UpcomingFixtureCard` too once it lands. Beyond that, the large
+screen-level components (`MatchScreen`, `TournamentsScreen`, etc.) that
+hold real application state via hooks are a different, harder case than
+a presentational leaf and deserve their own look before extracting, not
+a mechanical repeat of this batch. Continue through the rest now — the
 project owner has asked for the full extraction to be completed without
 pausing for confirmation between batches; only stop for a genuine
 blocker that needs the owner's own decision.
