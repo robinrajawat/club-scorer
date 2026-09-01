@@ -799,7 +799,27 @@ caught early: several action buttons (priority/status/copy/delete) only
 render once a row is expanded — three tests initially failed trying to
 find them before clicking the row header to open it first.
 
-~12 components remain, all of them screens now (`renderMatchCard`
+A thirty-fifth PR extracted `src/components/recordsScreen.js`
+(`RecordsScreen` — a club's/federation's "Record Book": career
+milestones, umpire appearance counts, one placement per tournament,
+an all-time/current-year tab, a team filter, a player-name search, and
+a CSV export). `loadFederationTournaments`/`loadClubTournaments`/
+`loadTournamentMatches` all run together from a single mount-time
+`useEffect`; `downloadMultiSectionCSV` (also a bare global — builds via
+the already-extracted `multiSectionCSV` then triggers a real download,
+neither itself extracted) is stubbed only in the export test. Two build
+mistakes caught by the mandatory pipeline before any test ran:
+`safeFilenamePart` was imported from the wrong file
+(`statsAndFixtures.js` instead of `shareAndFormat.js`, where it
+actually lives — `npm run generate` failed immediately with a clear
+"does not provide an export" error) and `computeTournamentPlacement`
+(already inside `appLogic.js`'s module) itself references
+`ISO_DATETIME_RE` as a bare global from `shareAndFormat.js` — genuine
+in `docs/index.html`'s single script scope, but undefined under Node
+until the test file explicitly imports and sets it on `globalThis`, the
+first time any test has exercised that particular code path.
+
+~11 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder

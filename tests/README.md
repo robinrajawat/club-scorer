@@ -354,6 +354,15 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `Object.defineProperty` workaround for Node's read-only `navigator`
   as `shareMenus.test.js`. Several action buttons only render once a
   row is expanded, so most tests click the row header first.
+- `src/components/recordsScreen.js` /
+  `tests/unit/components/recordsScreen.test.js` — `RecordsScreen`, a
+  club's/federation's Record Book. `loadFederationTournaments`/
+  `loadClubTournaments`/`loadTournamentMatches` all run together from
+  one mount-time `useEffect`; `downloadMultiSectionCSV` is stubbed only
+  in the export test. Also imports `ISO_DATETIME_RE` from
+  `shareAndFormat.js` and sets it on `globalThis` — `appLogic.js`'s
+  `computeTournamentPlacement` references it as a bare global, and this
+  is the first test file to actually exercise that code path.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
