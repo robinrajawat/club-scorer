@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 # Deploys public/ (the built PWA -- index.html, sw.js, manifest.json,
 # icons/, CNAME) straight to GitHub Pages via Actions. There is no build
 # step: the committed public/index.html is already the complete deployable
-# artifact (see scripts/generate.js / handoff-prompt.md for how it's kept
+# artifact (see scripts/generate.js / docs/handoff-prompt.md for how it's kept
 # in sync with src/core/*.js and src/components/*.js before being
 # committed).
 
