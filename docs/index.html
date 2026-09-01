@@ -22341,6 +22341,7 @@ function StandingsTable({
   }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3)))))));
 }
 // GENERATED-FN-END: StandingsTable
+// GENERATED-FN-START: TournamentDetailScreen
 function TournamentDetailScreen({
   tournament,
   onBack,
@@ -23226,6 +23227,7 @@ function TournamentDetailScreen({
     onCancel: () => setConfirmDeleteTournament(false)
   }));
 }
+// GENERATED-FN-END: TournamentDetailScreen
 // Generic leaderboard/records table shared by every section of RecordsScreen below — takes
 // plain string/number cells rather than raw player objects so the same renderer works for player
 // leaderboards, team totals, and win-margin/milestone lists alike.
