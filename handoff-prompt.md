@@ -185,22 +185,30 @@ avatars, over-label parsing — 24 more declarations) plus
 `unpackMatchFromFirestore` into `packUtils.js` alongside its counterpart
 `packMatchForFirestore`.
 
-**Continuing the modularization:** every remaining standalone function in
-`docs/index.html` (~33 of them) leans on a browser-only API with no
-fallback, so none are a mechanical repeat of the last three passes —
-each needs its own judgment call on whether a Node-testable path
-actually exists:
-- `ttlTimestamp` needs the Firebase SDK global (`firebase.firestore.Timestamp`) — skipped already, no Node-side mock exists.
-- localStorage persistence: `lsSetItem`/`lsGetIndex`/`lsSetIndex`, the `undoHistory*` family, the `pendingWrite*`/`upsertLocalPointer` family.
-- `window.location` parsing with no `try`/`catch`: `getFollowCodeFromUrl` and its four siblings (unlike `buildPollUrl`/`buildFollowUrl` from the last pass, these would need a guard added first, which is a real code change, not just an extraction).
-- DOM/Blob downloads: `downloadTextFile`, `downloadCSV`, `downloadMultiSectionCSV`.
-- Browser-only APIs: `resizeImageToDataURL` (FileReader/canvas), `shareText` (`navigator.share`/clipboard).
-- Produce React elements, not data: `highlightMatch`, `renderMatchCard`.
-- Genuinely coupled to other in-file state/UI: `buildClaudeFixPrompt`, `accountExistsLinkInfo`, `friendlyEmailAuthError`, `registerLiveMatch`/`unregisterLiveMatch`/`notifyLiveMatchSynced` (a live in-memory registry).
+An eighth PR went back through the ~33 remaining functions individually
+(each needed its own judgment call, per the note this section used to
+carry) and found most were extractable after all: `buildClaudeFixPrompt`/
+`accountExistsLinkInfo`/`friendlyEmailAuthError` plus five
+`window.location` query-param readers (`getFollowCodeFromUrl` and
+siblings — turned out to already have the same `try`/`catch` guard as
+`buildPollUrl`, no code change needed) joined `miscHelpers.js`;
+`registerLiveMatch`/`unregisterLiveMatch`/`notifyLiveMatchSynced` (a
+pure in-memory registry, no DOM at all) became
+`src/core/liveMatchRegistry.js`; and the whole localStorage-backed match
+index / offline outbox / undo-history cluster (`lsSetItem` and 15 more)
+became `src/core/localStorageOutbox.js`, tested against an in-memory
+`localStorage` polyfill installed on `globalThis`.
 
-The ~93 React components are a separate, much larger and riskier
-undertaking (closures over shared app state, not standalone pure
-functions) — don't start on those without deciding on an approach first,
+**What's actually left in `docs/index.html` now** (verified, not
+estimated — nothing else fits the `GENERATED-FN` pattern without a real
+code change first):
+- `ttlTimestamp` — needs the Firebase SDK global (`firebase.firestore.Timestamp`); no Node-side mock exists, not worth adding one for a one-line wrapper.
+- `downloadTextFile`, `downloadCSV`, `downloadMultiSectionCSV` — DOM Blob/anchor-click side effects, nothing to unit-test.
+- `resizeImageToDataURL` (FileReader/canvas), `shareText` (`navigator.share`/clipboard) — browser-only APIs, side-effecting.
+- `highlightMatch`, `renderMatchCard` — produce React elements, not data.
+- The ~93 React components — a separate, much larger and riskier undertaking (closures over shared app state, not standalone pure functions).
+
+Don't start on the components without deciding on an approach first,
 given how much rides on `docs/index.html` staying correct. Check with the
 project owner for priorities if none are recorded here by the time you
 read this.

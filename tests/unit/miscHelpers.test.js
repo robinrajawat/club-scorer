@@ -7,7 +7,10 @@ import {
   formatAddressLabel, weatherCodeInfo,
   parseCsvLine, parseBulkPlayers, normalizeEmail, isClubOwner, isFederationOwner,
   relativeDayLabel, greetingPrefix, tournamentStatus, tournamentDateRangeLabel,
-  playerInitials, playerAvatarColor, parseOverLabel, ballLabelsForOver
+  playerInitials, playerAvatarColor, parseOverLabel, ballLabelsForOver,
+  buildClaudeFixPrompt, accountExistsLinkInfo, friendlyEmailAuthError,
+  getFollowCodeFromUrl, getTournamentFollowCodeFromUrl, getPollCodeFromUrl,
+  getShortcutActionFromUrl, getAuthActionFromUrl
 } from "../../src/core/miscHelpers.js";
 
 test("isFeedbackAdmin: matches the hardcoded admin email case-insensitively, false for anyone/anything else", () => {
@@ -151,4 +154,34 @@ test("ballLabelsForOver: legal balls increment the label, wide/no-ball share the
     { kind: "run" }
   ];
   assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2", "1.2"]);
+});
+
+test("buildClaudeFixPrompt: includes the message, page/browser context, and a resolution note when present", () => {
+  const prompt = buildClaudeFixPrompt({ kind: "error", message: "Crash on save", url: "/match/1", createdAt: Date.now(), resolutionNote: "Happens on iOS only" });
+  assert.match(prompt, /user-reported crash/);
+  assert.match(prompt, /"Crash on save"/);
+  assert.match(prompt, /Page: \/match\/1/);
+  assert.match(prompt, /Happens on iOS only/);
+});
+
+test("accountExistsLinkInfo: extracts email/credential only for the specific account-exists error code", () => {
+  assert.equal(accountExistsLinkInfo({ code: "auth/wrong-password" }), null);
+  const info = accountExistsLinkInfo({ code: "auth/account-exists-with-different-credential", email: "a@b.com", credential: "cred" });
+  assert.deepEqual(info, { email: "a@b.com", credential: "cred" });
+});
+
+test("friendlyEmailAuthError: maps known Firebase Auth codes to user-facing copy, falls back to err.message", () => {
+  assert.match(friendlyEmailAuthError({ code: "auth/weak-password" }), /at least 6 characters/);
+  assert.match(friendlyEmailAuthError({ code: "auth/user-not-found" }), /didn't match/);
+  assert.match(friendlyEmailAuthError({ code: "auth/wrong-password" }), /didn't match/);
+  assert.equal(friendlyEmailAuthError({ code: "auth/something-unmapped", message: "raw message" }), "raw message");
+  assert.equal(friendlyEmailAuthError({ code: "auth/something-unmapped" }), "Something went wrong.");
+});
+
+test("getFollowCodeFromUrl and friends: fall back to null when window isn't available (as in Node)", () => {
+  assert.equal(getFollowCodeFromUrl(), null);
+  assert.equal(getTournamentFollowCodeFromUrl(), null);
+  assert.equal(getPollCodeFromUrl(), null);
+  assert.equal(getShortcutActionFromUrl(), null);
+  assert.equal(getAuthActionFromUrl(), null);
 });
