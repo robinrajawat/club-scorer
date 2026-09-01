@@ -739,7 +739,19 @@ popover at all: the tests grab the `ShareMenu` element via
 (`ShareMenu`'s own popover behavior is already covered by
 `shareMenus.test.js`).
 
-~16 components remain, all of them screens now (`renderMatchCard`
+A thirty-first PR extracted `src/components/playersScreen.js`
+(`PlayersScreen` — the public player directory: search all players any
+club has made public, view one's details/stats, and, for the home
+club's owner, edit/transfer/delete). Another genuinely clean
+extraction, cleaner even than `InboxScreen`: both mount effects
+(loading the public players list, and opening straight to
+`initialSelected` when handed one) call props
+(`onLoadPublicPlayers`/`onComputeCareerStats`), not bare globals, so no
+Firestore stubbing was needed anywhere — the only stub any test needed
+was `Modal`, for the three tests that open `ConfirmModal`/
+`EditPlayerModal`/`TransferPlayerModal`.
+
+~15 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`, and `FollowScreen`
 still deferred). Most hold real application state via hooks
 (`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,

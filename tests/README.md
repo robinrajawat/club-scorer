@@ -320,6 +320,13 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   grabbing the `ShareMenu` element (`findByType(ShareMenu)`) and calling
   those props directly, without ever opening the popover (that's
   `shareMenus.test.js`'s job).
+- `src/components/playersScreen.js` /
+  `tests/unit/components/playersScreen.test.js` — `PlayersScreen`, the
+  public player directory. Both mount effects call props
+  (`onLoadPublicPlayers`/`onComputeCareerStats`), not bare globals, so
+  no Firestore stubbing anywhere; the only stub needed is `Modal`, for
+  the tests that open `ConfirmModal`/`EditPlayerModal`/
+  `TransferPlayerModal`.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

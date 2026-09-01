@@ -27165,6 +27165,7 @@ function TransferPlayerModal({
 // clubs is passed through only to resolve a player's homeClubId into a readable name for the
 // stats section's "scoped to X's tournaments" label — see computePlayerCareerStats for why
 // that's the honest scope rather than implying comprehensive career stats.
+// GENERATED-FN-START: PlayersScreen
 function PlayersScreen({
   onBack,
   initialSelected,
@@ -27544,6 +27545,7 @@ function PlayersScreen({
     }
   }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 ")))))));
 }
+// GENERATED-FN-END: PlayersScreen
 // A11y note: every bottom sheet in the app routes through this one component, so fixing it once
 // here fixes it everywhere — no call site needs to change. Adds: role="dialog"/aria-modal so
 // VoiceOver/TalkBack actually announce a sheet opened (this is the PRIMARY access technology on
