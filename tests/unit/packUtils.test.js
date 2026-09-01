@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packMatchForFirestore, findEmptyKeyPath } from "../../src/core/packUtils.js";
+import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore } from "../../src/core/packUtils.js";
 import { newInning, applyBall, ensureBatsman, ensureBowler } from "../../src/core/scoringEngine.js";
 
 test("findEmptyKeyPath finds an injected empty batsmen key, ignores empty string values", () => {
@@ -40,4 +40,17 @@ test("a normal over of real scoring never produces an empty-string key anywhere 
 
   const packed = packMatchForFirestore({ id: "test", innings: [inn] });
   assert.equal(findEmptyKeyPath(packed, ""), null);
+});
+
+test("unpackMatchFromFirestore: round-trips packMatchForFirestore's overs-wrapping back to plain arrays", () => {
+  const match = { id: "test", innings: [{ overs: [[{ kind: "run", runs: 1 }], []] }] };
+  const packed = packMatchForFirestore(match);
+  const unpacked = unpackMatchFromFirestore(packed);
+  assert.deepEqual(unpacked.innings[0].overs, match.innings[0].overs);
+});
+
+test("unpackMatchFromFirestore: normalizes a malformed non-array overs entry to [] instead of crashing downstream", () => {
+  const malformed = { id: "test", innings: [{ overs: [{ notAnArray: true }, null, [{ kind: "run" }]] }] };
+  const unpacked = unpackMatchFromFirestore(malformed);
+  assert.deepEqual(unpacked.innings[0].overs, [[], [], [{ kind: "run" }]]);
 });

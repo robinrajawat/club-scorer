@@ -177,27 +177,30 @@ builders) — 31 more scattered declarations via the same `GENERATED-FN`
 mechanism, including two (`buildPollUrl`/`buildFollowUrl`) that read
 `window.location` in the browser but fall back to a relative URL via
 `try`/`catch` anywhere that isn't available (including Node), so they're
-still meaningfully testable there.
+still meaningfully testable there. A seventh PR extracted
+`src/core/miscHelpers.js` (admin-email checks, match/invite codes,
+address/weather formatting, CSV parsing for bulk player import,
+club/federation ownership checks, date labels, tournament status, player
+avatars, over-label parsing — 24 more declarations) plus
+`unpackMatchFromFirestore` into `packUtils.js` alongside its counterpart
+`packMatchForFirestore`.
 
-**Continuing the modularization:** ~50 more standalone functions are still
-scattered through `docs/index.html`, uncovered by tests. Good next
-candidates (pure, no DOM/localStorage/network): `genMatchCode`,
-`ttlTimestamp`, `expiresAtMillis`, `inviteExpiryLabel`,
-`formatAddressLabel`, `weatherCodeInfo`, `parseCsvLine`,
-`parseBulkPlayers`, `normalizeEmail`, `isClubOwner`, `isFederationOwner`,
-`relativeDayLabel`, `greetingPrefix`, `tournamentStatus`,
-`tournamentDateRangeLabel`, `playerInitials`, `playerAvatarColor`,
-`parseOverLabel`, `ballLabelsForOver`, `unpackMatchFromFirestore`. The
-rest of that ~50 lean on browser-only APIs with no fallback (localStorage
-persistence like `lsSetItem`/the `undoHistory*`/`pendingWrite*` families,
-`window.location` parsing with no `try`/`catch` like
-`getFollowCodeFromUrl`, DOM/Blob downloads, `FileReader`/canvas image
-resizing, `navigator.share`) or produce React elements
-(`highlightMatch`, `renderMatchCard`) — extractable in principle but each
-needs its own judgment call on whether a Node-testable fallback path
-actually exists, not a mechanical repeat of this pass. The ~93 React
-components are a separate, much larger and riskier undertaking (closures
-over shared app state, not standalone pure functions) — don't start on
-those without deciding on an approach first, given how much rides on
-`docs/index.html` staying correct. Check with the project owner for
-priorities if none are recorded here by the time you read this.
+**Continuing the modularization:** every remaining standalone function in
+`docs/index.html` (~33 of them) leans on a browser-only API with no
+fallback, so none are a mechanical repeat of the last three passes —
+each needs its own judgment call on whether a Node-testable path
+actually exists:
+- `ttlTimestamp` needs the Firebase SDK global (`firebase.firestore.Timestamp`) — skipped already, no Node-side mock exists.
+- localStorage persistence: `lsSetItem`/`lsGetIndex`/`lsSetIndex`, the `undoHistory*` family, the `pendingWrite*`/`upsertLocalPointer` family.
+- `window.location` parsing with no `try`/`catch`: `getFollowCodeFromUrl` and its four siblings (unlike `buildPollUrl`/`buildFollowUrl` from the last pass, these would need a guard added first, which is a real code change, not just an extraction).
+- DOM/Blob downloads: `downloadTextFile`, `downloadCSV`, `downloadMultiSectionCSV`.
+- Browser-only APIs: `resizeImageToDataURL` (FileReader/canvas), `shareText` (`navigator.share`/clipboard).
+- Produce React elements, not data: `highlightMatch`, `renderMatchCard`.
+- Genuinely coupled to other in-file state/UI: `buildClaudeFixPrompt`, `accountExistsLinkInfo`, `friendlyEmailAuthError`, `registerLiveMatch`/`unregisterLiveMatch`/`notifyLiveMatchSynced` (a live in-memory registry).
+
+The ~93 React components are a separate, much larger and riskier
+undertaking (closures over shared app state, not standalone pure
+functions) — don't start on those without deciding on an approach first,
+given how much rides on `docs/index.html` staying correct. Check with the
+project owner for priorities if none are recorded here by the time you
+read this.
