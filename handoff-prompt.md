@@ -2,11 +2,27 @@
 
 I'm continuing work on Club Scorer (github.com/robinrajawat/club-scorer).
 Production ([www.clubscorer.com](https://www.clubscorer.com)) is `index.html`
-at the repo root — a single-file, browser-based cricket scoring PWA, no
-build step, served straight from GitHub Pages (see `CNAME`). There is no
-`dist/` and no CI workflow: whatever is on `main`'s `index.html` is what's
-live the moment it's pushed, so treat every push to `main` as an immediate
-production deploy.
+at the repo root — a single-file, browser-based cricket scoring PWA, served
+straight from GitHub Pages (see `CNAME`). There is no `dist/` and no CI
+workflow: whatever is on `main`'s `index.html` is what's live the moment
+it's pushed, so treat every push to `main` as an immediate production
+deploy.
+
+The scoring engine, Firestore pack/validation helpers, and tournament
+standings/DLS logic are no longer hand-edited inside `index.html` — they
+live in tested `src/core/*.js` modules and get spliced into `index.html` by
+`npm run generate` (see `scripts/generate.js`), replacing the content
+between each `// GENERATED-START: <name>` / `// GENERATED-END: <name>`
+marker pair. **Edit the `src/core/` file, never the generated block in
+`index.html` directly** — a hand-edit inside a marker span is silently
+overwritten by the next `npm run generate` and will look like it "reverted"
+for no reason. After editing `src/core/`, run `npm run generate` and commit
+both the source file and the regenerated `index.html` together. Run `npm run
+generate:verify` any time you're unsure whether they're in sync — it fails
+loudly if `index.html` doesn't match what `src/core/*.js` would produce.
+This still ships as a single `index.html` with no build step for
+deployment — `generate` is a local/dev-time sync step, not something CI or
+GitHub Pages runs.
 
 The repo also contains `ios/` — a native SwiftUI rewrite that is explicitly
 **parked** in favor of the existing PWA (see `ios/STATUS.md`'s "Why parked"
@@ -21,13 +37,12 @@ Before touching anything, read:
 - `README.md` — the full feature reference for what Club Scorer actually
   does today; read this before changing user-facing behavior, since it's
   the source of truth for intended functionality, not just a description.
-- `tests/README.md` — how the regression suite (`node tests/run.js`) works:
-  it extracts the scoring engine straight out of `index.html` between
-  `TEST-EXTRACT-START`/`TEST-EXTRACT-END` markers, so it always tests
-  exactly what's about to ship. Run it before pushing any change that
-  touches scoring logic (`newInning`, `applyBall`, `ensureBatsman`,
-  `ensureBowler`, `packMatchForFirestore`, `findEmptyKeyPath`), and add a
-  case for any scoring bug before considering the fix done.
+- `tests/README.md` — how the regression suite (`npm test`, using Node's
+  built-in test runner) works: it imports `src/core/*.js` directly — the
+  same modules `npm run generate` splices into `index.html` — so it always
+  tests exactly what's about to ship. Run it before pushing any change that
+  touches scoring, standings, or DLS logic, and add a case for any bug in
+  that logic before considering the fix done.
 - `firestore.rules` — the trust-model comment at the top explains the three
   data tiers. These rules are **not auto-deployed**: a change here has zero
   effect until it's manually pasted into Firebase Console → Firestore
@@ -90,8 +105,14 @@ a separate follow-up PR.
 
 **Before every merge:**
 
-- Run `node tests/run.js` and confirm it passes if the change touches
-  scoring logic (the functions listed above).
+- Run `npm test` and confirm it passes if the change touches scoring,
+  standings, or DLS logic.
+- If you touched anything in `src/core/`, run `npm run generate` and check
+  `git diff index.html` — it should contain only the change you intended
+  (plus whatever marker-span reformatting `generate` does); commit the
+  regenerated `index.html` alongside the source change. Run `npm run
+  generate:verify` if you want a hard pass/fail instead of eyeballing the
+  diff.
 - Since `index.html` is production the instant it's pushed to `main`,
   actually load the change in a real browser (headless Chromium is
   pre-installed) and click through the affected flow before calling any

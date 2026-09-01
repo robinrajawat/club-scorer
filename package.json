@@ -1,0 +1,10 @@
+{
+  "name": "club-scorer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate.js",
+    "generate:verify": "node scripts/generate.js --verify",
+    "test": "node --test tests/unit/*.test.js"
+  }
+}
