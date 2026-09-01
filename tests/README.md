@@ -256,6 +256,23 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   tested module, so the one test that opens it just needs the same
   `Modal`/`loadTeamPolls` stubs `availabilityPollModal.test.js` already
   established.
+- `src/components/followTournamentScreen.js` /
+  `tests/unit/components/followTournamentScreen.test.js` —
+  `FollowTournamentScreen`, the read-only public standings/fixtures view
+  opened via a `?tournament=CODE` link. Calls
+  `db.collection("tournamentViews").doc(code).get()` directly from a
+  mount-time `useEffect` — the first extraction to stub the raw
+  Firestore SDK instance itself (`db`, a bare global, not extracted)
+  rather than one of the app's own wrapper functions; the stub is a
+  small mock object with a `.collection().doc().get()` chain resolving
+  to a mock snapshot (`.exists`/`.data()`).
+- `src/components/pollRespondScreen.js` /
+  `tests/unit/components/pollRespondScreen.test.js` —
+  `PollRespondScreen`, the public availability-poll response screen
+  opened via a poll link. `loadPollByCode` runs from a mount-time
+  `useEffect` and `submitPollResponse` from the submit handler — both
+  bare globals, not extracted, stubbed the same way
+  `availabilityPollModal.test.js` stubs them.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

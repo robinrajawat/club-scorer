@@ -30130,6 +30130,7 @@ function FollowScreen({
 // model as a match view link. Anyone with the link can pick their name off the roster snapshot
 // (or type their own, if they're not on it) and record Yes/No/Maybe plus an optional note;
 // submitting again under the same name updates that answer rather than adding a duplicate.
+// GENERATED-FN-START: PollRespondScreen
 function PollRespondScreen({
   code,
   onExit
@@ -30471,6 +30472,8 @@ function PollRespondScreen({
     }, r ? r.status === "yes" ? "Yes" : r.status === "no" ? "No" : "Maybe" : "\u2014"));
   })));
 }
+// GENERATED-FN-END: PollRespondScreen
+// GENERATED-FN-START: FollowTournamentScreen
 function FollowTournamentScreen({
   code,
   onExit
@@ -30707,6 +30710,7 @@ function FollowTournamentScreen({
     onClick: onExit
   }, "Go to Club Scorer"))));
 }
+// GENERATED-FN-END: FollowTournamentScreen
 function MatchScreen({
   match,
   setMatch,
