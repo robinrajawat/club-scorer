@@ -716,7 +716,30 @@ tapped — is already its own tested module, so its tests only needed the
 same `Modal`/`loadTeamPolls`/`loadPollByCode` stubs
 `availabilityPollModal.test.js` already established, not anything new.
 
-~17 components remain, all of them screens now (`renderMatchCard`
+A thirtieth PR extracted `src/components/resultScreen.js`
+(`ResultScreen` — the match-complete screen: winner banner, share/
+export/View-Super-Over actions, Player of the Match / Best Fielder
+cards, both innings' scorecards). Its dependency read applied the
+lesson from `SeriesDetailScreen`'s batch directly: `newInning` turned
+out to already be inside `src/core/scoringEngine.js`'s module splice,
+and `captainFor`/`keeperFor`/`numbersFor` inside `src/core/appLogic.js`'s
+— both grepped for and confirmed *before* touching `generate.js`, so no
+false start this time. `saveTransition`/`saveMatch`/`loadMatch` (bare
+globals) are all called from button handlers, never render or a mount
+effect, so tests stub only what each exercised action needs. One new
+testing wrinkle: this is the first already-extracted screen to render
+`ShareMenu` (from `shareMenus.js`) directly and unconditionally.
+`ShareMenu`'s popover only creates its `ReactDOM.createPortal` once
+`open` is true, so simply mounting the closed button is fine under
+`react-test-renderer` — but exercising `ResultScreen`'s own
+`onGetCode`/`onGetViewCode` handlers doesn't require opening that
+popover at all: the tests grab the `ShareMenu` element via
+`findByType(ShareMenu)` and call `.props.onGetCode()` /
+`.props.onGetViewCode()` directly, sidestepping the portal entirely
+(`ShareMenu`'s own popover behavior is already covered by
+`shareMenus.test.js`).
+
+~16 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`, and `FollowScreen`
 still deferred). Most hold real application state via hooks
 (`MatchScreen`, `TournamentsScreen`, `SetupScreen`, `TeamsScreen`,
