@@ -363,6 +363,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `shareAndFormat.js` and sets it on `globalThis` — `appLogic.js`'s
   `computeTournamentPlacement` references it as a bare global, and this
   is the first test file to actually exercise that code path.
+- `src/components/fixturesSection.js` /
+  `tests/unit/components/fixturesSection.test.js` — `FixturesSection`,
+  a tournament's schedule tab. No bare globals of its own (every write
+  is `onUpdateTournament`); each rendered fixture goes through
+  `FixtureRow`, so its `Modal`/`loadFixturePollSummary` stubs are
+  needed too. The knockout-proposal test exercises a real
+  `computeStandings`/`applicableKnockoutStages`/`BRACKET_SEED_PAIRS`
+  round trip with an actual completed match. The champion banner
+  renders `champion` and `" won the tournament"` as two separate JSX
+  children, so its assertion matches
+  `/"Riverside CC"," won the tournament"/`, not a plain substring.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

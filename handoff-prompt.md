@@ -819,7 +819,25 @@ in `docs/index.html`'s single script scope, but undefined under Node
 until the test file explicitly imports and sets it on `globalThis`, the
 first time any test has exercised that particular code path.
 
-~11 components remain, all of them screens now (`renderMatchCard`
+A thirty-sixth PR extracted `src/components/fixturesSection.js`
+(`FixturesSection` — a tournament's schedule tab: generate/add group-
+stage fixtures, propose each knockout round once the previous one is
+decided, a freeform "Playoffs" section for manually-added custom-stage
+fixtures, and a champion banner). A genuinely clean extraction on the
+Firestore front — every write action is `onUpdateTournament`, no bare
+globals, no mount effect of its own — but the most logic-heavy
+component tested so far: exercising the knockout-proposal path needed a
+real `computeStandings`/`applicableKnockoutStages`/`BRACKET_SEED_PAIRS`
+round trip (all already inside `appLogic.js`'s module) with an actual
+completed match to seed the Final from. One test-writing snag: the
+champion banner renders `champion` and `" won the tournament"` as two
+separate JSX children, not one concatenated string, so
+`JSON.stringify`-based text matching needed
+`/"Riverside CC"," won the tournament"/`, not a plain substring match —
+the same two-array-elements gotcha `PlayingXIPicker`'s tests hit
+earlier this session with `"0","/","2"`.
+
+~10 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
