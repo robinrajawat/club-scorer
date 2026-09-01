@@ -20117,6 +20117,7 @@ function tournamentDateRangeLabel(t) {
   return first === last ? fmt(first) : `${fmt(first)} \u2013 ${fmt(last)}`;
 }
 // GENERATED-FN-END: tournamentDateRangeLabel
+// GENERATED-FN-START: TournamentsScreen
 function TournamentsScreen({
   tournaments,
   clubs,
@@ -20939,6 +20940,7 @@ function TournamentsScreen({
     }
   }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
 }
+// GENERATED-FN-END: TournamentsScreen
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
 // since the local match index only carries lightweight pointers — nowhere near enough to compute a
 // points table from.
