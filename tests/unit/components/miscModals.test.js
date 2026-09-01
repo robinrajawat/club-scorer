@@ -16,7 +16,7 @@ beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   // FirstLaunchTour's finish() calls markTourSeen() (src/core/appLogic.js), which calls lsSetItem
   // -- a bare global cross-reference to localStorageOutbox.js's own export, real in
-  // docs/index.html's single scope but not in appLogic.js's own module scope under test.
+  // public/index.html's single scope but not in appLogic.js's own module scope under test.
   globalThis.lsSetItem = () => ({ ok: true });
   globalThis.LS_PREFIX = "cricket-scorer:";
 });

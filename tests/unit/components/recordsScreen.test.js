@@ -12,7 +12,7 @@ import { RecordsScreen } from "../../../src/components/recordsScreen.js";
 import { ISO_DATETIME_RE } from "../../../src/core/shareAndFormat.js";
 
 // computeTournamentPlacement (src/core/appLogic.js, spliced as part of the app-logic module)
-// references ISO_DATETIME_RE as a bare global -- real in docs/index.html's single script scope,
+// references ISO_DATETIME_RE as a bare global -- real in public/index.html's single script scope,
 // where shareAndFormat.js's own module is already loaded earlier in the file, but undefined here
 // under Node without this stub.
 globalThis.ISO_DATETIME_RE = ISO_DATETIME_RE;

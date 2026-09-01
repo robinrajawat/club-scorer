@@ -1,7 +1,7 @@
 // Top-level crash boundary (src/components/errorBoundary.js) wrapping <CricketScorer /> at the
 // bootstrap render call. `reportErrorAuto`/`submitFeedback` (bare globals, Firestore writes) and
 // `RECENT_CONSOLE_ERRORS` (a bare global ring buffer, shared and populated elsewhere in
-// docs/index.html, not specific to this component) are stubbed per test. A minimal
+// public/index.html, not specific to this component) are stubbed per test. A minimal
 // `globalThis.window = { location: { reload: () => {} } }` covers the Reload button's one DOM
 // touch -- no jsdom needed since nothing else here reads a real DOM API.
 

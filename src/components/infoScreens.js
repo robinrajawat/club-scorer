@@ -12,7 +12,7 @@ import { POLL_TTL_DAYS } from "../core/shareAndFormat.js";
 //
 // FeedbackScreen calls `submitFeedback` and BetaTestersScreen calls `loadBetaRequests`/
 // `loadBetaTesters`/`approveBetaRequest`/`declineBetaRequest`/`revokeBetaAccess` (all Firestore
-// writes/reads, defined in docs/index.html, not extracted -- need the Firebase SDK global).
+// writes/reads, defined in public/index.html, not extracted -- need the Firebase SDK global).
 // BetaTestersScreen calls its load functions from a mount-time useEffect (not just an event
 // handler), so its own test stubs them on globalThis before rendering -- see the module's test file.
 

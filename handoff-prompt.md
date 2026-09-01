@@ -2,27 +2,31 @@
 
 I'm continuing work on Club Scorer (github.com/robinrajawat/club-scorer).
 Production ([www.clubscorer.com](https://www.clubscorer.com)) is
-`docs/index.html` — a single-file, browser-based cricket scoring PWA,
-served straight from GitHub Pages with the source set to the `docs/`
-folder (see `docs/CNAME`). There is no separate build output beyond that
-and no CI workflow: whatever is on `main`'s `docs/index.html` is what's
-live the moment it's pushed, so treat every push to `main` as an
-immediate production deploy. `docs/sw.js`, `docs/manifest.json`, and
-`docs/icons/` are the rest of the deployed PWA — they ship as siblings of
-`docs/index.html` and its relative paths assume that.
+`public/index.html` — a single-file, browser-based cricket scoring PWA,
+deployed to GitHub Pages by `.github/workflows/deploy.yml` (checkout →
+`actions/upload-pages-artifact` of the `public/` folder →
+`actions/deploy-pages`; see `public/CNAME` for the custom domain, which
+ships as part of that artifact). There is no separate build output beyond
+that and no test/lint gate in the workflow: it runs on every push to
+`main` that touches `public/**`, so whatever's on `main`'s
+`public/index.html` is what's live within about a minute of being pushed
+— treat every push to `main` as an immediate production deploy.
+`public/sw.js`, `public/manifest.json`, and `public/icons/` are the rest
+of the deployed PWA — they ship as siblings of `public/index.html` and
+its relative paths assume that.
 
 The scoring engine, Firestore pack/validation helpers, and tournament
-standings/DLS logic are no longer hand-edited inside `docs/index.html` —
+standings/DLS logic are no longer hand-edited inside `public/index.html` —
 they live in tested `src/core/*.js` modules and get spliced into
-`docs/index.html` by `npm run generate` (see `scripts/generate.js`),
+`public/index.html` by `npm run generate` (see `scripts/generate.js`),
 replacing the content between each `// GENERATED-START: <name>` /
 `// GENERATED-END: <name>` marker pair. **Edit the `src/core/` file, never
-the generated block in `docs/index.html` directly** — a hand-edit inside a
+the generated block in `public/index.html` directly** — a hand-edit inside a
 marker span is silently overwritten by the next `npm run generate` and
 will look like it "reverted" for no reason. After editing `src/core/`, run
 `npm run generate` and commit both the source file and the regenerated
-`docs/index.html` together. Run `npm run generate:verify` any time you're
-unsure whether they're in sync — it fails loudly if `docs/index.html`
+`public/index.html` together. Run `npm run generate:verify` any time you're
+unsure whether they're in sync — it fails loudly if `public/index.html`
 doesn't match what `src/core/*.js` would produce. This still ships as a
 single `index.html` with no build step for deployment — `generate` is a
 local/dev-time sync step, not something CI or GitHub Pages runs.
@@ -32,7 +36,7 @@ The repo also contains `ios/` — a native SwiftUI rewrite that is explicitly
 section for the reasoning). Nothing in it has been compiled, run, or tested
 on a device. Don't touch `ios/` or treat its STATUS.md priority list as live
 work unless the project owner explicitly asks to resume it — that hasn't
-happened. All real day-to-day work is on `docs/index.html` (and
+happened. All real day-to-day work is on `public/index.html` (and
 `firebase/firestore.rules` / `firebase/storage.rules` when scoring logic
 touches Firestore access patterns).
 
@@ -43,7 +47,7 @@ Before touching anything, read:
   the source of truth for intended functionality, not just a description.
 - `tests/README.md` — how the regression suite (`npm test`, using Node's
   built-in test runner) works: it imports `src/core/*.js` directly — the
-  same modules `npm run generate` splices into `docs/index.html` — so it
+  same modules `npm run generate` splices into `public/index.html` — so it
   always tests exactly what's about to ship. Run it before pushing any
   change that touches scoring, standings, or DLS logic, and add a case for
   any bug in that logic before considering the fix done.
@@ -115,36 +119,38 @@ a separate follow-up PR.
 - Run `npm test` and confirm it passes if the change touches scoring,
   standings, or DLS logic.
 - If you touched anything in `src/core/`, run `npm run generate` and check
-  `git diff docs/index.html` — it should contain only the change you
+  `git diff public/index.html` — it should contain only the change you
   intended (plus whatever marker-span reformatting `generate` does);
-  commit the regenerated `docs/index.html` alongside the source change.
+  commit the regenerated `public/index.html` alongside the source change.
   Run `npm run generate:verify` if you want a hard pass/fail instead of
   eyeballing the diff.
-- Since `docs/index.html` is production the instant it's pushed to `main`,
+- Since `public/index.html` is production the instant it's pushed to `main`,
   actually load the change in a real browser (headless Chromium is
   pre-installed) and click through the affected flow before calling any
   user-facing change done — passing the regression suite proves the
   scoring engine didn't regress, not that a UI change looks or behaves
   right. Note: sandboxed sessions may not have outbound network access to
-  the React/Firebase CDN scripts `docs/index.html` loads — if so, say so
+  the React/Firebase CDN scripts `public/index.html` loads — if so, say so
   explicitly rather than claiming a click-through that didn't actually
   render the app, and fall back to a syntax/parity check (e.g. `npm run
   generate:verify` plus re-parsing the script with `new Function(...)`).
 
 ## Repo structure
 
-- `docs/` — the deployed PWA: `index.html`, `sw.js`, `manifest.json`,
-  `icons/`, and `CNAME` (GitHub Pages requires the custom-domain CNAME
-  file inside whatever folder is configured as the Pages source — that's
-  `docs/` here, not the repo root).
-- `src/core/` — tested logic modules spliced into `docs/index.html` by
+- `public/` — the deployed PWA: `index.html`, `sw.js`, `manifest.json`,
+  `icons/`, and `CNAME` (the custom domain — ships as part of the Pages
+  artifact `.github/workflows/deploy.yml` uploads from this folder).
+- `.github/workflows/deploy.yml` — deploys `public/` to GitHub Pages via
+  Actions on every push to `main` that touches it (or on demand via
+  `workflow_dispatch`). No build step.
+- `src/core/` — tested logic modules spliced into `public/index.html` by
   `scripts/generate.js` (see above).
 - `src/components/` — presentational React components, also spliced by
   `scripts/generate.js`. Unlike `src/core/`, these use real `import`s
   (see "React component extraction" below) and are tested with
   `react-test-renderer` — this repo's first two npm `devDependencies`
   (`react`, `react-test-renderer`, both pinned to `18.3.1` to match the
-  CDN version `docs/index.html` loads). `node_modules/` is gitignored.
+  CDN version `public/index.html` loads). `node_modules/` is gitignored.
 - `tests/` — `tests/unit/*.test.js` (Node's built-in test runner, covers
   `src/core/`) plus `tests/unit/components/*.test.js` (covers
   `src/components/`), and `tests/README.md`.
@@ -152,7 +158,7 @@ a separate follow-up PR.
   the Firebase Console (not auto-deployed).
 - `ios/` — parked native SwiftUI rewrite; don't touch without explicit
   instruction (see above).
-- `scripts/generate.js` — splices `src/core/*.js` into `docs/index.html`.
+- `scripts/generate.js` — splices `src/core/*.js` into `public/index.html`.
 - `README.md`, `LICENSE`, `handoff-prompt.md`, `package.json` — repo-level
   docs/config, deliberately kept at the root.
 
@@ -165,11 +171,15 @@ contradicts the docs above, trust the docs.)*
 extracted the scoring engine/Firestore helpers/standings+DLS into tested
 `src/core/` modules with a `generate`/`generate:verify` splice-back
 pipeline. #4 moved the deploy-served files (`index.html`, `sw.js`,
-`manifest.json`, `icons/`, `CNAME`) into `docs/` and
+`manifest.json`, `icons/`, `CNAME`) into a folder then named `docs/` and
 `firestore.rules`/`storage.rules` into `firebase/`, since classic GitHub
-Pages only serves from a repo's root or its `docs/` folder — the required
-manual Settings → Pages → source change to `main`/`/docs` has been done
-and the live site confirmed working. A fifth PR extracted
+Pages only served from a repo's root or a folder literally named `docs/`
+— the required manual Settings → Pages → source change to `main`/`/docs`
+was done and the live site confirmed working. (That folder was later
+renamed to `public/` once Pages moved to Actions-based deployment — see
+"GitHub Pages deploy-mode switch" below — so every reference to `docs/`
+elsewhere in this file describes history, not the current layout.) A
+fifth PR extracted
 `src/core/statsAndFixtures.js` (round-robin fixture generation, player/club
 stats, Player-of-the-Match/Best-Fielder/Player-of-the-Tournament
 suggestion) — the first module built from **scattered, non-contiguous**
@@ -218,7 +228,7 @@ effects, nothing to unit-test); `resizeImageToDataURL`
 ## React component extraction (started)
 
 A ninth PR started pulling the ~93 React components out of
-`docs/index.html` into `src/components/`, using the same `GENERATED-FN`
+`public/index.html` into `src/components/`, using the same `GENERATED-FN`
 per-function marker mechanism — components turned out to need it just
 like the scattered functions did (they're not one contiguous span
 either), landing 18 of the smallest, purely presentational leaf
@@ -229,7 +239,7 @@ call to make).
 
 A tenth PR closed that gap: **this repo now has its first two npm
 `devDependencies`, `react` and `react-test-renderer`, both pinned to
-`18.3.1`** — the exact version `docs/index.html` loads from CDN, so
+`18.3.1`** — the exact version `public/index.html` loads from CDN, so
 tests exercise the real thing rather than a version-skewed stand-in.
 `node_modules/` is gitignored (`.gitignore` didn't exist before this —
 now it does, just that one line). This changes the pattern for
@@ -339,7 +349,7 @@ Every batch since `matchDisplayAtoms.js`/`screenAtoms.js` has picked
 components specifically chosen to be fully renderable using only
 already-extracted pieces (e.g. `PlayerPicker` imports `RoleBadge` from
 `scoringUiAtoms.js` and `TextField` from `formUiAtoms.js`) — components
-that pull in siblings still living in `docs/index.html` (e.g.
+that pull in siblings still living in `public/index.html` (e.g.
 `ScorecardOverlay` needs `MatchStatsPanel`, which itself needs
 `RunRateChart`/`RunsPerOverChart`/`OversStrip`, none extracted yet) are
 set aside for a batch where those siblings come along too, rather than
@@ -390,7 +400,7 @@ not-yet-extracted sibling: `src/components/matchInsightCards.js`
 `SyncConflictModal` — builds its own overlay rather than using `Modal`,
 so needed no DOM stub either; `PlayerOfMatchCard`/`BestFielderCard` — the
 two post-match award-picker cards). The two award cards call `saveMatch`
-(a Firestore write, still in `docs/index.html`, unextracted — needs the
+(a Firestore write, still in `public/index.html`, unextracted — needs the
 Firebase SDK global) from their `pick()` handler; rather than leave that
 untested, one test stubs `globalThis.saveMatch` locally (same pattern as
 `Modal` in `formUiAtoms.test.js`) to exercise a real "Confirm" click.
@@ -453,7 +463,7 @@ per-over ball-by-ball strip, pure — no DOM APIs), `FixturePollSummary`
 it needed the jsdom pattern — same shape as `Modal`, just `react-test-renderer`
 this time (no portal involved, so no need for the real-`react-dom`
 approach `shareMenus.test.js` needed). Its `handleTap` calls
-`flushPendingWrites` (a Firestore write, still in `docs/index.html`, not
+`flushPendingWrites` (a Firestore write, still in `public/index.html`, not
 extracted), stubbed on `globalThis` the same way `saveMatch` was for
 `PlayerOfMatchCard`/`BestFielderCard`.
 
@@ -519,7 +529,7 @@ stopping their extraction, and took the smaller half of that cluster:
   still need stubbing.** `FirstLaunchTour`'s `finish()` calls
   `markTourSeen()` (`src/core/appLogic.js`), which itself calls
   `lsSetItem`/reads `LS_PREFIX` — both bare globals belonging to
-  `localStorageOutbox.js`, real in `docs/index.html`'s single scope but
+  `localStorageOutbox.js`, real in `public/index.html`'s single scope but
   not in `appLogic.js`'s own module scope under test. Its test stubs
   both on `globalThis` before clicking anything that reaches `finish()`.
 - `TournamentShareModal` reads `window.location.origin`/`pathname`
@@ -533,7 +543,7 @@ A nineteenth PR finished the rest of that `Modal`-unblocked cluster:
 `WEEKDAY_LABELS`, `MONTH_LABELS`, `FixtureDateTimeModal`) and, appended
 to `miscModals.js`, `QualificationCalculatorModal`. `VenueEditModal`'s
 own address search (`searchAddress`, a debounced Nominatim fetch,
-still in `docs/index.html`, not extracted — network-touching and
+still in `public/index.html`, not extracted — network-touching and
 side-effecting) is gated behind a 400ms `setTimeout` and a 3-character
 minimum; its tests exercise the venue-length-under-3 path and the
 independent club-address-shortcut path (computed with no debounce at
@@ -662,7 +672,7 @@ each declaration from its own `export function/const` line up to the
 **above** a newly-added export, when that export isn't first in the
 file, gets glued onto the end of the *previous* export's spliced text
 instead, silently duplicating (and misplacing) the comment in
-`docs/index.html` at the previous export's location. First caught here
+`public/index.html` at the previous export's location. First caught here
 via the mandatory pre-test byte-diff check against the pre-batch
 snapshot, before any test was written — exactly what that check exists
 to catch. Fixed by dropping the per-export leading comment entirely for
@@ -689,7 +699,7 @@ own helper `matchWinner` looked like fresh, never-extracted pure logic,
 so the first pass added them as new `GENERATED-FN` entries in
 `src/core/statsAndFixtures.js`. They aren't new — both already live
 inside `src/core/appLogic.js`, part of its **module**-level splice (the
-whole `docs/index.html` span from `// GENERATED-START: app-logic` to
+whole `public/index.html` span from `// GENERATED-START: app-logic` to
 `// GENERATED-END: app-logic`, lines ~4871–6174, gets replaced wholesale
 from `appLogic.js` on every `generate` run). Adding `GENERATED-FN`
 markers *inside* a span a module splice already owns doesn't work — the
@@ -700,7 +710,7 @@ any test was written. Fixed by dropping the duplicate `GENERATED-FN`
 entries and re-pointing `SeriesDetailScreen`'s import of
 `computeSeriesScore` at `src/core/appLogic.js`, where it already lived.
 **Rule for every future batch:** before wrapping a "new" top-level
-function's `docs/index.html` declaration in `GENERATED-FN-START`/`END`
+function's `public/index.html` declaration in `GENERATED-FN-START`/`END`
 markers, grep `src/core/*.js` and `src/components/*.js` for
 `export function <name>`/`export const <name>` first — it may already
 be part of an existing module or component extraction, especially for
@@ -815,7 +825,7 @@ actually lives — `npm run generate` failed immediately with a clear
 "does not provide an export" error) and `computeTournamentPlacement`
 (already inside `appLogic.js`'s module) itself references
 `ISO_DATETIME_RE` as a bare global from `shareAndFormat.js` — genuine
-in `docs/index.html`'s single script scope, but undefined under Node
+in `public/index.html`'s single script scope, but undefined under Node
 until the test file explicitly imports and sets it on `globalThis`, the
 first time any test has exercised that particular code path.
 
@@ -940,7 +950,7 @@ still inside `HomeScreen` itself) were updated to pass that object
 explicitly. This was verified two ways: first that the marker-wrapped
 splice step itself stays byte-identical against a post-refactor
 snapshot (same discipline as every other batch), and separately that
-the refactor commit against the true pre-refactor `docs/index.html`
+the refactor commit against the true pre-refactor `public/index.html`
 touches *only* the signature and the four call sites, nothing else. The
 other nested helpers in the same body (`renderClubRow`, `renderCupRow`,
 `renderFederationRow`, `renderHelpRow`, `renderTeamRow`,
@@ -968,7 +978,7 @@ surfaced one more instance of the "check before extracting as new" rule
 from `SeriesDetailScreen`'s batch, this time for something that *wasn't*
 already extracted anywhere: `SETUP_PAGE_LABELS`, a standalone top-level
 `const` sitting just after `// GENERATED-END: app-logic` in
-`docs/index.html`, used nowhere but this screen. Since nothing else
+`public/index.html`, used nowhere but this screen. Since nothing else
 references it, it was extracted as its own `GENERATED-FN` export
 alongside `SetupScreen` in the same file, rather than folded into
 `appLogic.js`'s wholesale module splice (which would work at
@@ -1149,47 +1159,64 @@ pipeline:
   work outstanding before defaulting to per-test teardown.
 
 **Component extraction is now 100% complete** — every component that
-was in `docs/index.html` now lives in a tested `src/components/*.js`
+was in `public/index.html` now lives in a tested `src/components/*.js`
 module, spliced back in by `npm run generate`. `npm test` is at 449
 passing tests (437 before this batch, +7 for `cricketScorer.test.js`,
 +5 for `errorBoundary.test.js`).
 
-## GitHub Pages deploy-mode switch (in progress)
+## GitHub Pages deploy-mode switch (done)
 
-Switching this repo's GitHub Pages deployment from "Deploy from a
-branch" (source restricted to the repo root or a folder literally named
-`/docs`, which is why the deployed site lives in `docs/` despite having
-nothing to do with documentation) to GitHub Actions-based deployment,
-which has no folder-name restriction. Done as two separate, deliberately
-ordered PRs to avoid any live-site downtime — **doing the folder rename
-before Pages source is switched to Actions would 404 the live site**,
-since branch-deploy mode would suddenly find no `docs/` folder to serve
-from, and there's no API access available in this environment to flip
-that Settings toggle for the user.
+Switched this repo's GitHub Pages deployment from "Deploy from a branch"
+(source restricted to the repo root or a folder literally named `/docs`,
+which is why the deployed site used to live in a folder called `docs/`
+despite having nothing to do with documentation) to GitHub
+Actions-based deployment, which has no folder-name restriction. Done as
+two separate, deliberately ordered PRs specifically to avoid any
+live-site downtime — doing the folder rename before Pages source was
+switched to Actions would have 404'd the live site, since branch-deploy
+mode would suddenly have found no `docs/` folder to serve from, and
+there's no API access available in this environment to flip that
+Settings toggle — only the project owner could do that part.
 
-**Step one (done):** added `.github/workflows/deploy.yml` —
-`actions/checkout` → `actions/configure-pages` →
-`actions/upload-pages-artifact` (path `docs`, so `CNAME` ships with the
-artifact and the custom domain carries over automatically) →
-`actions/deploy-pages`. No build step, since `docs/index.html` is
-already the complete deployable artifact (kept in sync with
-`src/core/*.js`/`src/components/*.js` by `npm run generate` before every
-commit, same as always). This PR is safe to merge on its own: as long as
-Settings → Pages → Source is still "Deploy from a branch", this workflow
-has zero effect on the live site — it either doesn't run relevantly or
-its `deploy-pages` step fails loudly (a red Actions run, not a broken
-site) telling whoever looks that Pages needs to be switched to "GitHub
-Actions" first.
+**Step one:** added `.github/workflows/deploy.yml` — `actions/checkout`
+→ `actions/configure-pages` → `actions/upload-pages-artifact` (uploading
+the deploy folder, so `CNAME` ships with the artifact and the custom
+domain carries over automatically) → `actions/deploy-pages`. No build
+step, since the deployed `index.html` is already the complete deployable
+artifact (kept in sync with `src/core/*.js`/`src/components/*.js` by
+`npm run generate` before every commit, same as always). Merged first,
+while Pages source was still "Deploy from a branch" — safe by
+construction, since a workflow with no effect on the live site either
+doesn't run relevantly or has its `deploy-pages` step fail loudly (a red
+Actions run, not a broken site).
 
-**Step two (blocked on the project owner):** the project owner needs to
-manually flip Settings → Pages → Source to "GitHub Actions" (same
-manual-Settings-change pattern as the original `docs/` folder switch
-earlier this session) and confirm the workflow run went green / the live
-site still loads correctly. **Only after that confirmation** should the
-follow-up rename PR land: `docs/` → `public/` (or another sensible
-name), `scripts/generate.js`'s hardcoded `docs/index.html` path updated,
-`.github/workflows/deploy.yml`'s artifact `path` updated to match, and a
-sweep of `README.md`/`handoff-prompt.md`/`tests/README.md` for any
-remaining `docs/` references. Do not do the rename before that
-confirmation lands — it's the one step in this whole switch with real
-production-downtime risk if sequenced wrong.
+**Step two:** the project owner manually flipped Settings → Pages →
+Source to "GitHub Actions". Confirmed via a `workflow_dispatch` run
+(`actions_run_trigger`) that completed with `conclusion: success` on all
+five steps, including the actual `deploy-pages` step — this is the real
+signal, not just workflow-file syntax being valid, since the same
+workflow's very first run (triggered by its own merge, before the
+Settings flip) had correctly failed at that exact step for the reason
+described above.
+
+**Step three:** with Actions deployment confirmed working, `docs/` was
+renamed to `public/` — `git mv docs public`, `scripts/generate.js`'s
+hardcoded `INDEX_HTML` path updated to `public/index.html`,
+`.github/workflows/deploy.yml`'s `upload-pages-artifact` `path` and
+`push.paths` filter updated to `public`, and every `docs/index.html` /
+`docs/` reference across `README.md`, `handoff-prompt.md`,
+`tests/README.md`, `scripts/generate.js`, and the handful of
+`src/components/*.js`/`src/core/*.js`/`tests/unit/components/*.test.js`
+comments that mentioned it (narrating where a not-yet-extracted bare
+global still lives) updated to `public/`. One thing worth knowing if a
+future rename ever needs the same treatment: a blind
+find-and-replace of `docs/` → `public/` across a file that also uses
+"docs" as a plain English word (this file's own `README.md`,
+`handoff-prompt.md`, `package.json` — repo-level **docs**/config" line)
+will mangle it into nonsense unless that occurrence is protected first —
+caught and fixed here before committing, not after.
+
+The deploy-mode switch is now fully complete: `public/index.html` is
+production, deployed by `.github/workflows/deploy.yml` via GitHub
+Actions, with no folder-name restriction left over from the old
+branch-deploy setup.

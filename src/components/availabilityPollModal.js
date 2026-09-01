@@ -13,7 +13,7 @@ import { POLL_TTL_DAYS, buildPollUrl, buildPollShareText, pollExpiryDateLabel } 
 // Covered by tests/unit/components/availabilityPollModal.test.js.
 //
 // Reads/writes to the poll collection all go through bare-global Firestore functions defined in
-// docs/index.html, not extracted (need the Firebase SDK): `loadTeamPolls`/`loadPollByCode` (also
+// public/index.html, not extracted (need the Firebase SDK): `loadTeamPolls`/`loadPollByCode` (also
 // called from a mount-time useEffect, not just a handler -- see how PlayerOfMatchCard and
 // BetaTestersScreen stub their own Firestore calls for the same reason), `createAvailabilityPoll`,
 // `deleteAvailabilityPoll`. `shareToWhatsApp`/`copyLink` call `window.open`/`navigator.clipboard`

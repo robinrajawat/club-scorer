@@ -14,7 +14,7 @@ import { suggestPlayerOfMatch, suggestBestFielder, allMatchPlayers } from "../co
 // tests/unit/components/matchInsightCards.test.js.
 //
 // PlayerOfMatchCard/BestFielderCard call `saveMatch` (a Firestore write, defined in
-// docs/index.html, not extracted -- it needs the Firebase SDK global) from their pick() handler,
+// public/index.html, not extracted -- it needs the Firebase SDK global) from their pick() handler,
 // same as elsewhere in this app; not stubbed at module scope since a test can choose whether to
 // exercise that path.
 

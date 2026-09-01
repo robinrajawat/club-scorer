@@ -1,5 +1,5 @@
 // Small decorative/status React components (src/components/illustrations.js), rendered with
-// react-test-renderer -- the actual React version docs/index.html loads (18.3.1), pinned in
+// react-test-renderer -- the actual React version public/index.html loads (18.3.1), pinned in
 // package.json to match.
 
 import test from "node:test";

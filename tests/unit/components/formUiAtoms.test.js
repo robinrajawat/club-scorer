@@ -95,7 +95,7 @@ test("ConfirmModal: renders title/message and wires confirm/cancel through to th
   // Modal itself needs a real jsdom-backed DOM to test meaningfully (see modal.test.js) -- stub it
   // here to test ConfirmModal's own prop wiring without a DOM dependency or pretending to also
   // test Modal's real windowing/focus-trap behavior. ConfirmModal references Modal as a bare,
-  // unimported identifier (same as it does in docs/index.html, where splicing puts the real Modal
+  // unimported identifier (same as it does in public/index.html, where splicing puts the real Modal
   // in the same global scope), so setting it on globalThis is enough for the reference to resolve.
   const StubModal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   let confirmed = false, cancelled = false;
