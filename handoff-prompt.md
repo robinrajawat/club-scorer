@@ -171,13 +171,31 @@ functions rather than one contiguous span, via the new
 `scripts/generate.js` (see `tests/README.md` for how it differs from the
 block-based `GENERATED-START`/`GENERATED-END` markers).
 
-**Continuing the modularization:** ~80 more pure, non-DOM helper functions
-are still scattered through `docs/index.html` uncovered by tests — text/
-share/URL builders (`buildShareText`, `matchResultText`, `buildFollowUrl`,
-etc.), ICS/CSV export (`buildTournamentICS`, `toCSV`, etc.), date/format
-helpers (`pad2`, `relativeDayLabel`, etc.), and small predicates (`uid`,
-`normalizeEmail`, `isClubOwner`, etc.) — good next candidates using the
-same `GENERATED-FN` pattern established in this pass. The ~93 React
+A sixth PR extracted `src/core/shareAndFormat.js` (fixture date/time
+parsing & formatting, `.ics`/CSV export, match/poll share-text & URL
+builders) — 31 more scattered declarations via the same `GENERATED-FN`
+mechanism, including two (`buildPollUrl`/`buildFollowUrl`) that read
+`window.location` in the browser but fall back to a relative URL via
+`try`/`catch` anywhere that isn't available (including Node), so they're
+still meaningfully testable there.
+
+**Continuing the modularization:** ~50 more standalone functions are still
+scattered through `docs/index.html`, uncovered by tests. Good next
+candidates (pure, no DOM/localStorage/network): `genMatchCode`,
+`ttlTimestamp`, `expiresAtMillis`, `inviteExpiryLabel`,
+`formatAddressLabel`, `weatherCodeInfo`, `parseCsvLine`,
+`parseBulkPlayers`, `normalizeEmail`, `isClubOwner`, `isFederationOwner`,
+`relativeDayLabel`, `greetingPrefix`, `tournamentStatus`,
+`tournamentDateRangeLabel`, `playerInitials`, `playerAvatarColor`,
+`parseOverLabel`, `ballLabelsForOver`, `unpackMatchFromFirestore`. The
+rest of that ~50 lean on browser-only APIs with no fallback (localStorage
+persistence like `lsSetItem`/the `undoHistory*`/`pendingWrite*` families,
+`window.location` parsing with no `try`/`catch` like
+`getFollowCodeFromUrl`, DOM/Blob downloads, `FileReader`/canvas image
+resizing, `navigator.share`) or produce React elements
+(`highlightMatch`, `renderMatchCard`) — extractable in principle but each
+needs its own judgment call on whether a Node-testable fallback path
+actually exists, not a mechanical repeat of this pass. The ~93 React
 components are a separate, much larger and riskier undertaking (closures
 over shared app state, not standalone pure functions) — don't start on
 those without deciding on an approach first, given how much rides on
