@@ -319,8 +319,10 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `src/components/availabilityPollModal.js` (`AvailabilityPollModal`),
 `src/components/upcomingFixtureCard.js` (`UpcomingFixtureCard`),
 `src/components/tournamentStatus.js` (`TOURNAMENT_STATUS_LABELS`,
-`TOURNAMENT_STATUS_COLORS`), `src/components/fixtureRow.js` (`FixtureRow`)
-— all now with real `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
+`TOURNAMENT_STATUS_COLORS`), `src/components/fixtureRow.js` (`FixtureRow`),
+`src/components/inningsSetupScreens.js` (`SuperOverOpenersSetup`,
+`SecondInningsSetup`) — all now with real
+`tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
 `window.print()`/`document.title` from inside their `onClick` handler,
@@ -582,7 +584,17 @@ lift-and-splice this session has done everywhere else. It has to come
 out together with `HomeScreen` itself, or as a deliberate refactor
 pass, not as its own quick batch.
 
-~29 components remain, all of them screens now (`renderMatchCard`
+A twenty-third PR extracted the first two actual screens:
+`src/components/inningsSetupScreens.js` (`SuperOverOpenersSetup`,
+`SecondInningsSetup` — the between-innings opener-picker screens,
+~107/~193 lines, the two smallest of what's left). Confirms the pattern
+for the screens ahead: both call `saveTransition` (a bare global,
+wraps `saveMatch`, a Firestore write, not extracted) only from their
+own button handlers, never during render, so it needed stubbing only
+in the tests that actually click those buttons — no mount-time effect
+this time, a bit simpler than the last several batches.
+
+~27 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
