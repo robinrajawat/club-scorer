@@ -23925,6 +23925,7 @@ function RecordsScreen({
 // teams: [teamA, teamB], and ordinary fixtures) — see handleCreateSeries — so it also reuses
 // loadTournamentMatches, FixtureRow, handleStartFixtureMatch, and handleDeleteTournament
 // unchanged; only the summary math (computeSeriesScore) and this screen's layout are new.
+// GENERATED-FN-START: SeriesDetailScreen
 function SeriesDetailScreen({
   series,
   onBack,
@@ -24195,6 +24196,7 @@ function SeriesDetailScreen({
     onCancel: () => setConfirmDelete(false)
   }));
 }
+// GENERATED-FN-END: SeriesDetailScreen
 // Availability poll modal — reached from a club team's row on the Teams screen (owner/co-owner
 // only, same as every other team-management action). Two sub-views in one modal rather than a
 // separate screen: a short history of polls already sent for this team (tap one to see its

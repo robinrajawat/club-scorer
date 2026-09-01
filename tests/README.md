@@ -289,6 +289,17 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   only from the email-submit handler — never during render or a mount
   effect — so each test just stubs the one it needs, no `act()`-wrapped
   mount required.
+- `src/components/seriesDetailScreen.js` /
+  `tests/unit/components/seriesDetailScreen.test.js` —
+  `SeriesDetailScreen`, the "series" detail screen (teamA vs teamB over
+  N fixtures, e.g. a 3-match ODI series). `loadTournamentMatches` runs
+  from a mount-time `useEffect`; it also renders one `FixtureRow` per
+  fixture, so tests additionally stub `FixtureRow`'s own `Modal`/
+  `loadFixturePollSummary` bare globals — reusing `fixtureRow.test.js`'s
+  own setup. Uses `computeSeriesScore` from `src/core/appLogic.js` (not
+  a new export — see the note in `handoff-prompt.md` about not
+  re-extracting a function that's already inside an existing module
+  splice).
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block
