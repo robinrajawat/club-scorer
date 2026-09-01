@@ -1,10 +1,9 @@
 // Small, self-contained decorative/status React components -- loading spinners, empty-state art,
-// the app icon mark. Presentational only, no data-layer logic to test; extracted for file
-// organization, verified by the same generate/generate:verify round-trip and browser smoke test
-// as every other GENERATED-FN block, not by a component-level unit test (this repo has no React
-// test renderer, and these have no branching logic worth one). Reference React, hooks, COLORS,
-// and icon components as ambient globals -- exactly as they do in docs/index.html, since splicing
-// puts them back in the same global scope. Not meant to be imported and called from Node.
+// the app icon mark. Covered by tests/unit/components/illustrations.test.js using
+// react-test-renderer.
+
+import React from "react";
+import { COLORS } from "./theme.js";
 
 export function AppMark({
   size

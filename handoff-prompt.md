@@ -139,8 +139,15 @@ a separate follow-up PR.
   `docs/` here, not the repo root).
 - `src/core/` — tested logic modules spliced into `docs/index.html` by
   `scripts/generate.js` (see above).
+- `src/components/` — presentational React components, also spliced by
+  `scripts/generate.js`. Unlike `src/core/`, these use real `import`s
+  (see "React component extraction" below) and are tested with
+  `react-test-renderer` — this repo's first two npm `devDependencies`
+  (`react`, `react-test-renderer`, both pinned to `18.3.1` to match the
+  CDN version `docs/index.html` loads). `node_modules/` is gitignored.
 - `tests/` — `tests/unit/*.test.js` (Node's built-in test runner, covers
-  `src/core/`) and `tests/README.md`.
+  `src/core/`) plus `tests/unit/components/*.test.js` (covers
+  `src/components/`), and `tests/README.md`.
 - `firebase/` — `firestore.rules` and `storage.rules`, manually pasted into
   the Firebase Console (not auto-deployed).
 - `ios/` — parked native SwiftUI rewrite; don't touch without explicit
@@ -214,49 +221,92 @@ A ninth PR started pulling the ~93 React components out of
 `docs/index.html` into `src/components/`, using the same `GENERATED-FN`
 per-function marker mechanism — components turned out to need it just
 like the scattered functions did (they're not one contiguous span
-either). Key differences from the logic extraction above, worth knowing
-before continuing:
+either), landing 18 of the smallest, purely presentational leaf
+components with no test coverage (a disclosed gap at the time — real
+component tests need a React test renderer, which this repo hadn't
+added, and adding an npm dependency unprompted wasn't this session's
+call to make).
 
-- **No imports needed, ever, in a `src/components/*.js` file.**
-  Components reference `React`, hooks (`useState`/`useEffect`/`useRef`),
-  `COLORS`, icon components (themselves `const Name = props => ...`
-  arrow functions defined early in the script, not `function`
-  declarations — not hoisted, but already evaluated by the time any
-  component actually renders, since all rendering happens after the
-  whole script has run), and other components — all as ambient globals.
-  Splicing puts everything back in the same global scope at the same
-  position, so none of this needs wiring up. Do **not** add `import`
-  lines to a components file; there's nothing to import for.
-- **No component-level tests in this pass, and that's a real gap, not
-  an oversight to fix reflexively.** Rendering/asserting on a component
-  meaningfully needs a React test renderer, which is a real dependency
-  decision (this repo has added zero npm dependencies so far, only
-  Node's own `node --test`) — raise it explicitly with the project owner
-  rather than adding one unprompted. Until then, verification for a
-  components PR is the same rigor as every extraction so far
-  (`npm run generate` reproduces `docs/index.html` byte-for-byte outside
-  the new marker lines, `npm run generate:verify`, the `new Function(...)`
-  syntax re-parse, and the headless-browser local-asset check) — no
-  more, no less honestly claimed.
-- Components can be extracted in any order/grouping — cross-component
-  references don't need to travel together, since every component stays
-  reachable as a global at its original textual position regardless of
-  which file its own declaration now lives in.
+A tenth PR closed that gap: **this repo now has its first two npm
+`devDependencies`, `react` and `react-test-renderer`, both pinned to
+`18.3.1`** — the exact version `docs/index.html` loads from CDN, so
+tests exercise the real thing rather than a version-skewed stand-in.
+`node_modules/` is gitignored (`.gitignore` didn't exist before this —
+now it does, just that one line). This changes the pattern for
+`src/components/` files specifically, worth knowing before continuing:
 
-First batch done: `src/components/illustrations.js` (`AppMark`,
+- **Component files now use real `import`s** — `import React from
+  "react"`, `import { useState, useEffect, useRef } from "react"` where
+  hooks are used, `import { COLORS } from "./theme.js"`, icons from
+  `./icons.js`, and any already-extracted `src/core/`/sibling
+  `src/components/` function a component actually calls (e.g.
+  `PlayerAvatar` imports `playerInitials`/`playerAvatarColor` from
+  `../core/miscHelpers.js`; `PinnableChip` imports `useLongPress` from
+  `../core/appLogic.js`). These imports are stripped the same way as
+  always at splice time (`toGlobalScript`'s regex doesn't care what a
+  module imports from) — but they're needed now so a *test* can actually
+  render the component, not just parse the file.
+- **`COLORS` and the whole hand-rolled icon set (`Icon` plus 38 icon
+  components, `src/components/theme.js` and `src/components/icons.js`)
+  got extracted in this same PR**, specifically to unblock real rendering
+  of components that use them — a one-time foundational cost that
+  future component batches now just import from, no re-extraction
+  needed. `Btn` came along too (`formUiAtoms.js`), since `ConfirmModal`
+  needed it to render for real.
+- **If a src/core/ function you're now calling for real (not just
+  importing) turns out to need a React hook, add the import** —
+  `appLogic.js`'s `useLongPress` needed `useRef`, which nothing had
+  actually *called* before (earlier tests only imported/asserted on
+  plain-logic exports from that file, never one that touches a hook).
+  Caught by actually running `PinnableChip`'s render test, not by
+  `generate:verify` or the syntax check — neither one calls anything,
+  they only reproduce/parse text.
+- **A component that still depends on something not yet extracted**
+  (e.g. `ConfirmModal` needs `Modal`, which reads
+  `window.visualViewport` with no guard — a real DOM dependency, not
+  just an ambient global, and a bigger lift than a plain presentational
+  leaf) gets a **local stub in its own test file**, set on `globalThis`
+  before rendering, rather than a real import or a skipped test — see
+  `formUiAtoms.test.js`'s `ConfirmModal` test for the pattern.
+- **A component using `useEffect` to start a timer/subscription must be
+  `.unmount()`-ed after each render in its test.** Missed this once
+  already: `InningsTimer`'s `setInterval` isn't cleared until unmount,
+  and `react-test-renderer` doesn't unmount automatically — an
+  unmounted instance's live interval kept the whole test process from
+  exiting instead of just failing loudly, and only showed up as the
+  test run hanging. See `scoringUiAtoms.test.js` for the fix.
+- **`generate.js` itself got one hardening fix in this PR**: the
+  per-declaration text extraction now appends exactly one trailing
+  newline even when the source file has none at all (`\s*$` instead of
+  `\s+$` in the replace), so a declaration appended by hand without a
+  final newline (exactly what happened extracting `Btn`) can't silently
+  glue its closing brace onto the next line's `GENERATED-FN-END` marker
+  — caught by the parity diff showing a one-line change instead of
+  zero, not by anything more automatic.
+- Components can still be extracted in any order/grouping — cross-
+  component references don't need to travel together, since every
+  component stays reachable as a global at its original textual
+  position regardless of which file its own declaration now lives in.
+
+Both batches' components: `src/components/illustrations.js` (`AppMark`,
 `LoadingBallIllustration`, `LoadingNote`, `EmptyStateBallIllustration`),
 `src/components/scoringUiAtoms.js` (`RoleBadge`, `BallCelebration`,
 `MILESTONE_ICONS`, `MilestoneToast`, `OdometerScore`, `InningsTimer`,
 `SwipeableRow`), `src/components/formUiAtoms.js` (`PlayerAvatar`,
 `TextField`, `RuleChoice`, `TeamChips`, `PinnableChip`,
-`HomeUtilityButton`, `ConfirmModal`) — 18 of the smallest, purely
-presentational leaf components, picked first specifically to prove the
-mechanism extends to components before taking on anything bigger or more
-interconnected. ~75 components remain, including the large screen-level
-ones (`MatchScreen`, `TournamentsScreen`, etc.) that hold real
-application state via hooks — those are a different, harder case than a
+`HomeUtilityButton`, `Btn`, `ConfirmModal`), `src/components/theme.js`
+(`COLORS`), `src/components/icons.js` (`Icon` + 38 icons) — all now with
+real `tests/unit/components/*.test.js` coverage using
+`react-test-renderer`, except `ConfirmModal` (tests its own prop wiring
+against a stubbed `Modal`, not `Modal` itself).
+
+~75 components remain, including the large screen-level ones
+(`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
+state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch.
+mechanical repeat of this batch. `Modal` itself (needs a `window`/
+`visualViewport` stub to render for real) is a reasonable next small
+target now that the pattern for a DOM-dependent component exists.
 
 Check with the project owner for priorities if none are recorded here by
 the time you read this.

@@ -54,6 +54,7 @@ const {
 } = React;
 
 // ---------- Inline icons (no external icon library needed) ----------
+// GENERATED-FN-START: Icon
 function Icon({
   children,
   size = 18,
@@ -74,18 +75,28 @@ function Icon({
     }
   }, children);
 }
+// GENERATED-FN-END: Icon
+// GENERATED-FN-START: ChevronLeft
 const ChevronLeft = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "15 18 9 12 15 6"
 }));
+// GENERATED-FN-END: ChevronLeft
+// GENERATED-FN-START: ChevronRight
 const ChevronRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "9 18 15 12 9 6"
 }));
+// GENERATED-FN-END: ChevronRight
+// GENERATED-FN-START: ChevronDown
 const ChevronDown = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "6 9 12 15 18 9"
 }));
+// GENERATED-FN-END: ChevronDown
+// GENERATED-FN-START: Check
 const Check = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "20 6 9 17 4 12"
 }));
+// GENERATED-FN-END: Check
+// GENERATED-FN-START: Pin
 const Pin = ({
   size = 18,
   fill,
@@ -108,6 +119,8 @@ const Pin = ({
 }), /*#__PURE__*/React.createElement("path", {
   d: "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
 }));
+// GENERATED-FN-END: Pin
+// GENERATED-FN-START: MoreVertical
 const MoreVertical = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
@@ -121,6 +134,8 @@ const MoreVertical = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*
   cy: "19",
   r: "1"
 }));
+// GENERATED-FN-END: MoreVertical
+// GENERATED-FN-START: Table2
 const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "3",
   y: "3",
@@ -143,11 +158,15 @@ const Table2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
   x2: "12",
   y2: "21"
 }));
+// GENERATED-FN-END: Table2
+// GENERATED-FN-START: Undo2
 const Undo2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M9 14 4 9l5-5"
 }), /*#__PURE__*/React.createElement("path", {
   d: "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"
 }));
+// GENERATED-FN-END: Undo2
+// GENERATED-FN-START: Trash2
 const Trash2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M3 6h18"
 }), /*#__PURE__*/React.createElement("path", {
@@ -165,6 +184,8 @@ const Trash2 = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
   x2: "14",
   y2: "17"
 }));
+// GENERATED-FN-END: Trash2
+// GENERATED-FN-START: Trophy
 const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M8 21h8"
 }), /*#__PURE__*/React.createElement("path", {
@@ -176,6 +197,7 @@ const Trophy = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
 }), /*#__PURE__*/React.createElement("path", {
   d: "M17 5h2.5a2 2 0 0 1 0 4H18"
 }));
+// GENERATED-FN-END: Trophy
 // Cap: a side-profile billed cap (dome + brim), for Orange/Purple Cap — Unicode has no colored cap
 // emoji. Unlike the other icons here, this is filled (not stroked via the shared Icon wrapper) —
 // a thin outline didn't read as "a cap" at a glance (tried it, looked wrong); a solid silhouette
@@ -198,12 +220,15 @@ function Cap({
   }));
 }
 // BookOpen: for the Record Book entry point (clubs and federations).
+// GENERATED-FN-START: BookOpen
 const BookOpen = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M12 7v14"
 }), /*#__PURE__*/React.createElement("path", {
   d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
 }));
+// GENERATED-FN-END: BookOpen
 // Hand: for the Best Fielder award (catches + run outs) on the result screen.
+// GENERATED-FN-START: Hand
 const Hand = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"
 }), /*#__PURE__*/React.createElement("path", {
@@ -213,12 +238,16 @@ const Hand = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
 }), /*#__PURE__*/React.createElement("path", {
   d: "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
 }));
+// GENERATED-FN-END: Hand
 // Bell: the Home header's Inbox shortcut (polls + requests), badge-counted for anything pending.
+// GENERATED-FN-START: Bell
 const Bell = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"
 }), /*#__PURE__*/React.createElement("path", {
   d: "M10.3 21a1.94 1.94 0 0 0 3.4 0"
 }));
+// GENERATED-FN-END: Bell
+// GENERATED-FN-START: Share
 const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",
@@ -242,6 +271,8 @@ const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
   x2: "15.4",
   y2: "17.6"
 }));
+// GENERATED-FN-END: Share
+// GENERATED-FN-START: Globe
 const Globe = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
@@ -254,12 +285,16 @@ const Globe = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 }), /*#__PURE__*/React.createElement("path", {
   d: "M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"
 }));
+// GENERATED-FN-END: Globe
 // Shield: a club/team crest is the more universal "club" symbol than Globe (which reads as
 // public/worldwide, already doing that job on the visibility badges elsewhere) -- used for the
 // Home screen's own Clubs button specifically.
+// GENERATED-FN-START: Shield
 const Shield = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
 }));
+// GENERATED-FN-END: Shield
+// GENERATED-FN-START: Plus
 const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "12",
   y1: "5",
@@ -271,6 +306,8 @@ const Plus = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   x2: "19",
   y2: "12"
 }));
+// GENERATED-FN-END: Plus
+// GENERATED-FN-START: CalendarClock
 const CalendarClock = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "3",
   y: "5",
@@ -295,6 +332,8 @@ const CalendarClock = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__
 }), /*#__PURE__*/React.createElement("path", {
   d: "M12 14v2.5l1.8 1"
 }));
+// GENERATED-FN-END: CalendarClock
+// GENERATED-FN-START: Circle
 const Circle = ({
   size = 18,
   fill = "currentColor",
@@ -310,6 +349,8 @@ const Circle = ({
   r: "9",
   fill: fill
 }));
+// GENERATED-FN-END: Circle
+// GENERATED-FN-START: Download
 const Download = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M12 3v12"
 }), /*#__PURE__*/React.createElement("polyline", {
@@ -317,6 +358,8 @@ const Download = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/Rea
 }), /*#__PURE__*/React.createElement("path", {
   d: "M5 21h14"
 }));
+// GENERATED-FN-END: Download
+// GENERATED-FN-START: Printer
 const Printer = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "6 9 6 2 18 2 18 9"
 }), /*#__PURE__*/React.createElement("path", {
@@ -327,6 +370,8 @@ const Printer = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/Reac
   width: "12",
   height: "8"
 }));
+// GENERATED-FN-END: Printer
+// GENERATED-FN-START: ArrowLeftRight
 const ArrowLeftRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "16 3 21 8 16 13"
 }), /*#__PURE__*/React.createElement("line", {
@@ -342,6 +387,8 @@ const ArrowLeftRight = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE_
   x2: "21",
   y2: "16"
 }));
+// GENERATED-FN-END: ArrowLeftRight
+// GENERATED-FN-START: Users
 const Users = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
 }), /*#__PURE__*/React.createElement("circle", {
@@ -353,9 +400,13 @@ const Users = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 }), /*#__PURE__*/React.createElement("path", {
   d: "M16 3.13a4 4 0 0 1 0 7.75"
 }));
+// GENERATED-FN-END: Users
+// GENERATED-FN-START: Pencil
 const Pencil = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
 }));
+// GENERATED-FN-END: Pencil
+// GENERATED-FN-START: Info
 const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
@@ -371,6 +422,8 @@ const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   x2: "12.01",
   y2: "8"
 }));
+// GENERATED-FN-END: Info
+// GENERATED-FN-START: HelpCircle
 const HelpCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
@@ -383,6 +436,8 @@ const HelpCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/R
   x2: "12.01",
   y2: "17"
 }));
+// GENERATED-FN-END: HelpCircle
+// GENERATED-FN-START: User
 const User = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
 }), /*#__PURE__*/React.createElement("circle", {
@@ -390,18 +445,24 @@ const User = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   cy: "7",
   r: "4"
 }));
+// GENERATED-FN-END: User
+// GENERATED-FN-START: MessageCircle
 const MessageCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
 }));
+// GENERATED-FN-END: MessageCircle
+// GENERATED-FN-START: InboxIcon
 const InboxIcon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "22 12 16 12 14 15 10 15 8 12 2 12"
 }), /*#__PURE__*/React.createElement("path", {
   d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
 }));
+// GENERATED-FN-END: InboxIcon
 // The WhatsApp brand mark, not a generic chat bubble -- every other icon in this app is a plain
 // stroke-based line icon (see Icon above), but a share target's icon needs to actually read as
 // that specific app at a glance, so this one deliberately breaks the pattern: filled, not
 // stroked, single path, fixed at the brand's own silhouette rather than reusing Icon's wrapper.
+// GENERATED-FN-START: WhatsAppIcon
 const WhatsAppIcon = ({
   size = 18,
   style
@@ -419,6 +480,8 @@ const WhatsAppIcon = ({
 }), /*#__PURE__*/React.createElement("path", {
   d: "M20.52 3.449C18.24 1.245 15.24 0 12.05 0 5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893.001-3.177-1.235-6.166-3.423-8.452zM12.05 21.785h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.981.999-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.263c.002-5.45 4.437-9.884 9.889-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.451-4.438 9.888-9.887 9.888z"
 }));
+// GENERATED-FN-END: WhatsAppIcon
+// GENERATED-FN-START: LogOut
 const LogOut = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
 }), /*#__PURE__*/React.createElement("polyline", {
@@ -429,6 +492,8 @@ const LogOut = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React
   x2: "9",
   y2: "12"
 }));
+// GENERATED-FN-END: LogOut
+// GENERATED-FN-START: Sun
 const Sun = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
@@ -436,9 +501,13 @@ const Sun = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.cr
 }), /*#__PURE__*/React.createElement("path", {
   d: "M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
 }));
+// GENERATED-FN-END: Sun
+// GENERATED-FN-START: Moon
 const Moon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"
 }));
+// GENERATED-FN-END: Moon
+// GENERATED-FN-START: Monitor
 const Monitor = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
   x: "2",
   y: "4",
@@ -456,6 +525,8 @@ const Monitor = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/Reac
   x2: "12",
   y2: "21"
 }));
+// GENERATED-FN-END: Monitor
+// GENERATED-FN-START: AlertTriangle
 const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"
 }), /*#__PURE__*/React.createElement("line", {
@@ -469,6 +540,8 @@ const AlertTriangle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__
   x2: "12.01",
   y2: "17"
 }));
+// GENERATED-FN-END: AlertTriangle
+// GENERATED-FN-START: Hash
 const Hash = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("line", {
   x1: "4",
   y1: "9",
@@ -490,6 +563,7 @@ const Hash = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.c
   x2: "14",
   y2: "21"
 }));
+// GENERATED-FN-END: Hash
 
 // ---------- Design tokens ----------
 // Pitch green header, scorecard-cream body, willow tan accents, ball-red for wickets.
@@ -633,6 +707,7 @@ function NavWrap({
     }
   }, children);
 }
+// GENERATED-FN-START: COLORS
 const COLORS = {
   pitch: "var(--cs-pitch)",
   pitchDark: "var(--cs-pitch-dark)",
@@ -659,6 +734,7 @@ const COLORS = {
   // across both themes rather than flipping with dark mode.
   live: "#e6544b"
 };
+// GENERATED-FN-END: COLORS
 // Jersey color presets offered when editing a team — deliberately a curated set rather than
 // leaving people to the raw native color picker for the common case, since a handful of
 // well-separated, readable-on-white options is faster to pick from and harder to end up with two
@@ -4792,7 +4868,11 @@ function generateGroupRoundRobinFixtures(groups, double) {
 // is just about not having proven out the splice pipeline on more than one module shape yet.
 // computeStandings/dlsTarget/dlsResourcePercent/oversLeftTrueDecimal are covered by
 // tests/unit/appLogic.test.js; the rest (DOM/localStorage-dependent) isn't unit-testable in Node
-// and is unchanged from before this refactor.
+// and is unchanged from before this refactor. useLongPress is a real React hook (used by
+// src/components/formUiAtoms.js's PinnableChip), hence the useRef import below -- everything else
+// in this file is plain logic and needs nothing from react.
+
+
 function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
   const table = new Map(tournament.teams.map(name => [name, {
@@ -8124,6 +8204,7 @@ function LoadingNote({
   }), label);
 }
 // GENERATED-FN-END: LoadingNote
+// GENERATED-FN-START: Btn
 function Btn({
   children,
   onClick,
@@ -8186,6 +8267,7 @@ function Btn({
     }
   }, children);
 }
+// GENERATED-FN-END: Btn
 // Small public/private toggle used on a club or federation's own admin card. Owner-only —
 // callers are expected to only render this when the viewer already passed an isOwner check.
 function VisibilitySwitch({
@@ -8479,6 +8561,7 @@ function PlayerPicker({
 }
 
 // ---------- Account sync: sign-in, match codes ----------
+// GENERATED-FN-START: GoogleGLogo
 const GoogleGLogo = ({
   size = 18,
   style
@@ -8503,6 +8586,8 @@ const GoogleGLogo = ({
   fill: "#EA4335",
   d: "M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.426 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1627 6.656 3.5795 9 3.5795z"
 }));
+// GENERATED-FN-END: GoogleGLogo
+// GENERATED-FN-START: LogIn
 const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
 }), /*#__PURE__*/React.createElement("polyline", {
@@ -8513,6 +8598,7 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
   x2: "3",
   y2: "12"
 }));
+// GENERATED-FN-END: LogIn
 // Account button + its quick-access dropdown. Previously this button led straight into the
 // full-screen AccountScreen, which meant Help & FAQ, Send Feedback, and About/Support -- things
 // people reasonably expect to find in one tap from an account menu -- were stranded at the
