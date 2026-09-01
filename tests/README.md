@@ -230,6 +230,20 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   only from their own button handlers, never during render, so it's
   stubbed on `globalThis` only in the tests that click those buttons —
   no mount-time effect here, unlike the last several batches.
+- `src/components/searchAndRequestPanel.js` /
+  `tests/unit/components/searchAndRequestPanel.test.js` — a generic
+  "search a directory, then request/link to a result" panel (reused for
+  club-to-federation and player-transfer flows). All Firestore access
+  (`onSearch`/`onRequest`) is passed in as props, not a bare global, so
+  no stubbing is needed at all.
+- `src/components/authActionScreen.js` /
+  `tests/unit/components/authActionScreen.test.js` — the landing screen
+  for a Firebase Auth email action link (reset password, verify email,
+  undo an email change). `auth` (the Firebase Auth SDK instance, a bare
+  global, not extracted) is called directly from a mount-time
+  `useEffect`, so every test stubs it and wraps the initial render in
+  `act()`; `sendPasswordReset` (also a bare global) is only ever called
+  from the "resend" button's handler.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

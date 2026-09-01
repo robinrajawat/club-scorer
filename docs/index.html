@@ -8338,6 +8338,7 @@ function VisibilitySwitch({
 // clubDirectory to invite one. `items` are the raw directory entries ({name, ownerName, id}) —
 // `idKey` picks which field is the id ("federationId" or "clubId") since the two directories key
 // their entries differently.
+// GENERATED-FN-START: SearchAndRequestPanel
 function SearchAndRequestPanel({
   placeholder,
   onSearch,
@@ -8456,6 +8457,7 @@ function SearchAndRequestPanel({
     }, already ? linkedLabelById[id] || alreadyLinkedLabel : busyId === id ? "\u2026" : actionLabel));
   }));
 }
+// GENERATED-FN-END: SearchAndRequestPanel
 // GENERATED-FN-START: TextField
 function TextField({
   value,
@@ -15665,6 +15667,7 @@ function ShareMenu({
 // generic hosted page (see getAuthActionFromUrl for the query params this reads). WelcomeScreen's
 // existing "Forgot password?" flow is only the REQUEST side (sends the email); this is what
 // actually completes it.
+// GENERATED-FN-START: AuthActionScreen
 function AuthActionScreen({
   mode,
   oobCode,
@@ -15899,6 +15902,7 @@ function AuthActionScreen({
     }
   }, "Continue to Club Scorer"));
 }
+// GENERATED-FN-END: AuthActionScreen
 
 // The real app icon (icon-512.png etc, used for the favicon/home-screen/app-switcher) carries a
 // deliberate safe-zone margin around the ball -- content only fills the center ~75% of the

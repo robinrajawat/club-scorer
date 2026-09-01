@@ -321,7 +321,9 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `src/components/tournamentStatus.js` (`TOURNAMENT_STATUS_LABELS`,
 `TOURNAMENT_STATUS_COLORS`), `src/components/fixtureRow.js` (`FixtureRow`),
 `src/components/inningsSetupScreens.js` (`SuperOverOpenersSetup`,
-`SecondInningsSetup`) — all now with real
+`SecondInningsSetup`), `src/components/searchAndRequestPanel.js`
+(`SearchAndRequestPanel`), `src/components/authActionScreen.js`
+(`AuthActionScreen`) — all now with real
 `tests/unit/components/*.test.js` coverage, except `ConfirmModal` (tests
 its own prop wiring against a stubbed `Modal`, not `Modal` itself) and
 `exportButtons.js` (tests rendering/state only — both buttons call
@@ -594,7 +596,18 @@ own button handlers, never during render, so it needed stubbing only
 in the tests that actually click those buttons — no mount-time effect
 this time, a bit simpler than the last several batches.
 
-~27 components remain, all of them screens now (`renderMatchCard`
+A twenty-fourth PR extracted two more: `src/components/searchAndRequestPanel.js`
+(`SearchAndRequestPanel` — a generic "search a directory, then
+request/link to a result" panel reused for club-to-federation and
+player-transfer flows; its Firestore access is passed in as props, not
+a bare global, so no stubbing was needed at all) and
+`src/components/authActionScreen.js` (`AuthActionScreen` — the landing
+screen for a Firebase Auth email action link). `AuthActionScreen` calls
+`auth` (the Firebase Auth SDK instance, a bare global, not extracted)
+directly from a mount-time `useEffect`, same stubbing pattern as
+`AvailabilityPollModal`/`BetaTestersScreen`.
+
+~25 components remain, all of them screens now (`renderMatchCard`
 included, since it can only come out with `HomeScreen`). Most hold real
 application state via hooks (`MatchScreen`, `TournamentsScreen`,
 `SetupScreen`, `TeamsScreen`, `HomeScreen`, etc.) — a different, harder
