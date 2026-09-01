@@ -301,13 +301,15 @@ Components extracted so far: `src/components/illustrations.js` (`AppMark`,
 `InstallHintBanner`, `ClubSourceSelector`), `src/components/tableAtoms.js`
 (`StandingsTable`, `RecordTable`), `src/components/pickerAtoms.js`
 (`PlayerPicker`, `JoinCodeBar`), `src/components/exportButtons.js`
-(`ExportPdfButton`, `ExportTournamentPdfButton`) — all now with real
-`tests/unit/components/*.test.js` coverage using `react-test-renderer`,
-except `ConfirmModal` (tests its own prop wiring against a stubbed
-`Modal`, not `Modal` itself) and `exportButtons.js` (tests rendering/
-state only — both buttons call `window.print()`/`document.title` from
-inside their `onClick` handler, never during render, so they're safely
-renderable without a DOM stub, but clicking them isn't exercised).
+(`ExportPdfButton`, `ExportTournamentPdfButton`), `src/components/modal.js`
+(`Modal`) — all now with real `tests/unit/components/*.test.js` coverage
+using `react-test-renderer`, except `ConfirmModal` (tests its own prop
+wiring against a stubbed `Modal`, not `Modal` itself) and
+`exportButtons.js` (tests rendering/state only — both buttons call
+`window.print()`/`document.title` from inside their `onClick` handler,
+never during render, so they're safely renderable without a DOM stub, but
+clicking them isn't exercised). `modal.test.js` tests `Modal` itself for
+real, DOM behavior included — see below.
 
 Every batch since `matchDisplayAtoms.js`/`screenAtoms.js` has picked
 components specifically chosen to be fully renderable using only
@@ -320,25 +322,49 @@ set aside for a batch where those siblings come along too, rather than
 extracted with an untested/unstubbed dependency. `ExportPdfButton` is
 now available for whenever `ScorecardOverlay` is tackled.
 
-**`Modal` specifically was tried and set aside**: unlike `ConfirmModal`
-(which only *uses* `Modal`, so stubbing it was enough), `Modal` itself
-calls real DOM APIs directly in its body and effects —
+**`Modal` was extracted in an eleventh PR**, to `src/components/modal.js`,
+closing the gap the previous paragraph used to describe. Unlike
+`ConfirmModal` (which only *uses* `Modal`, so a stub was enough), `Modal`
+itself calls real DOM APIs directly in its body and effects —
 `window.visualViewport`, `window.scrollY`/`scrollTo`, `document.body`,
 `document.activeElement`, `document.addEventListener` — for scroll-lock
-and focus-trap behavior. Manually stubbing enough of `window`/`document`
-to exercise that for real (not just avoid a crash) is a much bigger
-surface than the ambient-global pattern used everywhere else, and is a
-real jsdom-or-similar dependency decision on its own, separate from the
-`react`/`react-test-renderer` one already made — raise it explicitly
-rather than reaching for it mid-batch.
+and focus-trap behavior, so this repo now has its third npm
+`devDependency`, **`jsdom` (pinned `30.0.1`)**, used only by
+`tests/unit/components/modal.test.js`. That file installs a real
+`JSDOM`-backed `window`/`document` on `globalThis` in `beforeEach` and
+deletes them in `afterEach`, so no other test file (which all
+deliberately run under plain Node with no DOM) is affected. Notes for the
+next DOM-dependent component:
 
-~62 components remain, including the large screen-level ones
+- **Every mount/unmount/state-changing interaction must go through
+  `act()`** (imported from `react-test-renderer`) — Modal's effects run
+  as passive effects, not synchronously with `renderer.create()`, so
+  without `act()` they can flush *after* the test function returns,
+  sometimes inside a *later* test after `afterEach` has already deleted
+  `globalThis.window` (surfaced as a `ReferenceError: window is not
+  defined` thrown from inside React's own commit phase, in a test that
+  otherwise looked unrelated).
+- **jsdom doesn't implement `window.scrollTo()`** (logs "Not implemented"
+  and no-ops) and `window.scrollY` is a read-only getter that stays `0` —
+  stub both directly (`Object.defineProperty(window, "scrollY", ...)`,
+  reassign `window.scrollTo`) to exercise the real save/restore logic
+  rather than skip it.
+- **`react-test-renderer` doesn't mount to a real DOM**, so a ref like
+  `Modal`'s `sheetRef` is `null` by default and a real-DOM-only effect
+  (`sheetRef.current.focus()`) silently no-ops. Pass `createNodeMock` to
+  `renderer.create(element, { createNodeMock })` to hand back a real,
+  `document.body`-attached, `tabindex`-bearing element for the ref to
+  focus for real.
+- `window.visualViewport` isn't implemented by jsdom either — tested via
+  a small hand-rolled stub object (`{ height, addEventListener,
+  removeEventListener }`) assigned directly to `window.visualViewport`,
+  covering both the with- and without-the-API code paths.
+
+~61 components remain, including the large screen-level ones
 (`MatchScreen`, `TournamentsScreen`, etc.) that hold real application
 state via hooks — those are a different, harder case than a
 presentational leaf and deserve their own look before extracting, not a
-mechanical repeat of this batch. `Modal` itself (needs a `window`/
-`visualViewport` stub to render for real) is a reasonable next small
-target now that the pattern for a DOM-dependent component exists.
-
-Check with the project owner for priorities if none are recorded here by
-the time you read this.
+mechanical repeat of this batch. Continue through them now — the project
+owner has asked for the full extraction to be completed without pausing
+for confirmation between batches; only stop for a genuine blocker that
+needs the owner's own decision.
