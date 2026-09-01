@@ -2440,7 +2440,9 @@ async function deleteMatch(id) {
 // Deliberately local-only, not synced to Firestore: undo is a same-device "oops, fix the last
 // few balls" tool, not something that needs to follow the match across devices, and capping the
 // depth (see MAX_UNDO_HISTORY below) keeps it bounded regardless of how long the innings runs.
+// GENERATED-FN-START: MAX_UNDO_HISTORY
 const MAX_UNDO_HISTORY = 30;
+// GENERATED-FN-END: MAX_UNDO_HISTORY
 // GENERATED-FN-START: undoHistoryKey
 function undoHistoryKey(matchId) {
   return `${LS_PREFIX}undoHistory:${matchId}`;
@@ -30762,6 +30764,7 @@ function FollowTournamentScreen({
   }, "Go to Club Scorer"))));
 }
 // GENERATED-FN-END: FollowTournamentScreen
+// GENERATED-FN-START: MatchScreen
 function MatchScreen({
   match,
   setMatch,
@@ -33212,6 +33215,7 @@ function MatchScreen({
     onUseTheirs: resolveConflictUseTheirs
   }));
 }
+// GENERATED-FN-END: MatchScreen
 // Opening-batters/bowler picker for the very first innings of a fresh Super Over match — same
 // shape as SecondInningsSetup's job, just for innings[0] of a brand-new match instead of
 // innings[1] of an existing one, and with no "target" framing since nobody's chasing yet.

@@ -1040,16 +1040,59 @@ after opening the dialog silently matched the *first* one again
 `ConfirmModal`'s own `onConfirm` prop directly via `findByType(ConfirmModal)`
 instead of searching by ambiguous button text.
 
-~2 components remain: `MatchScreen` and the root `CricketScorer`
-component itself. Both hold real application state via hooks — a
-different, harder case than a presentational leaf: expect each one to
-need its own dependency read before starting, and to watch for the
-same kind of nested-closure helper `HomeScreen` resolved, a standalone
-bare constant like `SETUP_PAGE_LABELS` that needs its own
-`GENERATED-FN` entry, a `Modal` real-import mistake like
-`TeamEditScreen`'s batch, or an ambiguous-button-text mistake like this
-batch's. Continue through the rest now — the project owner has asked
-for the full extraction to be completed without pausing for
+A forty-sixth PR extracted `src/components/matchScreen.js`
+(`MatchScreen` — the live scoring screen: run/extra/wicket entry, undo,
+swap strike, retire, end-innings-early/no-result/revised-target
+(DLS-assisted or manual), the between-deliveries next-batsman/next-
+bowler prompts, sync-conflict resolution, and the NRR qualification
+banner). At ~2453 lines, the single biggest component extracted this
+session. Delegates out to `SuperOverOpenersSetup`/`SecondInningsSetup`
+(while an innings' openers aren't set) and `ResultScreen` (once the
+match is complete) via real imports rather than bare globals, since
+this screen renders them directly as an early return, not through any
+closure/prop indirection the way `HomeScreen`'s `renderMatchCard` did —
+so despite its size, every one of its ~24 local nested helper functions
+(`confirmWicketDetails`, `computeDLSPreview`, `undo`, `swapStrike`,
+etc.) traveled verbatim, no closure-breaking refactor needed anywhere.
+`MAX_UNDO_HISTORY` (a standalone top-level const, previously part of no
+module, used only here) got the same `SETUP_PAGE_LABELS` treatment —
+its own `GENERATED-FN` export alongside the component in the same file.
+`saveMatch` is the one bare global; every other write (undo history,
+live-match registry, pending-write cleanup) already goes through an
+extracted core helper.
+
+Testing this one surfaced two new lessons worth carrying forward
+(beyond the usual dependency-read discipline — this batch's read also
+caught a genuinely missed import, `crr` from `scoringEngine.js`, via
+the standard bare-function-call grep):
+
+- **`match` is a fully controlled prop here, not internal state** — the
+  first screen this session where the test render helper had to wire
+  `setMatch` to actually call `renderer.update(...)` with the latest
+  match on every commit, the same way the real App re-renders it,
+  rather than just capturing the latest value in a variable (the
+  pattern every prior screen's tests used, since none of them needed
+  the UI itself to reflect a post-interaction state change).
+- **A component rendering `InningsTimer` (or anything else with a live
+  `setInterval`) needs every test instance unmounted, not just the one
+  the original gotcha (documented in `scoringUiAtoms.test.js`) flagged.
+  With 15 tests each mounting their own instance and none unmounted,
+  `node --test` hung for minutes past every test finishing — the event
+  loop never drained while 15 live 30-second intervals stayed pending.
+  Fixed with a shared `mountedInstances` array unmounted in `afterEach`,
+  not a per-test fix.
+- The main scoring row's 0/1/2/3/4/6 run buttons stay mounted **behind**
+  every modal this screen opens (`Modal` is an overlay, not a
+  replacement) — a same-numbered `Btn` inside an open modal (the Extra
+  amount picker, the custom-runs overthrow buttons) isn't unique by
+  text alone. A `modalBtn` helper scopes the search to inside the
+  stubbed `Modal` itself rather than the whole tree.
+
+**Extraction is now complete for every screen except the root
+`CricketScorer` component itself** (the top-level router/app-shell that
+was always going to be last, since everything else had to exist first
+for it to delegate to). Continue straight to it now — the project owner
+has asked for the full extraction to be completed without pausing for
 confirmation between batches; only stop for a genuine blocker that
 needs the owner's own decision.
 
