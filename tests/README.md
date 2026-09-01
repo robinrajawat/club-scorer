@@ -177,6 +177,21 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   `window.location.origin`/`pathname` directly during render, so its
   test stubs a minimal `globalThis.window` object rather than pulling in
   jsdom.
+- `src/components/venueAndDateModals.js` /
+  `tests/unit/components/venueAndDateModals.test.js` — `VenueEditModal`
+  (address search with a club-address shortcut) and `FixtureDateTimeModal`
+  (a small custom date/time picker, using `WEEKDAY_LABELS`/`MONTH_LABELS`).
+  Same `Modal`-as-bare-global stub pattern. `VenueEditModal`'s address
+  search (`searchAddress`, a debounced Nominatim fetch, still in
+  `docs/index.html`, not extracted) is gated behind a 400ms `setTimeout`
+  and a 3-character minimum — tests exercise the venue-length-under-3
+  path and the independent, non-debounced club-address-shortcut path
+  without ever reaching that timer, rather than waiting it out or
+  risking a leaked timer. `QualificationCalculatorModal` (in
+  `miscModals.js`/`miscModals.test.js`) works out the NRR a team needs
+  against a tied rival — its test exercises the real
+  `computeQualificationTarget` math end to end, not just the component's
+  own rendering.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

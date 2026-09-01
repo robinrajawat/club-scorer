@@ -16300,6 +16300,7 @@ function greetingPrefix() {
 // venue is otherwise only ever set as a side effect of scoring its first fixture. Small enough
 // (one field) not to need its own bespoke modal shell — reuses the generic Modal wrapper the rest
 // of the app already uses for exactly this kind of lightweight edit sheet.
+// GENERATED-FN-START: VenueEditModal
 function VenueEditModal({
   value,
   initialLat,
@@ -16522,6 +16523,7 @@ function VenueEditModal({
     }
   }, busy ? "\u2026" : "Save")));
 }
+// GENERATED-FN-END: VenueEditModal
 // Small "N yes · N no" glance rendered next to the Send poll button — see loadFixturePollSummary
 // for what it's built from and why it only ever shows once a poll has responses. Team-name prefix
 // only appears when there's more than one matching team (both fixture sides tracked by the same
@@ -20922,8 +20924,12 @@ function TournamentsScreen({
 // GENERATED-FN-START: ISO_DATETIME_RE
 const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 // GENERATED-FN-END: ISO_DATETIME_RE
+// GENERATED-FN-START: WEEKDAY_LABELS
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+// GENERATED-FN-END: WEEKDAY_LABELS
+// GENERATED-FN-START: MONTH_LABELS
 const MONTH_LABELS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// GENERATED-FN-END: MONTH_LABELS
 // GENERATED-FN-START: FIXTURE_DEFAULT_HOUR
 const FIXTURE_DEFAULT_HOUR = 11; // most club fixtures kick off mid-morning, so this is the sane default rather than midnight
 // GENERATED-FN-END: FIXTURE_DEFAULT_HOUR
@@ -20991,6 +20997,7 @@ function formatFixtureDateTime(iso) {
 // A compact calendar-grid + hour/minute/AM-PM picker, styled to match the rest of the app instead
 // of falling back on the browser's own date/time widgets. Opens with the time defaulted to 11 AM
 // whenever the fixture doesn't already carry a specific time.
+// GENERATED-FN-START: FixtureDateTimeModal
 function FixtureDateTimeModal({
   value,
   onSave,
@@ -21234,6 +21241,7 @@ function FixtureDateTimeModal({
     }
   }, "Save")));
 }
+// GENERATED-FN-END: FixtureDateTimeModal
 function FixtureRow({
   fixture,
   tournament,
@@ -27698,6 +27706,7 @@ function ConfirmModal({
 // Standalone calculator (and, via onSave, the setup step for MatchScreen's live banner) for the
 // "what does my team need to do THIS match to have a higher NRR than a specific rival" question.
 // See computeQualificationTarget for the actual math and its assumptions.
+// GENERATED-FN-START: QualificationCalculatorModal
 function QualificationCalculatorModal({
   tournament,
   standings,
@@ -27925,6 +27934,7 @@ function QualificationCalculatorModal({
     }
   }, saved_ ? "Saved!" : "Save for live tracking")));
 }
+// GENERATED-FN-END: QualificationCalculatorModal
 // GENERATED-FN-START: TournamentShareModal
 function TournamentShareModal({
   tournament,

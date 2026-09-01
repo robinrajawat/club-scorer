@@ -230,7 +230,12 @@ const FUNCTIONS = [
   { name: "TransferPlayerModal", file: "src/components/playerModals.js" },
   { name: "TOUR_SLIDES", file: "src/components/miscModals.js" },
   { name: "FirstLaunchTour", file: "src/components/miscModals.js" },
-  { name: "TournamentShareModal", file: "src/components/miscModals.js" }
+  { name: "TournamentShareModal", file: "src/components/miscModals.js" },
+  { name: "QualificationCalculatorModal", file: "src/components/miscModals.js" },
+  { name: "VenueEditModal", file: "src/components/venueAndDateModals.js" },
+  { name: "WEEKDAY_LABELS", file: "src/components/venueAndDateModals.js" },
+  { name: "MONTH_LABELS", file: "src/components/venueAndDateModals.js" },
+  { name: "FixtureDateTimeModal", file: "src/components/venueAndDateModals.js" }
 ];
 
 // Strips the ES module syntax needed for the file to be importable/testable under Node, so what's
