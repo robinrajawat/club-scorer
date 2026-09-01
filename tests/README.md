@@ -159,6 +159,24 @@ if `docs/index.html` doesn't match what `src/core/*.js` would produce).
   in a template string) won't show up in a `React.createElement(X` grep
   for dependencies — it only surfaces as a `ReferenceError` once a test
   actually imports and runs the file.
+- `src/components/playerModals.js` /
+  `tests/unit/components/playerModals.test.js` — `EditPlayerModal` and
+  `TransferPlayerModal`. `src/components/miscModals.js` /
+  `tests/unit/components/miscModals.test.js` — `FirstLaunchTour` and
+  `TournamentShareModal`. Both files reference `Modal` as a bare,
+  unimported global (same pattern as `ConfirmModal`), not a real
+  `import` — a real import binds the identifier at module load, so
+  `globalThis.Modal = StubModal` (the trick every other `Modal`-using
+  test uses to avoid jsdom) would silently do nothing and the test would
+  hit `Modal`'s real `window`-dependent effects instead. `FirstLaunchTour`
+  also needed two more bare-global stubs (`lsSetItem`, `LS_PREFIX`, both
+  really from `localStorageOutbox.js`) because its `finish()` calls
+  `markTourSeen()` (`appLogic.js`), which calls those — real in
+  `docs/index.html`'s single scope, not in `appLogic.js`'s own module
+  scope under test. `TournamentShareModal` reads
+  `window.location.origin`/`pathname` directly during render, so its
+  test stubs a minimal `globalThis.window` object rather than pulling in
+  jsdom.
 
 `pack-utils`, `scoring-engine`, and `app-logic` are each one contiguous
 span of `docs/index.html`, spliced in as a block

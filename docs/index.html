@@ -742,6 +742,7 @@ const COLORS = {
 // GENERATED-FN-START: TEAM_COLOR_PRESETS
 const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
 // GENERATED-FN-END: TEAM_COLOR_PRESETS
+// GENERATED-FN-START: PLAYER_ROLES
 const PLAYER_ROLES = [{
   value: "batsman",
   label: "Batsman"
@@ -752,6 +753,8 @@ const PLAYER_ROLES = [{
   value: "allrounder",
   label: "All-rounder"
 }];
+// GENERATED-FN-END: PLAYER_ROLES
+// GENERATED-FN-START: PLAYER_HANDS
 const PLAYER_HANDS = [{
   value: "right",
   label: "Right"
@@ -759,6 +762,7 @@ const PLAYER_HANDS = [{
   value: "left",
   label: "Left"
 }];
+// GENERATED-FN-END: PLAYER_HANDS
 // GENERATED-FN-START: uid
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -10455,6 +10459,7 @@ const HELP_SECTIONS = [{
 // handful of things someone genuinely wouldn't discover by exploring (score codes, borrowing a
 // player, clubs/federations, series vs. tournaments), not a full walkthrough of the app. Keep this
 // in sync with HELP_SECTIONS and README.md whenever a covered feature changes.
+// GENERATED-FN-START: TOUR_SLIDES
 const TOUR_SLIDES = [{
   icon: Table2,
   title: "Score ball-by-ball, works offline",
@@ -10472,6 +10477,7 @@ const TOUR_SLIDES = [{
   title: "Tournaments or a simple series",
   body: "Build a full tournament \u2014 round-robin, self-seeding knockout, points table \u2014 or a head-to-head series between two teams with just a running score."
 }];
+// GENERATED-FN-END: TOUR_SLIDES
 // A dismissible strip, not a modal like FirstLaunchTour below -- this is a low-stakes tip, not
 // something that needs to interrupt/block the screen the way first-launch orientation does.
 // Renders only when the caller's already confirmed isIOSSafari() && !isStandalone() &&
@@ -10543,6 +10549,7 @@ function InstallHintBanner({
   }, "\u00d7"));
 }
 // GENERATED-FN-END: InstallHintBanner
+// GENERATED-FN-START: FirstLaunchTour
 function FirstLaunchTour({
   onDone
 }) {
@@ -10627,6 +10634,7 @@ function FirstLaunchTour({
     }
   }, isLast ? "Get started" : "Next")));
 }
+// GENERATED-FN-END: FirstLaunchTour
 // Wraps every case-insensitive occurrence of `query` in `text` with a highlighted span -- used by
 // HelpScreen's search so a match is visible right where it actually occurred, not just implied by
 // the entry surviving the filter. Regex special characters in the query are escaped since this is
@@ -26777,6 +26785,7 @@ function PlayerAvatar({
 // pool schema has). Same write path in every mode: the caller's onSave does the actual
 // persistence and returns {ok, error}; onClose receives the saved payload on success (so a
 // caller can merge it into local state) or nothing on Cancel.
+// GENERATED-FN-START: EditPlayerModal
 function EditPlayerModal({
   player,
   onSave,
@@ -26973,10 +26982,12 @@ function EditPlayerModal({
     }
   }, busy ? "\u2026" : "Save")));
 }
+// GENERATED-FN-END: EditPlayerModal
 // Search-and-pick UI for transferring a published player to a different home club (see
 // transferPlayerHomeClub) — deliberately searches the same public clubDirectory used for
 // federation affiliation, not an open-ended raw club id field, so the target has to be a real,
 // discoverable club rather than something typed in blind.
+// GENERATED-FN-START: TransferPlayerModal
 function TransferPlayerModal({
   player,
   onSearchClubs,
@@ -27112,6 +27123,7 @@ function TransferPlayerModal({
     }
   }, error));
 }
+// GENERATED-FN-END: TransferPlayerModal
 
 // Search + profile for the public player directory (see publishPlayer/loadPublicPlayers).
 // clubs is passed through only to resolve a player's homeClubId into a readable name for the
@@ -27913,6 +27925,7 @@ function QualificationCalculatorModal({
     }
   }, saved_ ? "Saved!" : "Save for live tracking")));
 }
+// GENERATED-FN-START: TournamentShareModal
 function TournamentShareModal({
   tournament,
   standings,
@@ -28053,6 +28066,7 @@ function TournamentShareModal({
     }
   }, busy ? "Creating\u2026" : "Create share link")));
 }
+// GENERATED-FN-END: TournamentShareModal
 // GENERATED-FN-START: InningScorecard
 function InningScorecard({
   inning,
