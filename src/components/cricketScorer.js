@@ -885,6 +885,14 @@ export function CricketScorer() {
       teamBId: setup.teamBId || null,
       teamARoster: setup.teamARoster || [],
       teamBRoster: setup.teamBRoster || [],
+      teamABench: setup.teamABench || [],
+      teamBBench: setup.teamBBench || [],
+      teamAImpactUsed: false,
+      teamBImpactUsed: false,
+      // {team, outName, inName} per Impact Player substitution actually made -- see
+      // confirmImpactSub in inningsSetupScreens.js. Stays empty for any match that never uses the
+      // rule, same as penalties/fallOfWickets' own "nothing happened, empty array" convention.
+      impactSubs: [],
       teamACaptain: setup.teamACaptain || "",
       teamAKeeper: setup.teamAKeeper || "",
       teamAColor: setup.teamAColor || null,

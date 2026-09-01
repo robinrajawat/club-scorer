@@ -6,7 +6,7 @@ import { Field } from "./screenAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { ScorecardOverlay } from "./scorecard.js";
 import { ensureBatsman, ensureBowler } from "../core/scoringEngine.js";
-import { rosterFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
+import { rosterFor, benchFor, impactSubUsedFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Screens shown between innings, before scoring resumes: SuperOverOpenersSetup (pick openers for a
 // one-over-each decider) and SecondInningsSetup (pick openers for the chase, with a scorecard
@@ -126,6 +126,111 @@ export function SuperOverOpenersSetup({
   }, "Start Super Over"));
 }
 
+// Applies one Impact Player substitution: swaps outName for inName in that team's XI (and out of
+// its bench), marks the team's one-per-match swap as used, drops outName from captain/keeper if
+// they held either (same "can't stay captain/keeper once out of the XI" rule toggleAXI enforces at
+// setup time), and logs it to match.impactSubs for the scorecard. Every picker on the app already
+// reads the XI via rosterFor, so updating teamARoster/teamBRoster here is the entire mechanism --
+// nothing else needs to know a substitution happened.
+function confirmImpactSub(match, setMatch, team, outName, inName) {
+  const isTeamA = team === match.teamA;
+  const rosterKey = isTeamA ? "teamARoster" : "teamBRoster";
+  const benchKey = isTeamA ? "teamABench" : "teamBBench";
+  const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
+  const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
+  const updatedMatch = {
+    ...match,
+    [rosterKey]: (match[rosterKey] || []).map(n => n === outName ? inName : n),
+    [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
+    [usedKey]: true,
+    [captainKey]: match[captainKey] === outName ? "" : match[captainKey],
+    [keeperKey]: match[keeperKey] === outName ? "" : match[keeperKey],
+    impactSubs: [...(match.impactSubs || []), {
+      team,
+      outName,
+      inName
+    }]
+  };
+  setMatch(updatedMatch);
+  saveTransition(updatedMatch, setMatch);
+}
+// One team's Impact Player substitution card -- renders nothing unless the rule is on, this team
+// still has an unused swap, AND actually has a bench to draw from (a team entered as free-form
+// names with no saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown
+// for both teams on the same Innings Break screen, since the Laws allow either side to make its one
+// substitution any time before the start of the other team's innings -- this screen is exactly
+// that point.
+function ImpactPlayerCard({
+  match,
+  setMatch,
+  team
+}) {
+  const [outName, setOutName] = useState("");
+  const [inName, setInName] = useState("");
+  const bench = benchFor(match, team);
+  if (!match.rules || !match.rules.impactPlayerEnabled || impactSubUsedFor(match, team) || bench.length === 0) {
+    return null;
+  }
+  const canConfirm = outName.trim() && inName.trim();
+  function confirm() {
+    confirmImpactSub(match, setMatch, team, outName.trim(), inName.trim());
+    setOutName("");
+    setInName("");
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.gold,
+      textTransform: "uppercase",
+      marginBottom: 6
+    }
+  }, `Impact Player — ${team}`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 14,
+      lineHeight: 1.5
+    }
+  }, "One substitution allowed per team. The player going off takes no further part in the match."), /*#__PURE__*/React.createElement(Field, {
+    label: "Player going off"
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: rosterFor(match, team),
+    value: outName,
+    onChange: setOutName,
+    placeholder: "Player name",
+    captain: captainFor(match, team),
+    keeper: keeperFor(match, team),
+    numbers: numbersFor(match, team)
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Player coming on"
+  }, /*#__PURE__*/React.createElement(PlayerPicker, {
+    roster: bench,
+    value: inName,
+    onChange: setInName,
+    placeholder: "Bench player name",
+    numbers: numbersFor(match, team)
+  })), /*#__PURE__*/React.createElement(Btn, {
+    disabled: !canConfirm,
+    onClick: confirm,
+    style: {
+      width: "100%",
+      marginTop: 4
+    }
+  }, "Confirm substitution"));
+}
 export function SecondInningsSetup({
   match,
   setMatch
@@ -254,7 +359,15 @@ export function SecondInningsSetup({
     style: {
       color: COLORS.ink
     }
-  }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement("div", {
+  }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
+    match: match,
+    setMatch: setMatch,
+    team: inn.bowlingTeam
+  }), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
+    match: match,
+    setMatch: setMatch,
+    team: inn.battingTeam
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
