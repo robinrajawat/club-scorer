@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
-import { InningScorecard, MatchStatsPanel, ScorecardOverlay } from "../../../src/components/scorecard.js";
+import { InningScorecard, MatchStatsPanel, ScorecardOverlay, PrintReport, TournamentPrintReport } from "../../../src/components/scorecard.js";
 
 function inning(overrides = {}) {
   return {
@@ -93,4 +93,42 @@ test("ScorecardOverlay: renders a header with an export button and close button,
   assert.ok(closeBtn);
   closeBtn.props.onClick();
   assert.equal(closed, true);
+});
+
+test("PrintReport: renders nothing without a match, a result line and scorecards for a completed one", () => {
+  assert.equal(renderer.create(React.createElement(PrintReport, { match: null })).toJSON(), null);
+
+  const i1 = inning({ battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC", runs: 150, wickets: 8, complete: true });
+  const i2 = inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 120, wickets: 10, complete: true });
+  const match = matchWith([i1, i2], {
+    status: "complete", rules: { playersPerSide: 11 }, playerOfMatch: "Virat Kohli"
+  });
+  const text = JSON.stringify(renderer.create(React.createElement(PrintReport, { match })).toJSON());
+  assert.match(text, /"Riverside CC"/);
+  assert.match(text, /won by 30 runs/);
+  assert.match(text, /Player of the Match/);
+});
+
+test("PrintReport: shows 'Match in progress' instead of a result line for an unfinished match", () => {
+  const match = matchWith([inning({ complete: false })], { status: "live", rules: { playersPerSide: 11 } });
+  const text = JSON.stringify(renderer.create(React.createElement(PrintReport, { match })).toJSON());
+  assert.match(text, /Match in progress/);
+});
+
+test("TournamentPrintReport: renders nothing without a tournament, a standings table and fixtures with one", () => {
+  assert.equal(renderer.create(React.createElement(TournamentPrintReport, { tournament: null, standings: [] })).toJSON(), null);
+
+  const tournament = {
+    name: "Summer Cup", teams: ["Riverside CC", "Oakwood CC"],
+    fixtures: [{ id: "f1", date: "2026-07-04T14:00", teamA: "Riverside CC", teamB: "Oakwood CC" }]
+  };
+  const standings = [
+    { team: "Riverside CC", played: 3, won: 3, lost: 0, tied: 0, noResult: 0, points: 6, nrr: 1.2 },
+    { team: "Oakwood CC", played: 3, won: 0, lost: 3, tied: 0, noResult: 0, points: 0, nrr: -1.2 }
+  ];
+  const text = JSON.stringify(renderer.create(React.createElement(TournamentPrintReport, { tournament, standings })).toJSON());
+  assert.match(text, /Summer Cup/);
+  assert.match(text, /Standings/);
+  assert.match(text, /Fixtures/);
+  assert.match(text, /"\+1.200"/);
 });
