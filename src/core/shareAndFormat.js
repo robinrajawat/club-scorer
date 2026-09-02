@@ -142,6 +142,10 @@ export function safeFilenamePart(name) {
 
 export const POLL_TTL_DAYS = 120;
 
+// Deliberately silent on maxOversPerBowler, unlike every other field here: SetupScreen defaults
+// it to Math.ceil(oversLimit / 5) for every new match (the standard "no bowler bowls more than a
+// fifth of the innings" law), so it's non-null on essentially every match, standard or not --
+// including it here would make "silent when standard" never actually fire.
 export function nonStandardRulesText(rules) {
   if (!rules) return null;
   const bits = [];

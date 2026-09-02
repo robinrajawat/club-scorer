@@ -6,7 +6,7 @@ import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
-import { tossText, umpiresText } from "../core/shareAndFormat.js";
+import { tossText, umpiresText, nonStandardRulesText } from "../core/shareAndFormat.js";
 
 // The multi-page "New Match" setup flow: teams & format, toss, match rules, playing XI (only
 // shown when at least one side has a saved squad), opening line-up, then a review page before
@@ -259,6 +259,20 @@ export function SetupScreen({
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
   const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  // Review page's own pair, replacing rulesSummaryText there -- that one was built for a quick
+  // glance while still editing rules, not the last screen before a scorer locks the match in,
+  // where the same abbreviations turn ambiguous (e.g. "Wd/Nb counts as ball" doesn't say the
+  // final over is still standard). coreFormatText covers balls/over and the bowler cap in full
+  // words -- worth confirming even at their computed defaults, same reasoning as rulesSummaryText
+  // above, so it's unconditional rather than routed through nonStandardRulesText (which would stay
+  // silent on it: maxOversPerBowler defaults to a non-null computed value on every match, not just
+  // customized ones, so treating it as a "house rule" deviation would defeat that function's
+  // silent-when-standard design -- see nonStandardRulesText's own comment). houseRulesText covers
+  // everything else -- the actual deviations from standard Laws -- via the same nonStandardRulesText
+  // already used for the match result screen/PDF/scorecard and the tournament create Review page,
+  // for one consistent, tested wording app-wide, and silent (like those) when every rule is standard.
+  const coreFormatText = `${matchRules.ballsPerOver}-ball overs · ${matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} overs per bowler` : "no bowler limit"}`;
+  const houseRulesText = nonStandardRulesText(matchRules);
   const umpiresSummaryText = umpiresText({
     umpire1: umpire1.trim(),
     umpire2: umpire2.trim()
@@ -1313,7 +1327,7 @@ export function SetupScreen({
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
     wonBy: tossWonBy,
     decision: tossDecision || null
-  }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, rulesSummaryText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
+  }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, coreFormatText), houseRulesText && /*#__PURE__*/React.createElement("div", null, "House rules: ", houseRulesText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

@@ -133,6 +133,11 @@ test("nonStandardRulesText: calls out impactPlayerMaxSubs when it's above the st
   assert.match(text, /Impact Player substitution \(up to 2 per team\)/);
 });
 
+test("nonStandardRulesText: stays silent on maxOversPerBowler -- SetupScreen defaults it to a computed non-null value on every match, so it isn't a real deviation signal", () => {
+  const text = nonStandardRulesText({ ...DEFAULT_RULES, maxOversPerBowler: 4 });
+  assert.equal(text, null);
+});
+
 test("impactSubsText: null with no substitutions, one line per sub joined with a dot", () => {
   assert.equal(impactSubsText(null), null);
   assert.equal(impactSubsText([]), null);

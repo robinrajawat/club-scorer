@@ -208,6 +208,47 @@ test("SetupScreen: 'Customize' reveals the rules editor, and a rule change is re
   assert.equal(started.rules.ballsPerOver, 8);
 });
 
+// Regression: Review used to reuse the collapsed rules card's own terse, abbreviated summary
+// (e.g. "Wd/Nb counts as ball", ambiguous about whether that also applies in the final over) --
+// the same text meant for a quick glance while still editing rules, not the last screen before a
+// scorer locks the match in. Review now shows two things instead: coreFormatText (balls/over and
+// the bowler cap, unconditional -- worth confirming even at their computed defaults) and a
+// "House rules:" line built from nonStandardRulesText (the same wording already used on the match
+// result screen/PDF/scorecard and the tournament create Review page) for actual deviations from
+// standard Laws, silent when there aren't any.
+test("SetupScreen: Review always shows the core over/bowler-cap facts, and a 'House rules' line only once something's actually non-standard", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers, left standard
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  const standardText = JSON.stringify(inst.toJSON());
+  assert.match(standardText, /6-ball overs.*max 4 overs per bowler/); // 20 overs ÷ 5, the computed default
+  assert.doesNotMatch(standardText, /House rules/);
+
+  act(() => { btn(inst, "Back").props.onClick(); }); // review -> openers
+  act(() => { btn(inst, "Back").props.onClick(); }); // openers -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+  const wideNbBlock = ruleBlock(inst, "Wide/no-ball counts as a ball (except final over)");
+  act(() => { wideNbBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { btn(inst, "Review").props.onClick(); });
+  const reviewText = JSON.stringify(inst.toJSON());
+  assert.match(reviewText, /House rules:.*wide\/no-ball counts as a ball \(except final over\)/);
+  assert.doesNotMatch(reviewText, /Wd\/Nb/);
+});
+
 test("SetupScreen: presetTournament shows a 'Playing in' banner and locks the team names to the fixture", () => {
   const inst = render({
     presetTournament: { id: "t1", name: "Summer Cup", fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
