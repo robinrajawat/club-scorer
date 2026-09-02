@@ -4494,75 +4494,6 @@ async function kickClubFromFederation(federationId, clubId) {
     };
   }
 }
-// Only the person who personally minted a federation invite can revoke it — see the
-// federationJoinCodes/federationCoOwnerInviteCodes rules (`createdBy` check), a narrower
-// ownership check than clubs use for their own invites, where any owner/co-owner can revoke.
-async function revokeFederationInvite(federationId, code, kind) {
-  try {
-    const collectionName = kind === "coOwner" ? "federationCoOwnerInviteCodes" : "federationJoinCodes";
-    await db.collection(collectionName).doc(code).delete();
-    await db.collection("federations").doc(federationId).update({
-      [`pendingInvites.${code}`]: firebase.firestore.FieldValue.delete()
-    });
-    return {
-      ok: true
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "Only the person who sent this invite can revoke it." : e.message || "Couldn't revoke that invite."
-    };
-  }
-}
-async function redeemFederationCoOwnerInvite(code) {
-  if (!auth.currentUser) return {
-    ok: false,
-    error: "Sign in to redeem an invite."
-  };
-  const cleaned = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!cleaned) return {
-    ok: false,
-    error: "Enter a code."
-  };
-  try {
-    const codeDoc = await db.collection("federationCoOwnerInviteCodes").doc(cleaned).get();
-    if (!codeDoc.exists) return {
-      ok: false,
-      error: "That code doesn't match any invite."
-    };
-    const {
-      federationId,
-      email
-    } = codeDoc.data();
-    const myEmail = (auth.currentUser.email || "").toLowerCase();
-    if (myEmail !== email) return {
-      ok: false,
-      error: "That invite is addressed to a different email address than the one you're signed in with."
-    };
-    // The Firestore rule re-checks the code's email against request.auth.token.email
-    // server-side before allowing the coOwnerUids write — this client-side check is only for a
-    // fast, specific error message.
-    await db.collection("federations").doc(federationId).update({
-      coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
-      coOwnerInviteCodeUsed: cleaned,
-      [`pendingInvites.${cleaned}`]: firebase.firestore.FieldValue.delete()
-    });
-    const fedDoc = await db.collection("federations").doc(federationId).get();
-    return {
-      ok: true,
-      federation: {
-        id: fedDoc.id,
-        ...fedDoc.data()
-      }
-    };
-  } catch (e) {
-    console.error("redeem federation co-owner invite failed", e);
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "That invite isn't valid for your account." : e.message || "Couldn't redeem that invite."
-    };
-  }
-}
 // Owner-only. Revokes co-ownership without touching the federation's clubs/teams directory.
 async function removeFederationCoOwner(federationId, uid) {
   try {
@@ -14087,7 +14018,6 @@ function FederationsPanel({
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onDeleteFederation,
-  onRevokeInvite,
   federationRequests = [],
   onCancelFederationRequest,
   onOpenRecords
@@ -14123,8 +14053,6 @@ function FederationsPanel({
   const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
   const [confirmKick, setConfirmKick] = useState(null); // { federationId, clubId, clubName } | null
   const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
-  const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { federationId, code, kind, email } | null
-  const [revokeBusyCode, setRevokeBusyCode] = useState(null);
   const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
   const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
   const [confirmCancelInvite, setConfirmCancelInvite] = useState(null); // { requestId, clubName } | null
@@ -14140,9 +14068,9 @@ function FederationsPanel({
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
-  // Outgoing federation_to_club invites sent by search (as opposed to the email-code
-  // pendingInvites already shown lower down) -- these live in federationRequests, not on the
-  // federation doc itself, so without this they were invisible in the manage panel: a club could
+  // Outgoing federation_to_club invites sent by search (as opposed to the co-owner invites shown
+  // lower down) -- these live in federationRequests, not on the federation doc itself, so without
+  // this they were invisible in the manage panel: a club could
   // have an invite sitting unanswered and the owner would have no way to see it, cancel it, or
   // avoid sending a second one. manageNameById is populated by openManage; falls back to the raw
   // clubId if a name was never resolved (e.g. panel not yet opened this session).
@@ -14387,25 +14315,6 @@ function FederationsPanel({
     setLeaveBusyClubId(clubId);
     await onLeaveFederation(clubId, federationId);
     setLeaveBusyClubId(null);
-  }
-  function requestRevokeInvite(federationId, code, kind, email) {
-    setConfirmRevokeInvite({
-      federationId,
-      code,
-      kind,
-      email
-    });
-  }
-  async function handleRevokeInviteClick() {
-    const {
-      federationId,
-      code,
-      kind
-    } = confirmRevokeInvite;
-    setConfirmRevokeInvite(null);
-    setRevokeBusyCode(code);
-    await onRevokeInvite(federationId, code, kind);
-    setRevokeBusyCode(null);
   }
   const cardStyle = {
     background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
@@ -14942,67 +14851,7 @@ function FederationsPanel({
       fontWeight: 600,
       fontSize: 11.5
     }
-  }, "+ Find a club to invite"))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 10,
-      padding: 12,
-      borderRadius: 12,
-      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
-      border: `1px solid ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Pending invites"), Object.entries(f.pendingInvites).map(([code, invite]) => /*#__PURE__*/React.createElement("div", {
-    key: code,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "4px 0"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      fontSize: 12,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, invite.email), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: COLORS.gold,
-      flexShrink: 0
-    }
-  }, invite.kind === "coOwner" ? "Co-owner" : "Club"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => requestRevokeInvite(f.id, code, invite.kind, invite.email),
-    disabled: revokeBusyCode === code,
-    "aria-label": `Revoke invite to ${invite.email}`,
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11,
-      cursor: "pointer",
-      padding: "3px 4px",
-      flexShrink: 0,
-      textDecoration: "underline"
-    }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "+ Find a club to invite"))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,
@@ -15273,12 +15122,6 @@ function FederationsPanel({
     confirmLabel: "Remove",
     onConfirm: handleRemoveCoOwnerClick,
     onCancel: () => setConfirmRemoveCoOwner(null)
-  }), confirmRevokeInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Revoke this invite?",
-    message: `Revoke the invite to ${confirmRevokeInvite.email}? The code will stop working immediately.`,
-    confirmLabel: "Revoke",
-    onConfirm: handleRevokeInviteClick,
-    onCancel: () => setConfirmRevokeInvite(null)
   }), confirmCancelInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Cancel this invite?",
     message: `Cancel the pending invite to ${confirmCancelInvite.clubName}? They'll no longer be able to accept it.`,
@@ -26484,9 +26327,7 @@ function TeamsScreen({
   federationRequests,
   onCancelFederationRequest,
   onInviteFederationCoOwnerByEmail,
-  onRevokeFederationInvite,
   onRemoveFederationCoOwner,
-  onRedeemFederationCoOwnerInvite,
   clubsLoading,
   federationsLoading,
   onOpenRecords,
@@ -26533,26 +26374,6 @@ function TeamsScreen({
   const [bulkText, setBulkText] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const poolFileInputRef = useRef(null);
-  // Federation co-owner invite redemption -- moved here from the old standalone Clubs &
-  // Federations screen along with the rest of the Federations tab content below.
-  const [redeemCode, setRedeemCode] = useState("");
-  const [redeemBusy, setRedeemBusy] = useState(false);
-  const [redeemError, setRedeemError] = useState("");
-  const [redeemSuccess, setRedeemSuccess] = useState(null); // federation name, once redeemed
-  async function submitRedeem() {
-    if (!redeemCode.trim() || redeemBusy) return;
-    setRedeemBusy(true);
-    setRedeemError("");
-    setRedeemSuccess(null);
-    const result = await onRedeemFederationCoOwnerInvite(redeemCode.trim());
-    setRedeemBusy(false);
-    if (!result.ok) {
-      setRedeemError(result.error || "Couldn't redeem that invite.");
-      return;
-    }
-    setRedeemSuccess(result.federation.name);
-    setRedeemCode("");
-  }
   // Distinct team tags present in the pool (e.g. "U15", "2nd XI") -- lets someone spin up an
   // actual Team pre-filled with everyone who shares that tag, instead of hand-picking each name
   // one by one via the roster's own pool picker. Inactive pool players are left out, same as
@@ -27259,72 +27080,8 @@ function TeamsScreen({
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
-    onRevokeInvite: onRevokeFederationInvite,
     onOpenRecords: onOpenRecords
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 20,
-      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
-      borderRadius: 16,
-      padding: 16,
-      border: `1px dashed ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 8
-    }
-  }, "Have a federation co-owner invite?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 10
-    }
-  }, "If a federation owner invited you by email to be a co-owner, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: redeemCode,
-    onChange: v => setRedeemCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-    placeholder: "Invite code, e.g. 7GQK4RTP",
-    autoCapitalize: "characters",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitRedeem,
-    disabled: redeemBusy || !redeemCode.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 16px",
-      minHeight: 44
-    }
-  }, redeemBusy ? "\u2026" : "Redeem")), redeemError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 12,
-      fontFamily: "'Inter'",
-      marginTop: 8
-    }
-  }, redeemError), redeemSuccess && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.turf,
-      fontSize: 12.5,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      marginTop: 8
-    }
-  }, "You're now a co-owner of \"", redeemSuccess, "\"."))));
+  })));
 }
 // GENERATED-FN-END: TeamsScreen
 // GENERATED-FN-START: TeamEditScreen
@@ -38310,24 +38067,6 @@ function CricketScorer() {
     }
     return result;
   }
-  async function handleRevokeFederationInvite(federationId, code, kind) {
-    const result = await revokeFederationInvite(federationId, code, kind);
-    if (result.ok) {
-      setFederationsById(prev => {
-        const fed = prev[federationId];
-        if (!fed) return prev;
-        const pendingInvites = { ...(fed.pendingInvites || {})
-        };
-        delete pendingInvites[code];
-        return { ...prev,
-          [federationId]: { ...fed,
-            pendingInvites
-          }
-        };
-      });
-    }
-    return result;
-  }
   async function handleRemoveFederationCoOwner(federationId, uid) {
     const result = await removeFederationCoOwner(federationId, uid);
     if (result.ok) {
@@ -38363,16 +38102,6 @@ function CricketScorer() {
         delete next[federationId];
         return next;
       });
-    }
-    return result;
-  }
-  async function handleRedeemFederationCoOwnerInvite(code) {
-    const result = await redeemFederationCoOwnerInvite(code);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [result.federation.id]: result.federation
-      }));
     }
     return result;
   }
@@ -38956,9 +38685,7 @@ function CricketScorer() {
     federationRequests: myFederationRequests,
     onCancelFederationRequest: handleCancelFederationRequest,
     onInviteFederationCoOwnerByEmail: (federationId, email) => handleInviteCoOwner("federation", federationId, email),
-    onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
-    onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     clubsLoading: clubsLoading,
     federationsLoading: federationsLoading,
     onOpenRecords: handleOpenRecords,

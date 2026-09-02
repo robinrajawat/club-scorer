@@ -1842,24 +1842,6 @@ export function CricketScorer() {
     }
     return result;
   }
-  async function handleRevokeFederationInvite(federationId, code, kind) {
-    const result = await revokeFederationInvite(federationId, code, kind);
-    if (result.ok) {
-      setFederationsById(prev => {
-        const fed = prev[federationId];
-        if (!fed) return prev;
-        const pendingInvites = { ...(fed.pendingInvites || {})
-        };
-        delete pendingInvites[code];
-        return { ...prev,
-          [federationId]: { ...fed,
-            pendingInvites
-          }
-        };
-      });
-    }
-    return result;
-  }
   async function handleRemoveFederationCoOwner(federationId, uid) {
     const result = await removeFederationCoOwner(federationId, uid);
     if (result.ok) {
@@ -1895,16 +1877,6 @@ export function CricketScorer() {
         delete next[federationId];
         return next;
       });
-    }
-    return result;
-  }
-  async function handleRedeemFederationCoOwnerInvite(code) {
-    const result = await redeemFederationCoOwnerInvite(code);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [result.federation.id]: result.federation
-      }));
     }
     return result;
   }
@@ -2488,9 +2460,7 @@ export function CricketScorer() {
     federationRequests: myFederationRequests,
     onCancelFederationRequest: handleCancelFederationRequest,
     onInviteFederationCoOwnerByEmail: (federationId, email) => handleInviteCoOwner("federation", federationId, email),
-    onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
-    onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
     clubsLoading: clubsLoading,
     federationsLoading: federationsLoading,
     onOpenRecords: handleOpenRecords,

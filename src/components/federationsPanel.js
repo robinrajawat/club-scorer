@@ -36,7 +36,6 @@ export function FederationsPanel({
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onDeleteFederation,
-  onRevokeInvite,
   federationRequests = [],
   onCancelFederationRequest,
   onOpenRecords
@@ -72,8 +71,6 @@ export function FederationsPanel({
   const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
   const [confirmKick, setConfirmKick] = useState(null); // { federationId, clubId, clubName } | null
   const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
-  const [confirmRevokeInvite, setConfirmRevokeInvite] = useState(null); // { federationId, code, kind, email } | null
-  const [revokeBusyCode, setRevokeBusyCode] = useState(null);
   const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
   const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
   const [confirmCancelInvite, setConfirmCancelInvite] = useState(null); // { requestId, clubName } | null
@@ -89,9 +86,9 @@ export function FederationsPanel({
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
-  // Outgoing federation_to_club invites sent by search (as opposed to the email-code
-  // pendingInvites already shown lower down) -- these live in federationRequests, not on the
-  // federation doc itself, so without this they were invisible in the manage panel: a club could
+  // Outgoing federation_to_club invites sent by search (as opposed to the co-owner invites shown
+  // lower down) -- these live in federationRequests, not on the federation doc itself, so without
+  // this they were invisible in the manage panel: a club could
   // have an invite sitting unanswered and the owner would have no way to see it, cancel it, or
   // avoid sending a second one. manageNameById is populated by openManage; falls back to the raw
   // clubId if a name was never resolved (e.g. panel not yet opened this session).
@@ -336,25 +333,6 @@ export function FederationsPanel({
     setLeaveBusyClubId(clubId);
     await onLeaveFederation(clubId, federationId);
     setLeaveBusyClubId(null);
-  }
-  function requestRevokeInvite(federationId, code, kind, email) {
-    setConfirmRevokeInvite({
-      federationId,
-      code,
-      kind,
-      email
-    });
-  }
-  async function handleRevokeInviteClick() {
-    const {
-      federationId,
-      code,
-      kind
-    } = confirmRevokeInvite;
-    setConfirmRevokeInvite(null);
-    setRevokeBusyCode(code);
-    await onRevokeInvite(federationId, code, kind);
-    setRevokeBusyCode(null);
   }
   const cardStyle = {
     background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
@@ -891,67 +869,7 @@ export function FederationsPanel({
       fontWeight: 600,
       fontSize: 11.5
     }
-  }, "+ Find a club to invite"))), isOwner(f) && f.pendingInvites && Object.keys(f.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 10,
-      padding: 12,
-      borderRadius: 12,
-      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
-      border: `1px solid ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Pending invites"), Object.entries(f.pendingInvites).map(([code, invite]) => /*#__PURE__*/React.createElement("div", {
-    key: code,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "4px 0"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      fontSize: 12,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, invite.email), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: COLORS.gold,
-      flexShrink: 0
-    }
-  }, invite.kind === "coOwner" ? "Co-owner" : "Club"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => requestRevokeInvite(f.id, code, invite.kind, invite.email),
-    disabled: revokeBusyCode === code,
-    "aria-label": `Revoke invite to ${invite.email}`,
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11,
-      cursor: "pointer",
-      padding: "3px 4px",
-      flexShrink: 0,
-      textDecoration: "underline"
-    }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "+ Find a club to invite"))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,
@@ -1222,12 +1140,6 @@ export function FederationsPanel({
     confirmLabel: "Remove",
     onConfirm: handleRemoveCoOwnerClick,
     onCancel: () => setConfirmRemoveCoOwner(null)
-  }), confirmRevokeInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Revoke this invite?",
-    message: `Revoke the invite to ${confirmRevokeInvite.email}? The code will stop working immediately.`,
-    confirmLabel: "Revoke",
-    onConfirm: handleRevokeInviteClick,
-    onCancel: () => setConfirmRevokeInvite(null)
   }), confirmCancelInvite && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Cancel this invite?",
     message: `Cancel the pending invite to ${confirmCancelInvite.clubName}? They'll no longer be able to accept it.`,

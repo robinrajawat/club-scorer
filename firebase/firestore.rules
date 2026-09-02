@@ -512,30 +512,17 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         // (A) Owner/co-owner editing federation data (rename, description, kickedClubIds,
         // affiliatedClubIds — e.g. kickClubFromFederation removing an entry on their own doc).
-        // coOwnerUids and createdBy must not change via this branch — that's what (B) is for.
-        // get(field, default) handles federations from before these fields existed.
+        // coOwnerUids and createdBy must not change via this branch — that's what (C)/(F) below
+        // are for. get(field, default) handles federations from before these fields existed.
         (
           isFederationOwner(resource.data) &&
           request.resource.data.get('coOwnerUids', []) == resource.data.get('coOwnerUids', []) &&
           request.resource.data.createdBy == resource.data.createdBy
         )
         ||
-        // (B) Self-redeeming a co-owner invite code addressed to MY signed-in email — see
-        // inviteFederationCoOwnerByEmail/redeemFederationCoOwnerInvite in index.html. Only adds
-        // the caller to coOwnerUids; name/description/createdBy locked, and the code must
-        // actually name this federation and this exact email.
-        (
-          request.resource.data.createdBy == resource.data.createdBy &&
-          request.resource.data.name == resource.data.name &&
-          request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid]) &&
-          'coOwnerInviteCodeUsed' in request.resource.data &&
-          get(/databases/$(database)/documents/federationCoOwnerInviteCodes/$(request.resource.data.coOwnerInviteCodeUsed)).data.federationId == federationId &&
-          get(/databases/$(database)/documents/federationCoOwnerInviteCodes/$(request.resource.data.coOwnerInviteCodeUsed)).data.email == request.auth.token.email.lower()
-        )
-        ||
         // (C) Removing one or more co-owners — coOwnerUids may only SHRINK (become a subset of
-        // what it was), never grow or add anyone new (that's what (B) is for). Covers both the
-        // owner/a co-owner removing a DIFFERENT co-owner (see removeFederationCoOwner in
+        // what it was), never grow or add anyone new (that's what (F) below is for). Covers both
+        // the owner/a co-owner removing a DIFFERENT co-owner (see removeFederationCoOwner in
         // index.html — previously impossible under this rule, since (A) locks coOwnerUids
         // entirely), and a co-owner removing THEMSELVES (mirrors clubs' self-leave branch; also
         // what account deletion relies on to clean up a departing co-owner's federations, see
@@ -630,29 +617,15 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // A co-owner invite is addressed to one specific email, same pattern as a club co-owner
-    // invite — anyone can look it up by ID, but it only becomes a real co-owner grant if the
-    // redeemer's own signed-in email matches (enforced in the federations/{id} update rule,
-    // branch B, not here — this collection only controls who can mint/revoke the invite itself).
-    match /federationCoOwnerInviteCodes/{code} {
-      allow get: if request.auth != null;
-      allow list: if false;
-
-      allow create: if request.auth != null
-        && request.resource.data.federationId is string
-        && request.resource.data.email is string
-        && isFederationOwner(get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data);
-
-      allow delete: if request.auth != null
-        && request.auth.uid == resource.data.createdBy;
-
-      allow update: if false;
-    }
-
     // ---------------------------------------------------------------------
     // Unified co-owner invites, addressed to one email — replaces the co-owner-invite half of
-    // BOTH /clubJoinCodes (role: "coOwner") and /federationCoOwnerInviteCodes above with one
-    // collection covering both scopes. Unlike either bearer code, this is a real
+    // BOTH /clubJoinCodes (role: "coOwner") and the now-retired federationCoOwnerInviteCodes with
+    // one collection covering both scopes (federationCoOwnerInviteCodes was ONLY ever used for
+    // co-owner invites — unlike clubJoinCodes, which also serves plain club member invites and
+    // stays alive for that — so once every invite minted under it was confirmed redeemed or
+    // expired, both its rules here and the federations/{id} update rule's old redemption branch
+    // were removed outright rather than kept alive indefinitely; see docs/co-owner-invites-plan.md
+    // for the migration this collection replaced it with). Unlike either bearer code, this is a real
     // record-per-invite the recipient's OWN client can query by their own email
     // (`where("email","==",myEmail)`), so it shows up in their Inbox on its own — no code to mint,
     // copy, or send out-of-band. Exactly the same migration `federationJoinCodes ->
@@ -661,10 +634,11 @@ service cloud.firestore {
     // invites are untouched — still /clubJoinCodes role:"member", no Inbox ask for those, narrower
     // scope than this migration took on.
     //
-    // Both old collections' rules stay alive above (unchanged) through a transition window: an
-    // invite minted before this shipped is still a live bearer code sitting in Firestore and has to
-    // keep working until it's redeemed, revoked, or expires. Only the MINTING call sites in
-    // index.html move to this collection — see inviteCoOwner there.
+    // clubJoinCodes' rules stay alive above (unchanged) — plain club member invites still mint
+    // and redeem through it, permanently, not just through a transition window. The other old
+    // collection, federationCoOwnerInviteCodes, served ONLY co-owner invites, so once every one
+    // ever minted was confirmed redeemed or expired, its rules (and the federations/{id} update
+    // rule's matching redemption branch) were removed outright above rather than kept alive.
     // ---------------------------------------------------------------------
     function coOwnerInviteIsRecipient(data) {
       return request.auth.token.email.lower() == data.email;
