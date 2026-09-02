@@ -232,6 +232,41 @@ test("wideNoballCountsAsBall off (default): a wide/no-ball never credits the bow
   assert.equal(inn.bowlers.B1.ballsBowled, 0, "an illegal wide/no-ball is re-bowled, so it shouldn't count yet");
 });
 
+test("Free Hit: a no-ball activates it, and the very next fair ball consumes it", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: false }, 2);
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.freeHitActive, true);
+  inn = applyBall(inn, { kind: "run", runs: 1 });
+  assert.equal(inn.freeHitActive, false);
+});
+
+// BUG FIX: freeHitActive's "any counted ball consumes the free hit" reset used to key off
+// `legalBall` alone. Under wideNoballCountsAsBall, a no-ball IS `legalBall` (it counts toward the
+// over) -- so the very no-ball that had just set freeHitActive true a few lines earlier in the same
+// applyBall call immediately cleared it again, before the next delivery ever got a chance to be the
+// free hit. Reported in production as "no ball is not showing the free hit badge" on a match with
+// both house rules on together (a common combination -- see e.g. the Summer Cup tournament rules).
+test("Free Hit + wideNoballCountsAsBall together: a no-ball still activates the free hit, even though it also counts as a legal ball", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.legalBalls, 1, "sanity check -- this no-ball does count toward the over under the house rule");
+  assert.equal(inn.freeHitActive, true, "the no-ball must not consume the very free hit it just granted");
+  inn = applyBall(inn, { kind: "run", runs: 1 });
+  assert.equal(inn.freeHitActive, false, "the actual next fair delivery still consumes it as normal");
+});
+
+// Same root cause, the wide side of it: a legal (wideNoballCountsAsBall) wide should never consume
+// an already-active free hit either -- a wide was never the delivery being faced, whether or not it
+// counts toward the over.
+test("Free Hit + wideNoballCountsAsBall together: a legal wide doesn't consume an already-active free hit", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.freeHitActive, true);
+  inn = applyBall(inn, { kind: "wide", runs: 0 });
+  assert.equal(inn.legalBalls, 2, "sanity check -- this wide does count toward the over under the house rule");
+  assert.equal(inn.freeHitActive, true, "the free hit is still pending the next real delivery");
+});
+
 test("wideNoballCountsAsBall on, with lastOverRules off: a no-ball still counts as legal in what would be the final over -- there's no exception without opting in", () => {
   let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
   for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
