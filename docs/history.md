@@ -1260,3 +1260,55 @@ actually built, not obvious from the rule text alone:
   `/"B"," must retire"/`. Worth remembering next time a test failure
   looks like a genuine rendering mystery: check for this gotcha before
   assuming the component itself is broken.
+
+**2026-09-02 session — three bugs reported together from live use, two
+fixed (PR #69, merged), one left open pending a repro:**
+
+- **Ball-strip label ambiguity.** `ballLabelsForOver` (`miscHelpers.js`)
+  intentionally labels a wide/no-ball with the same over.ball number as
+  whichever legal delivery eventually completes that slot (documented in
+  the README) — but two adjacent badges with an identical label (e.g.
+  `3.4` then `3.4`) read as a rendering glitch, worst right at the end of
+  an over where it looks like the over already finished. Fixed by
+  appending a trailing `*` to the wide/no-ball's own label only (`3.4*`
+  then `3.4`), leaving the underlying slot-sharing numbering (and its
+  existing test) untouched. Also added a short info line to the extras
+  runs picker (Wide/No Ball) reading the current `wideRuns`/`noballRuns`
+  value and `isWideNoballLegal` status directly, since the `Tier 3`
+  final-over house rule can flip the latter mid-innings and the scorer
+  had no way to see that from the picker itself.
+- **Cap-retirement infinite loop — a real, unplayable bug.** `ensureBatsman`
+  resuming a retired batsman only ever cleared `retiredHurt`/`retiredAtCap`,
+  never their `runs`. `needsCapRetirement`'s derivation in `matchScreen.js`
+  compared that same lifetime `runs` total against the flat cap, so a
+  batsman returning from their first cap retirement (runs still sitting at
+  or above the cap) re-triggered the mandatory prompt on the very next
+  render — with everyone else also retired-and-waiting, there was no
+  playable batsman left and no way to proceed. Fixed with two new
+  `scoringEngine.js` exports: `retirementCapThreshold(runs, retirementRuns)`
+  (rounds down to the nearest multiple of the cap) and
+  `retirementCapDue(batsman, retirementRuns)` (true only once the batsman's
+  current threshold exceeds `batsman.capRetiredThreshold`, a new field set
+  each time `retireBatsman("cap")` fires). A returning batsman is now only
+  re-flagged once they cross the *next* multiple of the cap, not the one
+  they already served. Covered by unit tests on the two new exports plus a
+  full `MatchScreen` component test that reproduces the exact loop
+  (retire A at cap → bring in C → C out → bring A back → assert no
+  re-trigger).
+- **"Stuck on the Impact Player screen, can't start 2nd innings" — not
+  reproduced.** A dedicated investigation read `SecondInningsSetup` and
+  `ImpactPlayerCard` in `inningsSetupScreens.js` end to end and then
+  actually exercised the flow with `react-test-renderer` (not just static
+  reading) for both a single substitution and the per-team max of 2 — in
+  every run, "Start 2nd Innings" (gated only on openers + bowler being
+  picked, with zero dependency on Impact Player state) rendered enabled
+  and worked. Leading theory: UX confusion, not a code block — "Confirm
+  substitution" deliberately stays on the same screen (either team can use
+  remaining subs any time before the innings starts) and a user tapping it
+  expecting to advance may not notice the actual "Start 2nd Innings"
+  button further down the same screen. Asked the user for an exact repro
+  (which team, sub count, whether openers were picked before or after,
+  whether the Start button was visible-but-disabled or not there at all)
+  before touching any code here. If it recurs with a concrete repro, start
+  from `inningsSetupScreens.js:239` (`SecondInningsSetup`) and `:168`
+  (`ImpactPlayerCard`).

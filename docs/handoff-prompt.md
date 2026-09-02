@@ -230,11 +230,41 @@ every push/PR with `npm test`, `npm run generate:verify`, and
 `scripts/setup-git-identity.sh`) backstops both locally.
 
 Tournament "special rules" work is underway in phases: Phase 0 (a
-per-tournament rules editor) and Phase 1 (25-run retirement + Timed Out
-dismissal) are both done. Still open: the 30-minute escalating time-penalty
-rule (part of the same tier as Phase 1, not closed by it), the final-over
-wide/no-ball-illegal-again switch (Tier 3), and Impact Player substitutions
-(Tier 4 — the biggest lift, no data-model support today).
+per-tournament rules editor), Phase 1 (25-run retirement + Timed Out
+dismissal), Tier 3 (`wideNoballCountsAsBall`, the final-over
+wide/no-ball-illegal-again switch), and Tier 4 (Impact Player substitutions,
+up to 2 per team, configurable) are all done. This section had fallen out of
+date claiming Tier 3/4 were still open — both were already live in
+`scoringEngine.js`/`inningsSetupScreens.js` when this was corrected. Still
+open: the 30-minute escalating time-penalty rule (part of the same tier as
+Phase 1, not closed by it).
+
+**2026-09-02:** Fixed two real scoring bugs reported together, both with
+regression tests (see PR #69, merged): (1) a wide/no-ball's ball-strip label
+was visually identical to the legal delivery that completes its slot (e.g.
+two adjacent `3.4` badges), confusing right at the end of an over — now
+marked with a trailing `*` on the wide/no-ball's own label — plus a short
+info line on the extras runs picker showing the current wide/no-ball run
+value and legal-delivery status. (2) A batsman returning from a cap
+retirement (e.g. the 25-run rule) was never freed of their prior stint's
+run total, so the mandatory retire prompt re-triggered the instant they
+resumed batting — an unplayable infinite loop once every remaining batsman
+was in that state. Fixed via `retirementCapDue`/`retirementCapThreshold` in
+`scoringEngine.js`, which track the cap multiple already served per
+batsman.
+
+A third reported bug — "stuck on the Impact Player screen, no way to start
+the 2nd innings" — could **not** be reproduced: a thorough investigation
+(including exercising `SecondInningsSetup` end-to-end with
+`react-test-renderer` for both a single substitution and the max of 2 per
+team) found "Start 2nd Innings" is a separate button below the Impact
+Player card(s), gated only on openers/bowler being picked, and it worked in
+every case tried. Leading theory is UX confusion — "Confirm substitution"
+deliberately stays on the same screen (either team can use remaining subs
+any time before the innings starts) and can read as if nothing happened,
+when the actual advance button is further down. Asked the user for an exact
+repro; nothing changed in code for this one. Worth a fresh look with a real
+repro before assuming it's resolved.
 
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the
