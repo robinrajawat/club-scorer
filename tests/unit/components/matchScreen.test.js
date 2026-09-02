@@ -88,7 +88,8 @@ function renderMatch(matchState, extraProps = {}) {
   return {
     get inst() { return inst; },
     get match() { return current; },
-    get inning() { return current.innings[current.currentInningIndex]; }
+    get inning() { return current.innings[current.currentInningIndex]; },
+    setMatch
   };
 }
 
@@ -176,6 +177,32 @@ test("MatchScreen: shows a one-line commentary for the last ball, and clears it 
   // showing on its own timer regardless of undo, so checking the whole tree would find that instead.
   assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: "/);
   assert.equal(ctx.inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.fontSize === 12.5 && n.props.style.color === COLORS.inkSoft).length, 0);
+});
+
+// BUG FIX: MatchScreen never unmounts across the innings break -- it just renders
+// SecondInningsSetup in place of the normal scoring UI while awaitingSecondInningsSetup is true,
+// then reverts to this same component instance once the 2nd innings starts. ballCommentary has no
+// self-clearing timer (unlike celebration/milestoneToast), so without a reset keyed on
+// currentInningIndex, the LAST ball of the FIRST innings kept showing on the second innings'
+// scoring screen until a ball was actually scored in it.
+test("MatchScreen: the previous innings' last-ball commentary doesn't carry over once the 2nd innings starts", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const fourBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 4);
+  await act(async () => {
+    fourBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /"X to A: "/);
+
+  const secondInning = buildInning("Oakwood CC", "Riverside CC", { strikerName: "X", nonStrikerName: "Y", bowlerName: "A" });
+  act(() => {
+    ctx.setMatch(m => ({
+      ...m, currentInningIndex: 1, awaitingSecondInningsSetup: false,
+      innings: [{ ...m.innings[0], complete: true }, secondInning]
+    }));
+  });
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: "/);
 });
 
 test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and scores its bonus runs as a six", async () => {
