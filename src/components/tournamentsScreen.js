@@ -525,11 +525,42 @@ export function TournamentsScreen({
         superOver: v
       }))
     }), /*#__PURE__*/React.createElement(ToggleRule, {
-      label: "Wide/no-ball counts as a ball (except final over)",
+      label: "Wide/no-ball counts as a ball",
       value: tournamentRules.wideNoballCountsAsBall,
       onChange: v => setTournamentRules(r => ({
         ...r,
         wideNoballCountsAsBall: v
+      }))
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      // A generic bucket for "the last N overs behave differently", kept separate from any one
+      // specific rule (today just the wide/no-ball toggle below) -- see isInLastOvers in
+      // scoringEngine.js.
+      label: "Last over rules",
+      value: tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), enabled: v }
+      }))
+    }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Applies to the last",
+      value: tournamentRules.lastOverRules.overCount || 1,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+      })),
+      options: [{
+        value: 1,
+        label: "1 over"
+      }, {
+        value: 2,
+        label: "2 overs"
+      }]
+    }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && tournamentRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Wide/no-ball illegal again in the last over(s)",
+      value: tournamentRules.lastOverRules.wideNoballIllegalAgain,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: v }
       }))
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Impact Player substitution",

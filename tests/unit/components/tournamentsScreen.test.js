@@ -260,6 +260,8 @@ test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time ca
   act(() => { ruleBlock(inst, "Retirement run cap").findByType("button").props.onClick(); });
   act(() => { ruleBlock(inst, "Super Over if the match ties").findByType("button").props.onClick(); });
   act(() => { ruleBlock(inst, "Wide/no-ball counts as a ball").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Last over rules").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Wide/no-ball illegal again in the last over(s)").findByType("button").props.onClick(); });
   act(() => { ruleBlock(inst, "Impact Player substitution").findByType("button").props.onClick(); });
 
   clickNav(inst, "Review"); // rules -> review
@@ -275,7 +277,50 @@ test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time ca
   assert.equal(createdWith.retirementRuns, 25);
   assert.equal(createdWith.superOver, true);
   assert.equal(createdWith.wideNoballCountsAsBall, true);
+  assert.equal(createdWith.lastOverRules.enabled, true);
+  assert.equal(createdWith.lastOverRules.wideNoballIllegalAgain, true);
   assert.equal(createdWith.impactPlayerEnabled, true);
+});
+
+test("TournamentsScreen: Last over rules -- the overs picker and wide/no-ball sub-toggle only show once relevant, and both flow into onCreateTournament", async () => {
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules) => {
+      createdWith = defaultRules;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Applies to the last/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /illegal again/);
+
+  act(() => { ruleBlock(inst, "Last over rules").findByType("button").props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Applies to the last/);
+  // wideNoballCountsAsBall is still off -- its sub-toggle stays hidden even with lastOverRules on.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /illegal again/);
+
+  act(() => { inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Applies to the last").props.onChange(2); });
+  act(() => { ruleBlock(inst, "Wide/no-ball counts as a ball").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Wide/no-ball illegal again in the last over(s)").findByType("button").props.onClick(); });
+
+  clickNav(inst, "Review");
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith.lastOverRules.enabled, true);
+  assert.equal(createdWith.lastOverRules.overCount, 2);
+  assert.equal(createdWith.lastOverRules.wideNoballIllegalAgain, true);
 });
 
 test("TournamentsScreen: a nullable rule can be seeded then cleared back to null", () => {

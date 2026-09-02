@@ -147,13 +147,26 @@ test("parseOverLabel: cricket X.Y notation to a true decimal using ballsPerOver"
   assert.equal(parseOverLabel("4", 6), 4);
 });
 
-test("ballLabelsForOver: legal balls increment the label, wide/no-ball share the next legal ball's number", () => {
+test("ballLabelsForOver: an illegal wide/no-ball (ev.legal: false, or no ev.legal at all) shares the next legal ball's number", () => {
   const balls = [
-    { kind: "run" },
-    { kind: "wide" },
-    { kind: "run" }
+    { kind: "run", legal: true },
+    { kind: "wide", legal: false },
+    { kind: "run", legal: true }
   ];
-  assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2*", "1.2"]);
+  assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2", "1.2"]);
+  // Balls saved before ev.legal existed have no such field at all -- every wide/no-ball WAS
+  // illegal under the only rules that existed then, so the kind-based fallback is exact.
+  const oldBalls = [{ kind: "run" }, { kind: "wide" }, { kind: "run" }];
+  assert.deepEqual(ballLabelsForOver(0, oldBalls), ["1.1", "1.2", "1.2"]);
+});
+
+test("ballLabelsForOver: a wide/no-ball that DID count as legal (wideNoballCountsAsBall) gets its own incrementing number, not a shared one", () => {
+  const balls = [
+    { kind: "run", legal: true },
+    { kind: "wide", legal: true },
+    { kind: "run", legal: true }
+  ];
+  assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2", "1.3"]);
 });
 
 test("buildClaudeFixPrompt: includes the message, page/browser context, and a resolution note when present", () => {

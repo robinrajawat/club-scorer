@@ -13,7 +13,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
+import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, isInLastOvers, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
 
 const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
@@ -209,21 +209,61 @@ test("wideNoballCountsAsBall on: a wide counts as a legal ball in a non-final ov
   assert.equal(inn.legalBalls, 1, "wide advances the over, over 1 of 2 isn't the final over");
 });
 
-test("wideNoballCountsAsBall on: a no-ball reverts to illegal (re-bowled) in the final over", () => {
+test("wideNoballCountsAsBall on, with lastOverRules off: a no-ball still counts as legal in what would be the final over -- there's no exception without opting in", () => {
   let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
+  assert.equal(inn.legalBalls, 6, "first over complete, now bowling the final over");
+  inn.bowlerName = "B2";
+  ensureBowler(inn, "B2");
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.legalBalls, 7, "no lastOverRules exception configured, so it advances the over like any other over");
+});
+
+test("lastOverRules.wideNoballIllegalAgain: a no-ball reverts to illegal (re-bowled) in the configured last over(s)", () => {
+  let inn = finalOverInning({
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }
+  }, 2);
   // Complete the first (non-final) over with 6 legal runs balls.
   for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
   assert.equal(inn.legalBalls, 6, "first over complete, now bowling the final over");
   inn.bowlerName = "B2";
   ensureBowler(inn, "B2");
   inn = applyBall(inn, { kind: "noball", runs: 0 });
-  assert.equal(inn.legalBalls, 6, "no-ball in the final over doesn't advance it, must be re-bowled");
+  assert.equal(inn.legalBalls, 6, "no-ball in the last over doesn't advance it, must be re-bowled");
 });
 
-test("isWideNoballLegal: with no oversLimit baked in, the house rule applies uniformly (no final-over cutoff)", () => {
-  const inn = finalOverInning({ wideNoballCountsAsBall: true }, undefined);
+test("lastOverRules.enabled without wideNoballIllegalAgain: last-over window exists, but this specific rule stays off", () => {
+  let inn = finalOverInning({
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: false }
+  }, 2);
+  for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
+  inn.bowlerName = "B2";
+  ensureBowler(inn, "B2");
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.legalBalls, 7, "wideNoballIllegalAgain is off, so the last-over window has no effect on legality");
+});
+
+test("isWideNoballLegal: with no oversLimit baked in, no last-over cutoff can ever apply", () => {
+  const inn = finalOverInning({
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }
+  }, undefined);
   assert.equal(inn.oversLimit, null);
   assert.equal(isWideNoballLegal(inn), true);
+});
+
+test("isInLastOvers: overCount controls how many overs from the end count as last over(s)", () => {
+  let inn = finalOverInning({
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 2, wideNoballIllegalAgain: true }
+  }, 3);
+  // Over 1 of 3 -- not within the last 2 overs yet.
+  assert.equal(isInLastOvers(inn), false);
+  for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
+  // Over 2 of 3 -- IS within the last 2 overs (overs 2 and 3).
+  assert.equal(isInLastOvers(inn), true);
 });
 
 // A retired batsman's `runs` is never reset when they return (ensureBatsman only clears the

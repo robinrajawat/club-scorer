@@ -157,7 +157,12 @@ export function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
-  if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
+  if (rules.wideNoballCountsAsBall) {
+    const lor = rules.lastOverRules;
+    const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;
+    const lastOversLabel = revertsInLastOvers ? (lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over") : null;
+    bits.push(revertsInLastOvers ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
+  }
   if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
 }

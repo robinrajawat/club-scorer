@@ -315,14 +315,18 @@ export function parseOverLabel(label, ballsPerOver) {
 export function ballLabelsForOver(overIndex, balls) {
   let legalCount = 0;
   return balls.map(ev => {
-    const isLegal = ev.kind !== "wide" && ev.kind !== "noball";
+    // ev.legal is the actual, as-bowled legality applyBall recorded for this exact ball -- it can
+    // differ from a bare kind check when wideNoballCountsAsBall (or its lastOverRules exception)
+    // is in play, since a wide/no-ball isn't ALWAYS illegal under those house rules. Falls back to
+    // the kind-based guess only for balls saved before this field existed (every wide/no-ball WAS
+    // illegal under the only rules that existed then, so the fallback is exact, not a guess, for
+    // any match old enough to be missing it).
+    const isLegal = ev.legal !== undefined ? ev.legal : ev.kind !== "wide" && ev.kind !== "noball";
     if (isLegal) legalCount += 1;
-    const slot = legalCount + (isLegal ? 0 : 1);
-    // A wide/no-ball doesn't consume a legal-ball slot, so it shares its number with whichever
-    // legal delivery eventually completes that slot -- the trailing "*" is the only thing telling
-    // two adjacent badges with the same number apart (e.g. "3.4*" then "3.4"), which matters most
-    // right at the end of an over where identical-looking labels read as if the over already ended.
-    return isLegal ? `${overIndex + 1}.${slot}` : `${overIndex + 1}.${slot}*`;
+    // A wide/no-ball that didn't count as a legal ball doesn't consume its own slot, so it shares
+    // its number with whichever legal delivery eventually completes that slot (e.g. "3.4" then
+    // "3.4") -- standard, expected cricket-scoring shorthand, not a rendering bug.
+    return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
   });
 }
 

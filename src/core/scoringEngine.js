@@ -98,12 +98,21 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimi
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
     wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
+    // A generic "how many overs count as the last over(s), and what changes there" bucket, kept
+    // separate from wideNoballCountsAsBall itself (which used to hardcode its own final-over
+    // exception) so a future last-over-specific rule can hang off the same overCount/enabled
+    // config without re-plumbing "which over is this" arithmetic into each one. See isInLastOvers.
+    lastOverRules: {
+      enabled: !!(r.lastOverRules && r.lastOverRules.enabled),
+      overCount: (r.lastOverRules && r.lastOverRules.overCount) || 1,
+      wideNoballIllegalAgain: !!(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain)
+    },
     // The innings' total legal overs, baked in here purely so applyBall (which only ever sees this
-    // inning, never the match) can tell whether the ball it's about to score is in the final over —
-    // the one thing wideNoballCountsAsBall needs and nothing else here does. null for any caller
-    // that doesn't pass one (every test fixture, e.g.) simply means "no final-over cutoff", i.e.
-    // wideNoballCountsAsBall (if on at all) applies to every over uniformly. Same "baked in at
-    // innings start" caveat as every other house rule above: a mid-chase DLS overs revision won't
+    // inning, never the match) can tell whether the ball it's about to score is in the last over(s)
+    // — the one thing isInLastOvers needs and nothing else here does. null for any caller that
+    // doesn't pass one (every test fixture, e.g.) simply means "no last-over cutoff", i.e. a
+    // last-over rule (if on at all) applies to every over uniformly. Same "baked in at innings
+    // start" caveat as every other house rule above: a mid-chase DLS overs revision won't
     // retroactively change this.
     oversLimit: oversLimit != null ? oversLimit : null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
@@ -165,21 +174,34 @@ export function ensureBowler(inning, name) {
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
 }
+// Whether the current ball falls within the innings' configured "last over(s)" window (see
+// lastOverRules on the inning). A small generic building block -- deliberately answers only "are
+// we there yet", not "what changes there", so more than one last-over-specific rule can share it
+// (today just wideNoballIllegalAgain) without each one re-deriving the same over-counting
+// arithmetic. No oversLimit baked in (every test fixture, e.g.) means no last-over cutoff exists at
+// all, so this is always false rather than guessing at one.
+export function isInLastOvers(inning) {
+  const rules = inning.lastOverRules;
+  if (!rules || !rules.enabled || inning.oversLimit == null) return false;
+  const bpo = inning.ballsPerOver || 6;
+  const currentOver = Math.floor(inning.legalBalls / bpo);
+  return currentOver >= Math.floor(inning.oversLimit) - (rules.overCount || 1);
+}
 // Whether a wide/no-ball counts as a legal (over-completing) delivery right now. Standard Laws:
 // always false, every wide/no-ball is re-bowled. The wideNoballCountsAsBall house rule flips that
-// to true everywhere EXCEPT the innings' final over, where it reverts to the standard illegal-ball
-// behavior -- the "final-over wide/no-ball illegal again" switch. Exported (not inlined in
-// applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
+// to true, unless lastOverRules.wideNoballIllegalAgain is also on and we're in the configured
+// last-over window, where it reverts to the standard illegal-ball behavior. Exported (not inlined
+// in applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
 // (matchScreen.js builds event.legal itself, since a wicket's legality also depends on the
 // dismissal, not just the extra) and needs the identical answer rather than a second copy of this
 // logic drifting out of sync.
 export function isWideNoballLegal(inning) {
   if (!inning.wideNoballCountsAsBall) return false;
-  if (inning.oversLimit == null) return true;
-  const bpo = inning.ballsPerOver || 6;
-  const currentOver = Math.floor(inning.legalBalls / bpo);
-  const isFinalOver = currentOver >= Math.floor(inning.oversLimit) - 1;
-  return !isFinalOver;
+  const lastOverRules = inning.lastOverRules;
+  if (lastOverRules && lastOverRules.enabled && lastOverRules.wideNoballIllegalAgain && isInLastOvers(inning)) {
+    return false;
+  }
+  return true;
 }
 export function oversLabel(legalBalls, ballsPerOver) {
   const bpo = ballsPerOver || 6;
@@ -570,7 +592,13 @@ export function applyBall(inning, event) {
   cur.overs[lastOverIdx] = [...cur.overs[lastOverIdx], {
     display,
     kind: event.kind,
-    runs: runsThisBall
+    runs: runsThisBall,
+    // Persisted per-ball rather than re-derived from `kind` alone at display time -- a wide/
+    // no-ball's actual legality depends on the wideNoballCountsAsBall/lastOverRules house rules in
+    // effect *at the moment this exact ball was bowled*, not just its kind (see ballLabelsForOver
+    // in miscHelpers.js, which reads this to decide whether a wide/no-ball advances the over's
+    // ball count or shares a slot with the next legal delivery).
+    legal: legalBall
   }];
   if (legalBall) {
     cur.legalBalls += 1;
