@@ -7743,6 +7743,45 @@ function applyBall(inning, event) {
   }
   return cur;
 }
+// One-line "commentary" for the ball just bowled, built by diffing the inning before/after
+// applyBall -- same before/after pattern as the milestone detection above, so it can never drift
+// out of sync with what applyBall actually did. `before.overs[before.overs.length-1]` is always
+// the over this ball lands in (applyBall only ever appends a fresh empty over AFTER logging the
+// ball -- see the `cur.overs = [...cur.overs, []]` line above), so comparing that same index's
+// length before/after finds the newly-appended ball regardless of whether this delivery also
+// happened to complete the over. Returns null for a standalone penalty (applyBall returns early,
+// before ever touching `overs`) since there's no delivery to describe.
+function lastBallCommentary(before, after) {
+  const overIdx = before.overs.length - 1;
+  const prevOver = before.overs[overIdx] || [];
+  const nextOver = after.overs[overIdx] || [];
+  if (nextOver.length <= prevOver.length) return null;
+  const ball = nextOver[nextOver.length - 1];
+  const bowler = before.bowlerName;
+  const batter = before.strikerName;
+  const lead = bowler && batter ? `${bowler} to ${batter}: ` : "";
+  if (ball.kind === "wicket") {
+    const fow = after.fallOfWickets[after.fallOfWickets.length - 1];
+    const dismissed = (fow && fow.batsman) || batter;
+    const how = (after.batsmen[dismissed] && after.batsmen[dismissed].how) || "out";
+    return `${lead}OUT! ${dismissed} ${how}`;
+  }
+  if (ball.bigHit) return `${lead}${ball.bigHit}!`;
+  if (ball.runs === 6) return `${lead}SIX!`;
+  if (ball.runs === 4) return `${lead}FOUR!`;
+  if (ball.kind === "wide") {
+    const extra = ball.runs - (after.wideRuns || 1);
+    return `${lead}wide${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+  }
+  if (ball.kind === "noball") {
+    const extra = ball.runs - (after.noballRuns || 1);
+    return `${lead}no ball${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+  }
+  if (ball.kind === "bye") return `${lead}${ball.runs} bye${ball.runs === 1 ? "" : "s"}`;
+  if (ball.kind === "legbye") return `${lead}${ball.runs} leg bye${ball.runs === 1 ? "" : "s"}`;
+  if (ball.runs === 0) return `${lead}dot ball`;
+  return `${lead}${ball.runs} run${ball.runs === 1 ? "" : "s"}`;
+}
 // GENERATED-END: scoring-engine
 
 // ---------- UI atoms ----------
@@ -32228,6 +32267,7 @@ function MatchScreen({
   const [history, setHistory] = useState(() => loadUndoHistory(match.id));
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
+  const [ballCommentary, setBallCommentary] = useState(null);
   const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null — currently showing
   const [milestoneQueue, setMilestoneQueue] = useState([]); // milestones waiting their turn to toast
   // Drains milestoneQueue one at a time — a single ball can produce more than one milestone (e.g.
@@ -32442,6 +32482,11 @@ function MatchScreen({
     setMatch(updated);
     queueSave(updated);
     setDismissedCapRetireFor(null);
+    // Returns null for every non-delivery commit here (retire, swap strike, undo, a bowler/batsman
+    // confirmation, force-ending the innings) since none of those append a ball to `overs` -- only
+    // an actual applyBall() result ever does, so this naturally only updates for real deliveries.
+    const commentary = lastBallCommentary(inning, newInningState);
+    if (commentary) setBallCommentary(commentary);
     // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
     // above for why this doesn't just set milestoneToast directly (a single ball can produce more
     // than one, and only showing the last one silently dropped the rest from the toast). Includes
@@ -33116,6 +33161,9 @@ function MatchScreen({
     });
     setMatch(prev);
     queueSave(prev);
+    // Otherwise the commentary line for the just-undone ball keeps showing, describing a delivery
+    // that (as far as the score now reads) never happened.
+    setBallCommentary(null);
   }
   function swapStrike() {
     if (!inning.strikerName || !inning.nonStrikerName) return;
@@ -33970,7 +34018,16 @@ function MatchScreen({
       fontWeight: 600,
       color: COLORS.inkSoft
     }
-  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled, inning.ballsPerOver)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
+  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled, inning.ballsPerOver)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), ballCommentary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "10px 12px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontStyle: "italic",
+      color: COLORS.inkSoft,
+      textAlign: "center"
+    }
+  }, ballCommentary), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "14px 12px 0"
     }
@@ -34514,7 +34571,19 @@ function MatchScreen({
       marginTop: -4,
       marginBottom: 12
     }
-  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall && inning.lastOverRules && inning.lastOverRules.enabled && inning.lastOverRules.wideNoballIllegalAgain ? ` (this flips back in the last ${inning.lastOverRules.overCount > 1 ? inning.lastOverRules.overCount + " overs" : "over"})` : ""}.`), /*#__PURE__*/React.createElement("div", {
+  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${(() => {
+    // The illegal-again house rule only has anything to add when wideNoballCountsAsBall is on in
+    // the first place (otherwise every wide/no-ball is already always illegal, standard Laws, and
+    // this note would just be noise). Worded in two different tenses depending on whether we're
+    // actually IN the last-over window right now -- saying "this flips back in the last over"
+    // while OUTSIDE it correctly describes an upcoming change, but that exact same forward-looking
+    // wording attached to "doesn't count as a legal delivery" WHILE inside the window read as if
+    // the flip were still pending, when it had already happened -- confusing, since the sentence
+    // it's attached to is already describing the flipped-back state, not the one before it.
+    if (!inning.wideNoballCountsAsBall || !inning.lastOverRules || !inning.lastOverRules.enabled || !inning.lastOverRules.wideNoballIllegalAgain) return "";
+    const overWord = inning.lastOverRules.overCount > 1 ? `${inning.lastOverRules.overCount} overs` : "over";
+    return isInLastOvers(inning) ? ` (back to the standard rule for the last ${overWord})` : ` (this flips back to the standard rule in the last ${overWord})`;
+  })()}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",

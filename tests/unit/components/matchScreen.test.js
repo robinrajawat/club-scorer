@@ -145,6 +145,25 @@ test("MatchScreen: tapping a run button commits the ball and updates the score",
   assert.match(JSON.stringify(ctx.inst.toJSON()), /4-0/);
 });
 
+test("MatchScreen: shows a one-line commentary for the last ball, and clears it on Undo", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const fourBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 4);
+  await act(async () => {
+    fourBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  // X is the bowler, A the striker -- see buildInning/baseMatch above.
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+
+  const undoBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Undo"));
+  await act(async () => {
+    undoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+});
+
 test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and scores its bonus runs as a six", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const plainCtx = renderMatch(baseMatch());
@@ -245,6 +264,31 @@ test("MatchScreen: a Wide extra credits runs to the team without consuming a leg
   assert.equal(ctx.inning.runs, 1);
   assert.equal(ctx.inning.extras.wide, 1);
   assert.equal(ctx.inning.legalBalls, 0);
+});
+
+// BUG FIX: the illegal-again note used to say "this flips back in the last over" regardless of
+// whether the current ball was actually inside that window -- forward-looking wording that made
+// sense before the window started, but read as contradictory nonsense once inside it (attached to
+// "doesn't count as a legal delivery", as if the flip it's describing were still pending when it
+// had already happened).
+test("MatchScreen: the Wide/No Ball legality note reads forward-looking before the last over, and present-tense once inside it", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const rules = { wideNoballCountsAsBall: true, lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }, oversLimit: 2, ballsPerOver: 6 };
+
+  const beforeLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 0 })] }));
+  act(() => { btn(beforeLastOver, "Extra").props.onClick(); });
+  act(() => { modalBtn(beforeLastOver, "Wide").props.onClick(); });
+  const beforeText = JSON.stringify(beforeLastOver.inst.toJSON());
+  assert.match(beforeText, /counts as a legal delivery this over/);
+  assert.match(beforeText, /this flips back to the standard rule in the last over/);
+
+  const inLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 6 })] }));
+  act(() => { btn(inLastOver, "Extra").props.onClick(); });
+  act(() => { modalBtn(inLastOver, "Wide").props.onClick(); });
+  const inText = JSON.stringify(inLastOver.inst.toJSON());
+  assert.match(inText, /doesn't count as a legal delivery, so it's re-bowled/);
+  assert.match(inText, /back to the standard rule for the last over/);
+  assert.doesNotMatch(inText, /this flips back to the standard rule/, "must not read as forward-looking once already inside the window");
 });
 
 test("MatchScreen: the 'Other' runs modal combines completed runs, an overthrow bonus, and a short-run deduction", async () => {

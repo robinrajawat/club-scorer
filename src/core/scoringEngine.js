@@ -840,3 +840,42 @@ export function applyBall(inning, event) {
   }
   return cur;
 }
+// One-line "commentary" for the ball just bowled, built by diffing the inning before/after
+// applyBall -- same before/after pattern as the milestone detection above, so it can never drift
+// out of sync with what applyBall actually did. `before.overs[before.overs.length-1]` is always
+// the over this ball lands in (applyBall only ever appends a fresh empty over AFTER logging the
+// ball -- see the `cur.overs = [...cur.overs, []]` line above), so comparing that same index's
+// length before/after finds the newly-appended ball regardless of whether this delivery also
+// happened to complete the over. Returns null for a standalone penalty (applyBall returns early,
+// before ever touching `overs`) since there's no delivery to describe.
+export function lastBallCommentary(before, after) {
+  const overIdx = before.overs.length - 1;
+  const prevOver = before.overs[overIdx] || [];
+  const nextOver = after.overs[overIdx] || [];
+  if (nextOver.length <= prevOver.length) return null;
+  const ball = nextOver[nextOver.length - 1];
+  const bowler = before.bowlerName;
+  const batter = before.strikerName;
+  const lead = bowler && batter ? `${bowler} to ${batter}: ` : "";
+  if (ball.kind === "wicket") {
+    const fow = after.fallOfWickets[after.fallOfWickets.length - 1];
+    const dismissed = (fow && fow.batsman) || batter;
+    const how = (after.batsmen[dismissed] && after.batsmen[dismissed].how) || "out";
+    return `${lead}OUT! ${dismissed} ${how}`;
+  }
+  if (ball.bigHit) return `${lead}${ball.bigHit}!`;
+  if (ball.runs === 6) return `${lead}SIX!`;
+  if (ball.runs === 4) return `${lead}FOUR!`;
+  if (ball.kind === "wide") {
+    const extra = ball.runs - (after.wideRuns || 1);
+    return `${lead}wide${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+  }
+  if (ball.kind === "noball") {
+    const extra = ball.runs - (after.noballRuns || 1);
+    return `${lead}no ball${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+  }
+  if (ball.kind === "bye") return `${lead}${ball.runs} bye${ball.runs === 1 ? "" : "s"}`;
+  if (ball.kind === "legbye") return `${lead}${ball.runs} leg bye${ball.runs === 1 ? "" : "s"}`;
+  if (ball.runs === 0) return `${lead}dot ball`;
+  return `${lead}${ball.runs} run${ball.runs === 1 ? "" : "s"}`;
+}
