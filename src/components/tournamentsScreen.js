@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, Plus, Trophy } from "./icons.js";
+import { AlertTriangle, ChevronLeft, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
 import { Btn, TextField, PinnableChip, RuleChoice } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
+import { VenueEditModal } from "./venueAndDateModals.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
 import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
-import { nonStandardRulesText } from "../core/shareAndFormat.js";
+import { nonStandardRulesText, buildMapsUrl } from "../core/shareAndFormat.js";
 
 // The "Cups" list: club/federation source chips, create-tournament (with optional group-stage
 // split) and create-series forms, a status/search filter over the list, and each tournament as a
@@ -192,6 +193,14 @@ export function TournamentsScreen({
   // retroactively once the first fixture happens to get scored with whatever it was set to.
   const [rulesExpanded, setRulesExpanded] = useState(false);
   const [defaultOvers, setDefaultOvers] = useState("");
+  // A tournament-wide default venue -- fixtureRow.js already falls back to `fixture.venue ||
+  // tournament.venue` for any fixture that hasn't set its own, but there was no UI to actually set
+  // it. Useful for a one-day/one-ground tournament where every fixture is the same venue and
+  // re-entering it per match is pure repetition. A fixture's own venue, when set, still wins.
+  const [venue, setVenue] = useState("");
+  const [venueLat, setVenueLat] = useState(null);
+  const [venueLng, setVenueLng] = useState(null);
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
   const [tournamentRules, setTournamentRules] = useState({
     ...DEFAULT_RULES
   });
@@ -264,6 +273,9 @@ export function TournamentsScreen({
     setError("");
     setRulesExpanded(false);
     setDefaultOvers("");
+    setVenue("");
+    setVenueLat(null);
+    setVenueLng(null);
     setTournamentRules({
       ...DEFAULT_RULES
     });
@@ -299,7 +311,7 @@ export function TournamentsScreen({
     })).filter(g => g.teams.length > 0) : null;
     const oversNum = parseInt(defaultOvers || "0", 10);
     const rulesChanged = JSON.stringify(tournamentRules) !== JSON.stringify(DEFAULT_RULES);
-    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null);
+    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null, venue.trim() ? { venue: venue.trim(), venueLat, venueLng } : null);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't create the tournament.");
@@ -389,11 +401,22 @@ export function TournamentsScreen({
       }
     }, "Every fixture started from this tournament will use these settings automatically -- no need to re-enter them per match."), /*#__PURE__*/React.createElement(Field, {
       label: "Overs per innings"
+      // A full-width text input for what's always a 1-2 digit number looked oversized next to
+      // every other numeric rule here (retirement cap, big hit, etc.), which all use this same
+      // narrow, fixed-width box via NullableNumberRule.
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 64
+      }
     }, /*#__PURE__*/React.createElement(TextField, {
       value: defaultOvers,
       onChange: v => setDefaultOvers(v.replace(/[^0-9]/g, "")),
-      placeholder: "20"
-    })), /*#__PURE__*/React.createElement(RuleChoice, {
+      placeholder: "20",
+      style: {
+        textAlign: "center",
+        padding: "12px 8px"
+      }
+    }))), /*#__PURE__*/React.createElement(RuleChoice, {
       label: "Players per side",
       value: tournamentRules.playersPerSide,
       onChange: v => setTournamentRules(r => ({
@@ -922,7 +945,75 @@ export function TournamentsScreen({
     value: name,
     onChange: setName,
     placeholder: "e.g. Summer T20 League"
-  })), currentPage === "details" && /*#__PURE__*/React.createElement("div", {
+  })), currentPage === "details" && /*#__PURE__*/React.createElement(Field, {
+    label: "Default venue (optional)"
+    // Every fixture created from this tournament falls back to this venue unless it sets its own
+    // -- handy for a one-day/one-ground tournament where re-entering the same venue per fixture
+    // would be pure repetition.
+  }, venue ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      fontWeight: 600,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, "📍 ", venue), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Edit venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }))) : /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "Add a venue")), currentPage === "details" && venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+    value: venue,
+    initialLat: venueLat,
+    initialLng: venueLng,
+    clubs: clubs,
+    onSave: (v, lat, lng) => {
+      setVenue(v || "");
+      setVenueLat(lat != null ? lat : null);
+      setVenueLng(lng != null ? lng : null);
+    },
+    onClose: () => setVenueModalOpen(false)
+  }), currentPage === "details" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

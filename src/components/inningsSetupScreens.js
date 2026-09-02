@@ -507,7 +507,10 @@ export function SecondInningsSetup({
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, match.innings[0].battingTeam, " ", match.innings[0].runs, "/", match.innings[0].wickets), /*#__PURE__*/React.createElement("div", {
+    // A bare space between team name and score reads ambiguously when the name itself ends in a
+    // digit (e.g. "Billund 1 193/1" -- easy to misread as "1193/1"). A colon makes the boundary
+    // unambiguous regardless of what either side happens to be.
+  }, match.innings[0].battingTeam, ": ", match.innings[0].runs, "/", match.innings[0].wickets), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

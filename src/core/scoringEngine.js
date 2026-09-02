@@ -371,7 +371,12 @@ export function applyBall(inning, event) {
     bowler.runs += event.runs;
     bowler.ballsBowled += 1;
     display = runsDisplay(event.runs, event.overthrow, event.shortRun);
-    if (event.runs % 2 === 1) strikeChanges = true;
+    // A boundary is a dead ball the instant it crosses the rope -- no running happens, so strike
+    // never rotates off it, regardless of parity. This never needed an explicit exception before
+    // (a plain four/six's total is always even), but a bonus-hit tier's configured total can be
+    // odd (e.g. Maximum Hit at 15), and without this check that odd total was wrongly treated as
+    // 15 genuine running singles and rotated the strike.
+    if (!isFour && !isSix && event.runs % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
     legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.wideRuns || 1) + (event.runs || 0);
