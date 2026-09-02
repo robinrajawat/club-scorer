@@ -695,7 +695,11 @@ export function ScorecardOverlay({
       top: 0,
       background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchDarkFixed})`,
       color: COLORS.creamFixed,
-      padding: "16px 16px",
+      // This overlay is `position: fixed; inset: 0` (see the wrapper below), which escapes #root's
+      // own safe-area-inset-top padding -- without accounting for it here too, this sticky header
+      // (and the Close button inside it) sits flush against the true viewport top and collides with
+      // the iPhone status bar/notch.
+      padding: "calc(16px + env(safe-area-inset-top)) 16px 16px",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",

@@ -365,6 +365,11 @@ export function applyBall(inning, event) {
     cur.extras.wide += runsThisBall;
     display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Wd";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
+    // wideNoballCountsAsBall (see isWideNoballLegal) makes this ball count toward the over AND the
+    // bowler's own personal figures -- without this, the innings' over-count advanced correctly
+    // while the bowler's ballsBowled silently missed credit for every wide that counted, throwing
+    // off their overs-bowled/economy on the scorecard.
+    if (legalBall) bowler.ballsBowled += 1;
   } else if (event.kind === "noball") {
     legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.noballRuns || 1) + (event.runs || 0);
@@ -390,6 +395,9 @@ export function applyBall(inning, event) {
     display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Nb";
     if ((event.runs || 0) % 2 === 1) strikeChanges = true;
     if (cur.freeHitEnabled) cur.freeHitActive = true;
+    // Same reasoning as the wide branch above -- credit the bowler's own ballsBowled when this
+    // no-ball counts as legal under wideNoballCountsAsBall.
+    if (legalBall) bowler.ballsBowled += 1;
   } else if (event.kind === "bye" || event.kind === "legbye") {
     runsThisBall = event.runs;
     cur.runs += event.runs;

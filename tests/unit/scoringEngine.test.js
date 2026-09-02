@@ -209,6 +209,29 @@ test("wideNoballCountsAsBall on: a wide counts as a legal ball in a non-final ov
   assert.equal(inn.legalBalls, 1, "wide advances the over, over 1 of 2 isn't the final over");
 });
 
+// BUG FIX: a wide/no-ball that counts as legal (wideNoballCountsAsBall) advanced the innings'
+// own legalBalls correctly but never credited the bowler's OWN ballsBowled -- the two counters
+// silently drifted apart, so the bowler's personal overs-bowled/economy on the scorecard
+// undercounted every legal wide/no-ball they bowled.
+test("wideNoballCountsAsBall on: a legal wide also credits the bowler's own ballsBowled", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "wide", runs: 0 });
+  assert.equal(inn.bowlers.B1.ballsBowled, 1, "legal wide counts toward the bowler's own figures too");
+});
+
+test("wideNoballCountsAsBall on: a legal no-ball also credits the bowler's own ballsBowled", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.bowlers.B1.ballsBowled, 1, "legal no-ball counts toward the bowler's own figures too");
+});
+
+test("wideNoballCountsAsBall off (default): a wide/no-ball never credits the bowler's ballsBowled", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: false }, 2);
+  inn = applyBall(inn, { kind: "wide", runs: 0 });
+  inn = applyBall(inn, { kind: "noball", runs: 0 });
+  assert.equal(inn.bowlers.B1.ballsBowled, 0, "an illegal wide/no-ball is re-bowled, so it shouldn't count yet");
+});
+
 test("wideNoballCountsAsBall on, with lastOverRules off: a no-ball still counts as legal in what would be the final over -- there's no exception without opting in", () => {
   let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
   for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });
