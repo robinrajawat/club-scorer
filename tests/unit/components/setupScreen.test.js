@@ -104,6 +104,18 @@ test("SetupScreen: same team name on both sides shows a warning and blocks Next"
   assert.equal(btn(inst, "Next").props.disabled, true);
 });
 
+// Regression test: a stray closing paren once let the "rules" page's own div swallow one extra
+// sibling (the "Retirement run cap" field, the last one in that page) into the OUTER page
+// wrapper instead, making it render on every page regardless of which one was selected --
+// reported live as "Retirement run cap" showing up on the very first "Teams & Format" page.
+test("SetupScreen: 'Retirement run cap' (and the rest of the rules editor) never appears on the Teams & Format page", () => {
+  const inst = render();
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Retirement run cap/);
+  assert.doesNotMatch(text, /Balls per over/);
+  assert.doesNotMatch(text, /Impact Player substitution/);
+});
+
 test("SetupScreen: Back on a later page goes back one page instead of cancelling", () => {
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
