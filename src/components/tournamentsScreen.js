@@ -153,6 +153,32 @@ export function NullableNumberRule({
     }
   }, "None")));
 }
+// A small uppercase divider between logical groups of rules (Format, Extras, Bowling limits,
+// Batting rules, Special rules) -- the rules editor used to be one flat, un-differentiated list of
+// 16+ fields, all styled identically, with no visual signal for where one topic ended and the next
+// began. Gold, not the same inkSoft used by every individual field's own label, so the two levels
+// (section vs. field) read as genuinely different tiers rather than just more of the same text.
+// `first` drops the top border/extra margin, since the very first section sits right under the
+// "Customize" toggle's own explanatory sentence and doesn't need a second divider on top of that.
+function RuleSectionHeader({
+  label,
+  first
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: first ? 4 : 22,
+      marginBottom: 2,
+      paddingTop: first ? 0 : 14,
+      borderTop: first ? "none" : `1px solid ${COLORS.creamDark}`,
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.gold,
+      textTransform: "uppercase"
+    }
+  }, label);
+}
 export function TournamentsScreen({
   tournaments,
   clubs,
@@ -399,7 +425,10 @@ export function TournamentsScreen({
         lineHeight: 1.5,
         marginBottom: 10
       }
-    }, "Every fixture started from this tournament will use these settings automatically -- no need to re-enter them per match."), /*#__PURE__*/React.createElement(Field, {
+    }, "Every fixture started from this tournament will use these settings automatically -- no need to re-enter them per match."), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+      label: "Format",
+      first: true
+    }), /*#__PURE__*/React.createElement(Field, {
       label: "Overs per innings"
       // A full-width text input for what's always a 1-2 digit number looked oversized next to
       // every other numeric rule here (retirement cap, big hit, etc.), which all use this same
@@ -462,6 +491,8 @@ export function TournamentsScreen({
         value: 8,
         label: "8"
       }]
+    }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+      label: "Extras"
     }), /*#__PURE__*/React.createElement(RuleChoice, {
       label: "Runs on a wide",
       value: tournamentRules.wideRuns,
@@ -497,6 +528,8 @@ export function TournamentsScreen({
         ...r,
         freeHit: v
       }))
+    }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+      label: "Bowling limits"
     }), /*#__PURE__*/React.createElement(NullableNumberRule, {
       label: "Max overs per bowler",
       value: tournamentRules.maxOversPerBowler,
@@ -530,6 +563,8 @@ export function TournamentsScreen({
       seed: Math.max(10, Math.round(parseInt(defaultOvers || "20", 10) * 4.5)),
       unit: "minutes",
       hint: "a flag once you're past it, not a stop"
+    }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+      label: "Batting rules"
     }), /*#__PURE__*/React.createElement(NullableNumberRule, {
       label: "Retirement run cap",
       value: tournamentRules.retirementRuns,
@@ -560,6 +595,8 @@ export function TournamentsScreen({
       seed: 15,
       unit: "runs on a maximum hit",
       hint: "a second, independent bonus-hit tier -- use it however suits your ground (e.g. an even longer boundary than Big Hit above)"
+    }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+      label: "Special rules"
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Super Over if the match ties",
       value: tournamentRules.superOver,
@@ -574,7 +611,20 @@ export function TournamentsScreen({
         ...r,
         wideNoballCountsAsBall: v
       }))
-    }), /*#__PURE__*/React.createElement(ToggleRule, {
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        padding: 12,
+        borderRadius: 12,
+        border: `1px solid ${COLORS.creamDark}`,
+        background: COLORS.cream
+      }
+      // Set apart in its own bordered/tinted box (rather than three more rows in the flat stack
+      // above and below it) since it isn't one toggle but a small cluster of related controls --
+      // on/off, how many overs, and the wide/no-ball exception -- that read as one segmented unit
+      // much more easily than as three rows visually indistinguishable from every rule around
+      // them. Same treatment as SetupScreen's identical cluster.
+    }, /*#__PURE__*/React.createElement(ToggleRule, {
       // A generic bucket for "the last N overs behave differently", kept separate from any one
       // specific rule (today just the wide/no-ball toggle below) -- see isInLastOvers in
       // scoringEngine.js.
@@ -602,7 +652,18 @@ export function TournamentsScreen({
         ...r,
         lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: v }
       }))
-    }), /*#__PURE__*/React.createElement(ToggleRule, {
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        padding: 12,
+        borderRadius: 12,
+        border: `1px solid ${COLORS.creamDark}`,
+        background: COLORS.cream
+      }
+      // Same reasoning as the Last over rules box above -- a toggle plus its own conditional
+      // sub-control reads as one segmented unit more easily boxed than left as two more rows in
+      // the flat stack.
+    }, /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Impact Player substitution",
       value: tournamentRules.impactPlayerEnabled,
       onChange: v => setTournamentRules(r => ({
@@ -623,7 +684,7 @@ export function TournamentsScreen({
         value: 2,
         label: "2"
       }]
-    })));
+    }))));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {

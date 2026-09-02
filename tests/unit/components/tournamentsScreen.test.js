@@ -402,6 +402,31 @@ test("TournamentsScreen: a nullable rule can be seeded then cleared back to null
   assert.match(JSON.stringify(inst.toJSON()), /None — tap to set one/);
 });
 
+// The rules editor used to be one flat, undifferentiated list of 16+ fields, all styled
+// identically -- no visual signal for where one topic ended and the next began. Grouped into
+// labeled sections now, in a fixed order, so a scorer can jump straight to the topic they came in
+// for instead of scanning the whole list top to bottom every time.
+test("TournamentsScreen: the rules editor is grouped into labeled sections, in order", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  const text = JSON.stringify(inst.toJSON());
+  const sections = ["Format", "Extras", "Bowling limits", "Batting rules", "Special rules"];
+  const positions = sections.map(s => text.indexOf(`"${s}"`));
+  positions.forEach((pos, i) => assert.ok(pos !== -1, `section "${sections[i]}" is rendered`));
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1], `"${sections[i]}" appears after "${sections[i - 1]}"`);
+  }
+});
+
 test("TournamentsScreen: create form is paginated -- starts on 'Teams & Format', Next is blocked until name/2 teams are set", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
   const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
