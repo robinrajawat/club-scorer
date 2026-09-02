@@ -131,8 +131,16 @@ export function SuperOverOpenersSetup({
 // they held either (same "can't stay captain/keeper once out of the XI" rule toggleAXI enforces at
 // setup time), and logs it to match.impactSubs for the scorecard. Every picker on the app already
 // reads the XI via rosterFor, so updating teamARoster/teamBRoster here is the entire mechanism --
-// nothing else needs to know a substitution happened.
-function confirmImpactSub(match, setMatch, team, outName, inName) {
+// nothing else needs to know a substitution happened. Its sibling export just below,
+// ImpactPlayerCard, carries no comment of its own -- see docs/history.md's "React component
+// extraction" section for why a comment directly above a non-first export in a multi-export file
+// gets glued onto the wrong one by generate.js's splice mechanism. In short: ImpactPlayerCard
+// renders one team's substitution card -- nothing unless the rule is on, this team still has an
+// unused swap, AND actually has a bench to draw from (a team entered as free-form names with no
+// saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown for both teams
+// on the same Innings Break screen, since the Laws allow either side to make its one substitution
+// any time before the start of the other team's innings -- this screen is exactly that point.
+export function confirmImpactSub(match, setMatch, team, outName, inName) {
   const isTeamA = team === match.teamA;
   const rosterKey = isTeamA ? "teamARoster" : "teamBRoster";
   const benchKey = isTeamA ? "teamABench" : "teamBBench";
@@ -155,13 +163,7 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
   setMatch(updatedMatch);
   saveTransition(updatedMatch, setMatch);
 }
-// One team's Impact Player substitution card -- renders nothing unless the rule is on, this team
-// still has an unused swap, AND actually has a bench to draw from (a team entered as free-form
-// names with no saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown
-// for both teams on the same Innings Break screen, since the Laws allow either side to make its one
-// substitution any time before the start of the other team's innings -- this screen is exactly
-// that point.
-function ImpactPlayerCard({
+export function ImpactPlayerCard({
   match,
   setMatch,
   team
