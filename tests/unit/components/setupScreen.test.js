@@ -240,13 +240,50 @@ test("SetupScreen: Review always shows the core over/bowler-cap facts, and a 'Ho
   act(() => { btn(inst, "Back").props.onClick(); }); // openers -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
-  const wideNbBlock = ruleBlock(inst, "Wide/no-ball counts as a ball (except final over)");
+  const wideNbBlock = ruleBlock(inst, "Wide/no-ball counts as a ball");
   act(() => { wideNbBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
   act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
   act(() => { btn(inst, "Review").props.onClick(); });
   const reviewText = JSON.stringify(inst.toJSON());
-  assert.match(reviewText, /House rules:.*wide\/no-ball counts as a ball \(except final over\)/);
+  assert.match(reviewText, /House rules:.*wide\/no-ball counts as a ball/);
   assert.doesNotMatch(reviewText, /Wd\/Nb/);
+});
+
+test("SetupScreen: Last over rules -- enabling it reveals the overs-count picker, and (with wide/no-ball on) the illegal-again toggle", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  // Off by default -- neither the overs picker nor the wide/no-ball sub-toggle should show.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Applies to the last/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /illegal again/);
+
+  const lastOverBlock = ruleBlock(inst, "Last over rules");
+  act(() => { lastOverBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Applies to the last/);
+  // Wide/no-ball counts as a ball is still off, so its own sub-toggle stays hidden.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /illegal again/);
+
+  const wideNbBlock = ruleBlock(inst, "Wide/no-ball counts as a ball");
+  act(() => { wideNbBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+  const illegalAgainBlock = ruleBlock(inst, "Wide/no-ball illegal again in the last over(s)");
+  act(() => { illegalAgainBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /wide\/no-ball counts as a ball \(except the last over\)/);
 });
 
 test("SetupScreen: presetTournament shows a 'Playing in' banner and locks the team names to the fixture", () => {

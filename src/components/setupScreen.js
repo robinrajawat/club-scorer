@@ -714,7 +714,7 @@ export function SetupScreen({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "Wide/no-ball counts as a ball (except final over)"), /*#__PURE__*/React.createElement("button", {
+  }, "Wide/no-ball counts as a ball"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
     onClick: () => setMatchRules(r => ({
@@ -734,6 +734,84 @@ export function SetupScreen({
       fontSize: 13
     }
   }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+    // A generic bucket for "the last N overs behave differently", separate from any one specific
+    // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
+  }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), enabled: !(r.lastOverRules && r.lastOverRules.enabled) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off")), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Applies to the last",
+    value: matchRules.lastOverRules.overCount || 1,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+    })),
+    options: [{
+      value: 1,
+      label: "1 over"
+    }, {
+      value: 2,
+      label: "2 overs"
+    }]
+  }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Wide/no-ball illegal again in the last over(s)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: !(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules.wideNoballIllegalAgain ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules.wideNoballIllegalAgain ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules.wideNoballIllegalAgain ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }

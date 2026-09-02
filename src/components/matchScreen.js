@@ -375,7 +375,8 @@ export function MatchScreen({
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
           timeCapMinutes: inn.timeCapMinutes,
-          wideNoballCountsAsBall: inn.wideNoballCountsAsBall
+          wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
+          lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
         updated.awaitingSecondInningsSetup = true;
       } else {
@@ -589,9 +590,9 @@ export function MatchScreen({
       kind: "wicket",
       wicketType,
       // A dismissal on an ordinary delivery is always legal. On a wide/no-ball, whether it's legal
-      // follows the exact same wideNoballCountsAsBall/final-over rule as a plain wide/no-ball ball
-      // — isWideNoballLegal is the single source of truth for that, so this can't drift out of sync
-      // with the plain-ball branches in applyBall.
+      // follows the exact same wideNoballCountsAsBall/lastOverRules rule as a plain wide/no-ball
+      // ball — isWideNoballLegal is the single source of truth for that, so this can't drift out of
+      // sync with the plain-ball branches in applyBall.
       legal: extraKind == null ? true : isWideNoballLegal(inning),
       extraKind,
       runsBeforeWicket,
@@ -2258,7 +2259,7 @@ export function MatchScreen({
       marginTop: -4,
       marginBottom: 12
     }
-  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall ? " (this can flip in the final over)" : ""}.`), /*#__PURE__*/React.createElement("div", {
+  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall && inning.lastOverRules && inning.lastOverRules.enabled && inning.lastOverRules.wideNoballIllegalAgain ? ` (this flips back in the last ${inning.lastOverRules.overCount > 1 ? inning.lastOverRules.overCount + " overs" : "over"})` : ""}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",

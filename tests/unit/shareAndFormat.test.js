@@ -123,9 +123,34 @@ test("nonStandardRulesText: null when every rule matches the default, lists only
 
 test("nonStandardRulesText: notes wideNoballCountsAsBall and impactPlayerEnabled when on", () => {
   const text = nonStandardRulesText({ ...DEFAULT_RULES, wideNoballCountsAsBall: true, impactPlayerEnabled: true });
-  assert.match(text, /wide\/no-ball counts as a ball \(except final over\)/);
+  assert.match(text, /wide\/no-ball counts as a ball/);
   assert.match(text, /Impact Player substitution/);
   assert.doesNotMatch(text, /up to/); // standard 1-per-team default doesn't need calling out
+  assert.doesNotMatch(text, /except/); // lastOverRules isn't on, so no exception to call out
+});
+
+test("nonStandardRulesText: calls out the last-over exception only when lastOverRules.wideNoballIllegalAgain is actually on", () => {
+  const text = nonStandardRulesText({
+    ...DEFAULT_RULES,
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }
+  });
+  assert.match(text, /wide\/no-ball counts as a ball \(except the last over\)/);
+
+  const twoOvers = nonStandardRulesText({
+    ...DEFAULT_RULES,
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 2, wideNoballIllegalAgain: true }
+  });
+  assert.match(twoOvers, /except the last 2 overs/);
+
+  // lastOverRules enabled but the wide/no-ball-specific flag off -- no exception to mention.
+  const noException = nonStandardRulesText({
+    ...DEFAULT_RULES,
+    wideNoballCountsAsBall: true,
+    lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: false }
+  });
+  assert.doesNotMatch(noException, /except/);
 });
 
 test("nonStandardRulesText: calls out impactPlayerMaxSubs when it's above the standard 1", () => {

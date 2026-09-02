@@ -6066,6 +6066,11 @@ const DEFAULT_RULES = {
   playersPerSide: 11,
   retirementRuns: null,
   wideNoballCountsAsBall: false,
+  lastOverRules: {
+    enabled: false,
+    overCount: 1,
+    wideNoballIllegalAgain: false
+  },
   impactPlayerEnabled: false,
   impactPlayerMaxSubs: 1
 };
@@ -6225,7 +6230,12 @@ function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
-  if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
+  if (rules.wideNoballCountsAsBall) {
+    const lor = rules.lastOverRules;
+    const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;
+    const lastOversLabel = revertsInLastOvers ? (lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over") : null;
+    bits.push(revertsInLastOvers ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
+  }
   if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
 }
@@ -6970,12 +6980,21 @@ function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimit) {
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
     wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
+    // A generic "how many overs count as the last over(s), and what changes there" bucket, kept
+    // separate from wideNoballCountsAsBall itself (which used to hardcode its own final-over
+    // exception) so a future last-over-specific rule can hang off the same overCount/enabled
+    // config without re-plumbing "which over is this" arithmetic into each one. See isInLastOvers.
+    lastOverRules: {
+      enabled: !!(r.lastOverRules && r.lastOverRules.enabled),
+      overCount: (r.lastOverRules && r.lastOverRules.overCount) || 1,
+      wideNoballIllegalAgain: !!(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain)
+    },
     // The innings' total legal overs, baked in here purely so applyBall (which only ever sees this
-    // inning, never the match) can tell whether the ball it's about to score is in the final over —
-    // the one thing wideNoballCountsAsBall needs and nothing else here does. null for any caller
-    // that doesn't pass one (every test fixture, e.g.) simply means "no final-over cutoff", i.e.
-    // wideNoballCountsAsBall (if on at all) applies to every over uniformly. Same "baked in at
-    // innings start" caveat as every other house rule above: a mid-chase DLS overs revision won't
+    // inning, never the match) can tell whether the ball it's about to score is in the last over(s)
+    // — the one thing isInLastOvers needs and nothing else here does. null for any caller that
+    // doesn't pass one (every test fixture, e.g.) simply means "no last-over cutoff", i.e. a
+    // last-over rule (if on at all) applies to every over uniformly. Same "baked in at innings
+    // start" caveat as every other house rule above: a mid-chase DLS overs revision won't
     // retroactively change this.
     oversLimit: oversLimit != null ? oversLimit : null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
@@ -7037,21 +7056,34 @@ function ensureBowler(inning, name) {
     inning.bowlingOrder = [...inning.bowlingOrder, name];
   }
 }
+// Whether the current ball falls within the innings' configured "last over(s)" window (see
+// lastOverRules on the inning). A small generic building block -- deliberately answers only "are
+// we there yet", not "what changes there", so more than one last-over-specific rule can share it
+// (today just wideNoballIllegalAgain) without each one re-deriving the same over-counting
+// arithmetic. No oversLimit baked in (every test fixture, e.g.) means no last-over cutoff exists at
+// all, so this is always false rather than guessing at one.
+function isInLastOvers(inning) {
+  const rules = inning.lastOverRules;
+  if (!rules || !rules.enabled || inning.oversLimit == null) return false;
+  const bpo = inning.ballsPerOver || 6;
+  const currentOver = Math.floor(inning.legalBalls / bpo);
+  return currentOver >= Math.floor(inning.oversLimit) - (rules.overCount || 1);
+}
 // Whether a wide/no-ball counts as a legal (over-completing) delivery right now. Standard Laws:
 // always false, every wide/no-ball is re-bowled. The wideNoballCountsAsBall house rule flips that
-// to true everywhere EXCEPT the innings' final over, where it reverts to the standard illegal-ball
-// behavior -- the "final-over wide/no-ball illegal again" switch. Exported (not inlined in
-// applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
+// to true, unless lastOverRules.wideNoballIllegalAgain is also on and we're in the configured
+// last-over window, where it reverts to the standard illegal-ball behavior. Exported (not inlined
+// in applyBall) because the wicket-on-a-wide/no-ball path decides legality at the call site
 // (matchScreen.js builds event.legal itself, since a wicket's legality also depends on the
 // dismissal, not just the extra) and needs the identical answer rather than a second copy of this
 // logic drifting out of sync.
 function isWideNoballLegal(inning) {
   if (!inning.wideNoballCountsAsBall) return false;
-  if (inning.oversLimit == null) return true;
-  const bpo = inning.ballsPerOver || 6;
-  const currentOver = Math.floor(inning.legalBalls / bpo);
-  const isFinalOver = currentOver >= Math.floor(inning.oversLimit) - 1;
-  return !isFinalOver;
+  const lastOverRules = inning.lastOverRules;
+  if (lastOverRules && lastOverRules.enabled && lastOverRules.wideNoballIllegalAgain && isInLastOvers(inning)) {
+    return false;
+  }
+  return true;
 }
 function oversLabel(legalBalls, ballsPerOver) {
   const bpo = ballsPerOver || 6;
@@ -7442,7 +7474,13 @@ function applyBall(inning, event) {
   cur.overs[lastOverIdx] = [...cur.overs[lastOverIdx], {
     display,
     kind: event.kind,
-    runs: runsThisBall
+    runs: runsThisBall,
+    // Persisted per-ball rather than re-derived from `kind` alone at display time -- a wide/
+    // no-ball's actual legality depends on the wideNoballCountsAsBall/lastOverRules house rules in
+    // effect *at the moment this exact ball was bowled*, not just its kind (see ballLabelsForOver
+    // in miscHelpers.js, which reads this to decide whether a wide/no-ball advances the over's
+    // ball count or shares a slot with the next legal delivery).
+    legal: legalBall
   }];
   if (legalBall) {
     cur.legalBalls += 1;
@@ -7750,14 +7788,18 @@ function BallBadge({
 function ballLabelsForOver(overIndex, balls) {
   let legalCount = 0;
   return balls.map(ev => {
-    const isLegal = ev.kind !== "wide" && ev.kind !== "noball";
+    // ev.legal is the actual, as-bowled legality applyBall recorded for this exact ball -- it can
+    // differ from a bare kind check when wideNoballCountsAsBall (or its lastOverRules exception)
+    // is in play, since a wide/no-ball isn't ALWAYS illegal under those house rules. Falls back to
+    // the kind-based guess only for balls saved before this field existed (every wide/no-ball WAS
+    // illegal under the only rules that existed then, so the fallback is exact, not a guess, for
+    // any match old enough to be missing it).
+    const isLegal = ev.legal !== undefined ? ev.legal : ev.kind !== "wide" && ev.kind !== "noball";
     if (isLegal) legalCount += 1;
-    const slot = legalCount + (isLegal ? 0 : 1);
-    // A wide/no-ball doesn't consume a legal-ball slot, so it shares its number with whichever
-    // legal delivery eventually completes that slot -- the trailing "*" is the only thing telling
-    // two adjacent badges with the same number apart (e.g. "3.4*" then "3.4"), which matters most
-    // right at the end of an over where identical-looking labels read as if the over already ended.
-    return isLegal ? `${overIndex + 1}.${slot}` : `${overIndex + 1}.${slot}*`;
+    // A wide/no-ball that didn't count as a legal ball doesn't consume its own slot, so it shares
+    // its number with whichever legal delivery eventually completes that slot (e.g. "3.4" then
+    // "3.4") -- standard, expected cricket-scoring shorthand, not a rendering bug.
+    return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
   });
 }
 
@@ -19673,7 +19715,7 @@ function SetupScreen({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "Wide/no-ball counts as a ball (except final over)"), /*#__PURE__*/React.createElement("button", {
+  }, "Wide/no-ball counts as a ball"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
     onClick: () => setMatchRules(r => ({
@@ -19693,6 +19735,84 @@ function SetupScreen({
       fontSize: 13
     }
   }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+    // A generic bucket for "the last N overs behave differently", separate from any one specific
+    // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
+  }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), enabled: !(r.lastOverRules && r.lastOverRules.enabled) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off")), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Applies to the last",
+    value: matchRules.lastOverRules.overCount || 1,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+    })),
+    options: [{
+      value: 1,
+      label: "1 over"
+    }, {
+      value: 2,
+      label: "2 overs"
+    }]
+  }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Wide/no-ball illegal again in the last over(s)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: !(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules.wideNoballIllegalAgain ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules.wideNoballIllegalAgain ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules.wideNoballIllegalAgain ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -20940,11 +21060,42 @@ function TournamentsScreen({
         superOver: v
       }))
     }), /*#__PURE__*/React.createElement(ToggleRule, {
-      label: "Wide/no-ball counts as a ball (except final over)",
+      label: "Wide/no-ball counts as a ball",
       value: tournamentRules.wideNoballCountsAsBall,
       onChange: v => setTournamentRules(r => ({
         ...r,
         wideNoballCountsAsBall: v
+      }))
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      // A generic bucket for "the last N overs behave differently", kept separate from any one
+      // specific rule (today just the wide/no-ball toggle below) -- see isInLastOvers in
+      // scoringEngine.js.
+      label: "Last over rules",
+      value: tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), enabled: v }
+      }))
+    }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Applies to the last",
+      value: tournamentRules.lastOverRules.overCount || 1,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+      })),
+      options: [{
+        value: 1,
+        label: "1 over"
+      }, {
+        value: 2,
+        label: "2 overs"
+      }]
+    }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && tournamentRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Wide/no-ball illegal again in the last over(s)",
+      value: tournamentRules.lastOverRules.wideNoballIllegalAgain,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: v }
       }))
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Impact Player substitution",
@@ -31811,7 +31962,8 @@ function MatchScreen({
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
           timeCapMinutes: inn.timeCapMinutes,
-          wideNoballCountsAsBall: inn.wideNoballCountsAsBall
+          wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
+          lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
         updated.awaitingSecondInningsSetup = true;
       } else {
@@ -32025,9 +32177,9 @@ function MatchScreen({
       kind: "wicket",
       wicketType,
       // A dismissal on an ordinary delivery is always legal. On a wide/no-ball, whether it's legal
-      // follows the exact same wideNoballCountsAsBall/final-over rule as a plain wide/no-ball ball
-      // — isWideNoballLegal is the single source of truth for that, so this can't drift out of sync
-      // with the plain-ball branches in applyBall.
+      // follows the exact same wideNoballCountsAsBall/lastOverRules rule as a plain wide/no-ball
+      // ball — isWideNoballLegal is the single source of truth for that, so this can't drift out of
+      // sync with the plain-ball branches in applyBall.
       legal: extraKind == null ? true : isWideNoballLegal(inning),
       extraKind,
       runsBeforeWicket,
@@ -33694,7 +33846,7 @@ function MatchScreen({
       marginTop: -4,
       marginBottom: 12
     }
-  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall ? " (this can flip in the final over)" : ""}.`), /*#__PURE__*/React.createElement("div", {
+  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall && inning.lastOverRules && inning.lastOverRules.enabled && inning.lastOverRules.wideNoballIllegalAgain ? ` (this flips back in the last ${inning.lastOverRules.overCount > 1 ? inning.lastOverRules.overCount + " overs" : "over"})` : ""}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",
