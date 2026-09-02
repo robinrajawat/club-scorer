@@ -6010,6 +6010,12 @@ function impactSubsRemainingFor(match, teamName) {
   const max = (match.rules && match.rules.impactPlayerMaxSubs) || 1;
   return Math.max(0, max - used);
 }
+// Whether `name` came on as an Impact Player substitute at some point in this match --
+// match.impactSubs is match-wide (see confirmImpactSub), so this is a simple membership check
+// rather than anything scoped to a particular innings.
+function isImpactSubFor(match, name) {
+  return !!(match.impactSubs || []).some(s => s.inName === name);
+}
 function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
 }
@@ -8037,25 +8043,39 @@ function OversStrip({
 // GENERATED-FN-START: RoleBadge
 function RoleBadge({
   isCaptain,
-  isKeeper
+  isKeeper,
+  isImpact
 }) {
-  if (!isCaptain && !isKeeper) return null;
-  const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
-  return /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-block",
-      marginLeft: 5,
-      padding: "1px 5px",
-      borderRadius: 5,
-      background: isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)",
-      color: isCaptain ? COLORS.gold : COLORS.turf,
-      fontSize: 9.5,
-      fontWeight: 800,
-      letterSpacing: 0.3,
-      verticalAlign: "middle",
-      fontFamily: "'Inter'"
-    }
-  }, label);
+  if (!isCaptain && !isKeeper && !isImpact) return null;
+  function badge(key, label, background, color) {
+    return /*#__PURE__*/React.createElement("span", {
+      key,
+      style: {
+        display: "inline-block",
+        marginLeft: 5,
+        padding: "1px 5px",
+        borderRadius: 5,
+        background,
+        color,
+        fontSize: 9.5,
+        fontWeight: 800,
+        letterSpacing: 0.3,
+        verticalAlign: "middle",
+        fontFamily: "'Inter'"
+      }
+    }, label);
+  }
+  const badges = [];
+  if (isCaptain || isKeeper) {
+    const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
+    badges.push(badge("role", label, isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)", isCaptain ? COLORS.gold : COLORS.turf));
+  }
+  // Distinct color from captain (gold) and keeper (turf) so a substitute reads as its own thing at
+  // a glance, not a third variant of the same badge -- most useful right where the app already
+  // shows player names (scoring header, scorecard rows), so nobody has to cross-reference the
+  // one-line "Impact Player: X on for Y" summary to know who's who.
+  if (isImpact) badges.push(badge("impact", "IP", "rgba(201,168,118,0.3)", COLORS.willow));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, badges);
 }
 // GENERATED-FN-END: RoleBadge
 // GENERATED-FN-START: BallCelebration
@@ -29552,11 +29572,17 @@ function InningScorecard({
   bowlingCaptain,
   bowlingKeeper,
   battingNumbers,
-  bowlingNumbers
+  bowlingNumbers,
+  impactSubs
 }) {
   const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye + (inning.extras.penalty || 0);
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
   const bowlingOrder = inning.bowlingOrder.length ? inning.bowlingOrder : Object.keys(inning.bowlers);
+  // Impact subs are recorded match-wide, not per innings -- a name only earns the badge in whichever
+  // innings it actually came on in, otherwise the sub's original-XI teammate carried the same name
+  // into the OTHER innings' scorecard would wrongly get tagged too (unlikely with real rosters, but
+  // free to guard against since the check is just a Set lookup).
+  const impactNames = new Set((impactSubs || []).filter(s => s.team === inning.battingTeam || s.team === inning.bowlingTeam).map(s => s.inName));
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -29648,7 +29674,8 @@ function InningScorecard({
       }
     }, "#", battingNumbers[name], " "), name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === battingCaptain,
-      isKeeper: name === battingKeeper
+      isKeeper: name === battingKeeper,
+      isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11.5,
@@ -29837,7 +29864,8 @@ function InningScorecard({
       }
     }, "#", bowlingNumbers[name], " "), name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === bowlingCaptain,
-      isKeeper: name === bowlingKeeper
+      isKeeper: name === bowlingKeeper,
+      isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
@@ -29971,7 +29999,8 @@ function PrintReport({
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
-    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam),
+    impactSubs: match.impactSubs
   })) : null));
 }
 // GENERATED-FN-END: PrintReport
@@ -31161,7 +31190,8 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    impactSubs: match.impactSubs
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -31218,7 +31248,8 @@ function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    impactSubs: match.impactSubs
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
@@ -33874,7 +33905,8 @@ function MatchScreen({
       }
     }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
-      isKeeper: name === keeperFor(match, inning.battingTeam)
+      isKeeper: name === keeperFor(match, inning.battingTeam),
+      isImpact: isImpactSubFor(match, name)
     }))), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'IBM Plex Mono', monospace",
@@ -33929,7 +33961,8 @@ function MatchScreen({
     }
   }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
-    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam)
+    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam),
+    isImpact: isImpactSubFor(match, inning.bowlerName)
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",

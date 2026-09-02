@@ -1118,6 +1118,12 @@ export function impactSubsRemainingFor(match, teamName) {
   const max = (match.rules && match.rules.impactPlayerMaxSubs) || 1;
   return Math.max(0, max - used);
 }
+// Whether `name` came on as an Impact Player substitute at some point in this match --
+// match.impactSubs is match-wide (see confirmImpactSub), so this is a simple membership check
+// rather than anything scoped to a particular innings.
+export function isImpactSubFor(match, name) {
+  return !!(match.impactSubs || []).some(s => s.inName === name);
+}
 export function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
 }

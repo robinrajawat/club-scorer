@@ -53,6 +53,19 @@ test("InningScorecard: renders batting/bowling tables with captain/keeper badges
   assert.match(text, /Fall of Wickets/);
 });
 
+test("InningScorecard: tags an Impact Player substitute's name with an 'IP' badge, in whichever role they show up", () => {
+  const impactSubs = [{ inName: "Jasprit Bumrah", outName: "Mohammed Shami", team: "Oakwood CC" }];
+  const inst = renderer.create(React.createElement(InningScorecard, {
+    inning: inning(),
+    battingCaptain: "Virat Kohli", battingKeeper: "Rohit Sharma",
+    bowlingCaptain: "Jasprit Bumrah", bowlingKeeper: "",
+    battingNumbers: {}, bowlingNumbers: {},
+    impactSubs
+  }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.equal((text.match(/"IP"/g) || []).length, 1); // only Jasprit Bumrah, not any other name
+});
+
 test("MatchStatsPanel: showOvers=true shows the live-innings summary card, overs strip, and collapsible sections", () => {
   const match = matchWith([inning({ complete: false })]);
   const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));

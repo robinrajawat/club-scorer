@@ -15,6 +15,15 @@ test("RoleBadge: renders C/WK/C·WK based on the flags, null when neither is set
   assert.equal(renderer.create(React.createElement(RoleBadge, { isCaptain: true, isKeeper: true })).toJSON().children[0], "C·WK");
 });
 
+test("RoleBadge: isImpact renders an 'IP' badge, alongside a role badge when both apply", () => {
+  assert.equal(renderer.create(React.createElement(RoleBadge, { isImpact: false })).toJSON(), null);
+  assert.equal(renderer.create(React.createElement(RoleBadge, { isImpact: true })).toJSON().children[0], "IP");
+  const both = renderer.create(React.createElement(RoleBadge, { isCaptain: true, isImpact: true })).toJSON();
+  assert.equal(both.length, 2);
+  assert.equal(both[0].children[0], "C");
+  assert.equal(both[1].children[0], "IP");
+});
+
 test("BallCelebration: null with no celebration, otherwise OUT!/SIX!/FOUR! based on type", () => {
   assert.equal(renderer.create(React.createElement(BallCelebration, { celebration: null })).toJSON(), null);
   const wicketTree = renderer.create(React.createElement(BallCelebration, { celebration: { type: "wicket", key: 1 } })).toJSON();

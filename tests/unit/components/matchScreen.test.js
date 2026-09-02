@@ -112,6 +112,15 @@ function maxHitBtn(ctx) {
   return ctx.inst.root.findAllByType(Btn).find(b => typeof b.props.children === "string" && b.props.children.startsWith("Maximum Hit"));
 }
 
+test("MatchScreen: tags a batsman or bowler who came on as an Impact Player sub with an 'IP' badge", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch({
+    impactSubs: [{ inName: "B", outName: "C", team: "Riverside CC" }]
+  }));
+  const text = JSON.stringify(ctx.inst.toJSON());
+  assert.equal((text.match(/"IP"/g) || []).length, 1); // only B (non-striker), not A or bowler X
+});
+
 test("MatchScreen: shows the live score header", () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());

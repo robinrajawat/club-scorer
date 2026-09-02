@@ -16,8 +16,8 @@ import { ResultScreen } from "./resultScreen.js";
 import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
-  decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isOverTimeCap, keeperFor,
-  maxWicketsFor, numberFor, numbersFor, oversLeftTrueDecimal, rosterFor, suggestedNextBowler
+  decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isImpactSubFor, isOverTimeCap,
+  keeperFor, maxWicketsFor, numberFor, numbersFor, oversLeftTrueDecimal, rosterFor, suggestedNextBowler
 } from "../core/appLogic.js";
 import { chasingInfo } from "../core/shareAndFormat.js";
 import { clearPendingWrite, loadUndoHistory, saveUndoHistory } from "../core/localStorageOutbox.js";
@@ -1742,7 +1742,8 @@ export function MatchScreen({
       }
     }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
-      isKeeper: name === keeperFor(match, inning.battingTeam)
+      isKeeper: name === keeperFor(match, inning.battingTeam),
+      isImpact: isImpactSubFor(match, name)
     }))), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'IBM Plex Mono', monospace",
@@ -1797,7 +1798,8 @@ export function MatchScreen({
     }
   }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
-    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam)
+    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam),
+    isImpact: isImpactSubFor(match, inning.bowlerName)
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",

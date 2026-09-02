@@ -10,25 +10,39 @@ import { hasSeenSwipeHint, markSwipeHintSeen } from "../core/appLogic.js";
 
 export function RoleBadge({
   isCaptain,
-  isKeeper
+  isKeeper,
+  isImpact
 }) {
-  if (!isCaptain && !isKeeper) return null;
-  const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
-  return /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-block",
-      marginLeft: 5,
-      padding: "1px 5px",
-      borderRadius: 5,
-      background: isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)",
-      color: isCaptain ? COLORS.gold : COLORS.turf,
-      fontSize: 9.5,
-      fontWeight: 800,
-      letterSpacing: 0.3,
-      verticalAlign: "middle",
-      fontFamily: "'Inter'"
-    }
-  }, label);
+  if (!isCaptain && !isKeeper && !isImpact) return null;
+  function badge(key, label, background, color) {
+    return /*#__PURE__*/React.createElement("span", {
+      key,
+      style: {
+        display: "inline-block",
+        marginLeft: 5,
+        padding: "1px 5px",
+        borderRadius: 5,
+        background,
+        color,
+        fontSize: 9.5,
+        fontWeight: 800,
+        letterSpacing: 0.3,
+        verticalAlign: "middle",
+        fontFamily: "'Inter'"
+      }
+    }, label);
+  }
+  const badges = [];
+  if (isCaptain || isKeeper) {
+    const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
+    badges.push(badge("role", label, isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)", isCaptain ? COLORS.gold : COLORS.turf));
+  }
+  // Distinct color from captain (gold) and keeper (turf) so a substitute reads as its own thing at
+  // a glance, not a third variant of the same badge -- most useful right where the app already
+  // shows player names (scoring header, scorecard rows), so nobody has to cross-reference the
+  // one-line "Impact Player: X on for Y" summary to know who's who.
+  if (isImpact) badges.push(badge("impact", "IP", "rgba(201,168,118,0.3)", COLORS.willow));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, badges);
 }
 
 export function BallCelebration({
