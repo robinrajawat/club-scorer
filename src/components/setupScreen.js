@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Trophy, ArrowLeftRight } from "./icons.js";
+import { Trophy, ArrowLeftRight, Pencil } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
+import { VenueEditModal } from "./venueAndDateModals.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
 import { tossText, umpiresText, nonStandardRulesText, wideNoballLastOverExceptionLabel } from "../core/shareAndFormat.js";
 
@@ -36,7 +37,8 @@ export function SetupScreen({
   teams,
   rules,
   presetTournament,
-  clubUmpires
+  clubUmpires,
+  clubs
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -58,6 +60,12 @@ export function SetupScreen({
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
+  // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
+  // own default venue (see TournamentsScreen's own venue picker) doesn't carry verified coordinates
+  // today, so there's nothing to seed these from yet even when the venue name itself is inherited.
+  const [venueLat, setVenueLat] = useState(null);
+  const [venueLng, setVenueLng] = useState(null);
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
   // Deliberately not inherited from presetTournament the way venue is -- a ground tends to stay
   // the same across a tournament/series, but who's umpiring rarely does, so defaulting to the
   // previous fixture's umpires here would be wrong more often than it'd save typing.
@@ -482,11 +490,70 @@ export function SetupScreen({
     }]
   }), /*#__PURE__*/React.createElement(Field, {
     label: "Venue (optional)"
-  }, /*#__PURE__*/React.createElement(TextField, {
+  }, venue ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      fontWeight: 600,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, "📍 ", venue), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Edit venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }))) : /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "Add a venue")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: venue,
-    onChange: setVenue,
-    placeholder: "e.g. Willow Park"
-  })), /*#__PURE__*/React.createElement(Field, {
+    initialLat: venueLat,
+    initialLng: venueLng,
+    clubs: clubs,
+    onSave: (v, lat, lng) => {
+      setVenue(v || "");
+      setVenueLat(lat != null ? lat : null);
+      setVenueLng(lng != null ? lng : null);
+    },
+    onClose: () => setVenueModalOpen(false)
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Umpires (optional)"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1673,6 +1740,8 @@ export function SetupScreen({
         teamBId,
         oversLimit: parseInt(overs || "0", 10),
         venue: venue.trim() || null,
+        venueLat: venue.trim() ? venueLat : null,
+        venueLng: venue.trim() ? venueLng : null,
         umpire1: umpire1.trim() || null,
         umpire2: umpire2.trim() || null,
         battingFirstTeam: teamAIsBattingFirst ? teamAName.trim() : teamBName.trim(),
