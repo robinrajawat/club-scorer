@@ -8063,7 +8063,17 @@ function OversStrip({
         flex: "0 0 100%",
         width: "100%",
         scrollSnapAlign: "start",
-        scrollSnapStop: "always"
+        scrollSnapStop: "always",
+        // Own compositing layer per over, not just on the shared scroller (see its comment) --
+        // this is the actual region whose CONTENT swaps (ball badges <-> "Not started") while its
+        // own box geometry stays identical, which is exactly the case WebKit has been seen to
+        // under-invalidate for repaint: unlike the scroll-jump case the outer scroller's own fix
+        // targets, undoing the current over's only ball changes this div's content with no
+        // corresponding scroll-position change at all, so the outer layer's invalidation on scroll
+        // never fires for it. Giving each over its own layer means a content-only change here
+        // forces its own repaint regardless of what the scroller around it does.
+        WebkitTransform: "translateZ(0)",
+        transform: "translateZ(0)"
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {

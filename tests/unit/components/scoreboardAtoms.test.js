@@ -20,6 +20,25 @@ test("OversStrip: renders 'Not started' for an empty over, ball badges for a sta
   assert.match(text, /THIS OVER/);
 });
 
+// Reported alongside the "mystery apostrophe" glitch: undoing the current over's only ball --
+// e.g. undoing a just-scored dot ball -- reverts that over's ball count from 1 back to 0, so the
+// SAME div (same key, no fresh insert, no scroll-position change) must swap its content from a
+// ball badge to the "Not started" placeholder. On a real device this update was reported to leave
+// stale content on screen; this test can only confirm the React element tree itself comes out
+// correct on that exact transition (a real repaint bug, if that's what this is, wouldn't show up
+// here -- see the translateZ(0) mitigation on each over's own container in OversStrip).
+test("OversStrip: undoing the current over's only ball updates that over's content cleanly, no leftover ball badge", () => {
+  const withBall = [[{ runs: 0 }], [{ runs: 0 }]];
+  const withoutBall = [[{ runs: 0 }], []];
+  let inst;
+  act(() => { inst = renderer.create(React.createElement(OversStrip, { overs: withBall, ballsPerOver: 6 })); });
+  act(() => { inst.update(React.createElement(OversStrip, { overs: withoutBall, ballsPerOver: 6 })); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Not started/);
+  // Only OVER 1's single ball badge should remain -- none carried over from the now-empty over 2.
+  assert.equal((text.match(/cs-pop/g) || []).length, 1);
+});
+
 test("OversStrip: shows a per-over runs/wickets summary next to a completed over's label", () => {
   const overs = [[{ runs: 4 }, { runs: 1, kind: "wicket" }], [{ runs: 2 }]];
   const inst = renderer.create(React.createElement(OversStrip, { overs, ballsPerOver: 6 }));
