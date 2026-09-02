@@ -25,11 +25,17 @@ export function InningScorecard({
   bowlingCaptain,
   bowlingKeeper,
   battingNumbers,
-  bowlingNumbers
+  bowlingNumbers,
+  impactSubs
 }) {
   const totalExtras = inning.extras.wide + inning.extras.noball + inning.extras.bye + inning.extras.legbye + (inning.extras.penalty || 0);
   const battingOrder = inning.battingOrder.length ? inning.battingOrder : Object.keys(inning.batsmen);
   const bowlingOrder = inning.bowlingOrder.length ? inning.bowlingOrder : Object.keys(inning.bowlers);
+  // Impact subs are recorded match-wide, not per innings -- a name only earns the badge in whichever
+  // innings it actually came on in, otherwise the sub's original-XI teammate carried the same name
+  // into the OTHER innings' scorecard would wrongly get tagged too (unlikely with real rosters, but
+  // free to guard against since the check is just a Set lookup).
+  const impactNames = new Set((impactSubs || []).filter(s => s.team === inning.battingTeam || s.team === inning.bowlingTeam).map(s => s.inName));
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -121,7 +127,8 @@ export function InningScorecard({
       }
     }, "#", battingNumbers[name], " "), name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === battingCaptain,
-      isKeeper: name === battingKeeper
+      isKeeper: name === battingKeeper,
+      isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11.5,
@@ -310,7 +317,8 @@ export function InningScorecard({
       }
     }, "#", bowlingNumbers[name], " "), name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === bowlingCaptain,
-      isKeeper: name === bowlingKeeper
+      isKeeper: name === bowlingKeeper,
+      isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
       style: {
         textAlign: "right",
@@ -610,7 +618,8 @@ export function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    impactSubs: match.impactSubs
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -667,7 +676,8 @@ export function MatchStatsPanel({
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
-    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam)
+    bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
+    impactSubs: match.impactSubs
   })), /*#__PURE__*/React.createElement(RunRateChart, {
     match: match
   }), /*#__PURE__*/React.createElement(RunsPerOverChart, {
@@ -842,7 +852,8 @@ export function PrintReport({
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
-    bowlingNumbers: numbersFor(match, inn.bowlingTeam)
+    bowlingNumbers: numbersFor(match, inn.bowlingTeam),
+    impactSubs: match.impactSubs
   })) : null));
 }
 

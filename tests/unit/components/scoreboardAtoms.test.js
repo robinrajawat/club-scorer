@@ -105,6 +105,34 @@ test("SyncStatusBanner: tapping retries via the (stubbed) flushPendingWrites and
   }
 });
 
+test("SyncStatusBanner: an onRetry override is used instead of flushPendingWrites", async () => {
+  // MatchScreen passes its own onRetry (see matchScreen.js's retrySync) because flushPendingWrites
+  // deliberately skips whatever match is currently open there -- without this override, tapping
+  // retry on the exact match being scored would silently no-op forever.
+  Object.defineProperty(dom.window.navigator, "onLine", { value: true, configurable: true });
+  let flushCalls = 0;
+  globalThis.flushPendingWrites = () => { flushCalls++; return Promise.resolve({ lastError: null }); };
+  let retryCalls = 0;
+  let inst;
+  act(() => {
+    inst = renderer.create(React.createElement(SyncStatusBanner, {
+      count: 1, onSynced: () => {},
+      onRetry: () => { retryCalls++; return Promise.resolve({ lastError: null }); }
+    }));
+  });
+  try {
+    const button = inst.root.findByType("button");
+    await act(async () => {
+      button.props.onClick();
+      await new Promise(r => setTimeout(r, 0));
+    });
+    assert.equal(retryCalls, 1);
+    assert.equal(flushCalls, 0);
+  } finally {
+    act(() => { inst.unmount(); });
+  }
+});
+
 test("SyncStatusBanner: surfaces the error flushPendingWrites reports, and clears it once count hits 0", async () => {
   Object.defineProperty(dom.window.navigator, "onLine", { value: true, configurable: true });
   globalThis.flushPendingWrites = () => Promise.resolve({ lastError: "Permission denied" });

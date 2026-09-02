@@ -208,6 +208,30 @@ test("SetupScreen: 'Customize' reveals the rules editor, and a rule change is re
   assert.equal(started.rules.ballsPerOver, 8);
 });
 
+// The rules editor used to be one flat, undifferentiated list of 16+ fields, all styled
+// identically -- no visual signal for where one topic ended and the next began. Grouped into
+// labeled sections now (mirroring the same grouping already shipped for the tournament rules
+// editor), in a fixed order, so a scorer can jump straight to the topic they came in for.
+test("SetupScreen: the rules editor is grouped into labeled sections, in order", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  const text = JSON.stringify(inst.toJSON());
+  const sections = ["Format", "Extras", "Special rules", "Bowling limits", "Batting rules"];
+  const positions = sections.map(s => text.indexOf(`"${s}"`));
+  positions.forEach((pos, i) => assert.ok(pos !== -1, `section "${sections[i]}" is rendered`));
+  for (let i = 1; i < positions.length; i++) {
+    assert.ok(positions[i] > positions[i - 1], `"${sections[i]}" appears after "${sections[i - 1]}"`);
+  }
+});
+
 // Regression: Review used to reuse the collapsed rules card's own terse, abbreviated summary
 // (e.g. "Wd/Nb counts as ball", ambiguous about whether that also applies in the final over) --
 // the same text meant for a quick glance while still editing rules, not the last screen before a

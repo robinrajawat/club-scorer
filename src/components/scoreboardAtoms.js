@@ -10,9 +10,12 @@ import { ballLabelsForOver } from "../core/miscHelpers.js";
 // tests/unit/components/scoreboardAtoms.test.js.
 //
 // SyncStatusBanner reads navigator.onLine and window's online/offline events directly, so like
-// Modal it needs a real jsdom-backed DOM to test meaningfully. Its handleTap calls
+// Modal it needs a real jsdom-backed DOM to test meaningfully. Its handleTap defaults to calling
 // `flushPendingWrites` (a Firestore write, defined in public/index.html, not extracted -- needs the
-// Firebase SDK global) from an onClick handler, same pattern as saveMatch elsewhere in this app.
+// Firebase SDK global) from an onClick handler, same pattern as saveMatch elsewhere in this app --
+// but accepts an `onRetry` override, since flushPendingWrites deliberately skips whatever match is
+// currently open in MatchScreen (see its own comment), which would otherwise make "tap to retry" a
+// permanent no-op for the exact match someone is actively scoring.
 
 export function OversStrip({
   overs,
@@ -198,7 +201,8 @@ export function FixturePollSummary({
 export function SyncStatusBanner({
   count,
   dark,
-  onSynced
+  onSynced,
+  onRetry
 }) {
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState(null);
@@ -235,7 +239,7 @@ export function SyncStatusBanner({
     setLastError(null);
     const {
       lastError: error
-    } = await flushPendingWrites();
+    } = await (onRetry ? onRetry() : flushPendingWrites());
     // Without the onSynced() call, a tap that actually succeeds (clears the outbox) still leaves
     // the banner reading the old count — nothing refreshes it until the next 15s background poll
     // or an 'online' event, so a successful retry looks indistinguishable from tapping doing

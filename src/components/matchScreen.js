@@ -16,8 +16,8 @@ import { ResultScreen } from "./resultScreen.js";
 import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
-  decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isOverTimeCap, keeperFor,
-  maxWicketsFor, numberFor, numbersFor, oversLeftTrueDecimal, rosterFor, suggestedNextBowler
+  decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isImpactSubFor, isOverTimeCap,
+  keeperFor, maxWicketsFor, numberFor, numbersFor, oversLeftTrueDecimal, rosterFor, suggestedNextBowler
 } from "../core/appLogic.js";
 import { chasingInfo } from "../core/shareAndFormat.js";
 import { clearPendingWrite, loadUndoHistory, saveUndoHistory } from "../core/localStorageOutbox.js";
@@ -228,6 +228,17 @@ export function MatchScreen({
       writeSeq: writeSeqRef.current
     })).then(applySaveResult);
     return saveQueueRef.current;
+  }
+  // The SyncStatusBanner's manual "tap to retry" can't just fall back to flushPendingWrites here --
+  // that background flush deliberately SKIPS whatever match is currently open (see its own comment,
+  // added to fix the self-conflicting-save race) to avoid racing this screen's own queueSave chain.
+  // If this exact match is the one stuck in the outbox, flushPendingWrites would silently no-op on
+  // every tap forever. Retrying through queueSave keeps it on the same safe, serialized path as
+  // every other save from this screen, while flushPendingWrites still covers any OTHER queued match.
+  async function retrySync() {
+    const [own, others] = await Promise.all([queueSave(match), flushPendingWrites()]);
+    const error = !own.ok && !own.conflict ? own.error || "Couldn't reach the server." : others.lastError;
+    return { lastError: error || null };
   }
   function resolveConflictKeepMine() {
     const forced = {
@@ -1162,7 +1173,8 @@ export function MatchScreen({
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
     dark: true,
-    onSynced: onPendingSynced
+    onSynced: onPendingSynced,
+    onRetry: retrySync
   }), match.isSuperOver && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -1730,7 +1742,8 @@ export function MatchScreen({
       }
     }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
-      isKeeper: name === keeperFor(match, inning.battingTeam)
+      isKeeper: name === keeperFor(match, inning.battingTeam),
+      isImpact: isImpactSubFor(match, name)
     }))), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'IBM Plex Mono', monospace",
@@ -1785,7 +1798,8 @@ export function MatchScreen({
     }
   }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
-    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam)
+    isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam),
+    isImpact: isImpactSubFor(match, inning.bowlerName)
   })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",

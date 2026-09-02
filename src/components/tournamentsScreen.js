@@ -160,7 +160,7 @@ export function NullableNumberRule({
 // (section vs. field) read as genuinely different tiers rather than just more of the same text.
 // `first` drops the top border/extra margin, since the very first section sits right under the
 // "Customize" toggle's own explanatory sentence and doesn't need a second divider on top of that.
-function RuleSectionHeader({
+export function RuleSectionHeader({
   label,
   first
 }) {
