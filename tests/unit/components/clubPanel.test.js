@@ -36,6 +36,7 @@ function baseProps(overrides = {}) {
     clubs: [], activeClubId: null, onSelect: () => {}, currentUid: "owner1",
     onCreate: () => Promise.resolve({ ok: true }), onJoin: () => Promise.resolve({ ok: true }),
     onInvite: () => Promise.resolve({ ok: true }), onInviteCoOwner: () => Promise.resolve({ ok: true }),
+    onCancelCoOwnerInvite: () => Promise.resolve({ ok: true }),
     onLeave: () => {}, onDelete: () => {}, onRename: () => Promise.resolve({ ok: true }),
     onUpdateDescription: () => Promise.resolve({ ok: true }), onUpdateAddress: () => Promise.resolve({ ok: true }),
     onUploadLogo: () => Promise.resolve({ ok: true }), onRemoveLogo: () => Promise.resolve({ ok: true }),
@@ -151,6 +152,49 @@ test("ClubPanel: as owner, 'Manage' reveals invite/umpire/member controls; invit
   });
   assert.deepEqual(invitedWith, { id: "c1", email: "sam@example.com" });
   assert.match(JSON.stringify(inst.toJSON()), /INV123/);
+});
+
+test("ClubPanel: inviting a co-owner by email calls onInviteCoOwner and shows a confirmation, no code", async () => {
+  let invitedWith = null;
+  const inst = render({
+    clubs: [club()], activeClubId: "c1", currentUid: "owner1",
+    onInviteCoOwner: (id, email) => { invitedWith = { id, email }; return Promise.resolve({ ok: true }); }
+  });
+  openManage(inst);
+  const showMembersBtn = inst.root.findAllByProps({ "aria-label": "Show members" })[0];
+  act(() => { showMembersBtn.props.onClick(); });
+  const coOwnerBtn = inst.root.findAllByType("button").find(b => b.props.children === "+ Invite a co-owner by email");
+  act(() => { coOwnerBtn.props.onClick(); });
+
+  const emailField = inst.root.findAllByType("input").find(i => i.props.type !== "file");
+  act(() => { emailField.props.onChange({ target: { value: "sam@example.com" } }); });
+
+  const submitBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Invite"));
+  await act(async () => {
+    submitBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(invitedWith, { id: "c1", email: "sam@example.com" });
+  assert.match(JSON.stringify(inst.toJSON()), /Invite sent to/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
+});
+
+test("ClubPanel: a pending co-owner invite shows in the manage panel with a Cancel action wired to onCancelCoOwnerInvite", async () => {
+  let cancelledId = null;
+  const inst = render({
+    clubs: [club()], activeClubId: "c1", currentUid: "owner1",
+    coOwnerInvites: [{ id: "inv1", scope: "club", entityId: "c1", email: "sam@example.com", status: "pending" }],
+    onCancelCoOwnerInvite: id => { cancelledId = id; return Promise.resolve({ ok: true }); }
+  });
+  openManage(inst);
+  assert.match(JSON.stringify(inst.toJSON()), /Pending co-owner invites/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
+  const cancelBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Cancel invite to sam@example.com");
+  await act(async () => {
+    cancelBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(cancelledId, "inv1");
 });
 
 test("ClubPanel: adding an umpire calls onAddUmpire, and removing one calls onRemoveUmpire", async () => {

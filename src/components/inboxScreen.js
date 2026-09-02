@@ -15,14 +15,19 @@ export function InboxScreen({
   clubs,
   federationsById,
   currentUid,
+  currentEmail,
   onRespond,
   onCancel,
   onCompleteJoin,
+  coOwnerInvites = [],
+  onRespondCoOwnerInvite,
+  onCancelCoOwnerInvite,
   pollItems = [],
   onPollsChanged,
   onBack
 }) {
   const [busyId, setBusyId] = useState(null);
+  const [coOwnerBusyId, setCoOwnerBusyId] = useState(null);
   const [error, setError] = useState("");
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
   function clubById(id) {
@@ -49,6 +54,28 @@ export function InboxScreen({
   const incoming = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyFederation(r.federationId) || r.direction === "federation_to_club" && isMyClub(r.clubId)));
   const outgoing = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyClub(r.clubId) || r.direction === "federation_to_club" && isMyFederation(r.federationId)));
   const needsFinalize = requests.filter(r => r.direction === "club_to_federation" && r.status === "accepted" && isMyClub(r.clubId));
+  const myEmailLower = (currentEmail || "").toLowerCase();
+  const incomingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
+  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.createdBy === currentUid);
+  function coOwnerInviteEntityName(inv) {
+    return inv.scope === "club" ? clubName(inv.entityId) : fedName(inv.entityId);
+  }
+  async function handleRespondCoOwner(inv, accept) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onRespondCoOwnerInvite(inv.id, accept);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't respond to that invite.");
+  }
+  async function handleCancelCoOwner(inv) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onCancelCoOwnerInvite(inv.id);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't cancel that invite.");
+  }
   async function handleRespond(r, accept) {
     if (busyId) return;
     setBusyId(r.id);
@@ -102,7 +129,7 @@ export function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0;
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -259,7 +286,46 @@ export function InboxScreen({
     style: {
       width: "100%"
     }
-  }, busyId === r.id ? "\u2026" : "Finish joining")))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, busyId === r.id ? "\u2026" : "Finish joining")))), incomingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Co-owner invites"), incomingCoOwnerInvites.map((inv, idx) => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => handleRespondCoOwner(inv, true),
+    disabled: coOwnerBusyId === inv.id,
+    style: {
+      flex: 1
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Accept"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRespondCoOwner(inv, false),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "0 14px",
+      minHeight: 44,
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.willow}`,
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, "Decline"))))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
   }, "Needs your response"), incoming.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id,
@@ -323,7 +389,32 @@ export function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, busyId === r.id ? "\u2026" : "Cancel request")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, busyId === r.id ? "\u2026" : "Cancel request")))), outgoingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Co-owner invites sent"), outgoingCoOwnerInvites.map((inv, idx) => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwner(inv),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,

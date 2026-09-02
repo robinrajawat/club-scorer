@@ -84,6 +84,11 @@ async function render(url) {
   globalThis.loadTournaments = () => Promise.resolve([]);
   globalThis.loadBetaStatus = () => Promise.resolve(false);
   globalThis.loadClubs = () => Promise.resolve([]);
+  // Unlike loadMyFederationRequests (only called once the signed-in user owns/co-owns a club or
+  // federation, so most of these tests' plain signed-in user never reaches it), the co-owner
+  // invites load also covers invites addressed to my own email regardless of ownership -- so it
+  // runs on every signed-in mount here and needs a stub even for tests that own nothing.
+  globalThis.loadMyCoOwnerInvites = () => Promise.resolve([]);
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
   globalThis.loadMyPlayerProfile = () => Promise.resolve(null);

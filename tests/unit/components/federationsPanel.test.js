@@ -39,6 +39,7 @@ function baseProps(overrides = {}) {
     onLoadFederationTeams: () => Promise.resolve([]), onLoadFederationMembers: () => Promise.resolve([]),
     onRenameFederation: () => Promise.resolve({ ok: true }), onUpdateFederationDescription: () => Promise.resolve({ ok: true }),
     onInviteFederationCoOwnerByEmail: () => Promise.resolve({ ok: true }), onRemoveFederationCoOwner: () => Promise.resolve({ ok: true }),
+    onCancelCoOwnerInvite: () => Promise.resolve({ ok: true }),
     onKickClubFromFederation: () => Promise.resolve({ ok: true }), onDeleteFederation: () => Promise.resolve({ ok: true }),
     onRevokeInvite: () => Promise.resolve({ ok: true }), onCancelFederationRequest: () => Promise.resolve({ ok: true }),
     onOpenRecords: () => {},
@@ -195,11 +196,11 @@ test("FederationsPanel: 'Find a club to invite' requests federation_to_club affi
   assert.deepEqual(requestedWith, { direction: "federation_to_club", clubId: "c1", fedId: "fed1" });
 });
 
-test("FederationsPanel: inviting a co-owner by email calls onInviteFederationCoOwnerByEmail and shows the code", async () => {
+test("FederationsPanel: inviting a co-owner by email calls onInviteFederationCoOwnerByEmail and shows a confirmation", async () => {
   let invitedWith = null;
   const inst = render({
     federationsById: { fed1: federation() },
-    onInviteFederationCoOwnerByEmail: (fedId, email) => { invitedWith = { fedId, email }; return Promise.resolve({ ok: true, code: "COINV1" }); }
+    onInviteFederationCoOwnerByEmail: (fedId, email) => { invitedWith = { fedId, email }; return Promise.resolve({ ok: true }); }
   });
   await act(async () => {
     openManage(inst);
@@ -217,7 +218,29 @@ test("FederationsPanel: inviting a co-owner by email calls onInviteFederationCoO
     await new Promise(r => setTimeout(r, 0));
   });
   assert.deepEqual(invitedWith, { fedId: "fed1", email: "sam@example.com" });
-  assert.match(JSON.stringify(inst.toJSON()), /COINV1/);
+  assert.match(JSON.stringify(inst.toJSON()), /Invite sent to/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
+});
+
+test("FederationsPanel: a pending co-owner invite shows in the manage panel with a Cancel action wired to onCancelCoOwnerInvite", async () => {
+  let cancelledId = null;
+  const inst = render({
+    federationsById: { fed1: federation() },
+    coOwnerInvites: [{ id: "inv1", scope: "federation", entityId: "fed1", email: "sam@example.com", status: "pending" }],
+    onCancelCoOwnerInvite: id => { cancelledId = id; return Promise.resolve({ ok: true }); }
+  });
+  await act(async () => {
+    openManage(inst);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Pending co-owner invites/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
+  const cancelBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Cancel") && b.props["aria-label"] === "Cancel invite to sam@example.com");
+  await act(async () => {
+    cancelBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(cancelledId, "inv1");
 });
 
 test("FederationsPanel: 'Delete this federation' only shows once no clubs are affiliated, and confirming calls onDeleteFederation", async () => {

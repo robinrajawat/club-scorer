@@ -33,8 +33,11 @@ const federation = { id: "fed1", name: "County League", createdBy: "fedOwner1" }
 function baseProps(overrides = {}) {
   return {
     requests: [], clubs: [club], federationsById: { fed1: federation }, currentUid: "owner1",
+    currentEmail: "owner1@example.com",
     onRespond: () => Promise.resolve({ ok: true }), onCancel: () => Promise.resolve({ ok: true }),
     onCompleteJoin: () => Promise.resolve({ ok: true }), onBack: () => {},
+    coOwnerInvites: [], onRespondCoOwnerInvite: () => Promise.resolve({ ok: true }),
+    onCancelCoOwnerInvite: () => Promise.resolve({ ok: true }),
     ...overrides
   };
 }
@@ -102,6 +105,39 @@ test("InboxScreen: a failed respond shows the returned error", async () => {
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(hasText(inst.toJSON(), "That request no longer exists."), true);
+});
+
+test("InboxScreen: an incoming co-owner invite addressed to my email shows Accept/Decline, wired to onRespondCoOwnerInvite", async () => {
+  let respondedWith = null;
+  const coOwnerInvites = [{ id: "inv1", scope: "club", entityId: "c1", email: "owner1@example.com", status: "pending", createdByName: "Sam" }];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({
+    coOwnerInvites,
+    onRespondCoOwnerInvite: (id, accept) => { respondedWith = { id, accept }; return Promise.resolve({ ok: true }); }
+  })));
+  assert.equal(hasText(inst.toJSON(), "Co-owner invites"), true);
+  assert.equal(hasText(inst.toJSON(), "Riverside CC"), true);
+  const acceptBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Accept"));
+  await act(async () => {
+    acceptBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(respondedWith, { id: "inv1", accept: true });
+});
+
+test("InboxScreen: an outgoing co-owner invite I sent shows a Cancel invite link, wired to onCancelCoOwnerInvite", async () => {
+  let cancelledId = null;
+  const coOwnerInvites = [{ id: "inv2", scope: "federation", entityId: "fed1", email: "sam@example.com", status: "pending", createdBy: "owner1" }];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({
+    coOwnerInvites,
+    onCancelCoOwnerInvite: id => { cancelledId = id; return Promise.resolve({ ok: true }); }
+  })));
+  assert.equal(hasText(inst.toJSON(), "Co-owner invites sent"), true);
+  const cancelBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Cancel invite"));
+  await act(async () => {
+    cancelBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(cancelledId, "inv2");
 });
 
 test("InboxScreen: tapping a poll item opens AvailabilityPollModal for that item's team, and closing it calls onPollsChanged", async () => {
