@@ -23,19 +23,24 @@ export function BallBadge({
     shadow = "0 2px 6px rgba(139,30,30,0.4)";
   } else if (ev.kind === "wide") {
     // Split from "noball" below deliberately -- a wide can never have a genuine batted boundary
-    // (the ball's unplayable by definition, that's what makes it a wide), so ev.runs reaching 4 or
-    // 6 here is only ever a coincidental total from a wide's own run value plus a big overthrow,
-    // never an actual four or six. Always purple, unconditionally.
+    // (the ball's unplayable by definition, that's what makes it a wide). Always purple,
+    // unconditionally.
     bg = "linear-gradient(160deg, #9d6bc7, #7b3fa0)";
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(123,63,160,0.35)";
-  } else if (ev.runs === 4) {
+  } else if (ev.battedRuns === 4) {
+    // ev.battedRuns (see its comment in scoringEngine.js's applyBall), not ev.runs -- ev.runs is
+    // the ball's raw total, which for a no-ball includes the extras penalty (a genuine six off a
+    // default-penalty no-ball stores runs:7, never matching a plain ===6 check), for an
+    // overthrow-topped-up hit includes the bonus on top, and for a bye/leg-bye is a running total
+    // the bat was never involved in at all -- any of which could previously coincide with 4 or 6
+    // and get colored as a batted boundary that never actually happened.
     bg = `linear-gradient(160deg, #5c9436, ${COLORS.turf})`;
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(74,124,46,0.35)";
-  } else if (ev.runs === 6 || ev.bigHit) {
+  } else if (ev.battedRuns === 6 || ev.bigHit) {
     // Gold, not a darker shade of the fours green (the original version of this) and not purple
     // (a brief second attempt) -- gold carries real "biggest/best" weight (gold medal, a golden
     // moment) that a six, arguably the single most dramatic thing that can happen on a ball,
@@ -43,7 +48,7 @@ export function BallBadge({
     // introduced fresh -- gold already existed in this app's palette, just attached to the wrong
     // event.
     //
-    // ev.bigHit alongside the plain runs===6 check -- a big hit's total (e.g. 10) doesn't match 6,
+    // ev.bigHit alongside the battedRuns===6 check -- a big hit's total (e.g. 10) doesn't match 6,
     // but it's still exactly a six for styling purposes, same as it is for stats (see isSix in
     // applyBall). Without this it fell through to the default, unremarkable badge color, looking
     // no different from an ordinary single run.
@@ -52,11 +57,10 @@ export function BallBadge({
     border = "none";
     shadow = "0 2px 6px rgba(184,137,43,0.35)";
   } else if (ev.kind === "noball") {
-    // Checked AFTER runs===4/6 above, unlike "wide" -- unlike a wide, a no-ball CAN have a genuine
-    // batted boundary (event.runs here is just the batted portion, the "Nb+" text prefix is added
-    // separately -- see runsDisplay's caller), so a six hit off a no-ball needs to reach the gold
-    // branch above, not get short-circuited into purple before ev.runs is ever even checked. Only
-    // reaches here for a no-ball that WASN'T also a four or six.
+    // Checked AFTER battedRuns===4/6 above, unlike "wide" -- unlike a wide, a no-ball CAN have a
+    // genuine batted boundary, so a six hit off a no-ball needs to reach the gold branch above, not
+    // get short-circuited into purple before battedRuns is ever even checked. Only reaches here for
+    // a no-ball that WASN'T also a four or six.
     bg = "linear-gradient(160deg, #9d6bc7, #7b3fa0)";
     color = "#fff";
     border = "none";

@@ -116,10 +116,29 @@ test("FollowScreen: skips the celebration on the very first snapshot, then celeb
   act(() => { captured.onNext({ exists: true, data: () => first }); });
   assert.equal(inst.root.findByType(BallCelebration).props.celebration, null);
 
-  const withSix = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "run", runs: 6 }]] })]);
+  const withSix = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "run", runs: 6, battedRuns: 6 }]] })]);
   act(() => { captured.onNext({ exists: true, data: () => withSix }); });
   const celebration = inst.root.findByType(BallCelebration).props.celebration;
   assert.equal(celebration.type, 6);
+});
+
+// BUG FIX: this used to check lastBall.runs directly (the ball's raw total), so a 4-run bye/leg-bye
+// -- the bat never involved at all -- wrongly triggered a boundary celebration for viewers, while a
+// genuine six off a no-ball (stored total 7, including the 1-run penalty) never did. battedRuns
+// (set in applyBall -- see its own comment there) is the value that's actually correct here.
+test("FollowScreen: a bye reaching the boundary never celebrates, a genuine six off a no-ball always does", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  const first = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }]] })]);
+  act(() => { captured.onNext({ exists: true, data: () => first }); });
+
+  const withBye = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "bye", runs: 4 }]] })]);
+  act(() => { captured.onNext({ exists: true, data: () => withBye }); });
+  assert.equal(inst.root.findByType(BallCelebration).props.celebration, null);
+
+  const withNoballSix = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "bye", runs: 4 }, { kind: "noball", runs: 7, battedRuns: 6 }]] })]);
+  act(() => { captured.onNext({ exists: true, data: () => withNoballSix }); });
+  assert.equal(inst.root.findByType(BallCelebration).props.celebration.type, 6);
 });
 
 test("FollowScreen: a new toastMilestones entry queues a MilestoneToast on the next snapshot", () => {
