@@ -154,7 +154,7 @@ export function nonStandardRulesText(rules) {
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
   if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
-  if (rules.impactPlayerEnabled) bits.push("Impact Player substitution");
+  if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
 }
 

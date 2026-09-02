@@ -125,6 +125,12 @@ test("nonStandardRulesText: notes wideNoballCountsAsBall and impactPlayerEnabled
   const text = nonStandardRulesText({ ...DEFAULT_RULES, wideNoballCountsAsBall: true, impactPlayerEnabled: true });
   assert.match(text, /wide\/no-ball counts as a ball \(except final over\)/);
   assert.match(text, /Impact Player substitution/);
+  assert.doesNotMatch(text, /up to/); // standard 1-per-team default doesn't need calling out
+});
+
+test("nonStandardRulesText: calls out impactPlayerMaxSubs when it's above the standard 1", () => {
+  const text = nonStandardRulesText({ ...DEFAULT_RULES, impactPlayerEnabled: true, impactPlayerMaxSubs: 2 });
+  assert.match(text, /Impact Player substitution \(up to 2 per team\)/);
 });
 
 test("impactSubsText: null with no substitutions, one line per sub joined with a dot", () => {

@@ -887,8 +887,10 @@ export function CricketScorer() {
       teamBRoster: setup.teamBRoster || [],
       teamABench: setup.teamABench || [],
       teamBBench: setup.teamBBench || [],
-      teamAImpactUsed: false,
-      teamBImpactUsed: false,
+      // Count of Impact Player substitutions each team has made so far, not a boolean -- a
+      // tournament's own rule book can allow more than the standard 1 (impactPlayerMaxSubs).
+      teamAImpactUsed: 0,
+      teamBImpactUsed: 0,
       // {team, outName, inName} per Impact Player substitution actually made -- see
       // confirmImpactSub in inningsSetupScreens.js. Stays empty for any match that never uses the
       // rule, same as penalties/fallOfWickets' own "nothing happened, empty array" convention.

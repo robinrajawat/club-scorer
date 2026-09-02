@@ -258,7 +258,7 @@ export function SetupScreen({
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? "Impact Player" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const umpiresSummaryText = umpiresText({
     umpire1: umpire1.trim(),
     umpire2: umpire2.trim()
@@ -750,7 +750,21 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.impactPlayerEnabled ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.impactPlayerEnabled ? "On" : "Off")), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Substitutions allowed per team",
+    value: matchRules.impactPlayerMaxSubs,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      impactPlayerMaxSubs: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }

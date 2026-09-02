@@ -1106,12 +1106,17 @@ export function benchFor(match, teamName) {
   const bench = teamName === match.teamA ? match.teamABench : match.teamBBench;
   return bench || [];
 }
-// Whether this team has already used its one Impact Player substitution -- the "one per team, no
-// return" rule is enforced entirely by this flag (gates the substitution UI from rendering again)
-// plus the outgoing player being dropped from rosterFor's pool at the point of substitution, never
-// by clearing the rest of the bench (see confirmImpactSub in inningsSetupScreens.js).
-export function impactSubUsedFor(match, teamName) {
-  return Boolean(teamName === match.teamA ? match.teamAImpactUsed : match.teamBImpactUsed);
+// How many Impact Player substitutions this team still has available -- match.rules'
+// impactPlayerMaxSubs (default 1, the standard Impact Player Laws) minus however many this team
+// has actually made so far (teamAImpactUsed/teamBImpactUsed, a count, not a boolean -- some
+// tournaments' own rule book allows more than one, e.g. up to 2). The "no return" half of the
+// rule -- an outgoing player can't come back -- is enforced separately, by that player being
+// dropped from rosterFor's pool at the point of substitution (see confirmImpactSub in
+// inningsSetupScreens.js), never by clearing the rest of the bench.
+export function impactSubsRemainingFor(match, teamName) {
+  const used = (teamName === match.teamA ? match.teamAImpactUsed : match.teamBImpactUsed) || 0;
+  const max = (match.rules && match.rules.impactPlayerMaxSubs) || 1;
+  return Math.max(0, max - used);
 }
 export function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
@@ -1180,7 +1185,8 @@ export const DEFAULT_RULES = {
   playersPerSide: 11,
   retirementRuns: null,
   wideNoballCountsAsBall: false,
-  impactPlayerEnabled: false
+  impactPlayerEnabled: false,
+  impactPlayerMaxSubs: 1
 };
 // The number of batsmen a given team actually has for this match — NOT always 11. Uses the
 // playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to

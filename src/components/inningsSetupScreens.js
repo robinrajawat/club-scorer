@@ -6,7 +6,7 @@ import { Field } from "./screenAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { ScorecardOverlay } from "./scorecard.js";
 import { ensureBatsman, ensureBowler } from "../core/scoringEngine.js";
-import { rosterFor, benchFor, impactSubUsedFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
+import { rosterFor, benchFor, impactSubsRemainingFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Screens shown between innings, before scoring resumes: SuperOverOpenersSetup (pick openers for a
 // one-over-each decider) and SecondInningsSetup (pick openers for the chase, with a scorecard
@@ -127,19 +127,21 @@ export function SuperOverOpenersSetup({
 }
 
 // Applies one Impact Player substitution: swaps outName for inName in that team's XI (and out of
-// its bench), marks the team's one-per-match swap as used, drops outName from captain/keeper if
-// they held either (same "can't stay captain/keeper once out of the XI" rule toggleAXI enforces at
-// setup time), and logs it to match.impactSubs for the scorecard. Every picker on the app already
-// reads the XI via rosterFor, so updating teamARoster/teamBRoster here is the entire mechanism --
-// nothing else needs to know a substitution happened. Its sibling export just below,
-// ImpactPlayerCard, carries no comment of its own -- see docs/history.md's "React component
-// extraction" section for why a comment directly above a non-first export in a multi-export file
-// gets glued onto the wrong one by generate.js's splice mechanism. In short: ImpactPlayerCard
-// renders one team's substitution card -- nothing unless the rule is on, this team still has an
-// unused swap, AND actually has a bench to draw from (a team entered as free-form names with no
-// saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown for both teams
-// on the same Innings Break screen, since the Laws allow either side to make its one substitution
-// any time before the start of the other team's innings -- this screen is exactly that point.
+// its bench), counts one more against the team's impactPlayerMaxSubs allowance (a tournament's own
+// rule book can set this above the standard 1 -- e.g. Billund's allows up to 2), drops outName
+// from captain/keeper if they held either (same "can't stay captain/keeper once out of the XI"
+// rule toggleAXI enforces at setup time), and logs it to match.impactSubs for the scorecard. Every
+// picker on the app already reads the XI via rosterFor, so updating teamARoster/teamBRoster here
+// is the entire mechanism -- nothing else needs to know a substitution happened. Its sibling
+// export just below, ImpactPlayerCard, carries no comment of its own -- see docs/history.md's
+// "React component extraction" section for why a comment directly above a non-first export in a
+// multi-export file gets glued onto the wrong one by generate.js's splice mechanism. In short:
+// ImpactPlayerCard renders one team's substitution card -- nothing unless the rule is on, this
+// team still has at least one substitution remaining, AND actually has a bench to draw from (a
+// team entered as free-form names with no saved squad has no wider pool, same gap
+// rosterFor/benchFor already have). Shown for both teams on the same Innings Break screen, since
+// the Laws allow either side to make its substitution(s) any time before the start of the other
+// team's innings -- this screen is exactly that point.
 export function confirmImpactSub(match, setMatch, team, outName, inName) {
   const isTeamA = team === match.teamA;
   const rosterKey = isTeamA ? "teamARoster" : "teamBRoster";
@@ -151,7 +153,7 @@ export function confirmImpactSub(match, setMatch, team, outName, inName) {
     ...match,
     [rosterKey]: (match[rosterKey] || []).map(n => n === outName ? inName : n),
     [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
-    [usedKey]: true,
+    [usedKey]: (match[usedKey] || 0) + 1,
     [captainKey]: match[captainKey] === outName ? "" : match[captainKey],
     [keeperKey]: match[keeperKey] === outName ? "" : match[keeperKey],
     impactSubs: [...(match.impactSubs || []), {
@@ -171,7 +173,8 @@ export function ImpactPlayerCard({
   const [outName, setOutName] = useState("");
   const [inName, setInName] = useState("");
   const bench = benchFor(match, team);
-  if (!match.rules || !match.rules.impactPlayerEnabled || impactSubUsedFor(match, team) || bench.length === 0) {
+  const remaining = impactSubsRemainingFor(match, team);
+  if (!match.rules || !match.rules.impactPlayerEnabled || remaining <= 0 || bench.length === 0) {
     return null;
   }
   const canConfirm = outName.trim() && inName.trim();
@@ -206,7 +209,7 @@ export function ImpactPlayerCard({
       marginBottom: 14,
       lineHeight: 1.5
     }
-  }, "One substitution allowed per team. The player going off takes no further part in the match."), /*#__PURE__*/React.createElement(Field, {
+  }, remaining > 1 ? `${remaining} substitutions remaining for this team. The player going off takes no further part in the match.` : "Last substitution remaining for this team. The player going off takes no further part in the match."), /*#__PURE__*/React.createElement(Field, {
     label: "Player going off"
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, team),
