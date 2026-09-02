@@ -139,6 +139,20 @@ export function ensureBatsman(inning, name) {
     };
   }
 }
+// The run total at which a "must retire" cap prompt (see MatchScreen's needsCapRetirement) was
+// last actually served for this batsman, rounded down to a multiple of retirementRuns. Needed
+// because a retired batsman's `runs` is never reset when they return (ensureBatsman above only
+// clears the retiredHurt/retiredAtCap flags) -- without this, a returning batsman whose runs
+// already sit at or past the cap from their first stint would re-trigger the mandatory prompt the
+// instant they're confirmed as active again, with no way to actually resume batting.
+export function retirementCapThreshold(runs, retirementRuns) {
+  return Math.floor(runs / retirementRuns) * retirementRuns;
+}
+export function retirementCapDue(batsman, retirementRuns) {
+  if (!retirementRuns || !batsman) return false;
+  const runs = batsman.runs || 0;
+  return runs >= retirementRuns && retirementCapThreshold(runs, retirementRuns) > (batsman.capRetiredThreshold || 0);
+}
 export function ensureBowler(inning, name) {
   if (!name) return;
   if (!inning.bowlers[name]) {

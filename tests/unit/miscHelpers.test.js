@@ -153,7 +153,7 @@ test("ballLabelsForOver: legal balls increment the label, wide/no-ball share the
     { kind: "wide" },
     { kind: "run" }
   ];
-  assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2", "1.2"]);
+  assert.deepEqual(ballLabelsForOver(0, balls), ["1.1", "1.2*", "1.2"]);
 });
 
 test("buildClaudeFixPrompt: includes the message, page/browser context, and a resolution note when present", () => {

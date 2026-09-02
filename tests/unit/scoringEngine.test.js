@@ -13,7 +13,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal } from "../../src/core/scoringEngine.js";
+import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
 
 const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
@@ -224,4 +224,32 @@ test("isWideNoballLegal: with no oversLimit baked in, the house rule applies uni
   const inn = finalOverInning({ wideNoballCountsAsBall: true }, undefined);
   assert.equal(inn.oversLimit, null);
   assert.equal(isWideNoballLegal(inn), true);
+});
+
+// A retired batsman's `runs` is never reset when they return (ensureBatsman only clears the
+// retiredHurt/retiredAtCap flags) -- without retirementCapDue's own capRetiredThreshold check,
+// the mandatory retire prompt would immediately fire again the instant they're confirmed back as
+// active, since their runs already sit at/past the cap from their first stint. This was a real,
+// unplayable infinite-loop bug once every remaining batsman was in this state.
+test("retirementCapDue: due once a batsman reaches the cap for the first time", () => {
+  assert.equal(retirementCapDue({ runs: 24 }, 25), false);
+  assert.equal(retirementCapDue({ runs: 25 }, 25), true);
+  assert.equal(retirementCapDue({ runs: 30 }, 25), true);
+});
+
+test("retirementCapDue: not due again on return, since capRetiredThreshold already covers this stint's runs", () => {
+  const returned = { runs: 25, capRetiredThreshold: 25 };
+  assert.equal(retirementCapDue(returned, 25), false);
+});
+
+test("retirementCapDue: due again once a returned batsman crosses the NEXT multiple of the cap", () => {
+  const returned = { runs: 49, capRetiredThreshold: 25 };
+  assert.equal(retirementCapDue(returned, 25), false, "still short of the next 25-run multiple (50)");
+  assert.equal(retirementCapDue({ runs: 50, capRetiredThreshold: 25 }, 25), true);
+});
+
+test("retirementCapThreshold: rounds down to the nearest multiple of the cap", () => {
+  assert.equal(retirementCapThreshold(30, 25), 25);
+  assert.equal(retirementCapThreshold(50, 25), 50);
+  assert.equal(retirementCapThreshold(24, 25), 0);
 });

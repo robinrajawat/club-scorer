@@ -13,7 +13,7 @@ import { SyncConflictModal } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "./inningsSetupScreens.js";
 import { ResultScreen } from "./resultScreen.js";
-import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel } from "../core/scoringEngine.js";
+import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
   decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isOverTimeCap, keeperFor,
@@ -150,9 +150,7 @@ export function MatchScreen({
   // the non-striker's end could go the rest of the innings without ever being prompted. Prefers the
   // striker when (rare) both happen to qualify at once, since that's the one retireBatsman can act
   // on directly with no swap needed.
-  const strikerRunsForCap = inning && inning.strikerName && inning.batsmen[inning.strikerName] ? inning.batsmen[inning.strikerName].runs : 0;
-  const nonStrikerRunsForCap = inning && inning.nonStrikerName && inning.batsmen[inning.nonStrikerName] ? inning.batsmen[inning.nonStrikerName].runs : 0;
-  const capRetireName = inning && inning.retirementRuns && !inning.complete ? inning.strikerName && strikerRunsForCap >= inning.retirementRuns && dismissedCapRetireFor !== inning.strikerName ? inning.strikerName : inning.nonStrikerName && nonStrikerRunsForCap >= inning.retirementRuns && dismissedCapRetireFor !== inning.nonStrikerName ? inning.nonStrikerName : null : null;
+  const capRetireName = inning && inning.retirementRuns && !inning.complete ? inning.strikerName && retirementCapDue(inning.batsmen[inning.strikerName], inning.retirementRuns) && dismissedCapRetireFor !== inning.strikerName ? inning.strikerName : inning.nonStrikerName && retirementCapDue(inning.batsmen[inning.nonStrikerName], inning.retirementRuns) && dismissedCapRetireFor !== inning.nonStrikerName ? inning.nonStrikerName : null : null;
   const needsCapRetirement = !!capRetireName;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
   // Same revised-values fallback as checkInningEnd -- see there for the full reasoning. Both need
@@ -956,7 +954,11 @@ export function MatchScreen({
     } : {
       ...inning.batsmen[name],
       retiredHurt: true,
-      retiredAtCap: kind === "cap" ? inning.retirementRuns : false
+      retiredAtCap: kind === "cap" ? inning.retirementRuns : false,
+      // Records the cap multiple just served, so returning from this retirement doesn't
+      // immediately re-trigger needsCapRetirement off the same still->cap runs total -- see
+      // retirementCapDue in scoringEngine.js.
+      capRetiredThreshold: kind === "cap" ? retirementCapThreshold((inning.batsmen[name] && inning.batsmen[name].runs) || 0, inning.retirementRuns) : inning.batsmen[name] && inning.batsmen[name].capRetiredThreshold
     };
     const updated = {
       ...inning,
@@ -2248,7 +2250,15 @@ export function MatchScreen({
     noball: "No Ball",
     bye: "Bye",
     legbye: "Leg Bye"
-  }[showExtra], " — runs"), /*#__PURE__*/React.createElement("div", {
+  }[showExtra], " — runs"), (showExtra === "wide" || showExtra === "noball") && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: -4,
+      marginBottom: 12
+    }
+  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall ? " (this can flip in the final over)" : ""}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",
