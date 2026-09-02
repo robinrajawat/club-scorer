@@ -3340,11 +3340,15 @@ async function inviteClubMemberByEmail(clubId, email) {
     };
   }
 }
-// Owner-only. Same as above but the redeemer becomes a co-owner (added to both memberUids and
-// coOwnerUids) — the sole path onto coOwnerUids, same as club creation is the sole path onto
-// ownerUid. There's no promote-an-existing-member-by-uid flow anymore: granting ownership always
-// goes through the target's own verified email, whether or not they already happen to be a member.
-async function inviteClubCoOwnerByEmail(clubId, email) {
+// Owner-only (club or federation, per `scope`). Unified co-owner invite, addressed to one email —
+// replaces minting a coOwner-role clubJoinCodes/federationCoOwnerInviteCodes doc (formerly
+// inviteClubCoOwnerByEmail/inviteFederationCoOwnerByEmail, both retired in favor of this) with a
+// real coOwnerInvites record the recipient's own client can query by their own email — see
+// loadMyCoOwnerInvites below. No bearer code to generate, copy, or send out-of-band: the invitee
+// sees it in their Inbox the next time they open it while signed in with that exact email. See
+// docs/co-owner-invites-plan.md for the full design this mirrors (the same
+// federationJoinCodes -> federationRequests migration, applied here).
+async function inviteCoOwner(scope, entityId, email) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
@@ -3355,35 +3359,114 @@ async function inviteClubCoOwnerByEmail(clubId, email) {
     error: "Enter a valid email address."
   };
   try {
-    const code = genMatchCode();
-    const createdAt = Date.now();
-    const expiresAt = ttlTimestamp(CLUB_INVITE_TTL_DAYS);
-    await db.collection("clubJoinCodes").doc(code).set({
-      clubId,
+    const ref = db.collection("coOwnerInvites").doc();
+    const doc = {
+      scope,
+      entityId,
       email: cleaned,
-      role: "coOwner",
       createdBy: auth.currentUser.uid,
-      createdAt,
-      expiresAt
-    });
-    await db.collection("clubs").doc(clubId).update({
-      [`pendingInvites.${code}`]: {
-        email: cleaned,
-        role: "coOwner",
-        createdAt,
-        expiresAt
-      }
-    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
+      createdByName: auth.currentUser.displayName || auth.currentUser.email || "",
+      createdAt: Date.now(),
+      expiresAt: ttlTimestamp(CLUB_INVITE_TTL_DAYS),
+      status: "pending"
+    };
+    await ref.set(doc);
     return {
       ok: true,
-      code,
-      createdAt,
-      expiresAt
+      invite: {
+        id: ref.id,
+        ...doc
+      }
     };
   } catch (e) {
     return {
       ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner can invite a co-owner." : e.message || "Couldn't generate an invite code."
+      error: e.code === "permission-denied" ? "Only an owner or co-owner can invite others." : e.message || "Couldn't send that invite."
+    };
+  }
+}
+// Loads every coOwnerInvites row that involves me: ones I sent (entityId among clubs/federations I
+// own/co-own) or ones addressed to me (my own signed-in email) — feeds the Inbox screen's
+// co-owner-invites section and its notification badge, same "two queries, merge by id" shape as
+// loadMyFederationRequests. Firestore 'in' tops out at 10 ids, same limit that function accepts.
+async function loadMyCoOwnerInvites(clubIds, federationIds) {
+  if (!auth.currentUser) return [];
+  try {
+    const entityIds = [...(clubIds || []), ...(federationIds || [])].slice(0, 10);
+    const myEmail = (auth.currentUser.email || "").toLowerCase();
+    const queries = [db.collection("coOwnerInvites").where("email", "==", myEmail).get()];
+    if (entityIds.length) {
+      queries.push(db.collection("coOwnerInvites").where("entityId", "in", entityIds).get());
+    }
+    const snaps = await Promise.all(queries);
+    const seen = new Map();
+    snaps.forEach(snap => snap.docs.forEach(d => seen.set(d.id, {
+      id: d.id,
+      ...d.data()
+    })));
+    return Array.from(seen.values());
+  } catch (e) {
+    console.error("co-owner invites load failed", e);
+    return [];
+  }
+}
+// Recipient accepts or declines a still-pending invite addressed to them. Accepting adds them to
+// the target club/federation's coOwnerUids (and, for a club, memberUids too — co-owner implies
+// membership) BEFORE flipping the invite itself to "accepted", deliberately in that order — see
+// the coOwnerInviteAccepted branch on clubs/{clubId} and federations/{federationId} in
+// firestore.rules for why. Same "recipient already has implicit write access to add themselves
+// once accepted" pattern as respondFederationRequest's federation_to_club accept branch.
+async function respondCoOwnerInvite(inviteId, accept) {
+  try {
+    const snap = await db.collection("coOwnerInvites").doc(inviteId).get();
+    if (!snap.exists) return {
+      ok: false,
+      error: "That invite no longer exists."
+    };
+    const invite = snap.data();
+    if (accept) {
+      const collection = invite.scope === "club" ? "clubs" : "federations";
+      const update = invite.scope === "club" ? {
+        memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+        [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
+        coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+        coOwnerInviteAccepted: inviteId
+      } : {
+        coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+        coOwnerInviteAccepted: inviteId
+      };
+      await db.collection(collection).doc(invite.entityId).update(update);
+    }
+    await db.collection("coOwnerInvites").doc(inviteId).update({
+      status: accept ? "accepted" : "declined",
+      respondedAt: Date.now()
+    });
+    return {
+      ok: true,
+      scope: invite.scope,
+      entityId: invite.entityId
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "You can't respond to that invite." : e.message || "Couldn't respond to that invite."
+    };
+  }
+}
+// Sender cancels their own still-pending invite.
+async function cancelCoOwnerInvite(inviteId) {
+  try {
+    await db.collection("coOwnerInvites").doc(inviteId).update({
+      status: "cancelled",
+      respondedAt: Date.now()
+    });
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "You can't cancel that invite." : e.message || "Couldn't cancel that invite."
     };
   }
 }
@@ -4408,50 +4491,6 @@ async function kickClubFromFederation(federationId, clubId) {
     return {
       ok: false,
       error: e.code === "permission-denied" ? "Only the federation owner can remove a club." : e.message || "Couldn't remove that club."
-    };
-  }
-}
-// Owner-only. Names a co-owner by email instead of needing any kind of user search (this app has
-// none). Mints a code addressed to that one email, same bearer-code pattern as every other invite
-// in this app, except redemption additionally checks that the redeemer's own signed-in email
-// matches — see redeemFederationCoOwnerInvite and the federations/{id} update rule, branch (C).
-// The invite carries no authority on its own; it only becomes a real co-owner grant once someone
-// signed in as that exact email redeems it.
-async function inviteFederationCoOwnerByEmail(federationId, email) {
-  if (!auth.currentUser) return {
-    ok: false,
-    error: "Sign in first."
-  };
-  const cleaned = (email || "").trim().toLowerCase();
-  if (!cleaned || !cleaned.includes("@")) return {
-    ok: false,
-    error: "Enter a valid email address."
-  };
-  try {
-    const code = genMatchCode();
-    const createdAt = Date.now();
-    await db.collection("federationCoOwnerInviteCodes").doc(code).set({
-      federationId,
-      email: cleaned,
-      createdBy: auth.currentUser.uid,
-      createdAt
-    });
-    await db.collection("federations").doc(federationId).update({
-      [`pendingInvites.${code}`]: {
-        kind: "coOwner",
-        email: cleaned,
-        createdAt
-      }
-    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
-    return {
-      ok: true,
-      code,
-      createdAt
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "Only the federation owner can invite others." : e.message || "Couldn't create that invite."
     };
   }
 }
