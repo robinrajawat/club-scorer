@@ -40,6 +40,19 @@ test("HelpScreen: renders every section by default, filters to matching entries 
   assert.match(JSON.stringify(inst.toJSON()), /No results for/);
 });
 
+// These four house rules (retirement cap, wideNoballCountsAsBall, Big Hit/Maximum Hit, Impact
+// Player) had zero Help & FAQ coverage despite each being a real, configurable Match Rules option
+// -- someone searching "impact player" or "big hit" from the Help screen got nothing. Added
+// directly alongside the pre-existing Free Hit entry, which covers the same kind of question.
+test("HelpScreen: covers the retirement cap, wideNoballCountsAsBall, Big Hit/Maximum Hit, and Impact Player house rules", () => {
+  const inst = renderer.create(React.createElement(HelpScreen, { onBack: () => {} }));
+  const allText = JSON.stringify(inst.toJSON());
+  assert.match(allText, /retirement run cap/i);
+  assert.match(allText, /wide\/no-ball counts as a ball/i);
+  assert.match(allText, /Big Hit and Maximum Hit/i);
+  assert.match(allText, /Impact Player substitution work/i);
+});
+
 test("HelpScreen: shows the 'Replay the welcome tour' link only when onReplayTour is passed", () => {
   const without = JSON.stringify(renderer.create(React.createElement(HelpScreen, { onBack: () => {} })).toJSON());
   assert.doesNotMatch(without, /Replay the welcome tour/);
