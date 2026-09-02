@@ -145,6 +145,25 @@ test("MatchScreen: tapping a run button commits the ball and updates the score",
   assert.match(JSON.stringify(ctx.inst.toJSON()), /4-0/);
 });
 
+test("MatchScreen: shows a one-line commentary for the last ball, and clears it on Undo", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const fourBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 4);
+  await act(async () => {
+    fourBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  // X is the bowler, A the striker -- see buildInning/baseMatch above.
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+
+  const undoBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Undo"));
+  await act(async () => {
+    undoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+});
+
 test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and scores its bonus runs as a six", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const plainCtx = renderMatch(baseMatch());

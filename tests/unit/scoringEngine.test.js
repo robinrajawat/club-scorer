@@ -13,7 +13,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, isInLastOvers, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
+import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, isInLastOvers, lastBallCommentary, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
 
 const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
@@ -360,4 +360,34 @@ test("newInning: bigHitRuns defaults to null (rule off) and carries through when
   assert.equal(off.bigHitRuns, null);
   const on = newInning("TeamA", "TeamB", { ...rules, bigHitRuns: 10 }, 10);
   assert.equal(on.bigHitRuns, 10);
+});
+
+test("lastBallCommentary: describes a plain run, a boundary, a bonus hit, and a dot ball, crediting the bowler/batter who were actually at the crease before the ball", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 1 })), "B1 to P1: 1 run");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 4 })), "B1 to P1: FOUR!");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 6 })), "B1 to P1: SIX!");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 0 })), "B1 to P1: dot ball");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 15, bigHit: "Maximum Hit" })), "B1 to P1: Maximum Hit!");
+});
+
+test("lastBallCommentary: describes extras -- wide/no-ball (with any extra runs run off them), byes, and leg byes", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 0 })), "B1 to P1: wide");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 2 })), "B1 to P1: wide, 2 runs extra");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "noball", runs: 0 })), "B1 to P1: no ball");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "bye", runs: 2 })), "B1 to P1: 2 byes");
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "legbye", runs: 1 })), "B1 to P1: 1 leg bye");
+});
+
+test("lastBallCommentary: a wicket names who got out and how, using the same fall-of-wickets/how text as the scorecard", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "wicket", wicketType: "Bowled", newBatsman: "P3" });
+  assert.equal(lastBallCommentary(inn, after), "B1 to P1: OUT! P1 b B1");
+});
+
+test("lastBallCommentary: returns null for a non-delivery commit (nothing appended to `overs`), e.g. a standalone penalty or an unchanged inning", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  assert.equal(lastBallCommentary(inn, inn), null);
+  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "penalty", runs: 5 })), null);
 });

@@ -13,7 +13,7 @@ import { SyncConflictModal } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "./inningsSetupScreens.js";
 import { ResultScreen } from "./resultScreen.js";
-import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
+import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, lastBallCommentary, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
   decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isImpactSubFor, isOverTimeCap,
@@ -65,6 +65,7 @@ export function MatchScreen({
   const [history, setHistory] = useState(() => loadUndoHistory(match.id));
   const [showScorecard, setShowScorecard] = useState(false);
   const [celebration, setCelebration] = useState(null); // {type: 4|6, key}
+  const [ballCommentary, setBallCommentary] = useState(null);
   const [milestoneToast, setMilestoneToast] = useState(null); // {milestone, key} | null — currently showing
   const [milestoneQueue, setMilestoneQueue] = useState([]); // milestones waiting their turn to toast
   // Drains milestoneQueue one at a time — a single ball can produce more than one milestone (e.g.
@@ -279,6 +280,11 @@ export function MatchScreen({
     setMatch(updated);
     queueSave(updated);
     setDismissedCapRetireFor(null);
+    // Returns null for every non-delivery commit here (retire, swap strike, undo, a bowler/batsman
+    // confirmation, force-ending the innings) since none of those append a ball to `overs` -- only
+    // an actual applyBall() result ever does, so this naturally only updates for real deliveries.
+    const commentary = lastBallCommentary(inning, newInningState);
+    if (commentary) setBallCommentary(commentary);
     // Queue every milestone that's new on this ball — see the milestoneQueue-draining effect
     // above for why this doesn't just set milestoneToast directly (a single ball can produce more
     // than one, and only showing the last one silently dropped the rest from the toast). Includes
@@ -953,6 +959,9 @@ export function MatchScreen({
     });
     setMatch(prev);
     queueSave(prev);
+    // Otherwise the commentary line for the just-undone ball keeps showing, describing a delivery
+    // that (as far as the score now reads) never happened.
+    setBallCommentary(null);
   }
   function swapStrike() {
     if (!inning.strikerName || !inning.nonStrikerName) return;
@@ -1807,7 +1816,16 @@ export function MatchScreen({
       fontWeight: 600,
       color: COLORS.inkSoft
     }
-  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled, inning.ballsPerOver)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
+  }, inning.bowlers[inning.bowlerName] ? `${oversLabel(inning.bowlers[inning.bowlerName].ballsBowled, inning.ballsPerOver)}-${inning.bowlers[inning.bowlerName].runs}-${inning.bowlers[inning.bowlerName].wickets}` : "-"))), ballCommentary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "10px 12px 0",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontStyle: "italic",
+      color: COLORS.inkSoft,
+      textAlign: "center"
+    }
+  }, ballCommentary), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "14px 12px 0"
     }
