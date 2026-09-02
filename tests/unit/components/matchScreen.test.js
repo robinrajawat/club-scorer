@@ -101,6 +101,10 @@ function modalBtn(ctx, text) {
   return modal.findAllByType(Btn).find(b => b.props.children === text);
 }
 
+function bigHitBtn(ctx) {
+  return ctx.inst.root.findAllByType(Btn).find(b => typeof b.props.children === "string" && b.props.children.startsWith("Big Hit"));
+}
+
 test("MatchScreen: shows the live score header", () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
@@ -123,6 +127,23 @@ test("MatchScreen: tapping a run button commits the ball and updates the score",
   });
   assert.equal(ctx.inning.runs, 4);
   assert.match(JSON.stringify(ctx.inst.toJSON()), /4-0/);
+});
+
+test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and scores its bonus runs as a six", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const plainCtx = renderMatch(baseMatch());
+  assert.equal(bigHitBtn(plainCtx), undefined, "rule is off by default, no button shown");
+
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { bigHitRuns: 10 });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const btn2 = bigHitBtn(ctx);
+  assert.ok(btn2, "Big Hit button shown once the rule is configured");
+  await act(async () => {
+    btn2.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.runs, 10);
+  assert.equal(ctx.inning.batsmen.A.sixes, 1, "a big hit is still a six for stats purposes");
 });
 
 test("MatchScreen: a non-last wicket opens the Next batsman prompt, and confirming it commits the wicket", async () => {
@@ -347,6 +368,11 @@ test("MatchScreen: manually revising the target during a chase updates the match
   });
   assert.equal(ctx.match.revisedTarget, 90);
   assert.equal(ctx.match.revisedOvers, 15);
+  // BUG FIX: isInLastOvers reads the 2nd innings' OWN baked-in oversLimit, not match.revisedOvers
+  // -- without patching it here too, a last-over house rule (e.g. wideNoballIllegalAgain) kept
+  // computing "the last over" against the original, pre-revision limit for the rest of the chase,
+  // and so never actually triggered once the revised, shorter innings ended before reaching it.
+  assert.equal(ctx.match.innings[1].oversLimit, 15);
 });
 
 test("MatchScreen: a sync conflict from another device opens the resolution modal", async () => {
@@ -608,4 +634,37 @@ test("MatchScreen: Declare Timed Out asks for confirmation first, and cancelling
   assert.equal(ctx.inning.wickets, 0);
   assert.equal(ctx.inning.batsmen.C, undefined, "cancelling leaves C untouched, never recorded out");
   assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /Declare timed out\?/);
+});
+
+// Reported as "Timed Out isn't fixable with Undo" -- this confirms the underlying commit/undo
+// mechanism itself is correct (timedOutBatsman goes through the same pushHistory()+commit() path
+// as every other action, so the generic Undo genuinely reverts it). The likely real complaint is
+// that the very SAME "Next batsman" prompt reopens either way (needsNewBatsman was never cleared,
+// by design -- see timedOutBatsman's own comment), so nothing LOOKS different after tapping Undo
+// even though wickets/batsmen underneath did revert -- see the follow-up UI fix below.
+test("MatchScreen: Undo genuinely reverts a committed Timed Out declaration", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { strikerName: "", nonStrikerName: "B" });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  act(() => { timedOutBtn.props.onClick(); });
+  const confirmTimedOutBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "Declare Timed Out");
+  await act(async () => {
+    confirmTimedOutBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.wickets, 1);
+  assert.equal(ctx.inning.batsmen.C.out, true);
+
+  const undoBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Undo"));
+  assert.ok(undoBtn, "an Undo/Cancel affordance must be offered right after the commit");
+  act(() => { undoBtn.props.onClick(); });
+  assert.equal(ctx.inning.wickets, 0, "the wicket genuinely reverts");
+  assert.equal(ctx.inning.batsmen.C, undefined, "C is no longer recorded at all, same as before the declaration");
+  // UX FIX: the exact same "Next batsman" sheet reopens either way (it's a full-screen Modal, and
+  // needsNewBatsman stays true regardless), so without an explicit note, undoing from right here
+  // looked like nothing had happened even though it genuinely had.
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Reverted/);
 });

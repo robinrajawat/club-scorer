@@ -296,4 +296,14 @@ test("SecondInningsSetup: impactPlayerMaxSubs lets a team substitute more than o
   assert.match(finalHtml, /No substitutions left for this team/);
   // Only one "Player going off" form left -- Oakwood CC's own, untouched card.
   assert.equal((finalHtml.match(/Player going off/g) || []).length, 1);
+  // BUG FIX: the card used to only ever track/render the single MOST RECENT substitution -- once a
+  // team made a second one, the first quietly vanished from the UI entirely, with no way to see it
+  // had happened at all. Both must show, in order.
+  assert.match(finalHtml, /Virat Kohli/);
+  assert.match(finalHtml, /Hardik Pandya/);
+  assert.match(finalHtml, /Rohit Sharma/);
+  assert.match(finalHtml, /Suryakumar Yadav/);
+  // Only the LAST substitution gets an Undo button -- undoLastImpactSub can only ever reverse the
+  // most recent one, so offering it on the first would be misleading.
+  assert.equal(inst.root.findAllByType("button").filter(b => b.props.children === "Undo").length, 1);
 });

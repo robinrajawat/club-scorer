@@ -97,6 +97,11 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimi
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
+    // A six that clears this tournament's own extra-distance boundary rope (e.g. an 80m rope
+    // inside the ground's usual 60m one) scores this many runs total instead of the standard 6 --
+    // see the isSix/event.bigHit handling in applyBall's "run" branch. null means the rule is off
+    // and every six is worth the standard 6, same convention as retirementRuns above.
+    bigHitRuns: r.bigHitRuns || null,
     wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
     // A generic "how many overs count as the last over(s), and what changes there" bucket, kept
     // separate from wideNoballCountsAsBall itself (which used to hardcode its own final-over
@@ -111,9 +116,10 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimi
     // inning, never the match) can tell whether the ball it's about to score is in the last over(s)
     // — the one thing isInLastOvers needs and nothing else here does. null for any caller that
     // doesn't pass one (every test fixture, e.g.) simply means "no last-over cutoff", i.e. a
-    // last-over rule (if on at all) applies to every over uniformly. Same "baked in at innings
-    // start" caveat as every other house rule above: a mid-chase DLS overs revision won't
-    // retroactively change this.
+    // last-over rule (if on at all) applies to every over uniformly. A mid-chase DLS overs revision
+    // (see declareRevisedTarget/declareDLSRevisedTarget in matchScreen.js) explicitly patches this
+    // field on the live 2nd innings when it happens -- without that, a last-over rule would keep
+    // computing "the last over" against the original, now-wrong limit for the rest of the innings.
     oversLimit: oversLimit != null ? oversLimit : null,
     // Baked in once here rather than recomputed from the roster on every check — this is what
     // lets applyBall (which has no access to the match object, only this inning) use the right
@@ -345,13 +351,19 @@ export function applyBall(inning, event) {
     // an overthrow has nothing to do with the batsman's own timing, same reasoning as why a wide
     // reaching the boundary was already excluded there.
     const battedRuns = event.runs - (event.overthrow || 0);
-    if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
+    // event.bigHit marks a six that cleared the tournament's own extra-distance boundary rope
+    // (the bigHitRuns house rule) -- its total is whatever bonus value the rule configures (e.g.
+    // 10), not 6, so battedRuns === 6 alone would miss it entirely: no six credited, no boundary
+    // toast. Still exactly a six for every stats/milestone purpose, just worth more.
+    const isSix = event.bigHit || battedRuns === 6;
+    const isFour = !event.bigHit && battedRuns === 4;
+    if (isFour || isSix) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
       runs: cur.batsmen[cur.strikerName].runs + event.runs,
       balls: cur.batsmen[cur.strikerName].balls + 1,
-      fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
-      sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
+      fours: cur.batsmen[cur.strikerName].fours + (isFour ? 1 : 0),
+      sixes: cur.batsmen[cur.strikerName].sixes + (isSix ? 1 : 0)
     };
     bowler.runs += event.runs;
     bowler.ballsBowled += 1;

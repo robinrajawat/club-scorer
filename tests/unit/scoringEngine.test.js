@@ -316,3 +316,31 @@ test("retirementCapThreshold: rounds down to the nearest multiple of the cap", (
   assert.equal(retirementCapThreshold(50, 25), 50);
   assert.equal(retirementCapThreshold(24, 25), 0);
 });
+
+// bigHitRuns -- a six clearing a tournament's own extra-distance boundary rope scores this many
+// runs total instead of the standard 6 (event.bigHit marks it). Still exactly a six for every
+// stats/milestone purpose, just worth more -- see applyBall's isSix handling in the "run" branch.
+test("applyBall: event.bigHit awards the configured bonus runs and still credits a six", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "run", runs: 10, bigHit: true });
+  assert.equal(after.runs, 10);
+  assert.equal(after.batsmen.P1.runs, 10);
+  assert.equal(after.batsmen.P1.sixes, 1, "a big hit is still a six for stats purposes");
+  assert.equal(after.batsmen.P1.fours, 0);
+  assert.equal(after.bowlers.B1.runs, 10);
+  assert.equal(after.ballsSinceBoundary, 0, "a big hit resets the boundary drought same as any six");
+});
+
+test("applyBall: a plain 6 (no bigHit flag) still credits a six the same as before", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "run", runs: 6 });
+  assert.equal(after.batsmen.P1.sixes, 1);
+  assert.equal(after.batsmen.P1.runs, 6);
+});
+
+test("newInning: bigHitRuns defaults to null (rule off) and carries through when set", () => {
+  const off = newInning("TeamA", "TeamB", rules, 10);
+  assert.equal(off.bigHitRuns, null);
+  const on = newInning("TeamA", "TeamB", { ...rules, bigHitRuns: 10 }, 10);
+  assert.equal(on.bigHitRuns, 10);
+});
