@@ -22,6 +22,14 @@ afterEach(() => {
   delete globalThis.Modal;
 });
 
+// Finds the wrapping <div style={{marginTop:14}}> a ToggleRule/NullableNumberRule renders itself
+// as, scoped by its own label text -- both are private to tournamentsScreen.js (not exported), so
+// tests locate them by rendered structure/text the same way the rest of this suite already finds
+// plain buttons/inputs, rather than importing the helper components directly.
+function ruleBlock(inst, labelText) {
+  return inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.marginTop === 14 && hasText(n.props.children, labelText))[0];
+}
+
 function tournament(overrides = {}) {
   return {
     id: "t1", name: "Summer Cup", teams: ["Riverside CC", "Oakwood CC"], fixtures: [], createdAt: Date.now(),
@@ -182,8 +190,7 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
   act(() => { ruleChoices.find(r => r.props.label === "Players per side").props.onChange(8); });
   act(() => { ruleChoices.find(r => r.props.label === "Runs on a wide").props.onChange(2); });
   act(() => { ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.onChange(2); });
-  const freeHitBtn = inst.root.findAllByType("button").find(b => b.props.children === "Off");
-  act(() => { freeHitBtn.props.onClick(); });
+  act(() => { ruleBlock(inst, "Free hit after a no-ball").findByType("button").props.onClick(); });
 
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
@@ -195,6 +202,72 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
   assert.equal(createdWith.defaultRules.wideRuns, 2);
   assert.equal(createdWith.defaultRules.noballRuns, 2);
   assert.equal(createdWith.defaultRules.freeHit, true);
+});
+
+test("TournamentsScreen: 'Players per side' offers 10, not just 6/7/8/9/11", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+  const playersPerSide = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Players per side");
+  assert.deepEqual(playersPerSide.props.options.map(o => o.value), [6, 7, 8, 9, 10, 11]);
+});
+
+test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time cap, bowler limit, retirement, Super Over, final-over wide/no-ball, Impact Player) flows into onCreateTournament", async () => {
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules) => {
+      createdWith = defaultRules;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  act(() => { inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Balls per over").props.onChange(8); });
+  act(() => { ruleBlock(inst, "Max overs per bowler").findByType("button").props.onClick(); }); // seed it
+  act(() => { ruleBlock(inst, "Powerplay").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Time cap per innings").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Retirement run cap").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Super Over if the match ties").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Wide/no-ball counts as a ball").findByType("button").props.onClick(); });
+  act(() => { ruleBlock(inst, "Impact Player substitution").findByType("button").props.onClick(); });
+
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith.ballsPerOver, 8);
+  assert.equal(createdWith.maxOversPerBowler, 4); // seeded from the default 20 overs: ceil(20/5)
+  assert.equal(createdWith.powerplayOvers, 6);
+  assert.equal(createdWith.timeCapMinutes, 90); // round(20 * 4.5)
+  assert.equal(createdWith.retirementRuns, 25);
+  assert.equal(createdWith.superOver, true);
+  assert.equal(createdWith.wideNoballCountsAsBall, true);
+  assert.equal(createdWith.impactPlayerEnabled, true);
+});
+
+test("TournamentsScreen: a nullable rule can be seeded then cleared back to null", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+
+  act(() => { ruleBlock(inst, "Retirement run cap").findByType("button").props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /25/);
+
+  const clearBtn = ruleBlock(inst, "Retirement run cap").findAllByType("button").find(b => b.props.children === "None");
+  act(() => { clearBtn.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /None — tap to set one/);
 });
 
 test("TournamentsScreen: canManage=false hides 'New Tournament' and shows an owner-only note", () => {

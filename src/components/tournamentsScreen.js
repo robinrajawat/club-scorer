@@ -15,6 +15,139 @@ import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/a
 // create-series dialog only -- create-tournament is an inline card, not a modal. Covered by
 // tests/unit/components/tournamentsScreen.test.js.
 
+// A boolean rule shown as a labeled On/Off pill button -- same visual as SetupScreen's own
+// freeHit/superOver toggles, factored out here since the tournament rules editor below needs
+// several of these (freeHit, superOver, wideNoballCountsAsBall, impactPlayerEnabled) and copying
+// this block four times just to swap the label/value/setter would be pure duplication.
+function ToggleRule({
+  label,
+  value,
+  onChange
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, label), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => onChange(!value),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: value ? "#fff" : COLORS.ink,
+      boxShadow: value ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, value ? "On" : "Off"));
+}
+// A rule that's either null ("no limit"/unset) or a positive integer: tap "None -- tap to set one"
+// to seed it, edit it while set, tap "None" to clear it back. Same shape as SetupScreen's own
+// maxOversPerBowler/powerplayOvers/timeCapMinutes/retirementRuns editors, minus that editor's
+// auto-suggest-from-a-single-match's-overs wiring -- `seed` is passed in already computed instead,
+// since this file's equivalent (defaultOvers) is an optional string, not a live match in progress.
+function NullableNumberRule({
+  label,
+  value,
+  onChange,
+  seed,
+  unit,
+  hint
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, label), value === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => onChange(seed),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None — tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(value),
+    onChange: v => onChange(v.replace(/[^0-9]/g, "")),
+    onBlur: () => {
+      const n = parseInt(String(value), 10);
+      onChange(isNaN(n) || n < 1 ? 1 : n);
+    },
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, unit), hint && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, hint), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onChange(null),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None")));
+}
 export function TournamentsScreen({
   tournaments,
   clubs,
@@ -172,10 +305,10 @@ export function TournamentsScreen({
   }
   // Collapsed by default, same reasoning as SetupScreen's own match-rules editor: standard rules
   // are right most of the time, so this shouldn't force a scroll past several settings on every
-  // tournament creation. Unlike SetupScreen, there's no ballsPerOver/superOver/powerplayOvers/
-  // timeCapMinutes/maxOversPerBowler here -- those are more niche match-level knobs, not the kind
-  // of thing a tournament organiser sets once up front; this covers exactly the settings that
-  // actually vary tournament-to-tournament (overs, squad size, wide/no-ball value, Free Hit).
+  // tournament creation. Originally kept deliberately smaller than SetupScreen's match-level
+  // editor (only overs/squad size/wide-no-ball value/Free Hit), but that meant every OTHER rule
+  // still had to be re-entered per fixture even though this editor exists for exactly that reason
+  // -- now full parity with SetupScreen's match rules editor.
   function renderTournamentRulesSection() {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -246,8 +379,31 @@ export function TournamentsScreen({
         value: 9,
         label: "9"
       }, {
+        value: 10,
+        label: "10"
+      }, {
         value: 11,
         label: "11 (standard)"
+      }]
+    }), /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Balls per over",
+      value: tournamentRules.ballsPerOver,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        ballsPerOver: v
+      })),
+      options: [{
+        value: 4,
+        label: "4 (kids)"
+      }, {
+        value: 5,
+        label: "5"
+      }, {
+        value: 6,
+        label: "6 (standard)"
+      }, {
+        value: 8,
+        label: "8"
       }]
     }), /*#__PURE__*/React.createElement(RuleChoice, {
       label: "Runs on a wide",
@@ -277,34 +433,78 @@ export function TournamentsScreen({
         value: 2,
         label: "2"
       }]
-    }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 12,
-        fontWeight: 600,
-        color: COLORS.inkSoft,
-        marginBottom: 6
-      }
-    }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      className: "cs-btn cs-shine",
-      onClick: () => setTournamentRules(r => ({
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Free hit after a no-ball",
+      value: tournamentRules.freeHit,
+      onChange: v => setTournamentRules(r => ({
         ...r,
-        freeHit: !r.freeHit
+        freeHit: v
+      }))
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Max overs per bowler",
+      value: tournamentRules.maxOversPerBowler,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        maxOversPerBowler: v
       })),
-      style: {
-        padding: "8px 14px",
-        borderRadius: 20,
-        border: "none",
-        cursor: "pointer",
-        background: tournamentRules.freeHit ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-        color: tournamentRules.freeHit ? "#fff" : COLORS.ink,
-        boxShadow: tournamentRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 13
-      }
-    }, tournamentRules.freeHit ? "On" : "Off"))));
+      seed: Math.max(1, Math.ceil(parseInt(defaultOvers || "20", 10) / 5)),
+      unit: "overs each",
+      hint: "suggested from your overs per innings, editable"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Powerplay",
+      value: tournamentRules.powerplayOvers,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        powerplayOvers: v
+      })),
+      seed: (() => {
+        const n = parseInt(defaultOvers || "20", 10);
+        return Math.min(n, n <= 20 ? 6 : Math.round(n / 5));
+      })(),
+      unit: "overs",
+      hint: "at the start of each innings, shown as a badge while it's in effect"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Time cap per innings",
+      value: tournamentRules.timeCapMinutes,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        timeCapMinutes: v
+      })),
+      seed: Math.max(10, Math.round(parseInt(defaultOvers || "20", 10) * 4.5)),
+      unit: "minutes",
+      hint: "a flag once you're past it, not a stop"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Retirement run cap",
+      value: tournamentRules.retirementRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        retirementRuns: v
+      })),
+      seed: 25,
+      unit: "runs — must retire",
+      hint: "a batsman reaching this is prompted to retire (not out)"
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Super Over if the match ties",
+      value: tournamentRules.superOver,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        superOver: v
+      }))
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Wide/no-ball counts as a ball (except final over)",
+      value: tournamentRules.wideNoballCountsAsBall,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        wideNoballCountsAsBall: v
+      }))
+    }), /*#__PURE__*/React.createElement(ToggleRule, {
+      label: "Impact Player substitution",
+      value: tournamentRules.impactPlayerEnabled,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        impactPlayerEnabled: v
+      }))
+    })));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
