@@ -287,6 +287,27 @@ test("MatchScreen: ending the innings early via the match menu marks it complete
   assert.equal(ctx.match.awaitingSecondInningsSetup, true);
 });
 
+// BUG FIX: retirementRuns (the 25-run mandatory-retirement house rule) was missing from the list
+// of house rules carried over into the 2nd innings' newInning() call -- every other rule there
+// (maxOversPerBowler, powerplayOvers, timeCapMinutes, wideNoballCountsAsBall, lastOverRules) was
+// explicitly forwarded, but retirementRuns silently fell back to DEFAULT_RULES' null, so the cap
+// simply never kicked in for anyone batting in the 2nd innings.
+test("MatchScreen: ending the innings early carries the retirement-runs house rule into the 2nd innings", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { retirementRuns: 25 });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const menuBtn = ctx.inst.root.findAllByProps({ "aria-label": "Match menu" })[0];
+  act(() => { menuBtn.props.onClick(); });
+  const endInningsBtn = ctx.inst.root.findAllByType("button").find(b => b.props.children === "End innings");
+  act(() => { endInningsBtn.props.onClick(); });
+  const confirmBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "End innings");
+  await act(async () => {
+    confirmBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.match.innings[1].retirementRuns, 25);
+});
+
 test("MatchScreen: abandoning the match via the match menu ends it with no result", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
@@ -523,8 +544,10 @@ test("MatchScreen: Timed Out on the Next batsman prompt records a wicket for the
   const picker = ctx.inst.root.findByType(PlayerPicker);
   act(() => { picker.props.onChange("C"); });
   const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  act(() => { timedOutBtn.props.onClick(); });
+  const confirmTimedOutBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "Declare Timed Out");
   await act(async () => {
-    timedOutBtn.props.onClick();
+    confirmTimedOutBtn.props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(ctx.inning.batsmen.C.out, true);
@@ -551,8 +574,10 @@ test("MatchScreen: Timed Out also resolves a pending wicket (the outgoing batsma
   const picker = ctx.inst.root.findByType(PlayerPicker);
   act(() => { picker.props.onChange("C"); });
   const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  act(() => { timedOutBtn.props.onClick(); });
+  const confirmTimedOutBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "Declare Timed Out");
   await act(async () => {
-    timedOutBtn.props.onClick();
+    confirmTimedOutBtn.props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
   // The original wicket (A, bowled) is resolved, and C is separately timed out -- two wickets down.
@@ -562,4 +587,25 @@ test("MatchScreen: Timed Out also resolves a pending wicket (the outgoing batsma
   assert.equal(ctx.inning.batsmen.C.how, "Timed out");
   assert.equal(ctx.inning.wickets, 2);
   assert.equal(ctx.inning.strikerName, "");
+});
+
+// BUG FIX: "Declare Timed Out" used to commit the dismissal on a single tap with no confirmation
+// step at all -- risky for a full out-without-facing-a-ball dismissal. It now opens a confirm
+// prompt first; cancelling it must leave the match untouched.
+test("MatchScreen: Declare Timed Out asks for confirmation first, and cancelling it commits nothing", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { strikerName: "", nonStrikerName: "B" });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  const timedOutBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Timed Out"));
+  act(() => { timedOutBtn.props.onClick(); });
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Declare timed out\?/);
+  assert.equal(ctx.inning.wickets, 0, "no commit has happened yet, only the confirm prompt opened");
+
+  const cancelBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "Cancel");
+  act(() => { cancelBtn.props.onClick(); });
+  assert.equal(ctx.inning.wickets, 0);
+  assert.equal(ctx.inning.batsmen.C, undefined, "cancelling leaves C untouched, never recorded out");
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /Declare timed out\?/);
 });

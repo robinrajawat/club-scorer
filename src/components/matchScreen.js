@@ -375,6 +375,7 @@ export function MatchScreen({
           maxOversPerBowler: inn.maxOversPerBowler,
           powerplayOvers: inn.powerplayOvers,
           timeCapMinutes: inn.timeCapMinutes,
+          retirementRuns: inn.retirementRuns,
           wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
           lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
@@ -693,6 +694,12 @@ export function MatchScreen({
   // implies you do.
   const [endInningTrigger, setEndInningTrigger] = useState(null);
   const [confirmNoResult, setConfirmNoResult] = useState(false);
+  // Gates timedOutBatsman behind an explicit "are you sure" -- it's a full dismissal (out, no ball
+  // faced) committed on a single tap with no delivery to double-check against first, unlike every
+  // other wicket type which at least requires picking Wicket mid-ball. Still reversible via the
+  // regular Undo afterward (timedOutBatsman calls pushHistory() same as any other commit), but that
+  // shouldn't be the only thing standing between one misplaced tap and a real dismissal.
+  const [confirmTimedOutName, setConfirmTimedOutName] = useState(null);
   // Separate from confirmNoResult's own confirmation modal deliberately -- this is a lighter,
   // first tap of friction before reaching either End innings or Abandon match at all, not a
   // replacement for the "are you sure" step each of them already has. Swap Strike and Retire stay
@@ -1917,7 +1924,7 @@ export function MatchScreen({
     }
   }, "Confirm"), newBatsmanName.trim() && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => timedOutBatsman(newBatsmanName),
+    onClick: () => setConfirmTimedOutName(newBatsmanName.trim()),
     className: "cs-btn",
     style: {
       display: "block",
@@ -1996,6 +2003,15 @@ export function MatchScreen({
     confirmLabel: "Abandon \u2014 No Result",
     onConfirm: declareNoResult,
     onCancel: () => setConfirmNoResult(false)
+  }), confirmTimedOutName && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Declare timed out?",
+    message: `${confirmTimedOutName} is given OUT without facing a single ball \u2014 they weren't ready to bat within the time limit. Only use this for a genuine timed-out situation. You can still fix a mistake afterward with the regular Undo.`,
+    confirmLabel: "Declare Timed Out",
+    onConfirm: () => {
+      timedOutBatsman(confirmTimedOutName);
+      setConfirmTimedOutName(null);
+    },
+    onCancel: () => setConfirmTimedOutName(null)
   }), needsCapRetirement && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setDismissedCapRetireFor(capRetireName)
   }, /*#__PURE__*/React.createElement("div", {
