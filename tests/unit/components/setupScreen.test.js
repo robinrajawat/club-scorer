@@ -17,12 +17,18 @@ import { SetupScreen } from "../../../src/components/setupScreen.js";
 import { Btn, TeamChips, RuleChoice } from "../../../src/components/formUiAtoms.js";
 import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { Field } from "../../../src/components/screenAtoms.js";
+import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
 
 beforeEach(() => {
   globalThis.window = { scrollTo: () => {} };
+  // VenueEditModal (the venue field's address-search picker) references Modal as a bare global,
+  // same pattern as every other Modal-based component in this app -- see venueAndDateModals.js's
+  // own comment and tournamentsScreen.test.js's identical stub.
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
 });
 afterEach(() => {
   delete globalThis.window;
+  delete globalThis.Modal;
 });
 
 function hasText(node, str) {
@@ -137,7 +143,10 @@ test("SetupScreen: walking every page to Start Match calls onStart with the asse
 
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
-  act(() => { input(inst, "e.g. Willow Park").props.onChange({ target: { value: "Willow Park" } }); });
+  const addVenueBtn = inst.root.findAllByType("button").find(b => b.props.children === "Add a venue");
+  act(() => { addVenueBtn.props.onClick(); });
+  const venueModal = inst.root.findByType(VenueEditModal);
+  act(() => { venueModal.props.onSave("Willow Park", 12.34, 56.78); });
   const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Oakwood CC"));
   act(() => { tossBtn.props.onClick(); });
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bowl").props.onClick(); });
@@ -160,6 +169,8 @@ test("SetupScreen: walking every page to Start Match calls onStart with the asse
   assert.equal(started.teamA, "Riverside CC");
   assert.equal(started.teamB, "Oakwood CC");
   assert.equal(started.venue, "Willow Park");
+  assert.equal(started.venueLat, 12.34);
+  assert.equal(started.venueLng, 56.78);
   // Oakwood CC won the toss and chose to bowl -> Riverside CC bats first.
   assert.equal(started.battingFirstTeam, "Riverside CC");
   assert.equal(started.strikerA, "A. Sharma");

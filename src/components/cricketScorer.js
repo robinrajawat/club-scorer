@@ -944,6 +944,8 @@ export function CricketScorer() {
       teamBNumbers: setup.teamBNumbers || {},
       oversLimit: setup.oversLimit,
       venue: setup.venue || null,
+      venueLat: setup.venueLat != null ? setup.venueLat : null,
+      venueLng: setup.venueLng != null ? setup.venueLng : null,
       umpire1: setup.umpire1 || null,
       umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
@@ -2385,7 +2387,8 @@ export function CricketScorer() {
     teams: allTeamsForSetup,
     rules: rules,
     presetTournament: presetTournament,
-    clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || []
+    clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || [],
+    clubs: clubs
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
