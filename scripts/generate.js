@@ -268,6 +268,7 @@ const FUNCTIONS = [
   { name: "FixturesSection", file: "src/components/fixturesSection.js" },
   { name: "ToggleRule", file: "src/components/tournamentsScreen.js" },
   { name: "NullableNumberRule", file: "src/components/tournamentsScreen.js" },
+  { name: "RuleSectionHeader", file: "src/components/tournamentsScreen.js" },
   { name: "TournamentsScreen", file: "src/components/tournamentsScreen.js" },
   { name: "TournamentDetailScreen", file: "src/components/tournamentDetailScreen.js" },
   { name: "ClubPanel", file: "src/components/clubPanel.js" },

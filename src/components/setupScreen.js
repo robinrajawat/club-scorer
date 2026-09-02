@@ -5,6 +5,7 @@ import { Field } from "./screenAtoms.js";
 import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
 import { PlayerPicker } from "./pickerAtoms.js";
+import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
 import { tossText, umpiresText, nonStandardRulesText } from "../core/shareAndFormat.js";
 
@@ -434,7 +435,9 @@ export function SetupScreen({
       marginTop: -4,
       marginBottom: 12
     }
-  }, "Both sides have the same name — playing the same squad against itself? Edit one label above (e.g. \"", teamAName.trim(), " A\" / \"", teamAName.trim(), " B\") so the app can tell them apart."), /*#__PURE__*/React.createElement(Field, {
+  }, "Both sides have the same name — playing the same squad against itself? Edit one label above (e.g. \"", teamAName.trim(), " A\" / \"", teamAName.trim(), " B\") so the app can tell them apart."), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Format"
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Overs per innings"
     // Same fix as the tournament rules editor's identical field -- a full-width text input for a
     // 1-2 digit number looked oversized next to every other numeric field on this screen.
@@ -637,7 +640,10 @@ export function SetupScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Standard by default — adjust for junior or short formats."), /*#__PURE__*/React.createElement(RuleChoice, {
+  }, "Standard by default — adjust for junior or short formats."), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Format",
+    first: true
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Balls per over",
     value: matchRules.ballsPerOver,
     onChange: v => setMatchRules(r => ({
@@ -657,6 +663,8 @@ export function SetupScreen({
       value: 8,
       label: "8"
     }]
+  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Extras"
   }), /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Runs on a wide",
     value: matchRules.wideRuns,
@@ -712,7 +720,9 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.freeHit ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.freeHit ? "On" : "Off")), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Special rules"
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -831,8 +841,15 @@ export function SetupScreen({
     }
   }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
     }
+    // Same reasoning as the Last over rules box above -- a toggle plus its own conditional
+    // sub-control reads as one segmented unit more easily boxed than left as two more rows in the
+    // flat stack. Matches the tournament rules editor's identical cluster.
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -860,7 +877,7 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.impactPlayerEnabled ? "On" : "Off")), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+  }, matchRules.impactPlayerEnabled ? "On" : "Off"), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Substitutions allowed per team",
     value: matchRules.impactPlayerMaxSubs,
     onChange: v => setMatchRules(r => ({
@@ -874,7 +891,7 @@ export function SetupScreen({
       value: 2,
       label: "2"
     }]
-  }), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -905,7 +922,9 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.superOver ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.superOver ? "On" : "Off")), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Bowling limits"
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1204,7 +1223,9 @@ export function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))), /*#__PURE__*/React.createElement("div", {
+  }, "None"))), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Batting rules"
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
