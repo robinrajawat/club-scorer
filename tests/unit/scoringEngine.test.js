@@ -364,26 +364,26 @@ test("newInning: bigHitRuns defaults to null (rule off) and carries through when
 
 test("lastBallCommentary: describes a plain run, a boundary, a bonus hit, and a dot ball, crediting the bowler/batter who were actually at the crease before the ball", () => {
   const inn = freshInning(10, ["P1", "P2"]);
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 1 })), "B1 to P1: 1 run");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 4 })), "B1 to P1: FOUR!");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 6 })), "B1 to P1: SIX!");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 0 })), "B1 to P1: dot ball");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 15, bigHit: "Maximum Hit" })), "B1 to P1: Maximum Hit!");
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 1 })), { lead: "B1 to P1: ", outcome: "1 run", kind: "run" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 4 })), { lead: "B1 to P1: ", outcome: "FOUR!", kind: "four" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 6 })), { lead: "B1 to P1: ", outcome: "SIX!", kind: "six" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 0 })), { lead: "B1 to P1: ", outcome: "dot ball", kind: "run" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "run", runs: 15, bigHit: "Maximum Hit" })), { lead: "B1 to P1: ", outcome: "Maximum Hit!", kind: "six" });
 });
 
 test("lastBallCommentary: describes extras -- wide/no-ball (with any extra runs run off them), byes, and leg byes", () => {
   const inn = freshInning(10, ["P1", "P2"]);
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 0 })), "B1 to P1: wide");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 2 })), "B1 to P1: wide, 2 runs extra");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "noball", runs: 0 })), "B1 to P1: no ball");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "bye", runs: 2 })), "B1 to P1: 2 byes");
-  assert.equal(lastBallCommentary(inn, applyBall(inn, { kind: "legbye", runs: 1 })), "B1 to P1: 1 leg bye");
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 0 })), { lead: "B1 to P1: ", outcome: "wide", kind: "wide" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "wide", runs: 2 })), { lead: "B1 to P1: ", outcome: "wide, 2 runs extra", kind: "wide" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "noball", runs: 0 })), { lead: "B1 to P1: ", outcome: "no ball", kind: "noball" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "bye", runs: 2 })), { lead: "B1 to P1: ", outcome: "2 byes", kind: "run" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "legbye", runs: 1 })), { lead: "B1 to P1: ", outcome: "1 leg bye", kind: "run" });
 });
 
 test("lastBallCommentary: a wicket names who got out and how, using the same fall-of-wickets/how text as the scorecard", () => {
   const inn = freshInning(10, ["P1", "P2"]);
   const after = applyBall(inn, { kind: "wicket", wicketType: "Bowled", newBatsman: "P3" });
-  assert.equal(lastBallCommentary(inn, after), "B1 to P1: OUT! P1 b B1");
+  assert.deepEqual(lastBallCommentary(inn, after), { lead: "B1 to P1: ", outcome: "OUT! P1 b B1", kind: "wicket" });
 });
 
 test("lastBallCommentary: returns null for a non-delivery commit (nothing appended to `overs`), e.g. a standalone penalty or an unchanged inning", () => {

@@ -22,6 +22,7 @@ import { JSDOM } from "jsdom";
 import { ResultScreen } from "../../../src/components/resultScreen.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "../../../src/components/inningsSetupScreens.js";
 import { newInning } from "../../../src/core/scoringEngine.js";
+import { COLORS } from "../../../src/components/theme.js";
 
 beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
@@ -153,15 +154,28 @@ test("MatchScreen: shows a one-line commentary for the last ball, and clears it 
     fourBtn.props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
-  // X is the bowler, A the striker -- see buildInning/baseMatch above.
-  assert.match(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+  // X is the bowler, A the striker -- see buildInning/baseMatch above. The outcome ("FOUR!") is a
+  // separate, colored span from the plain-text lead -- see the color-coded-outcome redesign below.
+  // Scoped to the commentary line's own container (fontSize 12.5) since BallCelebration's "FOUR!"
+  // banner is a second, unrelated element with the exact same text showing at the same moment.
+  let text = JSON.stringify(ctx.inst.toJSON());
+  assert.match(text, /"X to A: "/);
+  assert.match(text, /"FOUR!"/);
+  const commentaryLine = ctx.inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.fontSize === 12.5 && n.props.style.color === COLORS.inkSoft)[0];
+  assert.ok(commentaryLine, "the commentary line's container renders");
+  const outcomeSpan = commentaryLine.findAllByType("span")[0];
+  assert.equal(outcomeSpan.props.children, "FOUR!");
+  assert.equal(outcomeSpan.props.style.color, COLORS.turf, "a four is colored the same green as its ball badge");
 
   const undoBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Undo"));
   await act(async () => {
     undoBtn.props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
-  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: FOUR!"/);
+  // Scoped the same way as above -- BallCelebration's own "FOUR!" banner is unrelated and keeps
+  // showing on its own timer regardless of undo, so checking the whole tree would find that instead.
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /"X to A: "/);
+  assert.equal(ctx.inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.fontSize === 12.5 && n.props.style.color === COLORS.inkSoft).length, 0);
 });
 
 test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and scores its bonus runs as a six", async () => {

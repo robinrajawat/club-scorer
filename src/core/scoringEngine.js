@@ -848,6 +848,11 @@ export function applyBall(inning, event) {
 // length before/after finds the newly-appended ball regardless of whether this delivery also
 // happened to complete the over. Returns null for a standalone penalty (applyBall returns early,
 // before ever touching `overs`) since there's no delivery to describe.
+//
+// Returns { lead, outcome, kind } rather than one flat string, so the UI can color/weight just the
+// outcome half (matching BallBadge's own kind-based coloring elsewhere -- green four, gold six,
+// red wicket, purple wide/no-ball) instead of the whole line reading as identical, easy-to-miss
+// plain text regardless of what actually happened.
 export function lastBallCommentary(before, after) {
   const overIdx = before.overs.length - 1;
   const prevOver = before.overs[overIdx] || [];
@@ -861,21 +866,21 @@ export function lastBallCommentary(before, after) {
     const fow = after.fallOfWickets[after.fallOfWickets.length - 1];
     const dismissed = (fow && fow.batsman) || batter;
     const how = (after.batsmen[dismissed] && after.batsmen[dismissed].how) || "out";
-    return `${lead}OUT! ${dismissed} ${how}`;
+    return { lead, outcome: `OUT! ${dismissed} ${how}`, kind: "wicket" };
   }
-  if (ball.bigHit) return `${lead}${ball.bigHit}!`;
-  if (ball.runs === 6) return `${lead}SIX!`;
-  if (ball.runs === 4) return `${lead}FOUR!`;
+  if (ball.bigHit) return { lead, outcome: `${ball.bigHit}!`, kind: "six" };
+  if (ball.runs === 6) return { lead, outcome: "SIX!", kind: "six" };
+  if (ball.runs === 4) return { lead, outcome: "FOUR!", kind: "four" };
   if (ball.kind === "wide") {
     const extra = ball.runs - (after.wideRuns || 1);
-    return `${lead}wide${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+    return { lead, outcome: `wide${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`, kind: "wide" };
   }
   if (ball.kind === "noball") {
     const extra = ball.runs - (after.noballRuns || 1);
-    return `${lead}no ball${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`;
+    return { lead, outcome: `no ball${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`, kind: "noball" };
   }
-  if (ball.kind === "bye") return `${lead}${ball.runs} bye${ball.runs === 1 ? "" : "s"}`;
-  if (ball.kind === "legbye") return `${lead}${ball.runs} leg bye${ball.runs === 1 ? "" : "s"}`;
-  if (ball.runs === 0) return `${lead}dot ball`;
-  return `${lead}${ball.runs} run${ball.runs === 1 ? "" : "s"}`;
+  if (ball.kind === "bye") return { lead, outcome: `${ball.runs} bye${ball.runs === 1 ? "" : "s"}`, kind: "run" };
+  if (ball.kind === "legbye") return { lead, outcome: `${ball.runs} leg bye${ball.runs === 1 ? "" : "s"}`, kind: "run" };
+  if (ball.runs === 0) return { lead, outcome: "dot ball", kind: "run" };
+  return { lead, outcome: `${ball.runs} run${ball.runs === 1 ? "" : "s"}`, kind: "run" };
 }
