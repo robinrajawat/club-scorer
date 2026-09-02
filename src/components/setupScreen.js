@@ -7,7 +7,7 @@ import { PlayingXIPicker } from "./playingXIPicker.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
-import { tossText, umpiresText, nonStandardRulesText } from "../core/shareAndFormat.js";
+import { tossText, umpiresText, nonStandardRulesText, wideNoballLastOverExceptionLabel } from "../core/shareAndFormat.js";
 
 // The multi-page "New Match" setup flow: teams & format, toss, match rules, playing XI (only
 // shown when at least one side has a saved squad), opening line-up, then a review page before
@@ -258,12 +258,16 @@ export function SetupScreen({
   // match summary/PDF, which stays silent about anything at its default value), this always shows
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
-  // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  // glancing at a collapsed card wants to confirm before they trust it and move on. The wide/no-ball
+  // bit still gets the last-over caveat appended (via wideNoballLastOverExceptionLabel, shared with
+  // nonStandardRulesText) -- leaving it off here just means the scorer discovers the flip mid-final-over
+  // instead of at a glance.
+  const wideNoballLastOverLabel = wideNoballLastOverExceptionLabel(matchRules);
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? `Wd/Nb counts as ball${wideNoballLastOverLabel ? ` (except ${wideNoballLastOverLabel})` : ""}` : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   // Review page's own pair, replacing rulesSummaryText there -- that one was built for a quick
   // glance while still editing rules, not the last screen before a scorer locks the match in,
-  // where the same abbreviations turn ambiguous (e.g. "Wd/Nb counts as ball" doesn't say the
-  // final over is still standard). coreFormatText covers balls/over and the bowler cap in full
+  // where the other abbreviations (bowler caps, powerplay, etc.) turn ambiguous without full words.
+  // coreFormatText covers balls/over and the bowler cap in full
   // words -- worth confirming even at their computed defaults, same reasoning as rulesSummaryText
   // above, so it's unconditional rather than routed through nonStandardRulesText (which would stay
   // silent on it: maxOversPerBowler defaults to a non-null computed value on every match, not just

@@ -232,6 +232,31 @@ test("SetupScreen: the rules editor is grouped into labeled sections, in order",
   }
 });
 
+// Regression: the collapsed "MATCH RULES" card (Step 2, shown before "Customize" is tapped) used
+// to say "Wd/Nb counts as ball" with no mention of the final-over house rule flipping that back
+// off -- exactly what a tournament like the one in this test configures. A scorer glancing at this
+// card before the final over had no way to know it was coming.
+test("SetupScreen: the collapsed rules summary names the last-over wide/no-ball exception when the tournament sets one", () => {
+  const inst = render({
+    presetTournament: {
+      name: "Summer Cup",
+      defaultRules: {
+        wideNoballCountsAsBall: true,
+        lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }
+      }
+    }
+  });
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Wd\/Nb counts as ball \(except last over\)/);
+});
+
 // Regression: Review used to reuse the collapsed rules card's own terse, abbreviated summary
 // (e.g. "Wd/Nb counts as ball", ambiguous about whether that also applies in the final over) --
 // the same text meant for a quick glance while still editing rules, not the last screen before a
