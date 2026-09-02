@@ -13,7 +13,7 @@ import { SyncConflictModal } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "./inningsSetupScreens.js";
 import { ResultScreen } from "./resultScreen.js";
-import { applyBall, crr, ensureBatsman, ensureBowler, isWideNoballLegal, lastBallCommentary, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
+import { applyBall, crr, ensureBatsman, ensureBowler, isInLastOvers, isWideNoballLegal, lastBallCommentary, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
   battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
   decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isImpactSubFor, isOverTimeCap,
@@ -2369,7 +2369,19 @@ export function MatchScreen({
       marginTop: -4,
       marginBottom: 12
     }
-  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${inning.wideNoballCountsAsBall && inning.lastOverRules && inning.lastOverRules.enabled && inning.lastOverRules.wideNoballIllegalAgain ? ` (this flips back in the last ${inning.lastOverRules.overCount > 1 ? inning.lastOverRules.overCount + " overs" : "over"})` : ""}.`), /*#__PURE__*/React.createElement("div", {
+  }, `Worth ${inning[showExtra + "Runs"] || 1} run${(inning[showExtra + "Runs"] || 1) === 1 ? "" : "s"} on its own, plus whatever's picked below — and ${isWideNoballLegal(inning) ? "counts as a legal delivery this over" : "doesn't count as a legal delivery, so it's re-bowled"}${(() => {
+    // The illegal-again house rule only has anything to add when wideNoballCountsAsBall is on in
+    // the first place (otherwise every wide/no-ball is already always illegal, standard Laws, and
+    // this note would just be noise). Worded in two different tenses depending on whether we're
+    // actually IN the last-over window right now -- saying "this flips back in the last over"
+    // while OUTSIDE it correctly describes an upcoming change, but that exact same forward-looking
+    // wording attached to "doesn't count as a legal delivery" WHILE inside the window read as if
+    // the flip were still pending, when it had already happened -- confusing, since the sentence
+    // it's attached to is already describing the flipped-back state, not the one before it.
+    if (!inning.wideNoballCountsAsBall || !inning.lastOverRules || !inning.lastOverRules.enabled || !inning.lastOverRules.wideNoballIllegalAgain) return "";
+    const overWord = inning.lastOverRules.overCount > 1 ? `${inning.lastOverRules.overCount} overs` : "over";
+    return isInLastOvers(inning) ? ` (back to the standard rule for the last ${overWord})` : ` (this flips back to the standard rule in the last ${overWord})`;
+  })()}.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",

@@ -266,6 +266,31 @@ test("MatchScreen: a Wide extra credits runs to the team without consuming a leg
   assert.equal(ctx.inning.legalBalls, 0);
 });
 
+// BUG FIX: the illegal-again note used to say "this flips back in the last over" regardless of
+// whether the current ball was actually inside that window -- forward-looking wording that made
+// sense before the window started, but read as contradictory nonsense once inside it (attached to
+// "doesn't count as a legal delivery", as if the flip it's describing were still pending when it
+// had already happened).
+test("MatchScreen: the Wide/No Ball legality note reads forward-looking before the last over, and present-tense once inside it", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const rules = { wideNoballCountsAsBall: true, lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true }, oversLimit: 2, ballsPerOver: 6 };
+
+  const beforeLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 0 })] }));
+  act(() => { btn(beforeLastOver, "Extra").props.onClick(); });
+  act(() => { modalBtn(beforeLastOver, "Wide").props.onClick(); });
+  const beforeText = JSON.stringify(beforeLastOver.inst.toJSON());
+  assert.match(beforeText, /counts as a legal delivery this over/);
+  assert.match(beforeText, /this flips back to the standard rule in the last over/);
+
+  const inLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 6 })] }));
+  act(() => { btn(inLastOver, "Extra").props.onClick(); });
+  act(() => { modalBtn(inLastOver, "Wide").props.onClick(); });
+  const inText = JSON.stringify(inLastOver.inst.toJSON());
+  assert.match(inText, /doesn't count as a legal delivery, so it's re-bowled/);
+  assert.match(inText, /back to the standard rule for the last over/);
+  assert.doesNotMatch(inText, /this flips back to the standard rule/, "must not read as forward-looking once already inside the window");
+});
+
 test("MatchScreen: the 'Other' runs modal combines completed runs, an overthrow bonus, and a short-run deduction", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
