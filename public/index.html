@@ -1812,7 +1812,7 @@ function packMatchForFirestore(match) {
   // (which Firestore allows) instead of array-of-arrays (which it rejects outright). This only
   // affects what gets sent to Firestore — the runtime/in-memory shape the whole engine uses is
   // untouched.
-  return {
+  const packed = {
     ...match,
     innings: match.innings.map(inn => ({
       ...inn,
@@ -1821,6 +1821,19 @@ function packMatchForFirestore(match) {
       }))
     }))
   };
+  // Firestore's client SDK rejects ANY field whose value is the JS primitive `undefined` outright
+  // ("Function Transaction.set() called with invalid data. Unsupported field value: undefined") --
+  // a real, currently-reported production failure, not a hypothetical. Several call sites build
+  // objects with a `foo || undefined` pattern (e.g. every ball's `bigHit` field in
+  // scoringEngine.js's applyBall -- explicitly `undefined`, not merely absent, on every single ball
+  // that isn't a bonus hit), which is indistinguishable from a real value once assigned as an
+  // object key -- unlike a key that was simply never set. JSON.stringify already silently drops any
+  // object key whose value is undefined (though it turns an undefined ARRAY ELEMENT into null
+  // instead -- not a concern here, nothing in a match document is ever an array of possibly-missing
+  // values), so round-tripping through it is the simplest reliable fix, cheaper than writing and
+  // maintaining a bespoke recursive walker for what JSON already does correctly. packMatchForFirestore
+  // builds a brand new object above anyway, so nothing here depends on identity surviving intact.
+  return JSON.parse(JSON.stringify(packed));
 }
 // Firestore rejects a map with a literal empty-string key ("Document fields must not be empty"),
 // which gives no indication of WHERE in a large match document that key is — unhelpful even with
