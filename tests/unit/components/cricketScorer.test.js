@@ -143,6 +143,7 @@ afterEach(() => {
   delete globalThis.loadPublicPlayers;
   delete globalThis.fetchSharedMatch;
   delete globalThis.saveMatch;
+  delete globalThis.saveRules;
   delete globalThis.db;
   delete globalThis.Modal;
 });
@@ -219,6 +220,55 @@ test("CricketScorer: joining a match by code opens it on the match screen", asyn
     await new Promise(r => setTimeout(r, 0));
   });
   assert.ok(inst.root.findByType(MatchScreen));
+});
+
+// BUG FIX: starting a match remembered its rules as this device's own default (handleSaveRules,
+// via startNewMatch) unconditionally -- including a tournament match's rules (Free Hit, custom
+// wide/no-ball runs, whatever house rules that competition set). That meant scoring one tournament
+// fixture silently changed what the very next standalone "New Match" from Home defaulted to,
+// reported live as "new match from home tends to remember the match settings from tournament".
+// A tournament's own defaultRules are allowed to flow INTO its own matches (see SetupScreen's own
+// matchRules comment) -- they must never flow back OUT into becoming everyone's new device default.
+test("CricketScorer: starting a match tagged to a tournament does not overwrite this device's own default rules", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let savedRules = null;
+  globalThis.saveRules = r => { savedRules = r; return Promise.resolve(); };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onNew(); });
+  const setup = inst.root.findByType(SetupScreen);
+  await act(async () => {
+    setup.props.onStart({
+      teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20,
+      rules: { ballsPerOver: 6, freeHit: true }, tournamentId: "t1"
+    });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(savedRules, null, "a tournament match's rules must not become this device's own default");
+});
+
+test("CricketScorer: starting a standalone match (no tournament) does remember its rules as this device's own default", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let savedRules = null;
+  globalThis.saveRules = r => { savedRules = r; return Promise.resolve(); };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onNew(); });
+  const setup = inst.root.findByType(SetupScreen);
+  await act(async () => {
+    setup.props.onStart({
+      teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20,
+      rules: { ballsPerOver: 6, freeHit: true }, tournamentId: null
+    });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(savedRules, { ballsPerOver: 6, freeHit: true });
 });
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {
