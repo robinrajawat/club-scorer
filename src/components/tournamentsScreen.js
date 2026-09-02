@@ -517,6 +517,16 @@ export function TournamentsScreen({
       seed: 25,
       unit: "runs — must retire",
       hint: "a batsman reaching this is prompted to retire (not out)"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Big hit bonus",
+      value: tournamentRules.bigHitRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        bigHitRuns: v
+      })),
+      seed: 10,
+      unit: "runs on a big hit",
+      hint: "a six clearing your ground's extra-distance boundary rope scores this many instead of the standard 6"
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Super Over if the match ties",
       value: tournamentRules.superOver,

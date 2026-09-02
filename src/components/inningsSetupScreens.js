@@ -219,14 +219,13 @@ export function ImpactPlayerCard({
   const bench = benchFor(match, team);
   const remaining = impactSubsRemainingFor(match, team);
   const subs = match.impactSubs || [];
-  let lastSubIndex = -1;
-  for (let i = subs.length - 1; i >= 0; i--) {
-    if (subs[i].team === team) {
-      lastSubIndex = i;
-      break;
-    }
-  }
-  const lastSub = lastSubIndex === -1 ? null : subs[lastSubIndex];
+  // Every substitution THIS team has made so far, in order -- not just the most recent one. A
+  // tournament's impactPlayerMaxSubs can allow more than 1 (e.g. Billund's allows 2), and the
+  // card used to only ever track/show the single last sub, so a team's FIRST substitution silently
+  // disappeared from the UI the moment they made a second one. Only the actual last entry gets an
+  // Undo button -- undoLastImpactSub only ever reverses the most recent, never an arbitrary pick.
+  const teamSubs = subs.filter(s => s.team === team);
+  const lastSub = teamSubs.length ? teamSubs[teamSubs.length - 1] : null;
   const canOfferNew = remaining > 0 && bench.length > 0;
   // Nothing to offer and nothing to undo -- e.g. the rule's on but this team never had a bench to
   // draw from. Once ANY substitution has happened, the card stays (in a reduced form below) purely
@@ -240,11 +239,18 @@ export function ImpactPlayerCard({
     setOutName("");
     setInName("");
   }
-  const undoRow = lastSub && /*#__PURE__*/React.createElement("div", {
+  const undoRow = teamSubs.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: canOfferNew ? 14 : 0,
       paddingTop: canOfferNew ? 14 : 0,
       borderTop: canOfferNew ? `1px solid ${COLORS.creamDark}` : "none",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, teamSubs.map((sub, i) => /*#__PURE__*/React.createElement("div", {
+    key: `${sub.outName}-${sub.inName}-${i}`,
+    style: {
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -257,15 +263,15 @@ export function ImpactPlayerCard({
       color: COLORS.inkSoft,
       lineHeight: 1.4
     }
-  }, "Last: ", /*#__PURE__*/React.createElement("strong", {
+  }, teamSubs.length > 1 ? `Sub ${i + 1}: ` : "", /*#__PURE__*/React.createElement("strong", {
     style: {
       color: COLORS.ink
     }
-  }, lastSub.outName), " → ", /*#__PURE__*/React.createElement("strong", {
+  }, sub.outName), " → ", /*#__PURE__*/React.createElement("strong", {
     style: {
       color: COLORS.ink
     }
-  }, lastSub.inName)), /*#__PURE__*/React.createElement("button", {
+  }, sub.inName)), sub === lastSub && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => undoLastImpactSub(match, setMatch, team),
     className: "cs-btn",
@@ -281,7 +287,7 @@ export function ImpactPlayerCard({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "Undo"));
+  }, "Undo"))));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,

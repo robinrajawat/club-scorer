@@ -157,6 +157,7 @@ export function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
+  if (rules.bigHitRuns) bits.push(`big hit bonus (${rules.bigHitRuns} runs on the long boundary)`);
   if (rules.wideNoballCountsAsBall) {
     const lor = rules.lastOverRules;
     const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;

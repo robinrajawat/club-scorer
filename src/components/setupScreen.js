@@ -1284,6 +1284,94 @@ export function SetupScreen({
     }
   }, "Return timing and order are down to your competition's own rules — e.g. some require the rest of the batting order to bat first, or returning in the order retired. The app doesn't enforce this; it's on the scorer to apply.")), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Big hit bonus"), matchRules.bigHitRuns === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      bigHitRuns: 10
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None — tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.bigHitRuns),
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      bigHitRuns: v.replace(/[^0-9]/g, "")
+    })),
+    onBlur: () => setMatchRules(r => {
+      const n = parseInt(String(r.bigHitRuns), 10);
+      return { ...r, bigHitRuns: isNaN(n) || n < 1 ? 1 : n };
+    }),
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "runs on a big hit"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "— a six that clears your ground's extra-distance boundary rope scores this many runs instead of the standard 6."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      bigHitRuns: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None"))), /*#__PURE__*/React.createElement("div", {
+    style: {
       marginTop: 14,
       fontFamily: "'Inter'",
       fontSize: 12.5,

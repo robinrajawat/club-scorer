@@ -376,6 +376,7 @@ export function MatchScreen({
           powerplayOvers: inn.powerplayOvers,
           timeCapMinutes: inn.timeCapMinutes,
           retirementRuns: inn.retirementRuns,
+          bigHitRuns: inn.bigHitRuns,
           wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
           lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
@@ -385,19 +386,23 @@ export function MatchScreen({
       }
     }
   }
-  function handleRun(n, overthrow, shortRun) {
+  function handleRun(n, overthrow, shortRun, bigHit) {
     pushHistory();
     commit(applyBall(inning, {
       kind: "run",
       runs: n,
       overthrow: overthrow || undefined,
-      shortRun: shortRun || undefined
+      shortRun: shortRun || undefined,
+      bigHit: bigHit || undefined
     }));
     setShowRuns(false);
-    if (n === 4 || n === 6) {
+    if (n === 4 || n === 6 || bigHit) {
       const key = Date.now();
       setCelebration({
-        type: n,
+        // A big hit is still exactly a six for celebration purposes (see isSix in applyBall) --
+        // n itself is whatever bonus total the bigHitRuns rule configures (e.g. 10), which
+        // BallCelebration's own celebration.type === 6 check would otherwise miss.
+        type: bigHit ? 6 : n,
         key
       });
       setTimeout(() => {
@@ -700,6 +705,13 @@ export function MatchScreen({
   // regular Undo afterward (timedOutBatsman calls pushHistory() same as any other commit), but that
   // shouldn't be the only thing standing between one misplaced tap and a real dismissal.
   const [confirmTimedOutName, setConfirmTimedOutName] = useState(null);
+  // Undo genuinely reverts a Timed Out declaration (or any other wicket) made from this same
+  // "Next batsman" prompt -- but that prompt is a full-screen Modal, so the score/wickets header
+  // behind it is completely hidden, and needsNewBatsman stays true either way -- the EXACT same
+  // sheet just reopens, with no visible sign anything happened. Reported as "not fixable with
+  // Undo" even though the underlying data was correct all along; this is the fix, a brief explicit
+  // note right in the sheet confirming the revert actually happened.
+  const [justUndoneNote, setJustUndoneNote] = useState(false);
   // Separate from confirmNoResult's own confirmation modal deliberately -- this is a lighter,
   // first tap of friction before reaching either End innings or Abandon match at all, not a
   // replacement for the "are you sure" step each of them already has. Swap Strike and Retire stay
@@ -802,7 +814,13 @@ export function MatchScreen({
     const updated = {
       ...match,
       revisedTarget: newTarget,
-      revisedOvers: newOvers
+      revisedOvers: newOvers,
+      // Also patch the 2nd innings' OWN baked-in oversLimit (see newInning's "baked in at innings
+      // start" comment) -- isInLastOvers reads inning.oversLimit directly, not match.revisedOvers,
+      // so without this a last-over house rule (e.g. wideNoballIllegalAgain) keeps computing "the
+      // last over" against the ORIGINAL overs limit after a rain revision, and never actually
+      // triggers once the revised, shorter innings ends before reaching it.
+      innings: match.innings.map((inn, i) => i === 1 ? { ...inn, oversLimit: newOvers } : inn)
     };
     setMatch(updated);
     queueSave(updated);
@@ -877,7 +895,10 @@ export function MatchScreen({
       revisedTarget: preview.target,
       revisedOvers: newOvers,
       dlsR2Available: preview.R2,
-      dlsG50: parseFloat(dlsG50Input)
+      dlsG50: parseFloat(dlsG50Input),
+      // See the identical patch in declareRevisedTarget above -- isInLastOvers reads the 2nd
+      // innings' own baked-in oversLimit, not match.revisedOvers.
+      innings: match.innings.map((inn, i) => i === 1 ? { ...inn, oversLimit: newOvers } : inn)
     };
     setMatch(updated);
     queueSave(updated);
@@ -1878,7 +1899,17 @@ export function MatchScreen({
       padding: "9px 8px",
       fontSize: 14
     }
-  }, "Wicket")), /*#__PURE__*/React.createElement(Btn, {
+  }, "Wicket")), inning.bigHitRuns && /*#__PURE__*/React.createElement(Btn, {
+    variant: "gold",
+    onClick: () => handleRun(inning.bigHitRuns, 0, false, true),
+    style: {
+      width: "100%",
+      minHeight: 36,
+      padding: "8px 12px",
+      fontSize: 13.5,
+      marginBottom: 7
+    }
+  }, `Big Hit — ${inning.bigHitRuns} runs`), /*#__PURE__*/React.createElement(Btn, {
     onClick: undo,
     disabled: history.length === 0,
     style: {
@@ -1951,6 +1982,12 @@ export function MatchScreen({
         setPendingWicket(null);
       } else {
         undo();
+        // This whole prompt is a full-screen Modal (see its own comment), so the score/wickets
+        // header behind it is completely hidden, and needsNewBatsman stays true either way -- the
+        // exact same sheet just reopens with no visible sign anything happened. Without this note,
+        // undoing a dismissal from right here looks like a no-op even though it genuinely worked.
+        setJustUndoneNote(true);
+        setTimeout(() => setJustUndoneNote(false), 2500);
       }
       setNewBatsmanName("");
     },
@@ -1973,7 +2010,16 @@ export function MatchScreen({
     }
   }, /*#__PURE__*/React.createElement(Undo2, {
     size: 13
-  }), pendingWicket ? "Cancel this wicket" : "Undo"), /*#__PURE__*/React.createElement("button", {
+  }), pendingWicket ? "Cancel this wicket" : "Undo"), justUndoneNote && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.turf,
+      padding: "6px 4px 0"
+    }
+  }, "Reverted — the previous dismissal has been undone."), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setEndInningTrigger("stuck"),
     className: "cs-btn",
