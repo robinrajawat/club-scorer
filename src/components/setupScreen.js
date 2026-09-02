@@ -1094,7 +1094,7 @@ export function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None")))), /*#__PURE__*/React.createElement("div", {
+  }, "None"))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1182,7 +1182,7 @@ export function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "None")))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
