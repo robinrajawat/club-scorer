@@ -10,6 +10,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TournamentDetailScreen } from "../../../src/components/tournamentDetailScreen.js";
 import { Btn, ConfirmModal } from "../../../src/components/formUiAtoms.js";
+import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -84,6 +85,35 @@ test("TournamentDetailScreen: shows the tournament name and Orange/Purple Cap on
   assert.match(text, /Virat Kohli/);
   assert.match(text, /Purple Cap/);
   assert.match(text, /Jasprit Bumrah/);
+});
+
+// fixtureRow.js already falls back to `fixture.venue || tournament.venue` for any fixture that
+// hasn't set its own venue -- but until now there was no UI to actually set `tournament.venue` at
+// all. Useful for a one-day/one-ground tournament where re-entering the venue per fixture is pure
+// repetition.
+test("TournamentDetailScreen: offers to add a default venue when unset, and edits it via VenueEditModal", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let updated = null;
+  const inst = await renderScreen(tournamentFixture(), [completedMatch()], {
+    onUpdateTournament: t => { updated = t; return Promise.resolve(); }
+  });
+  const addBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Add tournament venue");
+  assert.ok(addBtn, "an add-venue affordance is offered when none is set");
+  act(() => { addBtn.props.onClick(); });
+
+  const venueModal = inst.root.findByType(VenueEditModal);
+  act(() => { venueModal.props.onSave("Riverside Oval", 12.34, 56.78); });
+  assert.equal(updated.venue, "Riverside Oval");
+  assert.equal(updated.venueLat, 12.34);
+  assert.equal(updated.venueLng, 56.78);
+});
+
+test("TournamentDetailScreen: shows the venue as a Maps link with an edit affordance once set", async () => {
+  const inst = await renderScreen(tournamentFixture({ venue: "Riverside Oval", venueLat: 12.34, venueLng: 56.78 }), [completedMatch()]);
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside Oval/);
+  const editBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Edit tournament venue");
+  assert.ok(editBtn, "an edit affordance replaces the add-venue one once a venue is set");
 });
 
 test("TournamentDetailScreen: switching to the Standings tab shows the standings table", async () => {

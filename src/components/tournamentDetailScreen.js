@@ -8,8 +8,9 @@ import { ExportTournamentPdfButton } from "./exportButtons.js";
 import { TournamentPrintReport } from "./scorecard.js";
 import { TournamentShareModal, QualificationCalculatorModal } from "./miscModals.js";
 import { FixturesSection } from "./fixturesSection.js";
+import { VenueEditModal } from "./venueAndDateModals.js";
 import { computePlayerStats, suggestPlayerOfTournament, allMatchPlayers } from "../core/statsAndFixtures.js";
-import { matchResultText, safeFilenamePart } from "../core/shareAndFormat.js";
+import { matchResultText, safeFilenamePart, buildMapsUrl } from "../core/shareAndFormat.js";
 import { computeStandings, computeGroupStandings } from "../core/appLogic.js";
 
 // A single tournament's own screen: schedule (via FixturesSection)/standings/stats/matches tabs,
@@ -45,6 +46,21 @@ export function TournamentDetailScreen({
   const [showQualCalc, setShowQualCalc] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
+  // A tournament-wide default venue -- fixtureRow.js already falls back to `tournament.venue` for
+  // any fixture that hasn't set its own (`fixture.venue || tournament.venue`), but there was never
+  // any UI to actually SET it: useful for a one-day/one-ground tournament where every fixture is
+  // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
+  // set, still wins -- this only fills in the default.
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
+  function editTournamentVenue(venue, lat, lng) {
+    if (!canManage) return;
+    onUpdateTournament({
+      ...tournament,
+      venue: venue || null,
+      venueLat: lat != null ? lat : null,
+      venueLng: lng != null ? lng : null
+    });
+  }
   useEffect(() => {
     let cancelled = false;
     loadTournamentMatches(tournament.id).then(m => {
@@ -208,7 +224,85 @@ export function TournamentDetailScreen({
       flexShrink: 0,
       padding: 4
     }
-  }, deleting ? "Deleting\u2026" : "Delete"))), matches === null ?  /*#__PURE__*/React.createElement("div", {
+  }, deleting ? "Deleting\u2026" : "Delete"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18,
+      marginTop: -12
+    }
+  }, tournament.venue ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("a", {
+    href: buildMapsUrl(tournament.venue, tournament.venueLat, tournament.venueLng),
+    target: "_blank",
+    rel: "noopener noreferrer",
+    className: "cs-btn",
+    "aria-label": `Open ${tournament.venue} in Maps`,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      minWidth: 0,
+      textDecoration: "none",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      color: COLORS.turf,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, "\ud83d\udccd ", tournament.venue), canManage && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Edit tournament venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 22,
+      height: 22,
+      flexShrink: 0,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      color: COLORS.inkSoft
+    }
+  }, /*#__PURE__*/React.createElement(Pencil, {
+    size: 11
+  }))) : canManage && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setVenueModalOpen(true),
+    className: "cs-btn",
+    "aria-label": "Add tournament venue",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 500,
+      color: COLORS.turf
+    }
+    // Explicitly framed as the tournament's DEFAULT, not "the" venue -- a fixture that sets its
+    // own venue still overrides this one (see fixtureRow.js's `fixture.venue || tournament.venue`).
+  }, "\ud83d\udccd Add a default venue for every fixture")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+    value: tournament.venue || "",
+    initialLat: tournament.venueLat,
+    initialLng: tournament.venueLng,
+    clubs: clubs,
+    onSave: (venue, lat, lng) => editTournamentVenue(venue, lat, lng),
+    onClose: () => setVenueModalOpen(false)
+  }), matches === null ?  /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0"

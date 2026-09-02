@@ -436,11 +436,21 @@ export function SetupScreen({
     }
   }, "Both sides have the same name — playing the same squad against itself? Edit one label above (e.g. \"", teamAName.trim(), " A\" / \"", teamAName.trim(), " B\") so the app can tell them apart."), /*#__PURE__*/React.createElement(Field, {
     label: "Overs per innings"
+    // Same fix as the tournament rules editor's identical field -- a full-width text input for a
+    // 1-2 digit number looked oversized next to every other numeric field on this screen.
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
-    placeholder: "20"
-  })), /*#__PURE__*/React.createElement(RuleChoice, {
+    placeholder: "20",
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  }))), /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Players per side",
     value: matchRules.playersPerSide,
     onChange: v => setMatchRules(r => ({

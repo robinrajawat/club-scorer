@@ -338,6 +338,23 @@ test("applyBall: a plain 6 (no bigHit flag) still credits a six the same as befo
   assert.equal(after.batsmen.P1.runs, 6);
 });
 
+// BUG FIX: a boundary is a dead ball the instant it crosses the rope -- no running happens, so
+// strike never rotates off it. A plain four/six's total is always even, so this never needed an
+// explicit exception before, but a bonus-hit tier's configured total can be odd (e.g. Maximum Hit
+// at 15) -- without excluding it, that odd total was wrongly treated as 15 genuine running
+// singles and rotated the strike.
+test("applyBall: a bonus hit with an odd total (e.g. 15) does not rotate strike, same as a four/six", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "run", runs: 15, bigHit: true });
+  assert.equal(after.strikerName, "P1", "strike stays with the batsman who hit it, no running happened");
+});
+
+test("applyBall: a plain odd run total (genuine running, not a boundary) still rotates strike", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "run", runs: 1 });
+  assert.equal(after.strikerName, "P2", "sanity check -- ordinary odd-run strike rotation is unaffected");
+});
+
 test("newInning: bigHitRuns defaults to null (rule off) and carries through when set", () => {
   const off = newInning("TeamA", "TeamB", rules, 10);
   assert.equal(off.bigHitRuns, null);

@@ -9,6 +9,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js";
 import { Btn, PinnableChip, RuleChoice } from "../../../src/components/formUiAtoms.js";
+import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -177,6 +178,64 @@ test("TournamentsScreen: creating a tournament with no rules customization sends
   });
   assert.equal(createdWith.defaultOvers, null);
   assert.equal(createdWith.defaultRules, null);
+});
+
+// fixtureRow.js already falls back to `fixture.venue || tournament.venue` for any fixture that
+// hasn't set its own -- but until now there was no UI to actually set it at creation time.
+test("TournamentsScreen: setting a venue on the details page passes it through to onCreateTournament", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) => {
+      createdWith = venueInfo;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+
+  const addVenueBtn = inst.root.findAllByType("button").find(b => b.props.children === "Add a venue");
+  act(() => { addVenueBtn.props.onClick(); });
+  const venueModal = inst.root.findByType(VenueEditModal);
+  act(() => { venueModal.props.onSave("Riverside Oval", 12.34, 56.78); });
+  assert.match(JSON.stringify(inst.toJSON()), /Riverside Oval/);
+
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(createdWith, { venue: "Riverside Oval", venueLat: 12.34, venueLng: 56.78 });
+});
+
+test("TournamentsScreen: no venue set sends null, not an empty object, to onCreateTournament", async () => {
+  let createdWith = "unset";
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) => {
+      createdWith = venueInfo;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith, null);
 });
 
 test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/free-hit/squad-size into onCreateTournament", async () => {

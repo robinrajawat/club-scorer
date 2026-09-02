@@ -1871,7 +1871,7 @@ export function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
     const t = {
       id: uid(),
       name,
@@ -1880,6 +1880,12 @@ export function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
+      // Bundled as one optional object rather than three more positional params -- fixtureRow.js
+      // already falls back to `fixture.venue || tournament.venue` for any fixture without its own,
+      // this is just the first place that can actually set it.
+      venue: venueInfo ? venueInfo.venue : null,
+      venueLat: venueInfo ? venueInfo.venueLat : null,
+      venueLng: venueInfo ? venueInfo.venueLng : null,
       createdAt: Date.now()
     };
     if (activeTournamentFederationId) {
