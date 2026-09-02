@@ -97,11 +97,14 @@ export function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimi
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
-    // A six that clears this tournament's own extra-distance boundary rope (e.g. an 80m rope
-    // inside the ground's usual 60m one) scores this many runs total instead of the standard 6 --
-    // see the isSix/event.bigHit handling in applyBall's "run" branch. null means the rule is off
-    // and every six is worth the standard 6, same convention as retirementRuns above.
+    // Two independent, optional bonus-hit tiers -- e.g. Big Hit for a six clearing a ground's own
+    // extra-distance boundary rope, Maximum Hit for an even bigger one, or however a club actually
+    // wants to use the two (the app doesn't attach real-world meaning to either name beyond the
+    // bonus runs configured). Either can score more than the standard 6 -- see the isSix/
+    // event.bigHit handling in applyBall's "run" branch. null means that tier is off, same
+    // convention as retirementRuns above. Both can be on at once, independently.
     bigHitRuns: r.bigHitRuns || null,
+    maxHitRuns: r.maxHitRuns || null,
     wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
     // A generic "how many overs count as the last over(s), and what changes there" bucket, kept
     // separate from wideNoballCountsAsBall itself (which used to hardcode its own final-over
@@ -618,7 +621,11 @@ export function applyBall(inning, event) {
     // effect *at the moment this exact ball was bowled*, not just its kind (see ballLabelsForOver
     // in miscHelpers.js, which reads this to decide whether a wide/no-ball advances the over's
     // ball count or shares a slot with the next legal delivery).
-    legal: legalBall
+    legal: legalBall,
+    // A big hit's runs (e.g. 10) don't match BallBadge's own `ev.runs === 6` gold-six check, so
+    // without this the ball-by-ball strip colored it like a plain, unremarkable run instead of the
+    // six it actually was -- see BallBadge in matchDisplayAtoms.js.
+    bigHit: event.bigHit || undefined
   }];
   if (legalBall) {
     cur.legalBalls += 1;

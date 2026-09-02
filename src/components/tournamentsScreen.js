@@ -527,6 +527,16 @@ export function TournamentsScreen({
       seed: 10,
       unit: "runs on a big hit",
       hint: "a six clearing your ground's extra-distance boundary rope scores this many instead of the standard 6"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Maximum hit bonus",
+      value: tournamentRules.maxHitRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        maxHitRuns: v
+      })),
+      seed: 15,
+      unit: "runs on a maximum hit",
+      hint: "a second, independent bonus-hit tier -- use it however suits your ground (e.g. an even longer boundary than Big Hit above)"
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Super Over if the match ties",
       value: tournamentRules.superOver,
@@ -558,13 +568,10 @@ export function TournamentsScreen({
         ...r,
         lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
       })),
-      options: [{
-        value: 1,
-        label: "1 over"
-      }, {
-        value: 2,
-        label: "2 overs"
-      }]
+      options: [1, 2, 3, 4, 5].map(n => ({
+        value: n,
+        label: n === 1 ? "1 over" : `${n} overs`
+      }))
     }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && tournamentRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Wide/no-ball illegal again in the last over(s)",
       value: tournamentRules.lastOverRules.wideNoballIllegalAgain,

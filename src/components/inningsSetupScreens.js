@@ -5,7 +5,7 @@ import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { ScorecardOverlay } from "./scorecard.js";
-import { ensureBatsman, ensureBowler } from "../core/scoringEngine.js";
+import { ensureBatsman, ensureBowler, oversLabel } from "../core/scoringEngine.js";
 import { rosterFor, benchFor, impactSubsRemainingFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Screens shown between innings, before scoring resumes: SuperOverOpenersSetup (pick openers for a
@@ -474,6 +474,67 @@ export function SecondInningsSetup({
   }, /*#__PURE__*/React.createElement(Undo2, {
     size: 15
   }), "Correct")));
+  // The 1st innings' own score and the chase target, right at the top of BOTH steps of this
+  // screen -- the Impact Player step (shown first whenever there's any Impact Player activity to
+  // offer) used to show neither, only a generic "make a substitution" line, so seeing what was
+  // actually just posted meant clicking into the full Scorecard overlay. A quick glance shouldn't
+  // need that.
+  const firstInningsSummary = /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "1st innings"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, match.innings[0].battingTeam, " ", match.innings[0].runs, "/", match.innings[0].wickets), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 2
+    }
+  }, "(", oversLabel(match.innings[0].legalBalls, match.innings[0].ballsPerOver), " overs)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.gold,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Target"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, target)));
   const overlays = /*#__PURE__*/React.createElement(React.Fragment, null, showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: {
       ...match,
@@ -500,7 +561,7 @@ export function SecondInningsSetup({
         margin: "0 auto",
         animation: "cs-fadeIn 0.3s ease"
       }
-    }, header, /*#__PURE__*/React.createElement("div", {
+    }, header, firstInningsSummary, /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 14,
@@ -531,7 +592,7 @@ export function SecondInningsSetup({
       margin: "0 auto",
       animation: "cs-fadeIn 0.3s ease"
     }
-  }, header, impactAvailable && /*#__PURE__*/React.createElement("button", {
+  }, header, firstInningsSummary, impactAvailable && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setStep("impact"),
     className: "cs-btn cs-shine",

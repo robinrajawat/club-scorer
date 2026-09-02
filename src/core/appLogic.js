@@ -1185,6 +1185,7 @@ export const DEFAULT_RULES = {
   playersPerSide: 11,
   retirementRuns: null,
   bigHitRuns: null,
+  maxHitRuns: null,
   wideNoballCountsAsBall: false,
   lastOverRules: {
     enabled: false,

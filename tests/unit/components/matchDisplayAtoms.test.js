@@ -15,6 +15,18 @@ test("BallBadge: shows the ball's display text, optionally its over.ball label",
   assert.equal(noLabel.children.length, 1);
 });
 
+// A big/maximum hit's runs (e.g. 10) never match the plain `runs === 6` gold-six check, so without
+// ev.bigHit the badge fell through to the default, unremarkable color -- looking identical to an
+// ordinary single run despite being a genuine six. ev.bigHit is a truthy string ("Big Hit"/
+// "Maximum Hit") in practice, but only truthiness should matter here.
+test("BallBadge: ev.bigHit gets the same gold styling as a plain six, even though its runs don't equal 6", () => {
+  const sixTree = renderer.create(React.createElement(BallBadge, { ev: { kind: "run", runs: 6, display: "6" } })).toJSON();
+  const bigHitTree = renderer.create(React.createElement(BallBadge, { ev: { kind: "run", runs: 10, display: "10", bigHit: "Big Hit" } })).toJSON();
+  const plainTenRuns = renderer.create(React.createElement(BallBadge, { ev: { kind: "run", runs: 10, display: "10" } })).toJSON();
+  assert.equal(bigHitTree.children[0].props.style.background, sixTree.children[0].props.style.background);
+  assert.notEqual(plainTenRuns.children[0].props.style.background, sixTree.children[0].props.style.background);
+});
+
 test("VisibilitySwitch: shows Public/Private text based on isPublic, '…' while busy", () => {
   const pub = renderer.create(React.createElement(VisibilitySwitch, { isPublic: true, onChange: () => {} })).toJSON();
   assert.ok(pub.children.includes("Public"));

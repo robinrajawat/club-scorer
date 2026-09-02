@@ -132,6 +132,21 @@ function impactMatch(overrides = {}) {
   });
 }
 
+// The Impact Player step (shown first whenever there's any substitution activity to offer) used
+// to show only a generic "make a substitution" line -- no 1st innings score, no target -- so
+// seeing what was actually just posted meant clicking into the full Scorecard overlay. A quick
+// summary card now sits right under the header on both steps of this screen.
+test("SecondInningsSetup: the Impact Player step shows the 1st innings score and target, not just a click-through to Scorecard", () => {
+  const match = impactMatch();
+  const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {} }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Impact Player/); // confirms we're actually on the impact step
+  assert.match(text, /Riverside CC/);
+  assert.match(text, /150.*"\/".*8/); // runs/wickets are separate JSX children, unquoted numbers
+  assert.match(text, /Target/);
+  assert.match(text, /151/); // 150 + 1
+});
+
 test("SecondInningsSetup: no Impact Player step when the rule is off -- lands straight on lineups", () => {
   const match = matchWith([inning({ complete: true }), inning()], {
     teamARoster: ["Virat Kohli"], teamABench: ["Hardik Pandya"]

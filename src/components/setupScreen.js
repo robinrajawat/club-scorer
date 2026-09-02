@@ -735,7 +735,11 @@ export function SetupScreen({
     }
   }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -747,6 +751,11 @@ export function SetupScreen({
     }
     // A generic bucket for "the last N overs behave differently", separate from any one specific
     // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
+    // Set apart in its own bordered/tinted box (rather than just another marginTop:14 row in the
+    // flat stack of toggles above and below it) since it isn't one toggle but a small cluster of
+    // related controls -- On/off, how many overs, and the wide/no-ball exception -- that read as
+    // one segmented unit much more easily than as three rows visually indistinguishable from
+    // every unrelated rule around them.
   }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
@@ -766,23 +775,22 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off")), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off"), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Applies to the last",
     value: matchRules.lastOverRules.overCount || 1,
     onChange: v => setMatchRules(r => ({
       ...r,
       lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
     })),
-    options: [{
-      value: 1,
-      label: "1 over"
-    }, {
-      value: 2,
-      label: "2 overs"
-    }]
+    options: [1, 2, 3, 4, 5].map(n => ({
+      value: n,
+      label: n === 1 ? "1 over" : `${n} overs`
+    }))
   }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 12,
+      paddingTop: 12,
+      borderTop: `1px solid ${COLORS.creamDark}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -811,7 +819,7 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1372,6 +1380,98 @@ export function SetupScreen({
     }
   }, "None"))), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Maximum hit bonus"), matchRules.maxHitRuns === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: 15
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None — tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.maxHitRuns),
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: v.replace(/[^0-9]/g, "")
+    })),
+    onBlur: () => setMatchRules(r => {
+      const n = parseInt(String(r.maxHitRuns), 10);
+      return { ...r, maxHitRuns: isNaN(n) || n < 1 ? 1 : n };
+    }),
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "runs on a maximum hit"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+    // Independent of Big Hit above -- a club can use the two tiers however suits their ground
+    // (e.g. Big Hit for a second rope, Maximum Hit for an even further one), or set only one, or
+    // neither. The app doesn't attach real-world meaning to either name beyond the bonus runs
+    // configured here.
+  }, "— a second, independent bonus-hit tier your club can use however it likes (e.g. an even longer boundary than Big Hit above)."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None"))), /*#__PURE__*/React.createElement("div", {
+    style: {
       marginTop: 14,
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -1490,10 +1590,10 @@ export function SetupScreen({
       color: COLORS.ink,
       lineHeight: 1.9
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, "Toss: ", tossWonBy ? tossText({
     wonBy: tossWonBy,
     decision: tossDecision || null
-  }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, coreFormatText), houseRulesText && /*#__PURE__*/React.createElement("div", null, "House rules: ", houseRulesText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
+  }) : "not recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, "Format: ", coreFormatText), houseRulesText && /*#__PURE__*/React.createElement("div", null, "House rules: ", houseRulesText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, "Squad: ", teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

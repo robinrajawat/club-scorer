@@ -35,8 +35,15 @@ export function BallCelebration({
   celebration
 }) {
   if (!celebration) return null;
-  const isSix = celebration.type === 6;
   const isWicket = celebration.type === "wicket";
+  // A bonus-hit tier's own configured name ("Big Hit", "Maximum Hit", or whatever a future tier is
+  // called) rather than a fixed "SIX!" -- handleRun passes the tier's label straight through as
+  // celebration.type for exactly this. Still styled and gold-colored the same as a six (see isSix
+  // in applyBall -- every bonus-hit tier is a genuine six for every other purpose too), just with
+  // its own name on screen instead of a generic one that reads oddly for a bonus total (e.g. 10),
+  // not literally six.
+  const isBonusHit = !isWicket && typeof celebration.type === "string";
+  const isSix = celebration.type === 6 || isBonusHit;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
@@ -64,7 +71,7 @@ export function BallCelebration({
       boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(184,137,43,0.45)" : "0 16px 44px rgba(74,124,46,0.45)",
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
-  }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
+  }, isWicket ? "OUT!" : isBonusHit ? `${celebration.type.toUpperCase()}!` : isSix ? "SIX!" : "FOUR!"));
 }
 
 export const MILESTONE_ICONS = {

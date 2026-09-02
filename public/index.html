@@ -6066,6 +6066,7 @@ const DEFAULT_RULES = {
   playersPerSide: 11,
   retirementRuns: null,
   bigHitRuns: null,
+  maxHitRuns: null,
   wideNoballCountsAsBall: false,
   lastOverRules: {
     enabled: false,
@@ -6231,7 +6232,8 @@ function nonStandardRulesText(rules) {
   if (rules.powerplayOvers) bits.push(`${rules.powerplayOvers}-over powerplay`);
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
-  if (rules.bigHitRuns) bits.push(`big hit bonus (${rules.bigHitRuns} runs on the long boundary)`);
+  if (rules.bigHitRuns) bits.push(`Big Hit bonus (${rules.bigHitRuns} runs)`);
+  if (rules.maxHitRuns) bits.push(`Maximum Hit bonus (${rules.maxHitRuns} runs)`);
   if (rules.wideNoballCountsAsBall) {
     const lor = rules.lastOverRules;
     const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;
@@ -6981,11 +6983,14 @@ function newInning(battingTeam, bowlingTeam, rules, maxWickets, oversLimit) {
     powerplayOvers: r.powerplayOvers || null,
     timeCapMinutes: r.timeCapMinutes || null,
     retirementRuns: r.retirementRuns || null,
-    // A six that clears this tournament's own extra-distance boundary rope (e.g. an 80m rope
-    // inside the ground's usual 60m one) scores this many runs total instead of the standard 6 --
-    // see the isSix/event.bigHit handling in applyBall's "run" branch. null means the rule is off
-    // and every six is worth the standard 6, same convention as retirementRuns above.
+    // Two independent, optional bonus-hit tiers -- e.g. Big Hit for a six clearing a ground's own
+    // extra-distance boundary rope, Maximum Hit for an even bigger one, or however a club actually
+    // wants to use the two (the app doesn't attach real-world meaning to either name beyond the
+    // bonus runs configured). Either can score more than the standard 6 -- see the isSix/
+    // event.bigHit handling in applyBall's "run" branch. null means that tier is off, same
+    // convention as retirementRuns above. Both can be on at once, independently.
     bigHitRuns: r.bigHitRuns || null,
+    maxHitRuns: r.maxHitRuns || null,
     wideNoballCountsAsBall: r.wideNoballCountsAsBall || false,
     // A generic "how many overs count as the last over(s), and what changes there" bucket, kept
     // separate from wideNoballCountsAsBall itself (which used to hardcode its own final-over
@@ -7502,7 +7507,11 @@ function applyBall(inning, event) {
     // effect *at the moment this exact ball was bowled*, not just its kind (see ballLabelsForOver
     // in miscHelpers.js, which reads this to decide whether a wide/no-ball advances the over's
     // ball count or shares a slot with the next legal delivery).
-    legal: legalBall
+    legal: legalBall,
+    // A big hit's runs (e.g. 10) don't match BallBadge's own `ev.runs === 6` gold-six check, so
+    // without this the ball-by-ball strip colored it like a plain, unremarkable run instead of the
+    // six it actually was -- see BallBadge in matchDisplayAtoms.js.
+    bigHit: event.bigHit || undefined
   }];
   if (legalBall) {
     cur.legalBalls += 1;
@@ -7743,13 +7752,18 @@ function BallBadge({
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(74,124,46,0.35)";
-  } else if (ev.runs === 6) {
+  } else if (ev.runs === 6 || ev.bigHit) {
     // Gold, not a darker shade of the fours green (the original version of this) and not purple
     // (a brief second attempt) -- gold carries real "biggest/best" weight (gold medal, a golden
     // moment) that a six, arguably the single most dramatic thing that can happen on a ball,
     // deserves more than either alternative gave it. Swapped with wide/no-ball above rather than
     // introduced fresh -- gold already existed in this app's palette, just attached to the wrong
     // event.
+    //
+    // ev.bigHit alongside the plain runs===6 check -- a big hit's total (e.g. 10) doesn't match 6,
+    // but it's still exactly a six for styling purposes, same as it is for stats (see isSix in
+    // applyBall). Without this it fell through to the default, unremarkable badge color, looking
+    // no different from an ordinary single run.
     bg = `linear-gradient(160deg, #d4a544, ${COLORS.gold})`;
     color = "#2e1c04";
     border = "none";
@@ -8033,8 +8047,15 @@ function BallCelebration({
   celebration
 }) {
   if (!celebration) return null;
-  const isSix = celebration.type === 6;
   const isWicket = celebration.type === "wicket";
+  // A bonus-hit tier's own configured name ("Big Hit", "Maximum Hit", or whatever a future tier is
+  // called) rather than a fixed "SIX!" -- handleRun passes the tier's label straight through as
+  // celebration.type for exactly this. Still styled and gold-colored the same as a six (see isSix
+  // in applyBall -- every bonus-hit tier is a genuine six for every other purpose too), just with
+  // its own name on screen instead of a generic one that reads oddly for a bonus total (e.g. 10),
+  // not literally six.
+  const isBonusHit = !isWicket && typeof celebration.type === "string";
+  const isSix = celebration.type === 6 || isBonusHit;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
@@ -8062,7 +8083,7 @@ function BallCelebration({
       boxShadow: isWicket ? "0 16px 44px rgba(139,30,30,0.5)" : isSix ? "0 16px 44px rgba(184,137,43,0.45)" : "0 16px 44px rgba(74,124,46,0.45)",
       animation: "cs-boundaryPop 1s cubic-bezier(0.22, 1, 0.36, 1) forwards"
     }
-  }, isWicket ? "OUT!" : isSix ? "SIX!" : "FOUR!"));
+  }, isWicket ? "OUT!" : isBonusHit ? `${celebration.type.toUpperCase()}!` : isSix ? "SIX!" : "FOUR!"));
 }
 // GENERATED-FN-END: BallCelebration
 // A quieter cousin of BallCelebration for the "nice to notice, not a big deal" moments —
@@ -19758,7 +19779,11 @@ function SetupScreen({
     }
   }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19770,6 +19795,11 @@ function SetupScreen({
     }
     // A generic bucket for "the last N overs behave differently", separate from any one specific
     // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
+    // Set apart in its own bordered/tinted box (rather than just another marginTop:14 row in the
+    // flat stack of toggles above and below it) since it isn't one toggle but a small cluster of
+    // related controls -- On/off, how many overs, and the wide/no-ball exception -- that read as
+    // one segmented unit much more easily than as three rows visually indistinguishable from
+    // every unrelated rule around them.
   }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
@@ -19789,23 +19819,22 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off")), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off"), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Applies to the last",
     value: matchRules.lastOverRules.overCount || 1,
     onChange: v => setMatchRules(r => ({
       ...r,
       lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
     })),
-    options: [{
-      value: 1,
-      label: "1 over"
-    }, {
-      value: 2,
-      label: "2 overs"
-    }]
+    options: [1, 2, 3, 4, 5].map(n => ({
+      value: n,
+      label: n === 1 ? "1 over" : `${n} overs`
+    }))
   }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 14
+      marginTop: 12,
+      paddingTop: 12,
+      borderTop: `1px solid ${COLORS.creamDark}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19834,7 +19863,7 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -20395,6 +20424,98 @@ function SetupScreen({
     }
   }, "None"))), /*#__PURE__*/React.createElement("div", {
     style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Maximum hit bonus"), matchRules.maxHitRuns === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: 15
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None — tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.maxHitRuns),
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: v.replace(/[^0-9]/g, "")
+    })),
+    onBlur: () => setMatchRules(r => {
+      const n = parseInt(String(r.maxHitRuns), 10);
+      return { ...r, maxHitRuns: isNaN(n) || n < 1 ? 1 : n };
+    }),
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "runs on a maximum hit"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+    // Independent of Big Hit above -- a club can use the two tiers however suits their ground
+    // (e.g. Big Hit for a second rope, Maximum Hit for an even further one), or set only one, or
+    // neither. The app doesn't attach real-world meaning to either name beyond the bonus runs
+    // configured here.
+  }, "— a second, independent bonus-hit tier your club can use however it likes (e.g. an even longer boundary than Big Hit above)."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      maxHitRuns: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None"))), /*#__PURE__*/React.createElement("div", {
+    style: {
       marginTop: 14,
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -20513,10 +20634,10 @@ function SetupScreen({
       color: COLORS.ink,
       lineHeight: 1.9
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, tossWonBy ? tossText({
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAName.trim()), " vs ", /*#__PURE__*/React.createElement("strong", null, teamBName.trim()), " \u2014 ", overs, " overs", matchRules.playersPerSide !== 11 && `, ${matchRules.playersPerSide}-a-side`, venue.trim() && ` \u2014 ${venue.trim()}`), /*#__PURE__*/React.createElement("div", null, "Toss: ", tossWonBy ? tossText({
     wonBy: tossWonBy,
     decision: tossDecision || null
-  }) : "No toss recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, coreFormatText), houseRulesText && /*#__PURE__*/React.createElement("div", null, "House rules: ", houseRulesText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
+  }) : "not recorded \u2014 Team A bats first by default"), /*#__PURE__*/React.createElement("div", null, "Format: ", coreFormatText), houseRulesText && /*#__PURE__*/React.createElement("div", null, "House rules: ", houseRulesText), umpiresSummaryText && /*#__PURE__*/React.createElement("div", null, umpiresSummaryText), hasSquads && /*#__PURE__*/React.createElement("div", null, "Squad: ", teamASquad.length > 0 && `${teamAName.trim()}: ${teamAPlayingXI.length} selected`, teamASquad.length > 0 && teamBSquad.length > 0 && " \u00b7 ", teamBSquad.length > 0 && `${teamBName.trim()}: ${teamBPlayingXI.length} selected`), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, teamAIsBattingFirst ? teamAName.trim() : teamBName.trim()), " opens: ", strikerA.trim(), " & ", nonStrikerA.trim(), " \u2014 ", bowlerB.trim(), " to bowl")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -21172,6 +21293,16 @@ function TournamentsScreen({
       seed: 10,
       unit: "runs on a big hit",
       hint: "a six clearing your ground's extra-distance boundary rope scores this many instead of the standard 6"
+    }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+      label: "Maximum hit bonus",
+      value: tournamentRules.maxHitRuns,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        maxHitRuns: v
+      })),
+      seed: 15,
+      unit: "runs on a maximum hit",
+      hint: "a second, independent bonus-hit tier -- use it however suits your ground (e.g. an even longer boundary than Big Hit above)"
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Super Over if the match ties",
       value: tournamentRules.superOver,
@@ -21203,13 +21334,10 @@ function TournamentsScreen({
         ...r,
         lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
       })),
-      options: [{
-        value: 1,
-        label: "1 over"
-      }, {
-        value: 2,
-        label: "2 overs"
-      }]
+      options: [1, 2, 3, 4, 5].map(n => ({
+        value: n,
+        label: n === 1 ? "1 over" : `${n} overs`
+      }))
     }), tournamentRules.lastOverRules && tournamentRules.lastOverRules.enabled && tournamentRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Wide/no-ball illegal again in the last over(s)",
       value: tournamentRules.lastOverRules.wideNoballIllegalAgain,
@@ -32088,6 +32216,7 @@ function MatchScreen({
           timeCapMinutes: inn.timeCapMinutes,
           retirementRuns: inn.retirementRuns,
           bigHitRuns: inn.bigHitRuns,
+          maxHitRuns: inn.maxHitRuns,
           wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
           lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
@@ -32097,23 +32226,24 @@ function MatchScreen({
       }
     }
   }
-  function handleRun(n, overthrow, shortRun, bigHit) {
+  // bigHitLabel: falsy for an ordinary run, or the configured tier's own name ("Big Hit"/
+  // "Maximum Hit") when scored via one of those bonus-hit buttons -- passed straight through as
+  // the celebration type so BallCelebration can show "BIG HIT!"/"MAXIMUM HIT!" (see there) instead
+  // of generic "SIX!", which read oddly for a ball that scored a bonus total, not literally six.
+  function handleRun(n, overthrow, shortRun, bigHitLabel) {
     pushHistory();
     commit(applyBall(inning, {
       kind: "run",
       runs: n,
       overthrow: overthrow || undefined,
       shortRun: shortRun || undefined,
-      bigHit: bigHit || undefined
+      bigHit: bigHitLabel || undefined
     }));
     setShowRuns(false);
-    if (n === 4 || n === 6 || bigHit) {
+    if (n === 4 || n === 6 || bigHitLabel) {
       const key = Date.now();
       setCelebration({
-        // A big hit is still exactly a six for celebration purposes (see isSix in applyBall) --
-        // n itself is whatever bonus total the bigHitRuns rule configures (e.g. 10), which
-        // BallCelebration's own celebration.type === 6 check would otherwise miss.
-        type: bigHit ? 6 : n,
+        type: bigHitLabel || n,
         key
       });
       setTimeout(() => {
@@ -33610,17 +33740,31 @@ function MatchScreen({
       padding: "9px 8px",
       fontSize: 14
     }
-  }, "Wicket")), inning.bigHitRuns && /*#__PURE__*/React.createElement(Btn, {
-    variant: "gold",
-    onClick: () => handleRun(inning.bigHitRuns, 0, false, true),
+  }, "Wicket")), (inning.bigHitRuns || inning.maxHitRuns) && /*#__PURE__*/React.createElement("div", {
     style: {
-      width: "100%",
-      minHeight: 36,
-      padding: "8px 12px",
-      fontSize: 13.5,
+      display: "flex",
+      gap: 7,
       marginBottom: 7
     }
-  }, `Big Hit — ${inning.bigHitRuns} runs`), /*#__PURE__*/React.createElement(Btn, {
+  }, inning.bigHitRuns && /*#__PURE__*/React.createElement(Btn, {
+    variant: "gold",
+    onClick: () => handleRun(inning.bigHitRuns, 0, false, "Big Hit"),
+    style: {
+      flex: 1,
+      minHeight: 36,
+      padding: "8px 12px",
+      fontSize: 13.5
+    }
+  }, `Big Hit — ${inning.bigHitRuns} runs`), inning.maxHitRuns && /*#__PURE__*/React.createElement(Btn, {
+    variant: "gold",
+    onClick: () => handleRun(inning.maxHitRuns, 0, false, "Maximum Hit"),
+    style: {
+      flex: 1,
+      minHeight: 36,
+      padding: "8px 12px",
+      fontSize: 13.5
+    }
+  }, `Maximum Hit — ${inning.maxHitRuns} runs`)), /*#__PURE__*/React.createElement(Btn, {
     onClick: undo,
     disabled: history.length === 0,
     style: {
@@ -34925,6 +35069,67 @@ function SecondInningsSetup({
   }, /*#__PURE__*/React.createElement(Undo2, {
     size: 15
   }), "Correct")));
+  // The 1st innings' own score and the chase target, right at the top of BOTH steps of this
+  // screen -- the Impact Player step (shown first whenever there's any Impact Player activity to
+  // offer) used to show neither, only a generic "make a substitution" line, so seeing what was
+  // actually just posted meant clicking into the full Scorecard overlay. A quick glance shouldn't
+  // need that.
+  const firstInningsSummary = /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 16,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "1st innings"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, match.innings[0].battingTeam, " ", match.innings[0].runs, "/", match.innings[0].wickets), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 2
+    }
+  }, "(", oversLabel(match.innings[0].legalBalls, match.innings[0].ballsPerOver), " overs)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.gold,
+      textTransform: "uppercase",
+      marginBottom: 4
+    }
+  }, "Target"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 19,
+      color: COLORS.pitch
+    }
+  }, target)));
   const overlays = /*#__PURE__*/React.createElement(React.Fragment, null, showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
     match: {
       ...match,
@@ -34951,7 +35156,7 @@ function SecondInningsSetup({
         margin: "0 auto",
         animation: "cs-fadeIn 0.3s ease"
       }
-    }, header, /*#__PURE__*/React.createElement("div", {
+    }, header, firstInningsSummary, /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 14,
@@ -34982,7 +35187,7 @@ function SecondInningsSetup({
       margin: "0 auto",
       animation: "cs-fadeIn 0.3s ease"
     }
-  }, header, impactAvailable && /*#__PURE__*/React.createElement("button", {
+  }, header, firstInningsSummary, impactAvailable && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setStep("impact"),
     className: "cs-btn cs-shine",
