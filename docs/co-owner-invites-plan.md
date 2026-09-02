@@ -1,8 +1,18 @@
 # Co-owner invites in the Inbox — implementation plan
 
-**Status:** scoped, not started. Written up as a follow-up rather than built directly, since it
-needs a manual `firestore.rules` deploy (see "Rollout sequencing" below) and the request came in
-with a tournament coming up — not something to touch casually mid-crunch.
+**Status: shipped and fully cleaned up (2026-09-02).** Built in PR #84 (`coOwnerInvites`
+collection, Inbox section, email-only invite UI in `ClubPanel`/`FederationsPanel`), with a
+same-day hotfix in PR #85 after a branch-reconstruction mistake shipped `public/index.html`
+without the new hand-written Firestore glue functions it depended on — see
+`docs/handoff-prompt.md`'s Current State for the full story and the general lesson (these
+hand-written functions have zero auto-sync/test coverage; see the note at the bottom of this file).
+The cleanup PR then retired `federationCoOwnerInviteCodes` entirely (rules, redemption UI, the
+matching self-redeem branch on `federations/{federationId}`) once every invite minted under it was
+confirmed redeemed or expired. `clubJoinCodes` stays alive permanently for plain club **member**
+invites (always out of scope for this migration — see "Proposed design" below).
+
+The rest of this document is the original design write-up, kept as-is for context on **why** things
+are shaped the way they are; it no longer describes a "not started" plan.
 
 ## Current state
 
@@ -163,3 +173,27 @@ mirrors — a real, multi-file change, not a quick fix:
 - A follow-up cleanup PR once the old bearer-code paths are confirmed drained
 
 Medium-large. Worth its own dedicated session rather than folding into other work.
+
+## Postscript: what actually happened, and the lesson worth keeping
+
+Shipped over three PRs on 2026-09-02: #84 (the build above), #85 (a same-day hotfix), and a
+cleanup PR retiring `federationCoOwnerInviteCodes`. The middle one is the part worth remembering.
+
+`inviteCoOwner`/`loadMyCoOwnerInvites`/`respondCoOwnerInvite`/`cancelCoOwnerInvite` — like every
+other Firestore-calling function this app never extracted (`joinClubWithCode`,
+`respondFederationRequest`, and so on) — live only as hand-written code directly in
+`public/index.html`. Unlike `src/core/` or `src/components/`, there is no `scripts/generate.js`
+splice covering them, so nothing keeps this hand-written portion of the file in sync with anything:
+`npm run generate:verify` doesn't check it, and the component test suite stubs these functions as
+`globalThis.*` fakes rather than ever executing the real ones. A branch that reconstructs
+`public/index.html` from its component sources (e.g. after discovering it was built on a stale
+`main`, as happened here) will silently regenerate every *spliced* section correctly while leaving
+every *hand-written* one at whatever it was before — no error, no test failure, nothing but a
+`ReferenceError` waiting for the first real user. That's exactly what PR #84 shipped, and #85
+fixed a few minutes later.
+
+The takeaway for next time a branch needs this kind of reconstruction: `npm run generate` syncs
+`src/core/`/`src/components/` into `public/index.html`, full stop — it does nothing for hand-written
+glue functions, and there's no automated way to tell they've drifted. After any branch rebuild that
+touches `public/index.html`, diff the hand-written functions you actually changed against what the
+PR was supposed to contain, don't just trust `generate:verify` + `npm test` to have caught it.

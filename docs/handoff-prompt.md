@@ -317,6 +317,38 @@ to "doesn't count as a legal delivery" as if the flip were still pending
 when it had already happened). Now tensed correctly against
 `isInLastOvers(inning)`.
 
+**2026-09-02 (continued) — co-owner invites shipped, a same-day production bug, and cleanup
+(PRs #83–#85 + one cleanup PR):**
+
+- **PR #83** — fixed a real bug: the one-line ball commentary has no self-clearing timer (unlike
+  `celebration`/`milestoneToast`), and `MatchScreen` never unmounts across the innings break (it
+  just renders `SecondInningsSetup` in place of the normal scoring UI, then reverts to the same
+  instance) — so the last ball of the first innings kept showing on the second innings' scoring
+  screen. Fixed by resetting the commentary state whenever `currentInningIndex` changes.
+- **PR #84** — built `docs/co-owner-invites-plan.md` in full: a new `coOwnerInvites` Firestore
+  collection replaces minting bearer-code co-owner invites, `InboxScreen` gets a co-owner-invites
+  section (Accept/Decline/Cancel), and `ClubPanel`/`FederationsPanel`'s invite flow is now a plain
+  email + Send button. New `firestore.rules` published to Firebase Console before merging.
+- **PR #85 (hotfix, merged same day):** PR #84's actual `public/index.html` shipped **without**
+  the four new hand-written Firestore functions (`inviteCoOwner`/`loadMyCoOwnerInvites`/
+  `respondCoOwnerInvite`/`cancelCoOwnerInvite`) it depended on, while the old, superseded
+  `inviteClubCoOwnerByEmail`/`inviteFederationCoOwnerByEmail` were still sitting there unused.
+  Root cause: while rebuilding that PR's branch (discovered mid-session it had been based on a
+  stale local `main`), every `src/` file was correctly restored and `npm run generate` correctly
+  re-spliced the component-derived sections — but these four functions live **only** as
+  hand-written code directly in `public/index.html`, with no `generate.js` splice and no test
+  coverage (the component test suite stubs them as `globalThis.*` fakes), so nothing caught that
+  they'd been silently left at their pre-PR state. Net effect: any signed-in user hit a
+  `ReferenceError` on load from the moment PR #84 merged until #85 landed a few minutes later.
+  **See `docs/co-owner-invites-plan.md`'s postscript for the full account and the general lesson**
+  — worth reading before any future branch reconstruction that touches `public/index.html`.
+- **Cleanup PR** — with the rules confirmed published and no old-style invites outstanding,
+  retired `federationCoOwnerInviteCodes` entirely: its rules block, the matching self-redeem
+  branch on `federations/{federationId}`, `redeemFederationCoOwnerInvite`/`revokeFederationInvite`
+  in `index.html`, `FederationsPanel`'s old pending-invites/revoke UI, and `TeamsScreen`'s
+  "Have a federation co-owner invite?" redemption box. `clubJoinCodes` (plain club **member**
+  invites) is untouched and stays permanent — that migration was always out of scope.
+
 **Open items handed off, unresolved as of 2026-09-02:**
 - **Mystery apostrophe in the "This Over" ball strip** — user has now sent
   a screenshot (a stray `'` floating next to a ball badge, over `2.1`,
@@ -339,17 +371,14 @@ when it had already happened). Now tensed correctly against
   proxy blocks the CDN `esm.sh` route) — see this session's throwaway
   `_repro_*` files (already deleted) for the working pattern if picking
   this back up.
-- **Co-owner invites** — scoped only, not built. See
-  `docs/co-owner-invites-plan.md` (from PR #76) for the full plan: replacing
-  the bearer-code invite with an Inbox accept/decline flow needs a real
-  Firestore rules change (a filtered list rule, not `allow list: if false`),
-  which isn't auto-deployed — treat as its own deliberate piece of work
-  when picked up, not a quick add-on.
 - **30-minute escalating time-penalty rule** — still open from the
   2026-09-01 entry above; not touched this session. Distinct from the
   (already-shipped) plain "time cap per innings" flag.
-- One-line ball-by-ball commentary (above) is **done**, not open — noting
-  it here only because it was an open question in earlier handoffs.
+- **"Stuck on Impact Player screen" report** — still unreproduced as of the
+  2026-09-02 entry above; needs a real repro before assuming it's resolved.
+- Co-owner invites (above) and the second-innings stale-commentary bug are
+  **both done**, not open — noting them here only because they were open
+  questions in earlier handoffs.
 
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the

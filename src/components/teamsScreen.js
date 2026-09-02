@@ -11,9 +11,8 @@ import { isClubOwner, parseBulkPlayers } from "../core/miscHelpers.js";
 // The "Clubs" screen: a Clubs/Federations tab (rendering ClubPanel/FederationsPanel respectively),
 // plus, once a club is active, its player pool (a club-wide roster to draw team lineups from --
 // quick-add, bulk paste/upload with a preview, active/inactive toggle, edit, remove, and
-// "create a team from everyone tagged X") and a federation co-owner invite-code redemption box.
-// Every write action is a prop -- no bare globals, no mount effect. Covered by
-// tests/unit/components/teamsScreen.test.js.
+// "create a team from everyone tagged X"). Every write action is a prop -- no bare globals, no
+// mount effect. Covered by tests/unit/components/teamsScreen.test.js.
 
 export function TeamsScreen({
   onManageTeams,
@@ -61,9 +60,7 @@ export function TeamsScreen({
   federationRequests,
   onCancelFederationRequest,
   onInviteFederationCoOwnerByEmail,
-  onRevokeFederationInvite,
   onRemoveFederationCoOwner,
-  onRedeemFederationCoOwnerInvite,
   clubsLoading,
   federationsLoading,
   onOpenRecords,
@@ -110,26 +107,6 @@ export function TeamsScreen({
   const [bulkText, setBulkText] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const poolFileInputRef = useRef(null);
-  // Federation co-owner invite redemption -- moved here from the old standalone Clubs &
-  // Federations screen along with the rest of the Federations tab content below.
-  const [redeemCode, setRedeemCode] = useState("");
-  const [redeemBusy, setRedeemBusy] = useState(false);
-  const [redeemError, setRedeemError] = useState("");
-  const [redeemSuccess, setRedeemSuccess] = useState(null); // federation name, once redeemed
-  async function submitRedeem() {
-    if (!redeemCode.trim() || redeemBusy) return;
-    setRedeemBusy(true);
-    setRedeemError("");
-    setRedeemSuccess(null);
-    const result = await onRedeemFederationCoOwnerInvite(redeemCode.trim());
-    setRedeemBusy(false);
-    if (!result.ok) {
-      setRedeemError(result.error || "Couldn't redeem that invite.");
-      return;
-    }
-    setRedeemSuccess(result.federation.name);
-    setRedeemCode("");
-  }
   // Distinct team tags present in the pool (e.g. "U15", "2nd XI") -- lets someone spin up an
   // actual Team pre-filled with everyone who shares that tag, instead of hand-picking each name
   // one by one via the roster's own pool picker. Inactive pool players are left out, same as
@@ -836,70 +813,6 @@ export function TeamsScreen({
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
-    onRevokeInvite: onRevokeFederationInvite,
     onOpenRecords: onOpenRecords
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 20,
-      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
-      borderRadius: 16,
-      padding: 16,
-      border: `1px dashed ${COLORS.willow}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 8
-    }
-  }, "Have a federation co-owner invite?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 10
-    }
-  }, "If a federation owner invited you by email to be a co-owner, paste the code they sent below \u2014 it only works while you're signed in with the exact email address it was addressed to."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: redeemCode,
-    onChange: v => setRedeemCode(v.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-    placeholder: "Invite code, e.g. 7GQK4RTP",
-    autoCapitalize: "characters",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false
-  }), /*#__PURE__*/React.createElement(Btn, {
-    onClick: submitRedeem,
-    disabled: redeemBusy || !redeemCode.trim(),
-    style: {
-      flexShrink: 0,
-      padding: "0 16px",
-      minHeight: 44
-    }
-  }, redeemBusy ? "\u2026" : "Redeem")), redeemError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 12,
-      fontFamily: "'Inter'",
-      marginTop: 8
-    }
-  }, redeemError), redeemSuccess && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.turf,
-      fontSize: 12.5,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      marginTop: 8
-    }
-  }, "You're now a co-owner of \"", redeemSuccess, "\"."))));
+  })));
 }

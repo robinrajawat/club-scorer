@@ -1,7 +1,6 @@
 // The "Clubs" screen (src/components/teamsScreen.js). Every write action is a prop -- no bare
 // globals, no mount effect. Renders ClubPanel/FederationsPanel as tabs (both already tested on
-// their own); these tests focus on TeamsScreen's own logic: the tab switch, the player pool, and
-// the federation co-owner invite-code redemption box.
+// their own); these tests focus on TeamsScreen's own logic: the tab switch and the player pool.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -47,7 +46,7 @@ function baseProps(overrides = {}) {
     onDeleteFederation: () => Promise.resolve({ ok: true }), onLoadFederationTeams: () => Promise.resolve([]),
     onLoadFederationMembers: () => Promise.resolve([]), federationRequests: [],
     onCancelFederationRequest: () => Promise.resolve({ ok: true }), onInviteFederationCoOwnerByEmail: () => Promise.resolve({ ok: true }),
-    onRemoveFederationCoOwner: () => Promise.resolve({ ok: true }), onRedeemFederationCoOwnerInvite: () => Promise.resolve({ ok: true }),
+    onRemoveFederationCoOwner: () => Promise.resolve({ ok: true }),
     onOpenRecords: () => {}, onAddUmpire: () => Promise.resolve({ ok: true }), onRemoveUmpire: () => Promise.resolve({ ok: true }),
     onAddPoolPlayers: () => Promise.resolve({ ok: true }), onUpdatePoolPlayer: () => Promise.resolve({ ok: true }),
     onRemovePoolPlayer: () => Promise.resolve({ ok: true }), onCreateTeamFromPool: () => {},
@@ -170,25 +169,4 @@ test("TeamsScreen: 'Create team from' a pool tag group calls onCreateTeamFromPoo
   assert.equal(createdWith.clubId, "c1");
   assert.equal(createdWith.tag, "2nd XI");
   assert.equal(createdWith.players.length, 2);
-});
-
-test("TeamsScreen: redeeming a federation co-owner invite calls onRedeemFederationCoOwnerInvite and shows the federation name", async () => {
-  let redeemedWith = null;
-  const inst = render({
-    tab: "federations",
-    onRedeemFederationCoOwnerInvite: code => {
-      redeemedWith = code;
-      return Promise.resolve({ ok: true, federation: { name: "County League" } });
-    }
-  });
-  const codeField = inst.root.findByType("input");
-  act(() => { codeField.props.onChange({ target: { value: "abc-123" } }); });
-
-  const redeemBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Redeem"));
-  await act(async () => {
-    redeemBtn.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.equal(redeemedWith, "ABC123");
-  assert.match(JSON.stringify(inst.toJSON()), /County League/);
 });

@@ -41,7 +41,7 @@ function baseProps(overrides = {}) {
     onInviteFederationCoOwnerByEmail: () => Promise.resolve({ ok: true }), onRemoveFederationCoOwner: () => Promise.resolve({ ok: true }),
     onCancelCoOwnerInvite: () => Promise.resolve({ ok: true }),
     onKickClubFromFederation: () => Promise.resolve({ ok: true }), onDeleteFederation: () => Promise.resolve({ ok: true }),
-    onRevokeInvite: () => Promise.resolve({ ok: true }), onCancelFederationRequest: () => Promise.resolve({ ok: true }),
+    onCancelFederationRequest: () => Promise.resolve({ ok: true }),
     onOpenRecords: () => {},
     ...overrides
   };
