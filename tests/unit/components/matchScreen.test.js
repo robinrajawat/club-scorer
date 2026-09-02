@@ -462,6 +462,58 @@ test("MatchScreen: dismissing the retirement cap prompt with 'Not now' lets scor
   assert.ok(ctx.inst.root.findAllByProps({ "data-stub-modal": true }).length > 0);
 });
 
+test("MatchScreen: a batsman returning from cap retirement isn't immediately re-prompted to retire again (real infinite-loop bug)", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", {
+    retirementRuns: 25,
+    batsmen: { A: { runs: 23, balls: 10, out: false, how: "", fours: 0, sixes: 0 } }
+  });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+
+  // Push A to the cap and confirm the mandatory retirement.
+  const twoBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 2);
+  await act(async () => {
+    twoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const confirmRetireBtn = capRetireModal(ctx).findAllByType(Btn).find(b => b.props.children === "Confirm retirement (not out)");
+  await act(async () => {
+    confirmRetireBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.batsmen.A.capRetiredThreshold, 25);
+
+  // A just vacated this slot, so the Next batsman prompt can't bring them straight back in yet --
+  // bring in C instead (see the excludeList/justRetiredName comment in matchScreen.js).
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Next batsman/);
+  let picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.strikerName, "C");
+
+  // C gets out -- a genuine wicket falls, so A is eligible to resume on this next prompt.
+  act(() => { btn(ctx, "Wicket").props.onClick(); });
+  act(() => {
+    ctx.inst.root.findAllByType("button").find(b => b.props.children === "Bowled").props.onClick();
+  });
+  picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("A"); });
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.strikerName, "A");
+
+  // The real bug: A's runs (25) still sit at the cap from their first stint. Without
+  // capRetiredThreshold guarding needsCapRetirement, this would immediately reopen the
+  // mandatory retire prompt with no way to actually resume batting.
+  assert.equal(ctx.inst.root.findAllByProps({ "data-stub-modal": true }).length, 0);
+  assert.doesNotMatch(JSON.stringify(ctx.inst.toJSON()), /must retire/);
+});
+
 test("MatchScreen: Timed Out on the Next batsman prompt records a wicket for the named player without them taking strike", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const i1 = buildInning("Riverside CC", "Oakwood CC", { strikerName: "", nonStrikerName: "B" });

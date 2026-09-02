@@ -317,7 +317,12 @@ export function ballLabelsForOver(overIndex, balls) {
   return balls.map(ev => {
     const isLegal = ev.kind !== "wide" && ev.kind !== "noball";
     if (isLegal) legalCount += 1;
-    return `${overIndex + 1}.${legalCount + (isLegal ? 0 : 1)}`;
+    const slot = legalCount + (isLegal ? 0 : 1);
+    // A wide/no-ball doesn't consume a legal-ball slot, so it shares its number with whichever
+    // legal delivery eventually completes that slot -- the trailing "*" is the only thing telling
+    // two adjacent badges with the same number apart (e.g. "3.4*" then "3.4"), which matters most
+    // right at the end of an over where identical-looking labels read as if the over already ended.
+    return isLegal ? `${overIndex + 1}.${slot}` : `${overIndex + 1}.${slot}*`;
   });
 }
 
