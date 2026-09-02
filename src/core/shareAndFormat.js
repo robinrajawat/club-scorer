@@ -142,6 +142,16 @@ export function safeFilenamePart(name) {
 
 export const POLL_TTL_DAYS = 120;
 
+// "last over" / "last N overs" when wideNoballCountsAsBall flips back off for the final over(s)
+// (lastOverRules.wideNoballIllegalAgain), else null. Shared by nonStandardRulesText below and by
+// SetupScreen's own quick-glance rules summary, so both places name the same exception instead of
+// one saying "Wd/Nb counts as ball" flatly and leaving the final-over flip undiscovered until Review.
+export function wideNoballLastOverExceptionLabel(rules) {
+  const lor = rules && rules.lastOverRules;
+  if (!(lor && lor.enabled && lor.wideNoballIllegalAgain)) return null;
+  return lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over";
+}
+
 // Deliberately silent on maxOversPerBowler, unlike every other field here: SetupScreen defaults
 // it to Math.ceil(oversLimit / 5) for every new match (the standard "no bowler bowls more than a
 // fifth of the innings" law), so it's non-null on essentially every match, standard or not --
@@ -160,10 +170,8 @@ export function nonStandardRulesText(rules) {
   if (rules.bigHitRuns) bits.push(`Big Hit bonus (${rules.bigHitRuns} runs)`);
   if (rules.maxHitRuns) bits.push(`Maximum Hit bonus (${rules.maxHitRuns} runs)`);
   if (rules.wideNoballCountsAsBall) {
-    const lor = rules.lastOverRules;
-    const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;
-    const lastOversLabel = revertsInLastOvers ? (lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over") : null;
-    bits.push(revertsInLastOvers ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
+    const lastOversLabel = wideNoballLastOverExceptionLabel(rules);
+    bits.push(lastOversLabel ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
   }
   if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;

@@ -7,7 +7,7 @@ import {
   pad2, parseFixtureDateTime, buildFixtureIso, formatFixtureDateTime,
   icsEscape, icsLocalDateTime, buildTournamentICS, buildFixtureICS,
   csvCell, toCSV, multiSectionCSV, safeFilenamePart,
-  nonStandardRulesText, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
+  nonStandardRulesText, wideNoballLastOverExceptionLabel, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
   buildShareText, buildFixtureShareText, pollExpiryDateLabel, buildMapsUrl, resolvePollTeams,
   buildPollUrl, buildPollShareText, buildFollowUrl, buildLiveShareText
 } from "../../src/core/shareAndFormat.js";
@@ -151,6 +151,16 @@ test("nonStandardRulesText: calls out the last-over exception only when lastOver
     lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: false }
   });
   assert.doesNotMatch(noException, /except/);
+});
+
+// wideNoballLastOverExceptionLabel is the shared building block behind the "(except the last
+// over)" wording above -- also consumed directly by SetupScreen's own collapsed rules summary
+// (see tests/unit/components/setupScreen.test.js), so it's tested on its own here too.
+test("wideNoballLastOverExceptionLabel: null unless lastOverRules.wideNoballIllegalAgain is on, else a pluralized label", () => {
+  assert.equal(wideNoballLastOverExceptionLabel(DEFAULT_RULES), null);
+  assert.equal(wideNoballLastOverExceptionLabel({ lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: false } }), null);
+  assert.equal(wideNoballLastOverExceptionLabel({ lastOverRules: { enabled: true, overCount: 1, wideNoballIllegalAgain: true } }), "last over");
+  assert.equal(wideNoballLastOverExceptionLabel({ lastOverRules: { enabled: true, overCount: 3, wideNoballIllegalAgain: true } }), "last 3 overs");
 });
 
 test("nonStandardRulesText: notes bigHitRuns/maxHitRuns independently when set, silent when off", () => {

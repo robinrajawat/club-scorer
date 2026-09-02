@@ -62,6 +62,7 @@ const FUNCTIONS = [
   { name: "multiSectionCSV", file: "src/core/shareAndFormat.js" },
   { name: "safeFilenamePart", file: "src/core/shareAndFormat.js" },
   { name: "POLL_TTL_DAYS", file: "src/core/shareAndFormat.js" },
+  { name: "wideNoballLastOverExceptionLabel", file: "src/core/shareAndFormat.js" },
   { name: "nonStandardRulesText", file: "src/core/shareAndFormat.js" },
   { name: "impactSubsText", file: "src/core/shareAndFormat.js" },
   { name: "tossText", file: "src/core/shareAndFormat.js" },

@@ -1325,10 +1325,10 @@ function genMatchCode() {
 // GENERATED-FN-START: POLL_TTL_DAYS
 const POLL_TTL_DAYS = 120;
 
-// Deliberately silent on maxOversPerBowler, unlike every other field here: SetupScreen defaults
-// it to Math.ceil(oversLimit / 5) for every new match (the standard "no bowler bowls more than a
-// fifth of the innings" law), so it's non-null on essentially every match, standard or not --
-// including it here would make "silent when standard" never actually fire.
+// "last over" / "last N overs" when wideNoballCountsAsBall flips back off for the final over(s)
+// (lastOverRules.wideNoballIllegalAgain), else null. Shared by nonStandardRulesText below and by
+// SetupScreen's own quick-glance rules summary, so both places name the same exception instead of
+// one saying "Wd/Nb counts as ball" flatly and leaving the final-over flip undiscovered until Review.
 // GENERATED-FN-END: POLL_TTL_DAYS
 const LIVE_VIEW_TTL_DAYS = 180;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
@@ -6237,6 +6237,18 @@ const SETUP_PAGE_LABELS = {
   review: "Review"
 };
 // GENERATED-FN-END: SETUP_PAGE_LABELS
+// GENERATED-FN-START: wideNoballLastOverExceptionLabel
+function wideNoballLastOverExceptionLabel(rules) {
+  const lor = rules && rules.lastOverRules;
+  if (!(lor && lor.enabled && lor.wideNoballIllegalAgain)) return null;
+  return lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over";
+}
+
+// Deliberately silent on maxOversPerBowler, unlike every other field here: SetupScreen defaults
+// it to Math.ceil(oversLimit / 5) for every new match (the standard "no bowler bowls more than a
+// fifth of the innings" law), so it's non-null on essentially every match, standard or not --
+// including it here would make "silent when standard" never actually fire.
+// GENERATED-FN-END: wideNoballLastOverExceptionLabel
 // GENERATED-FN-START: nonStandardRulesText
 function nonStandardRulesText(rules) {
   if (!rules) return null;
@@ -6252,10 +6264,8 @@ function nonStandardRulesText(rules) {
   if (rules.bigHitRuns) bits.push(`Big Hit bonus (${rules.bigHitRuns} runs)`);
   if (rules.maxHitRuns) bits.push(`Maximum Hit bonus (${rules.maxHitRuns} runs)`);
   if (rules.wideNoballCountsAsBall) {
-    const lor = rules.lastOverRules;
-    const revertsInLastOvers = lor && lor.enabled && lor.wideNoballIllegalAgain;
-    const lastOversLabel = revertsInLastOvers ? (lor.overCount > 1 ? `last ${lor.overCount} overs` : "last over") : null;
-    bits.push(revertsInLastOvers ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
+    const lastOversLabel = wideNoballLastOverExceptionLabel(rules);
+    bits.push(lastOversLabel ? `wide/no-ball counts as a ball (except the ${lastOversLabel})` : "wide/no-ball counts as a ball");
   }
   if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
@@ -19499,12 +19509,16 @@ function SetupScreen({
   // match summary/PDF, which stays silent about anything at its default value), this always shows
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
-  // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  // glancing at a collapsed card wants to confirm before they trust it and move on. The wide/no-ball
+  // bit still gets the last-over caveat appended (via wideNoballLastOverExceptionLabel, shared with
+  // nonStandardRulesText) -- leaving it off here just means the scorer discovers the flip mid-final-over
+  // instead of at a glance.
+  const wideNoballLastOverLabel = wideNoballLastOverExceptionLabel(matchRules);
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? `Wd/Nb counts as ball${wideNoballLastOverLabel ? ` (except ${wideNoballLastOverLabel})` : ""}` : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   // Review page's own pair, replacing rulesSummaryText there -- that one was built for a quick
   // glance while still editing rules, not the last screen before a scorer locks the match in,
-  // where the same abbreviations turn ambiguous (e.g. "Wd/Nb counts as ball" doesn't say the
-  // final over is still standard). coreFormatText covers balls/over and the bowler cap in full
+  // where the other abbreviations (bowler caps, powerplay, etc.) turn ambiguous without full words.
+  // coreFormatText covers balls/over and the bowler cap in full
   // words -- worth confirming even at their computed defaults, same reasoning as rulesSummaryText
   // above, so it's unconditional rather than routed through nonStandardRulesText (which would stay
   // silent on it: maxOversPerBowler defaults to a non-null computed value on every match, not just
