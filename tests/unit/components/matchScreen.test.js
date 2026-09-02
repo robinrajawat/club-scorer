@@ -105,6 +105,10 @@ function bigHitBtn(ctx) {
   return ctx.inst.root.findAllByType(Btn).find(b => typeof b.props.children === "string" && b.props.children.startsWith("Big Hit"));
 }
 
+function maxHitBtn(ctx) {
+  return ctx.inst.root.findAllByType(Btn).find(b => typeof b.props.children === "string" && b.props.children.startsWith("Maximum Hit"));
+}
+
 test("MatchScreen: shows the live score header", () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
@@ -144,6 +148,24 @@ test("MatchScreen: the Big Hit button only appears when bigHitRuns is set, and s
   });
   assert.equal(ctx.inning.runs, 10);
   assert.equal(ctx.inning.batsmen.A.sixes, 1, "a big hit is still a six for stats purposes");
+});
+
+// Big Hit and Maximum Hit are two fully independent bonus-hit tiers -- a club can turn on either,
+// both, or neither. Both buttons must show side by side when both are configured, each scoring
+// its own configured total.
+test("MatchScreen: Big Hit and Maximum Hit are independent -- both buttons show and score correctly when both are set", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { bigHitRuns: 10, maxHitRuns: 15 });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  assert.ok(bigHitBtn(ctx), "Big Hit button shown");
+  const maxBtn = maxHitBtn(ctx);
+  assert.ok(maxBtn, "Maximum Hit button shown independently");
+  await act(async () => {
+    maxBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.runs, 15);
+  assert.equal(ctx.inning.batsmen.A.sixes, 1, "a maximum hit is still a six for stats purposes");
 });
 
 test("MatchScreen: a non-last wicket opens the Next batsman prompt, and confirming it commits the wicket", async () => {

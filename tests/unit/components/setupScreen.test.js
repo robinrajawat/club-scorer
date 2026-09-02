@@ -249,6 +249,31 @@ test("SetupScreen: Review always shows the core over/bowler-cap facts, and a 'Ho
   assert.doesNotMatch(reviewText, /Wd\/Nb/);
 });
 
+// Review's toss/format/squad lines used to be the only ones with no label at all, inconsistent
+// with "House rules:" and umpiresText's own "Umpire(s):" prefix right next to them -- five-ish
+// unlabeled lines stacked together read as more to scan than they needed to. Toss/Format/Squad
+// now carry the same short-label treatment.
+test("SetupScreen: Review labels the toss and format lines for consistency with House rules/Umpires", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Toss: ".*Riverside CC won the toss, chose to bat/);
+  assert.match(text, /Format: ".*6-ball overs/);
+});
+
 test("SetupScreen: Last over rules -- enabling it reveals the overs-count picker, and (with wide/no-ball on) the illegal-again toggle", () => {
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });

@@ -35,13 +35,18 @@ export function BallBadge({
     color = "#fff";
     border = "none";
     shadow = "0 2px 6px rgba(74,124,46,0.35)";
-  } else if (ev.runs === 6) {
+  } else if (ev.runs === 6 || ev.bigHit) {
     // Gold, not a darker shade of the fours green (the original version of this) and not purple
     // (a brief second attempt) -- gold carries real "biggest/best" weight (gold medal, a golden
     // moment) that a six, arguably the single most dramatic thing that can happen on a ball,
     // deserves more than either alternative gave it. Swapped with wide/no-ball above rather than
     // introduced fresh -- gold already existed in this app's palette, just attached to the wrong
     // event.
+    //
+    // ev.bigHit alongside the plain runs===6 check -- a big hit's total (e.g. 10) doesn't match 6,
+    // but it's still exactly a six for styling purposes, same as it is for stats (see isSix in
+    // applyBall). Without this it fell through to the default, unremarkable badge color, looking
+    // no different from an ordinary single run.
     bg = `linear-gradient(160deg, #d4a544, ${COLORS.gold})`;
     color = "#2e1c04";
     border = "none";

@@ -377,6 +377,7 @@ export function MatchScreen({
           timeCapMinutes: inn.timeCapMinutes,
           retirementRuns: inn.retirementRuns,
           bigHitRuns: inn.bigHitRuns,
+          maxHitRuns: inn.maxHitRuns,
           wideNoballCountsAsBall: inn.wideNoballCountsAsBall,
           lastOverRules: inn.lastOverRules
         }, updated.isSuperOver ? 2 : battingTeamXISize(updated, inn.bowlingTeam) - 1, updated.oversLimit);
@@ -386,23 +387,24 @@ export function MatchScreen({
       }
     }
   }
-  function handleRun(n, overthrow, shortRun, bigHit) {
+  // bigHitLabel: falsy for an ordinary run, or the configured tier's own name ("Big Hit"/
+  // "Maximum Hit") when scored via one of those bonus-hit buttons -- passed straight through as
+  // the celebration type so BallCelebration can show "BIG HIT!"/"MAXIMUM HIT!" (see there) instead
+  // of generic "SIX!", which read oddly for a ball that scored a bonus total, not literally six.
+  function handleRun(n, overthrow, shortRun, bigHitLabel) {
     pushHistory();
     commit(applyBall(inning, {
       kind: "run",
       runs: n,
       overthrow: overthrow || undefined,
       shortRun: shortRun || undefined,
-      bigHit: bigHit || undefined
+      bigHit: bigHitLabel || undefined
     }));
     setShowRuns(false);
-    if (n === 4 || n === 6 || bigHit) {
+    if (n === 4 || n === 6 || bigHitLabel) {
       const key = Date.now();
       setCelebration({
-        // A big hit is still exactly a six for celebration purposes (see isSix in applyBall) --
-        // n itself is whatever bonus total the bigHitRuns rule configures (e.g. 10), which
-        // BallCelebration's own celebration.type === 6 check would otherwise miss.
-        type: bigHit ? 6 : n,
+        type: bigHitLabel || n,
         key
       });
       setTimeout(() => {
@@ -1899,17 +1901,31 @@ export function MatchScreen({
       padding: "9px 8px",
       fontSize: 14
     }
-  }, "Wicket")), inning.bigHitRuns && /*#__PURE__*/React.createElement(Btn, {
-    variant: "gold",
-    onClick: () => handleRun(inning.bigHitRuns, 0, false, true),
+  }, "Wicket")), (inning.bigHitRuns || inning.maxHitRuns) && /*#__PURE__*/React.createElement("div", {
     style: {
-      width: "100%",
-      minHeight: 36,
-      padding: "8px 12px",
-      fontSize: 13.5,
+      display: "flex",
+      gap: 7,
       marginBottom: 7
     }
-  }, `Big Hit — ${inning.bigHitRuns} runs`), /*#__PURE__*/React.createElement(Btn, {
+  }, inning.bigHitRuns && /*#__PURE__*/React.createElement(Btn, {
+    variant: "gold",
+    onClick: () => handleRun(inning.bigHitRuns, 0, false, "Big Hit"),
+    style: {
+      flex: 1,
+      minHeight: 36,
+      padding: "8px 12px",
+      fontSize: 13.5
+    }
+  }, `Big Hit — ${inning.bigHitRuns} runs`), inning.maxHitRuns && /*#__PURE__*/React.createElement(Btn, {
+    variant: "gold",
+    onClick: () => handleRun(inning.maxHitRuns, 0, false, "Maximum Hit"),
+    style: {
+      flex: 1,
+      minHeight: 36,
+      padding: "8px 12px",
+      fontSize: 13.5
+    }
+  }, `Maximum Hit — ${inning.maxHitRuns} runs`)), /*#__PURE__*/React.createElement(Btn, {
     onClick: undo,
     disabled: history.length === 0,
     style: {

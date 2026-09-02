@@ -25,6 +25,20 @@ test("BallCelebration: null with no celebration, otherwise OUT!/SIX!/FOUR! based
   assert.equal(fourTree.children[0].children[0], "FOUR!");
 });
 
+// A bonus-hit tier (Big Hit, Maximum Hit, or any future one) passes its own name straight through
+// as celebration.type -- shown as its own uppercased text, styled gold like a six (see isSix in
+// applyBall: every bonus-hit tier is a genuine six for every other purpose too), not a generic
+// "SIX!" that read oddly for a ball that scored a bonus total (e.g. 10), not literally six.
+test("BallCelebration: a bonus-hit tier's own label renders uppercased, styled like a six", () => {
+  const bigHitTree = renderer.create(React.createElement(BallCelebration, { celebration: { type: "Big Hit", key: 1 } })).toJSON();
+  assert.equal(bigHitTree.children[0].children[0], "BIG HIT!");
+  const maxHitTree = renderer.create(React.createElement(BallCelebration, { celebration: { type: "Maximum Hit", key: 2 } })).toJSON();
+  assert.equal(maxHitTree.children[0].children[0], "MAXIMUM HIT!");
+  // Same gold background/text color as a plain six -- confirm it isn't accidentally styled as a four.
+  const sixTree = renderer.create(React.createElement(BallCelebration, { celebration: { type: 6, key: 3 } })).toJSON();
+  assert.equal(bigHitTree.children[0].props.style.background, sixTree.children[0].props.style.background);
+});
+
 test("MilestoneToast: null with no toast, otherwise renders the milestone text and its icon", () => {
   assert.equal(renderer.create(React.createElement(MilestoneToast, { toast: null })).toJSON(), null);
   const tree = renderer.create(React.createElement(MilestoneToast, {

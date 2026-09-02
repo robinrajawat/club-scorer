@@ -153,10 +153,14 @@ test("nonStandardRulesText: calls out the last-over exception only when lastOver
   assert.doesNotMatch(noException, /except/);
 });
 
-test("nonStandardRulesText: notes bigHitRuns when set, silent when off", () => {
-  assert.doesNotMatch(nonStandardRulesText({ ...DEFAULT_RULES, bigHitRuns: null }) || "", /big hit/);
-  const text = nonStandardRulesText({ ...DEFAULT_RULES, bigHitRuns: 10 });
-  assert.match(text, /big hit bonus \(10 runs/);
+test("nonStandardRulesText: notes bigHitRuns/maxHitRuns independently when set, silent when off", () => {
+  assert.doesNotMatch(nonStandardRulesText({ ...DEFAULT_RULES, bigHitRuns: null, maxHitRuns: null }) || "", /Hit bonus/i);
+  const bigOnly = nonStandardRulesText({ ...DEFAULT_RULES, bigHitRuns: 10 });
+  assert.match(bigOnly, /Big Hit bonus \(10 runs\)/);
+  assert.doesNotMatch(bigOnly, /Maximum Hit/);
+  const both = nonStandardRulesText({ ...DEFAULT_RULES, bigHitRuns: 10, maxHitRuns: 15 });
+  assert.match(both, /Big Hit bonus \(10 runs\)/);
+  assert.match(both, /Maximum Hit bonus \(15 runs\)/);
 });
 
 test("nonStandardRulesText: calls out impactPlayerMaxSubs when it's above the standard 1", () => {
