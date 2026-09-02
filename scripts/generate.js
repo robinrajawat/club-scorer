@@ -63,6 +63,7 @@ const FUNCTIONS = [
   { name: "safeFilenamePart", file: "src/core/shareAndFormat.js" },
   { name: "POLL_TTL_DAYS", file: "src/core/shareAndFormat.js" },
   { name: "nonStandardRulesText", file: "src/core/shareAndFormat.js" },
+  { name: "impactSubsText", file: "src/core/shareAndFormat.js" },
   { name: "tossText", file: "src/core/shareAndFormat.js" },
   { name: "umpiresText", file: "src/core/shareAndFormat.js" },
   { name: "matchResultText", file: "src/core/shareAndFormat.js" },
@@ -243,6 +244,8 @@ const FUNCTIONS = [
   { name: "TOURNAMENT_STATUS_COLORS", file: "src/components/tournamentStatus.js" },
   { name: "FixtureRow", file: "src/components/fixtureRow.js" },
   { name: "SuperOverOpenersSetup", file: "src/components/inningsSetupScreens.js" },
+  { name: "confirmImpactSub", file: "src/components/inningsSetupScreens.js" },
+  { name: "ImpactPlayerCard", file: "src/components/inningsSetupScreens.js" },
   { name: "SecondInningsSetup", file: "src/components/inningsSetupScreens.js" },
   { name: "SearchAndRequestPanel", file: "src/components/searchAndRequestPanel.js" },
   { name: "AuthActionScreen", file: "src/components/authActionScreen.js" },
@@ -262,6 +265,8 @@ const FUNCTIONS = [
   { name: "FeedbackInboxScreen", file: "src/components/feedbackInboxScreen.js" },
   { name: "RecordsScreen", file: "src/components/recordsScreen.js" },
   { name: "FixturesSection", file: "src/components/fixturesSection.js" },
+  { name: "ToggleRule", file: "src/components/tournamentsScreen.js" },
+  { name: "NullableNumberRule", file: "src/components/tournamentsScreen.js" },
   { name: "TournamentsScreen", file: "src/components/tournamentsScreen.js" },
   { name: "TournamentDetailScreen", file: "src/components/tournamentDetailScreen.js" },
   { name: "ClubPanel", file: "src/components/clubPanel.js" },
@@ -362,7 +367,64 @@ function spliceFunction(html, name, file) {
   );
 }
 
+// Guards against a specific way FUNCTIONS entries above can silently produce a broken
+// public/index.html: findNamedExport only ever captures `export function/const/class`
+// declarations, so a plain (non-exported) top-level helper in one of these files -- or an
+// `export`ed one nobody remembered to add to FUNCTIONS -- simply falls outside every registered
+// declaration's [start, nextExportStart) slice and gets dropped with no error at all. It's only
+// "safe" by accident when it happens to sit textually between two REGISTERED exports in the same
+// file (the earlier one's slice then sweeps it in) -- fragile, and easy to break by reordering.
+// This happened twice in one session (ToggleRule/NullableNumberRule in tournamentsScreen.js,
+// impactSubsText in shareAndFormat.js): each shipped a React component/function that was
+// `undefined` in production, a live crash on clubscorer.com in one case and on every single
+// scorecard render in the other. Run before every splice so a repeat fails loudly here, not there.
+function auditReachability() {
+  const moduleFiles = new Set(MODULES.map(m => m.file));
+  const byFile = new Map(); // file -> Set(registered names)
+  for (const fn of FUNCTIONS) {
+    if (!byFile.has(fn.file)) byFile.set(fn.file, new Set());
+    byFile.get(fn.file).add(fn.name);
+  }
+  const exportRe = /^export (?:function (\w+)|const (\w+) =|class (\w+))/gm;
+  const declRe = /^(?:export )?(?:function (\w+)|const (\w+) =|class (\w+))/gm;
+  const orphans = [];
+  for (const [file, regNames] of byFile) {
+    if (moduleFiles.has(file)) continue; // whole-file splice, not at risk
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+    const exportMatches = [...source.matchAll(exportRe)].map(m => ({ name: m[1] || m[2] || m[3], index: m.index }));
+    const declMatches = [...source.matchAll(declRe)].map(m => ({ name: m[1] || m[2] || m[3], index: m.index }));
+    for (const decl of declMatches) {
+      if (regNames.has(decl.name)) continue;
+      let owner = null;
+      for (const em of exportMatches) {
+        if (em.index <= decl.index) owner = em;
+        else break;
+      }
+      if (!owner || !regNames.has(owner.name)) {
+        orphans.push({ file, name: decl.name, owner: owner ? owner.name : null });
+      }
+    }
+  }
+  if (orphans.length === 0) return;
+  console.error("Found declarations that would be silently dropped from public/index.html:\n");
+  for (const o of orphans) {
+    const reason = o.owner === o.name
+      ? "it's exported but not registered in FUNCTIONS"
+      : o.owner
+        ? `it isn't its own registered export, and its neighbor "${o.owner}" (whose slice would otherwise sweep it in) isn't registered either`
+        : "no export precedes it in the file at all, so no slice could ever include it";
+    console.error(`  ${o.file} :: "${o.name}" -- ${reason}`);
+  }
+  console.error(
+    "\nFix: add `export` to the declaration (if missing) and register it in this file's FUNCTIONS " +
+    "array, then wrap its (possibly empty) location in public/index.html with a matching " +
+    "// GENERATED-FN-START/END pair before running `npm run generate`."
+  );
+  process.exit(1);
+}
+
 function run() {
+  auditReachability();
   const verify = process.argv.includes("--verify");
   const original = fs.readFileSync(INDEX_HTML, "utf8");
   let html = original;

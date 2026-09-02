@@ -18,8 +18,16 @@ import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/a
 // A boolean rule shown as a labeled On/Off pill button -- same visual as SetupScreen's own
 // freeHit/superOver toggles, factored out here since the tournament rules editor below needs
 // several of these (freeHit, superOver, wideNoballCountsAsBall, impactPlayerEnabled) and copying
-// this block four times just to swap the label/value/setter would be pure duplication.
-function ToggleRule({
+// this block four times just to swap the label/value/setter would be pure duplication. Its sibling
+// export just below, NullableNumberRule, carries no comment of its own -- see docs/history.md's
+// "React component extraction" section for why a comment directly above a non-first export in a
+// multi-export file gets glued onto the wrong one by generate.js's splice mechanism. In short:
+// NullableNumberRule renders a rule that's either null ("no limit"/unset) or a positive integer,
+// same shape as SetupScreen's own maxOversPerBowler/powerplayOvers/timeCapMinutes/retirementRuns
+// editors minus that editor's auto-suggest-from-a-single-match's-overs wiring (its `seed` prop is
+// passed in already computed instead, since this file's equivalent, defaultOvers, is an optional
+// string, not a live match in progress).
+export function ToggleRule({
   label,
   value,
   onChange
@@ -54,12 +62,7 @@ function ToggleRule({
     }
   }, value ? "On" : "Off"));
 }
-// A rule that's either null ("no limit"/unset) or a positive integer: tap "None -- tap to set one"
-// to seed it, edit it while set, tap "None" to clear it back. Same shape as SetupScreen's own
-// maxOversPerBowler/powerplayOvers/timeCapMinutes/retirementRuns editors, minus that editor's
-// auto-suggest-from-a-single-match's-overs wiring -- `seed` is passed in already computed instead,
-// since this file's equivalent (defaultOvers) is an optional string, not a live match in progress.
-function NullableNumberRule({
+export function NullableNumberRule({
   label,
   value,
   onChange,

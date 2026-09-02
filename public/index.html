@@ -6223,6 +6223,12 @@ function nonStandardRulesText(rules) {
 // confirmImpactSub in inningsSetupScreens.js), for the scorecard. null when none were made, same
 // "nothing happened, don't render anything" convention as nonStandardRulesText.
 // GENERATED-FN-END: nonStandardRulesText
+// GENERATED-FN-START: impactSubsText
+function impactSubsText(impactSubs) {
+  if (!impactSubs || impactSubs.length === 0) return null;
+  return impactSubs.map(s => `${s.inName} on for ${s.outName} (${s.team})`).join(" · ");
+}
+// GENERATED-FN-END: impactSubsText
 // GENERATED-FN-START: tossText
 function tossText(toss) {
   if (!toss || !toss.wonBy) return null;
@@ -20354,6 +20360,134 @@ function tournamentDateRangeLabel(t) {
   return first === last ? fmt(first) : `${fmt(first)} \u2013 ${fmt(last)}`;
 }
 // GENERATED-FN-END: tournamentDateRangeLabel
+// GENERATED-FN-START: ToggleRule
+function ToggleRule({
+  label,
+  value,
+  onChange
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, label), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => onChange(!value),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: value ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: value ? "#fff" : COLORS.ink,
+      boxShadow: value ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, value ? "On" : "Off"));
+}
+// GENERATED-FN-END: ToggleRule
+// GENERATED-FN-START: NullableNumberRule
+function NullableNumberRule({
+  label,
+  value,
+  onChange,
+  seed,
+  unit,
+  hint
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, label), value === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => onChange(seed),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None — tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(value),
+    onChange: v => onChange(v.replace(/[^0-9]/g, "")),
+    onBlur: () => {
+      const n = parseInt(String(value), 10);
+      onChange(isNaN(n) || n < 1 ? 1 : n);
+    },
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, unit), hint && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, hint), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onChange(null),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None")));
+}
+// GENERATED-FN-END: NullableNumberRule
 // GENERATED-FN-START: TournamentsScreen
 function TournamentsScreen({
   tournaments,
@@ -33931,7 +34065,17 @@ function SuperOverOpenersSetup({
 // they held either (same "can't stay captain/keeper once out of the XI" rule toggleAXI enforces at
 // setup time), and logs it to match.impactSubs for the scorecard. Every picker on the app already
 // reads the XI via rosterFor, so updating teamARoster/teamBRoster here is the entire mechanism --
-// nothing else needs to know a substitution happened.
+// nothing else needs to know a substitution happened. Its sibling export just below,
+// ImpactPlayerCard, carries no comment of its own -- see docs/history.md's "React component
+// extraction" section for why a comment directly above a non-first export in a multi-export file
+// gets glued onto the wrong one by generate.js's splice mechanism. In short: ImpactPlayerCard
+// renders one team's substitution card -- nothing unless the rule is on, this team still has an
+// unused swap, AND actually has a bench to draw from (a team entered as free-form names with no
+// saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown for both teams
+// on the same Innings Break screen, since the Laws allow either side to make its one substitution
+// any time before the start of the other team's innings -- this screen is exactly that point.
+// GENERATED-FN-END: SuperOverOpenersSetup
+// GENERATED-FN-START: confirmImpactSub
 function confirmImpactSub(match, setMatch, team, outName, inName) {
   const isTeamA = team === match.teamA;
   const rosterKey = isTeamA ? "teamARoster" : "teamBRoster";
@@ -33955,12 +34099,8 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
   setMatch(updatedMatch);
   saveTransition(updatedMatch, setMatch);
 }
-// One team's Impact Player substitution card -- renders nothing unless the rule is on, this team
-// still has an unused swap, AND actually has a bench to draw from (a team entered as free-form
-// names with no saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown
-// for both teams on the same Innings Break screen, since the Laws allow either side to make its one
-// substitution any time before the start of the other team's innings -- this screen is exactly
-// that point.
+// GENERATED-FN-END: confirmImpactSub
+// GENERATED-FN-START: ImpactPlayerCard
 function ImpactPlayerCard({
   match,
   setMatch,
@@ -34031,7 +34171,7 @@ function ImpactPlayerCard({
     }
   }, "Confirm substitution"));
 }
-// GENERATED-FN-END: SuperOverOpenersSetup
+// GENERATED-FN-END: ImpactPlayerCard
 // Best-effort self-heal for one-time transition saves (second-innings setup, super-over openers)
 // where a conflict is never expected to reflect a genuine second scorer — nobody else should be
 // racing a transition only one person can trigger — so it's safe to just retry once against the
