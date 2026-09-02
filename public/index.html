@@ -32297,6 +32297,20 @@ function MatchScreen({
   tournament
 }) {
   const [padCollapsed, setPadCollapsed] = useState(false);
+  // Measures the fixed bottom scoring pad's REAL rendered height, rather than guessing it with a
+  // hardcoded pixel number (see the paddingBottom this feeds, below). The old hardcoded guess
+  // (40 collapsed / 118 expanded) was tuned once and never revisited as the pad grew new
+  // conditional rows -- the Big Hit/Maximum Hit button row chief among them -- so on a match with
+  // either configured, or on a device with a tall safe-area-inset-bottom (a notched/home-indicator
+  // iPhone), the pad's real height regularly exceeds the reserved space. Any content flowing close
+  // to the bottom of the page then renders UNDERNEATH the fixed pad instead of above it -- clipped,
+  // partially hidden, or with just a sliver peeking out past the pad's rounded top corner. That's
+  // the leading theory for the long-reported "This Over" strip rendering glitches (content
+  // sometimes hidden/misaligned near the bottom of the screen) -- a real per-device/per-match
+  // layout bug, not a data or reconciliation issue in OversStrip itself (which was investigated at
+  // length and never showed anything wrong with its actual DOM output).
+  const bottomPadRef = useRef(null);
+  const [bottomPadHeight, setBottomPadHeight] = useState(0);
   const [showRuns, setShowRuns] = useState(false);
   const [showExtra, setShowExtra] = useState(null); // 'wide'|'noball'|'bye'|'legbye'
   const [showWicket, setShowWicket] = useState(false);
@@ -32409,6 +32423,24 @@ function MatchScreen({
   const capRetireName = inning && inning.retirementRuns && !inning.complete ? inning.strikerName && retirementCapDue(inning.batsmen[inning.strikerName], inning.retirementRuns) && dismissedCapRetireFor !== inning.strikerName ? inning.strikerName : inning.nonStrikerName && retirementCapDue(inning.batsmen[inning.nonStrikerName], inning.retirementRuns) && dismissedCapRetireFor !== inning.nonStrikerName ? inning.nonStrikerName : null : null;
   const needsCapRetirement = !!capRetireName;
   const needsNewBowler = inning && inning.legalBalls > 0 && inning.legalBalls % (inning.ballsPerOver || 6) === 0 && !inning.bowlerName && !inning.complete;
+  // Keeps bottomPadHeight in sync with the fixed pad's actual rendered size -- ResizeObserver
+  // picks up every reason that size can change (padCollapsed, the Big Hit/Maximum Hit row
+  // appearing or disappearing, a bowler-name line wrapping, safe-area-inset-bottom differing by
+  // device) automatically, without needing any of those as explicit effect dependencies. Reads
+  // getBoundingClientRect() rather than the observer entry's own contentRect, which excludes the
+  // pad's own padding -- exactly the part of its height this needs to account for.
+  useEffect(() => {
+    const el = bottomPadRef.current;
+    if (!el) {
+      setBottomPadHeight(0);
+      return;
+    }
+    const measure = () => setBottomPadHeight(el.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [needsNewBatsman, needsNewBowler]);
   // Same revised-values fallback as checkInningEnd -- see there for the full reasoning. Both need
   // to agree on what "the target" and "the overs limit" actually are right now, or the live
   // display would show one number while the innings actually ends against a different one. Shared
@@ -33338,7 +33370,7 @@ function MatchScreen({
   const dlsPreview = showRevisedTargetModal && dlsMode ? computeDLSPreview() : null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      paddingBottom: padCollapsed ? 40 : 118,
+      paddingBottom: bottomPadHeight ? bottomPadHeight + 8 : 24,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -34111,6 +34143,7 @@ function MatchScreen({
     overs: inning.overs,
     ballsPerOver: inning.ballsPerOver
   })), !needsNewBatsman && !needsNewBowler && /*#__PURE__*/React.createElement("div", {
+    ref: bottomPadRef,
     style: {
       position: "fixed",
       bottom: 0,
