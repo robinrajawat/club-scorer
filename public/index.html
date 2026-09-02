@@ -578,20 +578,17 @@ const FONT_LINK = "https://fonts.googleapis.com/css2?family=DM+Serif+Display&fam
 // GENERATED-FN-START: GLOBAL_CSS
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
-  /* Disables the browser/OS's own text-selection UI everywhere except real text inputs. Best
-     working theory for the long-standing "mystery apostrophe" report (a stray mark that appears
-     near a just-updated label -- e.g. right as the "Not started" placeholder in OversStrip's
-     This Over strip gets replaced by the first ball badge -- and disappears on its own): none of
-     this app's static text was ever marked non-selectable, so a tap that lands a little long or
-     double-taps during rapid scoring can start a native text selection instead of just a button
-     press. On iOS Safari in particular, that selection's drag handle is a small teardrop/comma
-     shape -- exactly what a floating apostrophe next to a label would look like -- and it clears
-     itself the moment the next tap lands elsewhere, matching every symptom reported (intermittent,
-     tied to a text label, self-dismissing, never caught in a desktop browser's DOM since it's a
-     native selection overlay, not markup). Unconfirmed without a repro on the reporting device,
-     but a text app like this one has nothing that needs manual copy-selection (every "copy" action
-     already goes through an explicit Share/Copy button), so this is safe regardless of whether
-     it's the actual cause.
+  /* Disables the browser/OS's own text-selection UI everywhere except real text inputs. Originally
+     shipped as the leading theory for the long-standing "mystery apostrophe" report (a stray mark
+     next to a just-updated label, looking like a native selection drag-handle) -- but a later report
+     of the same symptom on OversStrip's "Not started" placeholder (a brand new empty over, not an
+     existing label being replaced) stayed stuck on screen until some unrelated re-render, rather
+     than clearing itself the way a selection handle would once the tap/hold ends. That rules this
+     theory out for at least that occurrence -- see the offsetHeight/translateZ(0) mitigation in
+     OversStrip (scoreboardAtoms.js) for the current, WebKit-stale-paint-based theory instead. Kept
+     here regardless: a text app like this one has nothing that needs manual copy-selection (every
+     "copy" action already goes through an explicit Share/Copy button), so it's harmless either way,
+     whatever the actual cause turns out to be for either report.
   */
   * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
@@ -7972,7 +7969,20 @@ function OversStrip({
   const [activeIndex, setActiveIndex] = useState(lastIndex);
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+      const el = scrollRef.current;
+      el.scrollLeft = el.scrollWidth;
+      // Forces a synchronous layout flush right after the jump above. Best working theory for a
+      // long-reported glitch where "Not started" (the fresh empty over this jump usually lands on)
+      // renders with a stray leftover mark and part of its text missing, stuck until some other
+      // state change forces React to touch this DOM again: iOS Safari can leave stale/mistiled
+      // paint behind when scrollLeft is set programmatically (not via a user gesture) on a
+      // scroll-snap container in the same tick a new child was inserted, rather than repainting the
+      // newly-scrolled-to area cleanly. Reading offsetHeight forces the browser to recompute layout
+      // before the next paint instead of coalescing it with whatever comes later, which is the
+      // standard nudge for this class of WebKit stale-paint bug. Unconfirmed without a repro on the
+      // reporting device (this app's test suite runs headless, which never reproduced it either),
+      // but reading a layout property back has no functional effect either way.
+      void el.offsetHeight;
     }
     setActiveIndex(lastIndex);
   }, [totalBalls, safeOvers.length]);
@@ -8030,7 +8040,13 @@ function OversStrip({
       display: "flex",
       overflowX: "auto",
       scrollSnapType: "x mandatory",
-      WebkitOverflowScrolling: "touch"
+      WebkitOverflowScrolling: "touch",
+      // Promotes this scroller to its own compositing layer -- part of the same stale-paint
+      // mitigation as the offsetHeight read in the effect above (see its comment). A container
+      // whose content changes AND scroll position jumps programmatically in the same tick is
+      // exactly where iOS Safari has historically left old tile content behind after the jump.
+      WebkitTransform: "translateZ(0)",
+      transform: "translateZ(0)"
     }
   }, safeOvers.map((balls, i) => {
     const isCurrent = i === lastIndex;

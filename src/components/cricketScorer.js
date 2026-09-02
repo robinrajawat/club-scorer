@@ -58,20 +58,17 @@ export const FONT_LINK = "https://fonts.googleapis.com/css2?family=DM+Serif+Disp
 
 export const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
-  /* Disables the browser/OS's own text-selection UI everywhere except real text inputs. Best
-     working theory for the long-standing "mystery apostrophe" report (a stray mark that appears
-     near a just-updated label -- e.g. right as the "Not started" placeholder in OversStrip's
-     This Over strip gets replaced by the first ball badge -- and disappears on its own): none of
-     this app's static text was ever marked non-selectable, so a tap that lands a little long or
-     double-taps during rapid scoring can start a native text selection instead of just a button
-     press. On iOS Safari in particular, that selection's drag handle is a small teardrop/comma
-     shape -- exactly what a floating apostrophe next to a label would look like -- and it clears
-     itself the moment the next tap lands elsewhere, matching every symptom reported (intermittent,
-     tied to a text label, self-dismissing, never caught in a desktop browser's DOM since it's a
-     native selection overlay, not markup). Unconfirmed without a repro on the reporting device,
-     but a text app like this one has nothing that needs manual copy-selection (every "copy" action
-     already goes through an explicit Share/Copy button), so this is safe regardless of whether
-     it's the actual cause.
+  /* Disables the browser/OS's own text-selection UI everywhere except real text inputs. Originally
+     shipped as the leading theory for the long-standing "mystery apostrophe" report (a stray mark
+     next to a just-updated label, looking like a native selection drag-handle) -- but a later report
+     of the same symptom on OversStrip's "Not started" placeholder (a brand new empty over, not an
+     existing label being replaced) stayed stuck on screen until some unrelated re-render, rather
+     than clearing itself the way a selection handle would once the tap/hold ends. That rules this
+     theory out for at least that occurrence -- see the offsetHeight/translateZ(0) mitigation in
+     OversStrip (scoreboardAtoms.js) for the current, WebKit-stale-paint-based theory instead. Kept
+     here regardless: a text app like this one has nothing that needs manual copy-selection (every
+     "copy" action already goes through an explicit Share/Copy button), so it's harmless either way,
+     whatever the actual cause turns out to be for either report.
   */
   * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   input, textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
