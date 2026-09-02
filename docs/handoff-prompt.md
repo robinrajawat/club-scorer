@@ -266,6 +266,91 @@ when the actual advance button is further down. Asked the user for an exact
 repro; nothing changed in code for this one. Worth a fresh look with a real
 repro before assuming it's resolved.
 
+**2026-09-02 (continued) — a long session, PRs #74–#81, all merged:**
+UX/feature work — Big Hit/Maximum Hit (two independent, configurable
+bonus-hit tiers, each celebrating under its own name and excluded from
+strike rotation like a real four/six), a first-innings summary card on the
+innings-break/Impact-Player screen, a fix for the team-name-vs-score
+ambiguity in that summary ("Billund 1" + "193/1" read as one number),
+Declare Timed Out now asks for confirmation first, an "IP" badge for
+Impact Player substitutes wherever their name shows up (scoring header,
+scorecard rows), a one-line color-coded ball commentary above the Overs
+strip ("X to A: FOUR!"), tournament-level venue (set once, inherited by
+every fixture), and the tournament + single-match rules editors both
+regrouped into labeled sections (Format/Extras/Bowling limits/Batting
+rules/Special rules) instead of one long unlabeled list.
+
+Reliability fixes, roughly in the order they were found chasing real user
+reports — **each was a genuine root cause, not a symptom patch:**
+1. A self-conflicting sync race: `flushPendingWrites`'s background retry
+   and a live `MatchScreen`'s own save could race on the same match,
+   surfacing as "Scores don't match" against a write from the same device.
+   Fixed by having the background flush skip whatever match is currently
+   open on screen (that screen's own save chain is already the source of
+   truth for it) — see the comment on `liveMatchSetters`/`flushPendingWrites`
+   in `public/index.html`.
+2. That very fix then made `SyncStatusBanner`'s "tap to retry" a permanent
+   no-op whenever the stuck match was the one open on screen (the retry
+   skipped it for the same reason). Fixed by giving `SyncStatusBanner` an
+   `onRetry` override; `MatchScreen` retries through its own safe
+   `queueSave` path instead of relying on the background flush.
+3. **The big one:** every single ball ever scored — not just bonus hits —
+   wrote `bigHit: undefined` into its ball-log entry (`applyBall`'s
+   `event.bigHit || undefined`), and `packMatchForFirestore` passed that
+   straight through into every transactional write. Firestore's client SDK
+   rejects any field whose value is the JS primitive `undefined` outright
+   ("Function Transaction.set() called with invalid data. Unsupported
+   field value: undefined"), so this had likely been silently breaking
+   cloud sync for a meaningful slice of matches for a while, with saves
+   falling back to the local-only path. Fixed by having
+   `packMatchForFirestore` strip any explicitly-`undefined` field via a
+   JSON round-trip — closes the whole class of bug at the write boundary,
+   not just this one field. **If sync issues get reported again, check
+   this fix actually reached the affected device first** (it's in `main`
+   as of PR #81) before assuming a new root cause.
+
+Also fixed a wording bug: the Wide/No Ball modal's "illegal again in the
+last over(s)" note always said "this flips back in the last over(s)"
+regardless of whether the current ball was actually inside that window —
+correct before the window starts, contradictory once inside it (attached
+to "doesn't count as a legal delivery" as if the flip were still pending
+when it had already happened). Now tensed correctly against
+`isInLastOvers(inning)`.
+
+**Open items handed off, unresolved as of 2026-09-02:**
+- **Mystery apostrophe in the "This Over" ball strip** — user has now sent
+  a screenshot (a stray `'` floating next to a ball badge, over `2.1`,
+  disappears on its own). Investigated hard this session: rebuilt
+  `OversStrip`/`MatchScreen` standalone in a real browser (Chromium via
+  Playwright, globally installed — see below) with `GLOBAL_CSS` and real
+  click interactions, scored balls one-by-one and across an over boundary,
+  screenshotted mid-animation — could not reproduce it. Suspect it may be
+  Safari/iOS-specific (the user's earlier PWA report was iPhone) or tied to
+  a specific player name/data shape not yet tried. Next step: ask for the
+  browser/device, whether any player name in that match has an apostrophe
+  (e.g. "O'Brien"), and ideally a screen recording or the exact ball
+  sequence right before it appears. **Playwright itself isn't in this
+  repo's `node_modules`** (no `package.json` dependency) but is available
+  globally (`npm root -g` → `/opt/node22/lib/node_modules/playwright`) with
+  Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` — bare
+  specifier resolution needs the script to live under that global
+  `node_modules` (or an import map + local shims for `react`/`react-dom`
+  UMD builds if reproducing browser-only rendering, since this sandbox's
+  proxy blocks the CDN `esm.sh` route) — see this session's throwaway
+  `_repro_*` files (already deleted) for the working pattern if picking
+  this back up.
+- **Co-owner invites** — scoped only, not built. See
+  `docs/co-owner-invites-plan.md` (from PR #76) for the full plan: replacing
+  the bearer-code invite with an Inbox accept/decline flow needs a real
+  Firestore rules change (a filtered list rule, not `allow list: if false`),
+  which isn't auto-deployed — treat as its own deliberate piece of work
+  when picked up, not a quick add-on.
+- **30-minute escalating time-penalty rule** — still open from the
+  2026-09-01 entry above; not touched this session. Distinct from the
+  (already-shipped) plain "time cap per innings" flag.
+- One-line ball-by-ball commentary (above) is **done**, not open — noting
+  it here only because it was an open question in earlier handoffs.
+
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the
 tournament-rules work in detail — see `docs/history.md`. It's reference
