@@ -369,23 +369,85 @@ when it had already happened). Now tensed correctly against
   report (an iOS text-selection handle looking like a stray mark) that's harmless either way and
   not ruled out as a contributing factor on some devices.
 
+**2026-09-02 (continued) — the "This Over" glitch turned out not to be fixed by PR #87 after all,
+plus five small reported bugs, PRs #89–#97, all merged:**
+
+- **PR #87 revisited — the "mystery apostrophe" wasn't actually gone.** Two fresh screenshots came
+  in after #87 shipped: (1) a brand-new empty over's "Not started" placeholder rendering as `Not s`
+  plus a stray mark, with no pad overlap in sight (ruling out #87's own fix, which was specifically
+  about vertical clipping under the scoring pad); (2) the same glitch, this time triggered
+  specifically by **Undo** — undoing the current over's only ball, reverting it from 1 ball back to
+  0. Confirmed via a `react-test-renderer` probe (render, then `.update()` to simulate the exact
+  undo transition) that OversStrip's actual React element tree comes out **completely correct** on
+  both transitions — ruling out a data/reconciliation bug and re-confirming this is a browser paint
+  bug, just not the one #87 fixed. Landed two follow-up mitigations, both **still unconfirmed** on a
+  real device: **PR #93** forces a layout flush (reads `offsetHeight`) right after OversStrip's
+  programmatic `scrollLeft` jump and promotes the scroller to its own compositing layer
+  (`translateZ(0)`) — targets the "fresh over inserted + scroll jumps in the same tick" case. **PR
+  #94** promotes each individual over's own container to its own compositing layer too — targets the
+  Undo case, where the scroll position never moves at all, just the current over's content swaps in
+  place, so #93's scroller-level fix never had anything to invalidate against. Both are inert
+  rendering hints (zero behavioral effect either way) since neither could be reproduced in this
+  sandbox (no network access to the CDN scripts this app loads at runtime).
+- **PR #89 + #90** — the "New Cup" wizard's group-stage preview read `"2 groups, top 1 from each →
+  2 qualifiers → Final."` when the advancing team count already equalled the first knockout stage's
+  size (e.g. a straight Final) — implying a nonexistent extra qualifying round. Reworded to name the
+  team count inline instead: `"... advance (2 teams) → Final."` Needed two PRs because the identical
+  string appeared on **two separate pages** of the wizard (the group-setup step, then the final
+  Review step) — #89 only caught the first; the user immediately reported the second was still
+  showing it, and #90 caught the one #89 missed.
+- **PR #91** — the "Cups" screen's club/federation filter chips rendered unconditionally, so they
+  stayed visible and tappable through every step of the New Cup wizard sitting right above the
+  wizard card, but nothing in the wizard reacts to them once creation has started — tapping one just
+  re-highlighted it with no visible effect. Now hidden for the duration of creation (`!creating`).
+- **PR #92** — the New Match wizard's collapsed "MATCH RULES" quick-glance card (Step 2) said
+  `"Wd/Nb counts as ball"` with no
+  mention of the final-over house-rule flip, even when the active tournament had one configured —
+  the Review page already avoided this ambiguity (see its own comment in `setupScreen.js`) but the
+  earlier quick-glance card never got the same fix. Extracted the shared label logic into
+  `wideNoballLastOverExceptionLabel` (`shareAndFormat.js`) and used it in both places.
+- **PR #95 — a real scoring bug:** Free Hit wasn't showing after a no-ball on any match with
+  `wideNoballCountsAsBall` also on (a common combination). `freeHitActive`'s "any counted ball
+  consumes the free hit" reset keyed off `legalBall` alone — but under that house rule a no-ball
+  *is* `legalBall`, so the very no-ball that had just granted the free hit a few lines earlier in
+  the same `applyBall` call immediately consumed it again, before the next delivery ever got a
+  chance to actually be the free hit. Scoped the reset to exclude wide/no-ball kinds (and wicket
+  events whose underlying ball was one) — a no-ball during a free hit grants another one under real
+  cricket law, it never consumes the one it just gave. Had zero test coverage before this; added
+  proper `freeHitActive` lifecycle tests to `scoringEngine.test.js`.
+- **PR #96** — the New Match setup screen's venue field was a plain text input with no address
+  search, unlike editing a fixture's venue elsewhere (which gets Nominatim search + a club-address
+  shortcut + verified coordinates for weather). Switched it to the same `VenueEditModal` pattern,
+  and threads `venueLat`/`venueLng` through into the created match object for the first time.
+- **PR #97 — another real bug:** starting *any* match unconditionally remembered its rules as this
+  device's own default for the next New Match setup screen (`handleSaveRules` in `startNewMatch`)
+  — including a tournament's own rules. Score one tournament fixture with Free Hit/custom
+  wide-runs/whatever, and the very next standalone "New Match" from Home silently inherited those
+  instead of `DEFAULT_RULES`. A tournament's `defaultRules` are meant to flow *into* its own
+  matches, never back *out* into becoming everyone's new device default — gated the save on
+  `!setup.tournamentId`.
+
+**"Stuck on Impact Player screen" report — closed, confirmed UX confusion, not a bug.** The user
+confirmed the actual cause: "Confirm substitution" and "Start 2nd Innings" appearing together on
+the same screen read as if the substitution button itself should advance the innings, when
+"Start 2nd Innings" is the separate button below it. Matches the leading theory from the original
+2026-09-02 investigation exactly. No code change — nothing to fix here.
+
 **Open items handed off, unresolved as of 2026-09-02:**
-- **30-minute escalating time-penalty rule** — still open from the
-  2026-09-01 entry above; not touched this session. Distinct from the
-  (already-shipped) plain "time cap per innings" flag. The only real open
-  item left as of this handoff.
-- **"Stuck on Impact Player screen" report** — still unreproduced as of the
-  2026-09-02 entry above; needs a real repro before assuming it's resolved.
-- ~~Mystery apostrophe in the "This Over" ball strip~~ — **fixed in PR #87
-  above**, with a confirmed root cause and measured before/after evidence
-  (not just a guess this time). Ask the user to confirm it's actually gone
-  on their device before fully closing this out — a real repro was never
-  obtained from the reporting device itself, only reconstructed in a
-  browser from the same match configuration (Big Hit + Maximum Hit rules).
-  If it recurs, it's a different bug from the one just fixed.
-- Co-owner invites and the second-innings stale-commentary bug (both
-  earlier in this same continued session) are **done**, not open — noting
-  them here only because they were open questions in earlier handoffs.
+- **30-minute escalating time-penalty rule** — still open from the 2026-09-01 entry above; not
+  touched in any session since. Distinct from the (already-shipped) plain "time cap per innings"
+  flag. The only real *unstarted* work left as of this handoff.
+- **"This Over" stale-paint glitch (PRs #93, #94)** — needs confirmation on a real iPhone/Safari
+  device, specifically after an Undo. Both fixes are informed guesses about a WebKit rendering bug
+  that couldn't be reproduced in this sandboxed environment (no network access to the CDN scripts
+  the app loads at runtime) — genuinely unknown whether either one actually resolves it. If it
+  recurs after both are live, the "stale paint" theory itself may be wrong and this needs a fresh
+  look, ideally with a screen recording rather than a static screenshot (to see whether it clears on
+  its own or stays stuck, which is what ruled out the earlier text-selection-handle theory).
+- ~~"Stuck on Impact Player screen"~~ — **closed above**, confirmed UX confusion.
+- ~~Mystery apostrophe in the "This Over" ball strip (original PR #87 report)~~ — superseded by the
+  entry above; PR #87's own fix (pad-overlap clipping) is confirmed correct for what it targeted,
+  it just wasn't the only cause of this family of glitch.
 
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the
