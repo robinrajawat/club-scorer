@@ -238,6 +238,7 @@ export function CricketScorer() {
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
+  const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -595,6 +596,25 @@ export function CricketScorer() {
     refreshMyFederationRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  async function refreshMyCoOwnerInvites() {
+    const rows = await loadMyCoOwnerInvites(myOwnedClubIds, myOwnedFederationIds);
+    setMyCoOwnerInvites(rows);
+  }
+  // Same trigger condition as the federationRequests effect above (the owner/co-owner set changing,
+  // or signing in) -- feeds the Inbox screen's co-owner-invites section and the other half of its
+  // badge count, alongside federationRequestsNeedingAction below.
+  useEffect(() => {
+    // Unlike the federationRequests effect above, this isn't gated on owning/co-owning anything —
+    // an invite addressed to my own email is loaded regardless (loadMyCoOwnerInvites's recipient
+    // query only needs me to be signed in), since anyone can be invited to co-own something they
+    // don't otherwise administer yet.
+    if (!user) {
+      setMyCoOwnerInvites([]);
+      return;
+    }
+    refreshMyCoOwnerInvites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -609,6 +629,11 @@ export function CricketScorer() {
     }
     return false;
   });
+  // A co-owner invite "needs my attention" only on the recipient side -- a still-pending invite
+  // addressed to my own signed-in email. An outgoing one I sent needs no action from me until
+  // someone else responds, same asymmetry as federationRequestsNeedingAction above.
+  const myEmailLower = (user && user.email || "").toLowerCase();
+  const coOwnerInvitesNeedingAction = myCoOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
   async function refreshPendingPollItems() {
     const items = await loadPendingPollItems(clubs, clubTeamsById);
     setPendingPollItems(items);
@@ -1427,15 +1452,56 @@ export function CricketScorer() {
     }
     return result;
   }
-  async function handleInviteClubCoOwner(clubId, email) {
-    const result = await inviteClubCoOwnerByEmail(clubId, email);
+  // Unified co-owner invite for both clubs and federations -- see inviteCoOwner in index.html.
+  // Appends the new invite locally so it shows up in the sender's own "pending co-owner invites"
+  // list immediately, without waiting on the next refreshMyCoOwnerInvites().
+  async function handleInviteCoOwner(scope, entityId, email) {
+    const result = await inviteCoOwner(scope, entityId, email);
     if (result.ok) {
-      mirrorPendingInvite(setClubs, clubId, result.code, {
-        email: email.trim().toLowerCase(),
-        role: "coOwner",
-        createdAt: result.createdAt,
-        expiresAt: result.expiresAt
-      });
+      setMyCoOwnerInvites(prev => [...prev, result.invite]);
+    }
+    return result;
+  }
+  // Recipient accepting/declining a co-owner invite -- see respondCoOwnerInvite in index.html. On
+  // accept, mirrors the resulting coOwnerUids (and, for a club, memberUids) grant onto local
+  // clubs/federationsById state so it shows up without waiting for a full refresh.
+  async function handleRespondCoOwnerInvite(inviteId, accept) {
+    const result = await respondCoOwnerInvite(inviteId, accept);
+    if (result.ok) {
+      if (accept && result.scope === "club") {
+        setClubs(cs => cs.map(c => c.id === result.entityId ? {
+          ...c,
+          memberUids: [...new Set([...(c.memberUids || []), user.uid])],
+          coOwnerUids: [...new Set([...(c.coOwnerUids || []), user.uid])],
+          memberNames: { ...(c.memberNames || {}),
+            [user.uid]: user.displayName || user.email || "Member"
+          }
+        } : c));
+      } else if (accept && result.scope === "federation") {
+        setFederationsById(prev => {
+          const fed = prev[result.entityId];
+          if (!fed) return prev;
+          return { ...prev,
+            [result.entityId]: { ...fed,
+              coOwnerUids: [...new Set([...(fed.coOwnerUids || []), user.uid])]
+            }
+          };
+        });
+      }
+      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
+        ...inv,
+        status: accept ? "accepted" : "declined"
+      } : inv));
+    }
+    return result;
+  }
+  async function handleCancelCoOwnerInvite(inviteId) {
+    const result = await cancelCoOwnerInvite(inviteId);
+    if (result.ok) {
+      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
+        ...inv,
+        status: "cancelled"
+      } : inv));
     }
     return result;
   }
@@ -1776,17 +1842,6 @@ export function CricketScorer() {
     }
     return result;
   }
-  async function handleInviteFederationCoOwner(federationId, email) {
-    const result = await inviteFederationCoOwnerByEmail(federationId, email);
-    if (result.ok) {
-      mirrorPendingInvite(setFederationsById, federationId, result.code, {
-        kind: "coOwner",
-        email: email.trim().toLowerCase(),
-        createdAt: result.createdAt
-      });
-    }
-    return result;
-  }
   async function handleRevokeFederationInvite(federationId, code, kind) {
     const result = await revokeFederationInvite(federationId, code, kind);
     if (result.ok) {
@@ -1871,7 +1926,7 @@ export function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules) {
     const t = {
       id: uid(),
       name,
@@ -1880,12 +1935,6 @@ export function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
-      // Bundled as one optional object rather than three more positional params -- fixtureRow.js
-      // already falls back to `fixture.venue || tournament.venue` for any fixture without its own,
-      // this is just the first place that can actually set it.
-      venue: venueInfo ? venueInfo.venue : null,
-      venueLat: venueInfo ? venueInfo.venueLat : null,
-      venueLng: venueInfo ? venueInfo.venueLng : null,
       createdAt: Date.now()
     };
     if (activeTournamentFederationId) {
@@ -2307,7 +2356,7 @@ export function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: federationRequestsNeedingAction.length + pendingPollItems.length,
+    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -2408,7 +2457,9 @@ export function CricketScorer() {
     onCreateClub: handleCreateClub,
     onJoinClub: handleJoinClub,
     onInviteClubMember: handleInviteClubMember,
-    onInviteClubCoOwner: handleInviteClubCoOwner,
+    onInviteClubCoOwner: (clubId, email) => handleInviteCoOwner("club", clubId, email),
+    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    coOwnerInvites: myCoOwnerInvites,
     onRevokeClubInvite: handleRevokeClubInvite,
     onLeaveClub: handleLeaveClub,
     onDeleteClub: handleDeleteClub,
@@ -2436,7 +2487,7 @@ export function CricketScorer() {
     onLoadFederationMembers: loadFederationMembers,
     federationRequests: myFederationRequests,
     onCancelFederationRequest: handleCancelFederationRequest,
-    onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
+    onInviteFederationCoOwnerByEmail: (federationId, email) => handleInviteCoOwner("federation", federationId, email),
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
@@ -2599,9 +2650,13 @@ export function CricketScorer() {
     clubs: clubs,
     federationsById: federationsById,
     currentUid: user && user.uid,
+    currentEmail: user && user.email,
     onRespond: handleRespondFederationRequest,
     onCancel: handleCancelFederationRequest,
     onCompleteJoin: handleCompleteAcceptedFederationRequest,
+    coOwnerInvites: myCoOwnerInvites,
+    onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
+    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")

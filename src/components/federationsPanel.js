@@ -31,6 +31,8 @@ export function FederationsPanel({
   onRenameFederation,
   onUpdateFederationDescription,
   onInviteFederationCoOwnerByEmail,
+  coOwnerInvites = [],
+  onCancelCoOwnerInvite,
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onDeleteFederation,
@@ -75,6 +77,15 @@ export function FederationsPanel({
   const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
   const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
   const [confirmCancelInvite, setConfirmCancelInvite] = useState(null); // { requestId, clubName } | null
+  const [cancelCoOwnerInviteBusyId, setCancelCoOwnerInviteBusyId] = useState(null);
+  function pendingCoOwnerInvitesFor(f) {
+    return coOwnerInvites.filter(inv => inv.scope === "federation" && inv.entityId === f.id && inv.status === "pending");
+  }
+  async function handleCancelCoOwnerInviteClick(inviteId) {
+    setCancelCoOwnerInviteBusyId(inviteId);
+    await onCancelCoOwnerInvite(inviteId);
+    setCancelCoOwnerInviteBusyId(null);
+  }
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
@@ -228,13 +239,12 @@ export function FederationsPanel({
     const result = await onInviteFederationCoOwnerByEmail(federationId, emailInviteText.trim());
     setEmailInviteBusy(false);
     if (!result.ok) {
-      setEmailInviteError(result.error || "Couldn't create that invite.");
+      setEmailInviteError(result.error || "Couldn't send that invite.");
       return;
     }
     setEmailInviteResult({
       kind: emailInviteKind,
-      email: emailInviteText.trim(),
-      code: result.code
+      email: emailInviteText.trim()
     });
   }
   function requestRemoveCoOwner(federationId, uid) {
@@ -863,14 +873,11 @@ export function FederationsPanel({
       marginTop: 6,
       lineHeight: 1.5
     }
-  }, "Send this code to ", emailInviteResult.email, " \u2014 it only works while they're signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+  }, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
     style: {
-      fontFamily: "'IBM Plex Mono'",
-      fontWeight: 700,
-      color: COLORS.pitch,
-      letterSpacing: 0.5
+      color: COLORS.ink
     }
-  }, emailInviteResult.code))) : /*#__PURE__*/React.createElement("button", {
+  }, emailInviteResult.email), " \u2014 they'll see it in their Inbox next time they sign in with that email.")) : /*#__PURE__*/React.createElement("button", {
     onClick: () => setFindClubOpen(true),
     className: "cs-btn",
     style: {
@@ -944,7 +951,58 @@ export function FederationsPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending co-owner invites"), pendingCoOwnerInvitesFor(f).map(inv => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, inv.email), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwnerInviteClick(inv.id),
+    disabled: cancelCoOwnerInviteBusyId === inv.id,
+    "aria-label": `Cancel invite to ${inv.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, cancelCoOwnerInviteBusyId === inv.id ? "\u2026" : "Cancel")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14,
       padding: 12,

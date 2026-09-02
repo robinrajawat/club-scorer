@@ -12482,6 +12482,8 @@ function ClubPanel({
   onJoin,
   onInvite,
   onInviteCoOwner,
+  coOwnerInvites = [],
+  onCancelCoOwnerInvite,
   onLeave,
   onDelete,
   onRename,
@@ -12518,8 +12520,9 @@ function ClubPanel({
   const [copied, setCopied] = useState(false);
   const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
   const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
-  const [coOwnerInviteCode, setCoOwnerInviteCode] = useState(null);
+  const [coOwnerInviteSent, setCoOwnerInviteSent] = useState(null); // email just invited, once sent
   const [coOwnerInviteBusy, setCoOwnerInviteBusy] = useState(false);
+  const [cancelCoOwnerInviteBusyId, setCancelCoOwnerInviteBusyId] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
@@ -12593,6 +12596,7 @@ function ClubPanel({
   const [manageOpen, setManageOpen] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
+  const pendingCoOwnerInvites = activeClub ? coOwnerInvites.filter(inv => inv.scope === "club" && inv.entityId === activeClub.id && inv.status === "pending") : [];
   // Same " · Owner" / " · Co-owner" / "" convention as FederationsPanel's roleLabel(f) just below
   // in this same screen — matching it exactly rather than inventing a parallel one, including
   // showing nothing at all for a plain member (the common case), not a "Member" badge.
@@ -12644,10 +12648,15 @@ function ClubPanel({
     const result = await onInviteCoOwner(activeClub.id, coOwnerInviteEmail.trim());
     setCoOwnerInviteBusy(false);
     if (!result.ok) {
-      setError(result.error || "Couldn't create that invite.");
+      setError(result.error || "Couldn't send that invite.");
       return;
     }
-    setCoOwnerInviteCode(result.code);
+    setCoOwnerInviteSent(coOwnerInviteEmail.trim());
+  }
+  async function handleCancelCoOwnerInviteClick(inviteId) {
+    setCancelCoOwnerInviteBusyId(inviteId);
+    await onCancelCoOwnerInvite(inviteId);
+    setCancelCoOwnerInviteBusyId(null);
   }
   function requestRemoveMember(uid, name) {
     setConfirmRemoveMember({
@@ -12714,7 +12723,7 @@ function ClubPanel({
     setInviteOpen(false);
     setInviteCode(null);
     setCoOwnerInviteOpen(false);
-    setCoOwnerInviteCode(null);
+    setCoOwnerInviteSent(null);
     setError("");
     setRenaming(false);
     setDescEditing(false);
@@ -13658,21 +13667,18 @@ function ClubPanel({
     paddingTop: 10,
     borderTop: `1px dashed ${COLORS.willow}`
   }
-}, coOwnerInviteCode ? /*#__PURE__*/React.createElement("div", {
+}, coOwnerInviteSent ? /*#__PURE__*/React.createElement("div", {
   style: {
     fontSize: 11.5,
     color: COLORS.inkSoft,
     fontFamily: "'Inter'",
     lineHeight: 1.5
   }
-}, "Share this code with ", coOwnerInviteEmail, " \u2014 it only works when they redeem it while signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+}, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
   style: {
-    fontFamily: "'IBM Plex Mono'",
-    fontWeight: 700,
-    color: COLORS.pitch,
-    letterSpacing: 0.5
+    color: COLORS.ink
   }
-}, coOwnerInviteCode)) : coOwnerInviteOpen ? /*#__PURE__*/React.createElement("div", {
+}, coOwnerInviteSent), " \u2014 they'll see it in their Inbox next time they sign in with that email.") : coOwnerInviteOpen ? /*#__PURE__*/React.createElement("div", {
   style: {
     display: "flex",
     gap: 6,
@@ -13711,7 +13717,7 @@ function ClubPanel({
   onClick: () => {
     setCoOwnerInviteOpen(true);
     setCoOwnerInviteEmail("");
-    setCoOwnerInviteCode(null);
+    setCoOwnerInviteSent(null);
   },
   className: "cs-btn",
   style: {
@@ -13794,7 +13800,58 @@ function ClubPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), activeIsOwner && manageOpen && pendingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending co-owner invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, inv.email), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwnerInviteClick(inv.id),
+    disabled: cancelCoOwnerInviteBusyId === inv.id,
+    "aria-label": `Cancel invite to ${inv.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, cancelCoOwnerInviteBusyId === inv.id ? "\u2026" : "Cancel")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,
@@ -13986,6 +14043,8 @@ function FederationsPanel({
   onRenameFederation,
   onUpdateFederationDescription,
   onInviteFederationCoOwnerByEmail,
+  coOwnerInvites = [],
+  onCancelCoOwnerInvite,
   onRemoveFederationCoOwner,
   onKickClubFromFederation,
   onDeleteFederation,
@@ -14030,6 +14089,15 @@ function FederationsPanel({
   const [confirmRemoveCoOwner, setConfirmRemoveCoOwner] = useState(null); // { federationId, uid } | null
   const [coOwnerBusyUid, setCoOwnerBusyUid] = useState(null);
   const [confirmCancelInvite, setConfirmCancelInvite] = useState(null); // { requestId, clubName } | null
+  const [cancelCoOwnerInviteBusyId, setCancelCoOwnerInviteBusyId] = useState(null);
+  function pendingCoOwnerInvitesFor(f) {
+    return coOwnerInvites.filter(inv => inv.scope === "federation" && inv.entityId === f.id && inv.status === "pending");
+  }
+  async function handleCancelCoOwnerInviteClick(inviteId) {
+    setCancelCoOwnerInviteBusyId(inviteId);
+    await onCancelCoOwnerInvite(inviteId);
+    setCancelCoOwnerInviteBusyId(null);
+  }
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
@@ -14183,13 +14251,12 @@ function FederationsPanel({
     const result = await onInviteFederationCoOwnerByEmail(federationId, emailInviteText.trim());
     setEmailInviteBusy(false);
     if (!result.ok) {
-      setEmailInviteError(result.error || "Couldn't create that invite.");
+      setEmailInviteError(result.error || "Couldn't send that invite.");
       return;
     }
     setEmailInviteResult({
       kind: emailInviteKind,
-      email: emailInviteText.trim(),
-      code: result.code
+      email: emailInviteText.trim()
     });
   }
   function requestRemoveCoOwner(federationId, uid) {
@@ -14818,14 +14885,11 @@ function FederationsPanel({
       marginTop: 6,
       lineHeight: 1.5
     }
-  }, "Send this code to ", emailInviteResult.email, " \u2014 it only works while they're signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+  }, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
     style: {
-      fontFamily: "'IBM Plex Mono'",
-      fontWeight: 700,
-      color: COLORS.pitch,
-      letterSpacing: 0.5
+      color: COLORS.ink
     }
-  }, emailInviteResult.code))) : /*#__PURE__*/React.createElement("button", {
+  }, emailInviteResult.email), " \u2014 they'll see it in their Inbox next time they sign in with that email.")) : /*#__PURE__*/React.createElement("button", {
     onClick: () => setFindClubOpen(true),
     className: "cs-btn",
     style: {
@@ -14899,7 +14963,58 @@ function FederationsPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), isOwner(f) && pendingCoOwnerInvitesFor(f).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending co-owner invites"), pendingCoOwnerInvitesFor(f).map(inv => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, inv.email), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwnerInviteClick(inv.id),
+    disabled: cancelCoOwnerInviteBusyId === inv.id,
+    "aria-label": `Cancel invite to ${inv.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, cancelCoOwnerInviteBusyId === inv.id ? "\u2026" : "Cancel")))), isOwner(f) && (f.affiliatedClubIds || []).length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14,
       padding: 12,
@@ -15140,14 +15255,19 @@ function InboxScreen({
   clubs,
   federationsById,
   currentUid,
+  currentEmail,
   onRespond,
   onCancel,
   onCompleteJoin,
+  coOwnerInvites = [],
+  onRespondCoOwnerInvite,
+  onCancelCoOwnerInvite,
   pollItems = [],
   onPollsChanged,
   onBack
 }) {
   const [busyId, setBusyId] = useState(null);
+  const [coOwnerBusyId, setCoOwnerBusyId] = useState(null);
   const [error, setError] = useState("");
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
   function clubById(id) {
@@ -15174,6 +15294,28 @@ function InboxScreen({
   const incoming = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyFederation(r.federationId) || r.direction === "federation_to_club" && isMyClub(r.clubId)));
   const outgoing = requests.filter(r => r.status === "pending" && (r.direction === "club_to_federation" && isMyClub(r.clubId) || r.direction === "federation_to_club" && isMyFederation(r.federationId)));
   const needsFinalize = requests.filter(r => r.direction === "club_to_federation" && r.status === "accepted" && isMyClub(r.clubId));
+  const myEmailLower = (currentEmail || "").toLowerCase();
+  const incomingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
+  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.createdBy === currentUid);
+  function coOwnerInviteEntityName(inv) {
+    return inv.scope === "club" ? clubName(inv.entityId) : fedName(inv.entityId);
+  }
+  async function handleRespondCoOwner(inv, accept) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onRespondCoOwnerInvite(inv.id, accept);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't respond to that invite.");
+  }
+  async function handleCancelCoOwner(inv) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onCancelCoOwnerInvite(inv.id);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't cancel that invite.");
+  }
   async function handleRespond(r, accept) {
     if (busyId) return;
     setBusyId(r.id);
@@ -15227,7 +15369,7 @@ function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0;
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -15384,7 +15526,46 @@ function InboxScreen({
     style: {
       width: "100%"
     }
-  }, busyId === r.id ? "\u2026" : "Finish joining")))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, busyId === r.id ? "\u2026" : "Finish joining")))), incomingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Co-owner invites"), incomingCoOwnerInvites.map((inv, idx) => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => handleRespondCoOwner(inv, true),
+    disabled: coOwnerBusyId === inv.id,
+    style: {
+      flex: 1
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Accept"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleRespondCoOwner(inv, false),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      padding: "0 14px",
+      minHeight: 44,
+      borderRadius: 10,
+      border: `1.5px solid ${COLORS.willow}`,
+      background: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: "pointer"
+    }
+  }, "Decline"))))), incoming.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
   }, "Needs your response"), incoming.map((r, idx) => /*#__PURE__*/React.createElement("div", {
     key: r.id,
@@ -15448,7 +15629,32 @@ function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, busyId === r.id ? "\u2026" : "Cancel request")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, busyId === r.id ? "\u2026" : "Cancel request")))), outgoingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: sectionTitleStyle
+  }, "Co-owner invites sent"), outgoingCoOwnerInvites.map((inv, idx) => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: descStyle
+  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwner(inv),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,
@@ -26208,6 +26414,8 @@ function TeamsScreen({
   onJoinClub,
   onInviteClubMember,
   onInviteClubCoOwner,
+  coOwnerInvites,
+  onCancelCoOwnerInvite,
   onRevokeClubInvite,
   onLeaveClub,
   onDeleteClub,
@@ -26448,6 +26656,8 @@ function TeamsScreen({
     onJoin: onJoinClub,
     onInvite: onInviteClubMember,
     onInviteCoOwner: onInviteClubCoOwner,
+    coOwnerInvites: coOwnerInvites,
+    onCancelCoOwnerInvite: onCancelCoOwnerInvite,
     onLeave: onLeaveClub,
     onDelete: onDeleteClub,
     onRename: onRenameClub,
@@ -27005,6 +27215,8 @@ function TeamsScreen({
     onRenameFederation: onRenameFederation,
     onUpdateFederationDescription: onUpdateFederationDescription,
     onInviteFederationCoOwnerByEmail: onInviteFederationCoOwnerByEmail,
+    coOwnerInvites: coOwnerInvites,
+    onCancelCoOwnerInvite: onCancelCoOwnerInvite,
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
@@ -36445,6 +36657,7 @@ function CricketScorer() {
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
+  const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -36802,6 +37015,25 @@ function CricketScorer() {
     refreshMyFederationRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  async function refreshMyCoOwnerInvites() {
+    const rows = await loadMyCoOwnerInvites(myOwnedClubIds, myOwnedFederationIds);
+    setMyCoOwnerInvites(rows);
+  }
+  // Same trigger condition as the federationRequests effect above (the owner/co-owner set changing,
+  // or signing in) -- feeds the Inbox screen's co-owner-invites section and the other half of its
+  // badge count, alongside federationRequestsNeedingAction below.
+  useEffect(() => {
+    // Unlike the federationRequests effect above, this isn't gated on owning/co-owning anything —
+    // an invite addressed to my own email is loaded regardless (loadMyCoOwnerInvites's recipient
+    // query only needs me to be signed in), since anyone can be invited to co-own something they
+    // don't otherwise administer yet.
+    if (!user) {
+      setMyCoOwnerInvites([]);
+      return;
+    }
+    refreshMyCoOwnerInvites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -36816,6 +37048,11 @@ function CricketScorer() {
     }
     return false;
   });
+  // A co-owner invite "needs my attention" only on the recipient side -- a still-pending invite
+  // addressed to my own signed-in email. An outgoing one I sent needs no action from me until
+  // someone else responds, same asymmetry as federationRequestsNeedingAction above.
+  const myEmailLower = (user && user.email || "").toLowerCase();
+  const coOwnerInvitesNeedingAction = myCoOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
   async function refreshPendingPollItems() {
     const items = await loadPendingPollItems(clubs, clubTeamsById);
     setPendingPollItems(items);
@@ -37634,15 +37871,56 @@ function CricketScorer() {
     }
     return result;
   }
-  async function handleInviteClubCoOwner(clubId, email) {
-    const result = await inviteClubCoOwnerByEmail(clubId, email);
+  // Unified co-owner invite for both clubs and federations -- see inviteCoOwner in index.html.
+  // Appends the new invite locally so it shows up in the sender's own "pending co-owner invites"
+  // list immediately, without waiting on the next refreshMyCoOwnerInvites().
+  async function handleInviteCoOwner(scope, entityId, email) {
+    const result = await inviteCoOwner(scope, entityId, email);
     if (result.ok) {
-      mirrorPendingInvite(setClubs, clubId, result.code, {
-        email: email.trim().toLowerCase(),
-        role: "coOwner",
-        createdAt: result.createdAt,
-        expiresAt: result.expiresAt
-      });
+      setMyCoOwnerInvites(prev => [...prev, result.invite]);
+    }
+    return result;
+  }
+  // Recipient accepting/declining a co-owner invite -- see respondCoOwnerInvite in index.html. On
+  // accept, mirrors the resulting coOwnerUids (and, for a club, memberUids) grant onto local
+  // clubs/federationsById state so it shows up without waiting for a full refresh.
+  async function handleRespondCoOwnerInvite(inviteId, accept) {
+    const result = await respondCoOwnerInvite(inviteId, accept);
+    if (result.ok) {
+      if (accept && result.scope === "club") {
+        setClubs(cs => cs.map(c => c.id === result.entityId ? {
+          ...c,
+          memberUids: [...new Set([...(c.memberUids || []), user.uid])],
+          coOwnerUids: [...new Set([...(c.coOwnerUids || []), user.uid])],
+          memberNames: { ...(c.memberNames || {}),
+            [user.uid]: user.displayName || user.email || "Member"
+          }
+        } : c));
+      } else if (accept && result.scope === "federation") {
+        setFederationsById(prev => {
+          const fed = prev[result.entityId];
+          if (!fed) return prev;
+          return { ...prev,
+            [result.entityId]: { ...fed,
+              coOwnerUids: [...new Set([...(fed.coOwnerUids || []), user.uid])]
+            }
+          };
+        });
+      }
+      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
+        ...inv,
+        status: accept ? "accepted" : "declined"
+      } : inv));
+    }
+    return result;
+  }
+  async function handleCancelCoOwnerInvite(inviteId) {
+    const result = await cancelCoOwnerInvite(inviteId);
+    if (result.ok) {
+      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
+        ...inv,
+        status: "cancelled"
+      } : inv));
     }
     return result;
   }
@@ -37983,17 +38261,6 @@ function CricketScorer() {
     }
     return result;
   }
-  async function handleInviteFederationCoOwner(federationId, email) {
-    const result = await inviteFederationCoOwnerByEmail(federationId, email);
-    if (result.ok) {
-      mirrorPendingInvite(setFederationsById, federationId, result.code, {
-        kind: "coOwner",
-        email: email.trim().toLowerCase(),
-        createdAt: result.createdAt
-      });
-    }
-    return result;
-  }
   async function handleRevokeFederationInvite(federationId, code, kind) {
     const result = await revokeFederationInvite(federationId, code, kind);
     if (result.ok) {
@@ -38078,7 +38345,7 @@ function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules) {
     const t = {
       id: uid(),
       name,
@@ -38087,12 +38354,6 @@ function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
-      // Bundled as one optional object rather than three more positional params -- fixtureRow.js
-      // already falls back to `fixture.venue || tournament.venue` for any fixture without its own,
-      // this is just the first place that can actually set it.
-      venue: venueInfo ? venueInfo.venue : null,
-      venueLat: venueInfo ? venueInfo.venueLat : null,
-      venueLng: venueInfo ? venueInfo.venueLng : null,
       createdAt: Date.now()
     };
     if (activeTournamentFederationId) {
@@ -38514,7 +38775,7 @@ function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: federationRequestsNeedingAction.length + pendingPollItems.length,
+    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -38615,7 +38876,9 @@ function CricketScorer() {
     onCreateClub: handleCreateClub,
     onJoinClub: handleJoinClub,
     onInviteClubMember: handleInviteClubMember,
-    onInviteClubCoOwner: handleInviteClubCoOwner,
+    onInviteClubCoOwner: (clubId, email) => handleInviteCoOwner("club", clubId, email),
+    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    coOwnerInvites: myCoOwnerInvites,
     onRevokeClubInvite: handleRevokeClubInvite,
     onLeaveClub: handleLeaveClub,
     onDeleteClub: handleDeleteClub,
@@ -38643,7 +38906,7 @@ function CricketScorer() {
     onLoadFederationMembers: loadFederationMembers,
     federationRequests: myFederationRequests,
     onCancelFederationRequest: handleCancelFederationRequest,
-    onInviteFederationCoOwnerByEmail: handleInviteFederationCoOwner,
+    onInviteFederationCoOwnerByEmail: (federationId, email) => handleInviteCoOwner("federation", federationId, email),
     onRevokeFederationInvite: handleRevokeFederationInvite,
     onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
     onRedeemFederationCoOwnerInvite: handleRedeemFederationCoOwnerInvite,
@@ -38806,9 +39069,13 @@ function CricketScorer() {
     clubs: clubs,
     federationsById: federationsById,
     currentUid: user && user.uid,
+    currentEmail: user && user.email,
     onRespond: handleRespondFederationRequest,
     onCancel: handleCancelFederationRequest,
     onCompleteJoin: handleCompleteAcceptedFederationRequest,
+    coOwnerInvites: myCoOwnerInvites,
+    onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
+    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")

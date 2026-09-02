@@ -24,6 +24,8 @@ export function ClubPanel({
   onJoin,
   onInvite,
   onInviteCoOwner,
+  coOwnerInvites = [],
+  onCancelCoOwnerInvite,
   onLeave,
   onDelete,
   onRename,
@@ -60,8 +62,9 @@ export function ClubPanel({
   const [copied, setCopied] = useState(false);
   const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
   const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
-  const [coOwnerInviteCode, setCoOwnerInviteCode] = useState(null);
+  const [coOwnerInviteSent, setCoOwnerInviteSent] = useState(null); // email just invited, once sent
   const [coOwnerInviteBusy, setCoOwnerInviteBusy] = useState(false);
+  const [cancelCoOwnerInviteBusyId, setCancelCoOwnerInviteBusyId] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
@@ -135,6 +138,7 @@ export function ClubPanel({
   const [manageOpen, setManageOpen] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
+  const pendingCoOwnerInvites = activeClub ? coOwnerInvites.filter(inv => inv.scope === "club" && inv.entityId === activeClub.id && inv.status === "pending") : [];
   // Same " · Owner" / " · Co-owner" / "" convention as FederationsPanel's roleLabel(f) just below
   // in this same screen — matching it exactly rather than inventing a parallel one, including
   // showing nothing at all for a plain member (the common case), not a "Member" badge.
@@ -186,10 +190,15 @@ export function ClubPanel({
     const result = await onInviteCoOwner(activeClub.id, coOwnerInviteEmail.trim());
     setCoOwnerInviteBusy(false);
     if (!result.ok) {
-      setError(result.error || "Couldn't create that invite.");
+      setError(result.error || "Couldn't send that invite.");
       return;
     }
-    setCoOwnerInviteCode(result.code);
+    setCoOwnerInviteSent(coOwnerInviteEmail.trim());
+  }
+  async function handleCancelCoOwnerInviteClick(inviteId) {
+    setCancelCoOwnerInviteBusyId(inviteId);
+    await onCancelCoOwnerInvite(inviteId);
+    setCancelCoOwnerInviteBusyId(null);
   }
   function requestRemoveMember(uid, name) {
     setConfirmRemoveMember({
@@ -256,7 +265,7 @@ export function ClubPanel({
     setInviteOpen(false);
     setInviteCode(null);
     setCoOwnerInviteOpen(false);
-    setCoOwnerInviteCode(null);
+    setCoOwnerInviteSent(null);
     setError("");
     setRenaming(false);
     setDescEditing(false);
@@ -1200,21 +1209,18 @@ export function ClubPanel({
     paddingTop: 10,
     borderTop: `1px dashed ${COLORS.willow}`
   }
-}, coOwnerInviteCode ? /*#__PURE__*/React.createElement("div", {
+}, coOwnerInviteSent ? /*#__PURE__*/React.createElement("div", {
   style: {
     fontSize: 11.5,
     color: COLORS.inkSoft,
     fontFamily: "'Inter'",
     lineHeight: 1.5
   }
-}, "Share this code with ", coOwnerInviteEmail, " \u2014 it only works when they redeem it while signed in with that exact email: ", /*#__PURE__*/React.createElement("span", {
+}, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
   style: {
-    fontFamily: "'IBM Plex Mono'",
-    fontWeight: 700,
-    color: COLORS.pitch,
-    letterSpacing: 0.5
+    color: COLORS.ink
   }
-}, coOwnerInviteCode)) : coOwnerInviteOpen ? /*#__PURE__*/React.createElement("div", {
+}, coOwnerInviteSent), " \u2014 they'll see it in their Inbox next time they sign in with that email.") : coOwnerInviteOpen ? /*#__PURE__*/React.createElement("div", {
   style: {
     display: "flex",
     gap: 6,
@@ -1253,7 +1259,7 @@ export function ClubPanel({
   onClick: () => {
     setCoOwnerInviteOpen(true);
     setCoOwnerInviteEmail("");
-    setCoOwnerInviteCode(null);
+    setCoOwnerInviteSent(null);
   },
   className: "cs-btn",
   style: {
@@ -1336,7 +1342,58 @@ export function ClubPanel({
       flexShrink: 0,
       textDecoration: "underline"
     }
-  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), /*#__PURE__*/React.createElement("div", {
+  }, revokeBusyCode === code ? "\u2026" : "Revoke")))), activeIsOwner && manageOpen && pendingCoOwnerInvites.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 12,
+      background: `color-mix(in srgb, ${COLORS.surface} 60%, transparent)`,
+      border: `1px solid ${COLORS.willow}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Pending co-owner invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
+    key: inv.id,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "4px 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 12,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, inv.email), /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleCancelCoOwnerInviteClick(inv.id),
+    disabled: cancelCoOwnerInviteBusyId === inv.id,
+    "aria-label": `Cancel invite to ${inv.email}`,
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11,
+      cursor: "pointer",
+      padding: "3px 4px",
+      flexShrink: 0,
+      textDecoration: "underline"
+    }
+  }, cancelCoOwnerInviteBusyId === inv.id ? "\u2026" : "Cancel")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       paddingTop: 10,

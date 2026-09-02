@@ -306,6 +306,32 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberNames']) &&
           request.resource.data.memberNames.diff(resource.data.get('memberNames', {})).affectedKeys().hasOnly([request.auth.uid])
         )
+        ||
+        // (F) Self-redeeming a PENDING /coOwnerInvites doc addressed to MY signed-in email — the
+        // unified co-owner-invite flow (see inviteCoOwner/respondCoOwnerInvite in index.html and
+        // the /coOwnerInvites rules below; replaces minting new coOwner-role /clubJoinCodes, though
+        // any already issued before this shipped still redeem via branch (B) until they're used or
+        // expire). Adds me to BOTH memberUids and coOwnerUids in one write — co-owner implies
+        // membership, so coOwnerUids alone would leave me unable to even read the club (see the
+        // read rule above) — while the actual /coOwnerInvites doc itself is flipped to "accepted"
+        // by a SEPARATE write to that collection, governed by its own rules, not this one. Doesn't
+        // re-check the invite's status here (unlike branch (B)'s code check) because the client
+        // deliberately does this club write BEFORE that one, precisely so this get() still sees
+        // the invite as it was minted — checking scope/entityId/email/expiry here is enough, since
+        // reusing an already-accepted invite can only ever re-grant access to the same one email
+        // it was already addressed to, never escalate to anyone else.
+        (
+          !(request.auth.uid in resource.data.memberUids) &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.name == resource.data.name &&
+          'coOwnerInviteAccepted' in request.resource.data &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'club' &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == clubId &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time &&
+          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
+          request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid])
+        )
       );
 
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
@@ -538,6 +564,22 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['affiliatedClubIds']) &&
           canSyncFederationClubLeave(resource.data.get('affiliatedClubIds', []), request.resource.data.affiliatedClubIds)
         )
+        ||
+        // (F) Self-redeeming a PENDING /coOwnerInvites doc (scope 'federation') addressed to MY
+        // signed-in email — the federation twin of the clubs/{clubId} branch (F) above; see its
+        // comment for the full reasoning (same "check the invite as minted, not as it stands now"
+        // ordering, same "replaces minting new invites, not existing ones" scope). A federation has
+        // no membership tier of its own, so this only ever touches coOwnerUids.
+        (
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid]) &&
+          'coOwnerInviteAccepted' in request.resource.data &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'federation' &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == federationId &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time
+        )
       );
 
       // A federation can be deleted once it's EMPTY — no club currently affiliated — by its
@@ -605,6 +647,59 @@ service cloud.firestore {
         && request.auth.uid == resource.data.createdBy;
 
       allow update: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // Unified co-owner invites, addressed to one email — replaces the co-owner-invite half of
+    // BOTH /clubJoinCodes (role: "coOwner") and /federationCoOwnerInviteCodes above with one
+    // collection covering both scopes. Unlike either bearer code, this is a real
+    // record-per-invite the recipient's OWN client can query by their own email
+    // (`where("email","==",myEmail)`), so it shows up in their Inbox on its own — no code to mint,
+    // copy, or send out-of-band. Exactly the same migration `federationJoinCodes ->
+    // federationRequests` already did for federation affiliation, applied to co-owner invites; see
+    // docs/co-owner-invites-plan.md for the full design and rollout sequencing. Plain club MEMBER
+    // invites are untouched — still /clubJoinCodes role:"member", no Inbox ask for those, narrower
+    // scope than this migration took on.
+    //
+    // Both old collections' rules stay alive above (unchanged) through a transition window: an
+    // invite minted before this shipped is still a live bearer code sitting in Firestore and has to
+    // keep working until it's redeemed, revoked, or expires. Only the MINTING call sites in
+    // index.html move to this collection — see inviteCoOwner there.
+    // ---------------------------------------------------------------------
+    function coOwnerInviteIsRecipient(data) {
+      return request.auth.token.email.lower() == data.email;
+    }
+    function coOwnerInviteIsSender(data) {
+      return data.scope == 'club'
+        ? isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data)
+        : isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data);
+    }
+    match /coOwnerInvites/{inviteId} {
+      // Same "list re-validates resource.data per returned doc" shape as /federationRequests'
+      // canSeeRequest above — lets the recipient query by their own email, and the sender query by
+      // entityId, without opening this up to a wholesale dump the way a bare `allow list: if true`
+      // would.
+      allow get, list: if request.auth != null
+        && (coOwnerInviteIsRecipient(resource.data) || coOwnerInviteIsSender(resource.data));
+
+      allow create: if request.auth != null
+        && request.resource.data.status == 'pending'
+        && request.resource.data.scope in ['club', 'federation']
+        && request.resource.data.entityId is string
+        && request.resource.data.email is string
+        && coOwnerInviteIsSender(request.resource.data);
+
+      // Recipient may only flip pending -> accepted/declined; sender may only flip pending ->
+      // cancelled. Either way, status (and respondedAt) is the only thing this write may change —
+      // the accept side-effect itself (joining coOwnerUids, and memberUids for a club) is a
+      // SEPARATE write to the club/federation doc, authorized by that doc's own rules (see branch
+      // (F) on both clubs/{clubId} and federations/{federationId} above), not this one.
+      allow update: if request.auth != null && resource.data.status == 'pending' && (
+        (coOwnerInviteIsRecipient(resource.data) && request.resource.data.status in ['accepted', 'declined'])
+        || (coOwnerInviteIsSender(resource.data) && request.resource.data.status == 'cancelled')
+      ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']);
+
+      allow delete: if false;
     }
 
     // A directory entry publishes one club's team name as visible to every OTHER club sharing
