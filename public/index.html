@@ -30104,7 +30104,8 @@ function TournamentPrintReport({
 function SyncStatusBanner({
   count,
   dark,
-  onSynced
+  onSynced,
+  onRetry
 }) {
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState(null);
@@ -30141,7 +30142,7 @@ function SyncStatusBanner({
     setLastError(null);
     const {
       lastError: error
-    } = await flushPendingWrites();
+    } = await (onRetry ? onRetry() : flushPendingWrites());
     // Without the onSynced() call, a tap that actually succeeds (clears the outbox) still leaves
     // the banner reading the old count — nothing refreshes it until the next 15s background poll
     // or an 'online' event, so a successful retry looks indistinguishable from tapping doing
@@ -32360,6 +32361,17 @@ function MatchScreen({
     })).then(applySaveResult);
     return saveQueueRef.current;
   }
+  // The SyncStatusBanner's manual "tap to retry" can't just fall back to flushPendingWrites here --
+  // that background flush deliberately SKIPS whatever match is currently open (see its own comment,
+  // added to fix the self-conflicting-save race) to avoid racing this screen's own queueSave chain.
+  // If this exact match is the one stuck in the outbox, flushPendingWrites would silently no-op on
+  // every tap forever. Retrying through queueSave keeps it on the same safe, serialized path as
+  // every other save from this screen, while flushPendingWrites still covers any OTHER queued match.
+  async function retrySync() {
+    const [own, others] = await Promise.all([queueSave(match), flushPendingWrites()]);
+    const error = !own.ok && !own.conflict ? own.error || "Couldn't reach the server." : others.lastError;
+    return { lastError: error || null };
+  }
   function resolveConflictKeepMine() {
     const forced = {
       ...match,
@@ -33293,7 +33305,8 @@ function MatchScreen({
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
     dark: true,
-    onSynced: onPendingSynced
+    onSynced: onPendingSynced,
+    onRetry: retrySync
   }), match.isSuperOver && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",

@@ -229,6 +229,17 @@ export function MatchScreen({
     })).then(applySaveResult);
     return saveQueueRef.current;
   }
+  // The SyncStatusBanner's manual "tap to retry" can't just fall back to flushPendingWrites here --
+  // that background flush deliberately SKIPS whatever match is currently open (see its own comment,
+  // added to fix the self-conflicting-save race) to avoid racing this screen's own queueSave chain.
+  // If this exact match is the one stuck in the outbox, flushPendingWrites would silently no-op on
+  // every tap forever. Retrying through queueSave keeps it on the same safe, serialized path as
+  // every other save from this screen, while flushPendingWrites still covers any OTHER queued match.
+  async function retrySync() {
+    const [own, others] = await Promise.all([queueSave(match), flushPendingWrites()]);
+    const error = !own.ok && !own.conflict ? own.error || "Couldn't reach the server." : others.lastError;
+    return { lastError: error || null };
+  }
   function resolveConflictKeepMine() {
     const forced = {
       ...match,
@@ -1162,7 +1173,8 @@ export function MatchScreen({
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
     dark: true,
-    onSynced: onPendingSynced
+    onSynced: onPendingSynced,
+    onRetry: retrySync
   }), match.isSuperOver && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",

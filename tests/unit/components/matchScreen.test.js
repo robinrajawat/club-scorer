@@ -17,6 +17,8 @@ import { MatchScreen } from "../../../src/components/matchScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { SyncConflictModal } from "../../../src/components/matchInsightCards.js";
+import { SyncStatusBanner } from "../../../src/components/scoreboardAtoms.js";
+import { JSDOM } from "jsdom";
 import { ResultScreen } from "../../../src/components/resultScreen.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "../../../src/components/inningsSetupScreens.js";
 import { newInning } from "../../../src/core/scoringEngine.js";
@@ -35,6 +37,7 @@ afterEach(() => {
   mountedInstances = [];
   delete globalThis.saveMatch;
   delete globalThis.Modal;
+  delete globalThis.flushPendingWrites;
 });
 
 function hasText(node, str) {
@@ -418,6 +421,41 @@ test("MatchScreen: a sync conflict from another device opens the resolution moda
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(ctx.inst.root.findAllByType(SyncConflictModal).length, 0);
+});
+
+test("MatchScreen: SyncStatusBanner's tap-to-retry actually saves THIS match, instead of silently no-op'ing via flushPendingWrites (real bug -- flushPendingWrites deliberately skips whatever match is open here)", async () => {
+  // SyncStatusBanner reads navigator.onLine and window's online/offline events (see
+  // scoreboardAtoms.test.js) -- this file otherwise has no DOM, so it needs a scoped-to-this-test
+  // jsdom install/teardown rather than the file-wide beforeEach/afterEach every other test here uses.
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://example.test/" });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true, writable: true });
+  let saveCalls = 0;
+  globalThis.saveMatch = () => { saveCalls++; return Promise.resolve({ ok: true, writeSeq: 2 }); };
+  let flushCalls = 0;
+  globalThis.flushPendingWrites = () => { flushCalls++; return Promise.resolve({ remaining: 0, lastError: null }); };
+  let inst;
+  act(() => {
+    inst = renderer.create(React.createElement(MatchScreen, {
+      match: baseMatch(), setMatch: () => {}, onExit: () => {}, pendingCount: 1, onPendingSynced: () => {}, tournament: null
+    }));
+  });
+  try {
+    const banner = inst.root.findByType(SyncStatusBanner);
+    const button = banner.findByType("button");
+    await act(async () => {
+      button.props.onClick();
+      await new Promise(r => setTimeout(r, 0));
+    });
+    assert.equal(saveCalls, 1);
+    assert.equal(flushCalls, 1);
+  } finally {
+    act(() => { inst.unmount(); });
+    delete globalThis.window;
+    delete globalThis.document;
+    delete globalThis.navigator;
+  }
 });
 
 test("MatchScreen: renders SuperOverOpenersSetup/SecondInningsSetup/ResultScreen for their respective match states", () => {
