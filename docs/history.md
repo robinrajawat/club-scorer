@@ -1312,3 +1312,181 @@ fixed (PR #69, merged), one left open pending a repro:**
   before touching any code here. If it recurs with a concrete repro, start
   from `inningsSetupScreens.js:239` (`SecondInningsSetup`) and `:168`
   (`ImpactPlayerCard`).
+
+**2026-09-02 session, continued — eight PRs (#74–#81), all merged.** A long
+run of feature requests and bug reports from live use, roughly in the order
+they landed:
+
+- **Big Hit / Maximum Hit (PR #74, extended in #75).** Two independent,
+  optional bonus-hit tiers (`bigHitRuns`/`maxHitRuns` on the inning) — a
+  club can attach either or both to whatever its own ground uses (a longer
+  boundary rope, an even bigger one). `handleRun`'s new `bigHitLabel`
+  parameter carries the tier's own configured name ("Big Hit"/"Maximum
+  Hit") straight through as `event.bigHit`, which `applyBall` treats as a
+  genuine six for every stat/milestone purpose (`isSix = event.bigHit ||
+  battedRuns === 6`) and which `BallCelebration` shows verbatim instead of
+  a generic "SIX!" — a bug fixed mid-session when it first shipped
+  celebrating as plain "SIX!" regardless of the tier's name. Also fixed: a
+  bonus hit's total can be odd (Maximum Hit at 15, say) and was wrongly
+  rotating strike like a genuine odd-run single — a boundary is a dead ball
+  the instant it lands, so `applyBall`'s strike-rotation check now
+  excludes any four/six/bonus-hit explicitly, not just by even/odd parity.
+- **Innings-break summary + team-name/score ambiguity (PR #75).**
+  `SecondInningsSetup` now shows a first-innings score + target summary
+  card at the top of both the Impact Player and lineups steps, so getting
+  the context doesn't require a click into the scorecard. Fixed alongside
+  it: a team named e.g. "Billund 1" next to a score like "193/1" rendered
+  as "Billund 1 193/1", readable as "1193/1" — separator changed from a
+  bare space to `": "`.
+- **Declare Timed Out confirmation (PR #75).** Genuinely destructive (an
+  irreversible-feeling dismissal with no ball bowled) and had no
+  confirmation step at all before this — now behind a `ConfirmModal`, with
+  an "Reverted" undo-feedback toast so cancelling out via Undo afterward is
+  visibly acknowledged.
+- **Self-conflicting sync race (PR #77) — the first of three sync bugs
+  found this session, each a real root cause chased down from a vague
+  "scores don't match" / "not syncing" report, not a guess.**
+  `flushPendingWrites` (the background outbox retry, still in
+  `public/index.html`, not extracted) and a live `MatchScreen`'s own
+  `queueSave` chain could both attempt to save the *same* match at the
+  same time from the same device — the background flush's queued snapshot
+  carried a now-stale `expectedSeq`, so it could lose the Firestore
+  transaction to a ball the live screen scored in the gap, surfacing as
+  "Scores don't match" (`SyncConflictModal`) against this exact device's
+  own write. Fixed by having `flushPendingWrites` skip whatever match is
+  currently registered live (`liveMatchSetters[id]`) — that screen's own
+  save chain is already the sole source of truth for it while it's open;
+  unmounting re-exposes the match to the next flush via
+  `unregisterLiveMatch`.
+- **Stuck "tap to retry" (PR #79) — the second sync bug, and a direct,
+  disclosed side effect of the fix just above.** `SyncStatusBanner`'s
+  manual retry called that same `flushPendingWrites`, which now
+  deliberately skips whatever match is open on screen — so if the *exact*
+  match stuck in the outbox was the one being actively scored, tapping
+  retry was a permanent no-op; it could only clear once some future ball
+  happened to save successfully on its own. Fixed by giving
+  `SyncStatusBanner` an optional `onRetry` prop (defaulting to
+  `flushPendingWrites`, unchanged for every other caller); `MatchScreen`
+  passes one that retries through its own `queueSave` — the same safe,
+  serialized path every other save already uses — while still flushing
+  any other queued match in the background.
+- **Firestore rejecting the save outright (PR #81) — the third and by far
+  the most serious.** A real production error report —
+  `Function Transaction.set() called with invalid data. Unsupported field
+  value: undefined` — traced to `applyBall`'s shared ball-log push
+  (`scoringEngine.js`, the single `cur.overs[lastOverIdx] = [...]` line
+  every ball kind runs through): `bigHit: event.bigHit || undefined` sets
+  that key to the literal JS `undefined` on *every* ball that isn't a
+  bonus hit, not just omitting it. Firestore's client SDK rejects any
+  field whose value is `undefined` outright, and `packMatchForFirestore`
+  (`packUtils.js`) passed the ball log straight through unchanged into
+  every transactional write — meaning this had likely been silently
+  failing to sync a meaningful slice of real matches since Big Hit shipped
+  a few PRs earlier in this same session, invisibly, since `npm test`
+  never touches a real Firestore backend and the local-storage fallback
+  kept the app usable. Fixed at the actual write boundary rather than
+  patching this one field: `packMatchForFirestore` now strips any
+  explicitly-`undefined` field via a `JSON.parse(JSON.stringify(...))`
+  round-trip before it ever reaches Firestore, closing the whole class of
+  bug (there are several other `foo || undefined` patterns elsewhere in
+  the codebase, all feeding transient event objects rather than persisted
+  fields today, but nothing stops a future one from landing in persisted
+  data the same way). **Read this before assuming a fresh sync bug is a
+  new root cause — check whether the affected write actually happened
+  after PR #81 landed on `main` first.**
+- **Confusing wide/no-ball last-over wording (PR #80).** The "illegal
+  again in the last over(s)" note always said "this flips back in the last
+  over(s)" whenever that house rule was configured on, regardless of
+  whether the current ball was actually inside the window — correct,
+  forward-looking phrasing before the window starts, but the identical
+  phrasing attached to "doesn't count as a legal delivery" once *inside*
+  it read as if the flip it described were still pending when it had
+  already happened. Fixed by branching the wording on
+  `isInLastOvers(inning)` (already exported from `scoringEngine.js`):
+  forward-looking outside the window, present-tense ("back to the standard
+  rule for the last over(s)") inside it.
+- **One-line ball commentary (PR #80, redesigned in #81).**
+  `lastBallCommentary(before, after)` in `scoringEngine.js` derives a short
+  "bowler to batter: outcome" line by diffing the inning immediately
+  before/after `applyBall` — the same before/after pattern the existing
+  milestone detection already uses, so it can't drift out of sync with
+  what actually happened. Shown above the Overs strip on `MatchScreen`,
+  cleared on Undo. Originally returned one flat string; redesigned one PR
+  later, per direct user feedback ("the presentation could be better"),
+  to return `{ lead, outcome, kind }` instead, so the UI can color/bold
+  just the outcome word to match `BallBadge`'s own kind-based coloring
+  (green four, gold six/bonus hit, red wicket, purple wide/no-ball)
+  instead of one plain gray line — the `kind` a small, deliberately
+  separate concept from the ball's own `event.kind`, since e.g. a bonus
+  hit and a plain six share `kind: "six"` for commentary-coloring purposes
+  despite having different `event.kind`/`bigHit` shapes underneath.
+- **Impact Player "IP" badge (PR #79).** Previously the only place a
+  substitution showed up was a one-line "Impact Player: X on for Y"
+  summary at the top of the Scorecard. `RoleBadge` (already shared for
+  Captain/WK) now also renders an "IP" tag next to a substitute's name
+  wherever it appears — the live scoring header (striker/non-striker/
+  bowler) and the scorecard's own batting/bowling rows — via a new
+  `isImpactSubFor(match, name)` helper in `appLogic.js` that checks
+  `match.impactSubs` (match-wide, not scoped to one innings) by
+  `inName`.
+- **Tournament venue + rules-editor segmentation (PR #78, mirrored onto
+  the single-match editor in #79).** A tournament can now carry its own
+  venue (set at creation, editable any time from
+  `TournamentDetailScreen`, reusing the existing `VenueEditModal`),
+  inherited by every fixture the same way tournament rules already were —
+  useful for a one-day tournament played on one ground, where re-entering
+  the same venue per fixture was pure friction. Alongside it, both the
+  tournament and single-match rules editors were regrouped from one long
+  unlabeled list into labeled sections (Format/Extras/Bowling
+  limits/Batting rules/Special rules) via a new shared `RuleSectionHeader`
+  component (exported from `tournamentsScreen.js`, imported into
+  `setupScreen.js` rather than duplicated) plus bordered clusters for the
+  Last Over Rules and Impact Player toggles.
+- **Last-over-rules overs count raised from a fixed single "last over" to
+  a configurable 1–5 (PR #75)**, at the same time the rules editor
+  segmentation above made the now-larger settings block legible rather
+  than one more unlabeled row in a wall of them.
+
+**Left open, unresolved as of this session's end:**
+
+- **A "mysterious apostrophe" in the "This Over" ball strip.** First
+  reported verbally ("a subtle single quote... after 2 balls... it also
+  disappears"), later with an actual screenshot (a stray `'` next to a
+  ball badge, over-label `2.1`). Investigated hard: reading every
+  candidate render path (`OversStrip`/`BallBadge`/`ballLabelsForOver`/
+  `MilestoneToast`/`InningsTimer`) found nothing that could produce a bare
+  `'` character. Escalated to an actual browser reproduction — no
+  `playwright` in this repo's own `node_modules` (not a declared
+  dependency), but it's installed globally
+  (`/opt/node22/lib/node_modules/playwright`, resolvable by placing a
+  script directly under that directory so Node's bare-specifier
+  resolution finds it) with Chromium at
+  `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`. Built a harness
+  serving the repo over `python3 -m http.server`, importing
+  `MatchScreen`/`OversStrip`/`GLOBAL_CSS` directly as real ES modules with
+  `react`/`react-dom` UMD builds (from this repo's own `node_modules`,
+  since the sandbox's proxy blocks the `esm.sh` CDN route a plain import
+  map would otherwise use) wired in via two tiny same-origin shim files
+  re-exporting `window.React`/`window.ReactDOM`. Scored balls one at a
+  time, across an over boundary (confirming the next bowler via the real
+  `PlayerPicker` UI, which turned out to render a candidate's name and
+  their `RoleBadge` with no separating space — `"YWK"` for a keeper named
+  "Y", not "Y" — a harness-only gotcha worth remembering for the next
+  from-scratch repro script), and screenshotted at several points
+  including mid-`cs-pop`-animation. Never reproduced. Leading theories,
+  untested: Safari/WebKit-specific rendering (the user's earlier PWA
+  report was on iPhone; no WebKit browser binary is available in this
+  sandbox to test directly) or a data shape not yet tried (a player name
+  containing a real apostrophe, e.g. "O'Brien"). **Next step is on the
+  user**: which browser/device, whether any player name in the match had
+  an apostrophe, and ideally a screen recording or the exact ball sequence
+  right before it appeared.
+- **Co-owner invites** — scoped only (`docs/co-owner-invites-plan.md`,
+  PR #76), never implemented. Needs a real Firestore rules change
+  (replacing `allow list: if false` on invite docs with a filtered list
+  rule) that has to be pasted into Firebase Console manually before any
+  code depending on it ships — treat as its own deliberate slice of work,
+  not a quick follow-on.
+- **30-minute escalating time-penalty rule** — still open, carried over
+  unchanged from the 2026-09-01 entry above. Not the same thing as the
+  (already-shipped) flat "time cap per innings" flag.
