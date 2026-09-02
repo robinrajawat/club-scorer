@@ -415,6 +415,36 @@ test("lastBallCommentary: describes extras -- wide/no-ball (with any extra runs 
   assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "legbye", runs: 1 })), { lead: "B1 to P1: ", outcome: "1 leg bye", kind: "run" });
 });
 
+// BUG FIX: every "was this ball a genuine four/six off the bat" check downstream of the ball log
+// (this function, BallBadge's color, FollowScreen's boundary celebration) used to compare the
+// ball's raw `runs` total directly, which is wrong in three real, reachable cases: (1) a no-ball's
+// stored total includes the extras penalty, so a genuine six off a default-1-run-penalty no-ball
+// stores runs:7, never matching ===6; (2) an overthrow-topped-up total (e.g. 2 run + a 2-run
+// overthrow) stores runs:4, indistinguishable from an actual four; (3) a bye/leg-bye reaching the
+// boundary is a running total the bat was never involved in at all, but could still coincide with
+// runs:4/6. applyBall now stores the correctly-computed ball.battedRuns (0 when the bat was never
+// involved) precisely so every downstream consumer reads the same right answer instead of each
+// re-deriving it -- see its own comment in applyBall for the full reasoning.
+test("lastBallCommentary: a genuine six off a no-ball is announced as SIX!, not swallowed into the no-ball's own extra-runs text", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  const after = applyBall(inn, { kind: "noball", runs: 6 });
+  assert.equal(after.overs[0][0].runs, 7, "sanity check -- the stored total includes the 1-run no-ball penalty");
+  assert.deepEqual(lastBallCommentary(inn, after), { lead: "B1 to P1: ", outcome: "SIX!", kind: "six" });
+});
+
+test("lastBallCommentary: an overthrow-topped-up total isn't announced as a boundary that never happened", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  // 2 genuine runs + a 2-run overthrow bonus = 4 total, but no four was actually hit.
+  const after = applyBall(inn, { kind: "run", runs: 4, overthrow: 2 });
+  assert.deepEqual(lastBallCommentary(inn, after), { lead: "B1 to P1: ", outcome: "4 runs", kind: "run" });
+});
+
+test("lastBallCommentary: a bye/leg-bye reaching the boundary is announced as byes, never as a batted FOUR/SIX", () => {
+  const inn = freshInning(10, ["P1", "P2"]);
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "bye", runs: 4 })), { lead: "B1 to P1: ", outcome: "4 byes", kind: "run" });
+  assert.deepEqual(lastBallCommentary(inn, applyBall(inn, { kind: "legbye", runs: 6 })), { lead: "B1 to P1: ", outcome: "6 leg byes", kind: "run" });
+});
+
 test("lastBallCommentary: a wicket names who got out and how, using the same fall-of-wickets/how text as the scorecard", () => {
   const inn = freshInning(10, ["P1", "P2"]);
   const after = applyBall(inn, { kind: "wicket", wicketType: "Bowled", newBatsman: "P3" });

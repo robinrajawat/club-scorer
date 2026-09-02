@@ -101,10 +101,18 @@ export function FollowScreen({
           key
         });
         setTimeout(() => setCelebration(c => c && c.key === key ? null : c), 1000);
-      } else if (lastBall && (lastBall.kind === "run" || lastBall.kind === "noball") && (lastBall.runs === 4 || lastBall.runs === 6)) {
+      } else if (lastBall && (lastBall.bigHit || lastBall.battedRuns === 4 || lastBall.battedRuns === 6)) {
+        // lastBall.battedRuns (see its comment in scoringEngine.js's applyBall), not lastBall.runs
+        // -- lastBall.runs is the ball's raw total, which for a no-ball includes the extras
+        // penalty (a genuine six off a default-penalty no-ball stores runs:7, never matching a
+        // plain ===6 check) and for an overthrow-topped-up hit includes the bonus on top, either of
+        // which could previously coincide with 4 or 6 and wrongly trigger a boundary celebration
+        // for viewers. Also now covers a Big Hit/Maximum Hit bonus six, which this never did before
+        // (its total doesn't match 4 or 6 either) -- same `bigHit || n` pattern MatchScreen's own
+        // handleRun already uses for the scorer's own celebration.
         const key = Date.now();
         setCelebration({
-          type: lastBall.runs,
+          type: lastBall.bigHit || lastBall.battedRuns,
           key
         });
         setTimeout(() => setCelebration(c => c && c.key === key ? null : c), 1000);

@@ -343,6 +343,13 @@ export function applyBall(inning, event) {
   // runsThisBall (which also includes wide/bye boundary-equivalents that were never hit off the
   // bat) — see ballsSinceBoundary's own comment in newInning for why that distinction matters.
   let boundaryHitByBat = false;
+  // The actual runs earned off the bat/by running this ball, excluding any extras penalty (a
+  // no-ball's fixed run) and any overthrow bonus on top -- 0 whenever the bat was never involved
+  // at all (wide, bye, leg bye). Stored on the ball log below (see there for why): every downstream
+  // "was this ball actually a four/six" check (BallBadge's color, lastBallCommentary's "FOUR!"/
+  // "SIX!", FollowScreen's boundary celebration) needs exactly this value, not the ball's raw total
+  // `runs` -- which for a no-ball/overthrow/bye/leg-bye is a different, larger or unrelated number.
+  let battedRuns = 0;
   if (event.kind === "run") {
     runsThisBall = event.runs;
     cur.runs += event.runs;
@@ -353,7 +360,7 @@ export function applyBall(inning, event) {
     // the batsman's own fours/sixes tally and now also for boundaryHitByBat (the drought toast) —
     // an overthrow has nothing to do with the batsman's own timing, same reasoning as why a wide
     // reaching the boundary was already excluded there.
-    const battedRuns = event.runs - (event.overthrow || 0);
+    battedRuns = event.runs - (event.overthrow || 0);
     // event.bigHit marks a six that cleared the tournament's own extra-distance boundary rope
     // (the bigHitRuns house rule) -- its total is whatever bonus value the rule configures (e.g.
     // 10), not 6, so battedRuns === 6 alone would miss it entirely: no six credited, no boundary
@@ -404,7 +411,7 @@ export function applyBall(inning, event) {
     cur.extras.noball += cur.noballRuns || 1;
     // Same reasoning as the "run" branch above — only the batted portion (excluding any overthrow
     // bonus) counts as a genuine boundary.
-    const battedRuns = (event.runs || 0) - (event.overthrow || 0);
+    battedRuns = (event.runs || 0) - (event.overthrow || 0);
     if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
@@ -460,6 +467,7 @@ export function applyBall(inning, event) {
       cur.extras.noball += noballPenalty;
       if (cur.freeHitEnabled) cur.freeHitActive = true;
       if (runsBeforeWicket > 0) {
+        battedRuns = runsBeforeWicket;
         if (runsBeforeWicket === 4 || runsBeforeWicket === 6) boundaryHitByBat = true;
         cur.batsmen[creditTo] = {
           ...cur.batsmen[creditTo],
@@ -478,6 +486,7 @@ export function applyBall(inning, event) {
       cur.runs += runsBeforeWicket;
       bowler.runs += runsBeforeWicket;
       runsThisBall = runsBeforeWicket;
+      battedRuns = runsBeforeWicket;
       if (runsBeforeWicket === 4 || runsBeforeWicket === 6) boundaryHitByBat = true;
       cur.batsmen[creditTo] = {
         ...cur.batsmen[creditTo],
@@ -627,10 +636,22 @@ export function applyBall(inning, event) {
     // in miscHelpers.js, which reads this to decide whether a wide/no-ball advances the over's
     // ball count or shares a slot with the next legal delivery).
     legal: legalBall,
-    // A big hit's runs (e.g. 10) don't match BallBadge's own `ev.runs === 6` gold-six check, so
-    // without this the ball-by-ball strip colored it like a plain, unremarkable run instead of the
-    // six it actually was -- see BallBadge in matchDisplayAtoms.js.
-    bigHit: event.bigHit || undefined
+    // A big hit's runs (e.g. 10) don't match BallBadge's own `ev.battedRuns === 6` gold-six check,
+    // so without this the ball-by-ball strip colored it like a plain, unremarkable run instead of
+    // the six it actually was -- see BallBadge in matchDisplayAtoms.js.
+    bigHit: event.bigHit || undefined,
+    // BUG FIX: without this, every "was this ball actually a four/six" check downstream of the
+    // over log (BallBadge's badge color, lastBallCommentary's "FOUR!"/"SIX!", FollowScreen's
+    // boundary celebration for viewers) used to compare against the ball's raw `runs` total
+    // instead -- wrong for a no-ball (runs includes the extras penalty: a genuine six off a
+    // default-penalty no-ball stores runs:7, never matching ===6), an overthrow-topped-up total
+    // (e.g. "2 run + a 2-run overthrow" stores runs:4, indistinguishable from an actual four), and
+    // a bye/leg-bye reaching the boundary (the bat was never involved at all, but runs:4 still
+    // matched the same check and got colored/announced as a batted four). Stored here instead so
+    // every downstream consumer reads the one value already correctly computed above (`battedRuns`
+    // -- see its own comment), rather than each re-deriving "was this actually a boundary" its own
+    // way and drifting out of sync, which is exactly how these bugs happened in the first place.
+    battedRuns: battedRuns || undefined
   }];
   if (legalBall) {
     cur.legalBalls += 1;
@@ -880,8 +901,12 @@ export function lastBallCommentary(before, after) {
     return { lead, outcome: `OUT! ${dismissed} ${how}`, kind: "wicket" };
   }
   if (ball.bigHit) return { lead, outcome: `${ball.bigHit}!`, kind: "six" };
-  if (ball.runs === 6) return { lead, outcome: "SIX!", kind: "six" };
-  if (ball.runs === 4) return { lead, outcome: "FOUR!", kind: "four" };
+  // ball.battedRuns (see its comment in applyBall) -- not ball.runs, which for a no-ball includes
+  // the extras penalty, for an overthrow-topped-up total includes the bonus, and for a bye/leg-bye
+  // is a running total the bat was never involved in at all. Any of those could otherwise coincide
+  // with 4 or 6 and get announced as a batted boundary that never actually happened.
+  if (ball.battedRuns === 6) return { lead, outcome: "SIX!", kind: "six" };
+  if (ball.battedRuns === 4) return { lead, outcome: "FOUR!", kind: "four" };
   if (ball.kind === "wide") {
     const extra = ball.runs - (after.wideRuns || 1);
     return { lead, outcome: `wide${extra > 0 ? `, ${extra} run${extra === 1 ? "" : "s"} extra` : ""}`, kind: "wide" };
