@@ -245,6 +245,7 @@ const FUNCTIONS = [
   { name: "FixtureRow", file: "src/components/fixtureRow.js" },
   { name: "SuperOverOpenersSetup", file: "src/components/inningsSetupScreens.js" },
   { name: "confirmImpactSub", file: "src/components/inningsSetupScreens.js" },
+  { name: "undoLastImpactSub", file: "src/components/inningsSetupScreens.js" },
   { name: "ImpactPlayerCard", file: "src/components/inningsSetupScreens.js" },
   { name: "SecondInningsSetup", file: "src/components/inningsSetupScreens.js" },
   { name: "SearchAndRequestPanel", file: "src/components/searchAndRequestPanel.js" },

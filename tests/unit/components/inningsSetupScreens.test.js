@@ -132,29 +132,46 @@ function impactMatch(overrides = {}) {
   });
 }
 
-test("SecondInningsSetup: no Impact Player card when the rule is off", () => {
+test("SecondInningsSetup: no Impact Player step when the rule is off -- lands straight on lineups", () => {
   const match = matchWith([inning({ complete: true }), inning()], {
     teamARoster: ["Virat Kohli"], teamABench: ["Hardik Pandya"]
   });
   const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {} }));
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Impact Player/);
+  assert.match(JSON.stringify(inst.toJSON()), /Opening striker/);
 });
 
-test("SecondInningsSetup: no Impact Player card for a team with an empty bench", () => {
+test("SecondInningsSetup: no Impact Player step when both teams have an empty bench", () => {
   const match = impactMatch({ teamABench: [], teamBBench: [] });
   const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {} }));
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Impact Player/);
+  assert.match(JSON.stringify(inst.toJSON()), /Opening striker/);
 });
 
-test("SecondInningsSetup: shows an Impact Player card for each team that still has an unused swap and a bench", () => {
+test("SecondInningsSetup: opens on a dedicated Impact Player step (not mixed in with the lineup pickers), with a way back to it from lineups", () => {
   const match = impactMatch();
   const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {} }));
   const html = JSON.stringify(inst.toJSON());
   assert.match(html, /Impact Player — Riverside CC/);
   assert.match(html, /Impact Player — Oakwood CC/);
-  // 3 opener/bowler pickers + 2 (out/in) per team's Impact Player card = 7
-  assert.equal(inst.root.findAllByType(PlayerPicker).length, 7);
+  // Only the 2 (out/in) pickers per team's Impact Player card -- no opener/bowler pickers on this
+  // first step, and no "Opening striker" text either.
+  assert.equal(inst.root.findAllByType(PlayerPicker).length, 4);
+  assert.doesNotMatch(html, /Opening striker/);
+
+  act(() => { btn(inst, "Continue to lineups").props.onClick(); });
+  const lineupsHtml = JSON.stringify(inst.toJSON());
+  assert.match(lineupsHtml, /Opening striker/);
+  assert.doesNotMatch(lineupsHtml, /Impact Player — Riverside CC/);
+  assert.ok(inst.root.findByProps({ "aria-label": "Back to Impact Player" }));
+
+  act(() => { inst.root.findByProps({ "aria-label": "Back to Impact Player" }).props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Impact Player — Riverside CC/);
 });
+
+function btn(inst, text) {
+  return inst.root.findAllByType(Btn).find(b => b.props.children === text);
+}
 
 test("SecondInningsSetup: Confirm substitution is disabled until both a player going off and coming on are picked", () => {
   const match = impactMatch();
@@ -179,7 +196,7 @@ test("SecondInningsSetup: confirming a substitution swaps the roster/bench, mark
   assert.deepEqual(updated.teamARoster, ["Hardik Pandya", "Rohit Sharma"]);
   assert.deepEqual(updated.teamABench, []);
   assert.equal(updated.teamAImpactUsed, 1);
-  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya" }]);
+  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: false, wasKeeper: false }]);
   // Untouched -- only Riverside CC's own fields change.
   assert.deepEqual(updated.teamBRoster, ["Ben Stokes", "Joe Root"]);
   assert.equal(updated.teamBImpactUsed, undefined);
@@ -197,9 +214,10 @@ test("SecondInningsSetup: a substituted-out captain/keeper loses that role", () 
   act(() => { confirmBtn.props.onClick(); });
   assert.equal(updated.teamACaptain, "");
   assert.equal(updated.teamAKeeper, "");
+  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: true, wasKeeper: true }]);
 });
 
-test("SecondInningsSetup: a team's Impact Player card disappears once its swap is used, the other team's stays", () => {
+test("SecondInningsSetup: a team's card switches to an 'Undo' affordance once its swap is used, offering no new substitution -- the other team's full card stays", () => {
   globalThis.saveTransition = () => {};
   const match = impactMatch();
   let updated = null;
@@ -211,13 +229,39 @@ test("SecondInningsSetup: a team's Impact Player card disappears once its swap i
   act(() => { confirmBtn.props.onClick(); });
   act(() => { inst.update(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } })); });
   const html = JSON.stringify(inst.toJSON());
-  assert.doesNotMatch(html, /Impact Player — Riverside CC/);
+  // The card itself is still there (so "Undo" has somewhere to live), but its substitution form
+  // is gone -- no more picking a new player off/on for a team that's used its only swap.
+  assert.match(html, /Impact Player — Riverside CC/);
+  assert.match(html, /No substitutions left for this team/);
   assert.match(html, /Impact Player — Oakwood CC/);
+  // Only one "Player going off" form -- Oakwood CC's own, untouched card.
+  assert.equal((html.match(/Player going off/g) || []).length, 1);
+});
+
+test("SecondInningsSetup: Undo reverses the roster/bench/used-count/captain and drops the logged entry", () => {
+  globalThis.saveTransition = () => {};
+  const match = impactMatch({ teamACaptain: "Virat Kohli" });
+  let updated = null;
+  const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: m => { updated = m; } }));
+  const [outPicker, inPicker] = inst.root.findAllByType(PlayerPicker).slice(0, 2);
+  act(() => { outPicker.props.onChange("Virat Kohli"); });
+  act(() => { inPicker.props.onChange("Hardik Pandya"); });
+  act(() => { inst.root.findAllByType(Btn).find(b => b.props.children === "Confirm substitution" && !b.props.disabled).props.onClick(); });
+  act(() => { inst.update(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } })); });
+
+  const undoBtn = inst.root.findAllByType("button").find(b => b.props.children === "Undo");
+  act(() => { undoBtn.props.onClick(); });
+
+  assert.deepEqual(updated.teamARoster, ["Virat Kohli", "Rohit Sharma"]);
+  assert.deepEqual(updated.teamABench, ["Hardik Pandya"]);
+  assert.equal(updated.teamAImpactUsed, 0);
+  assert.equal(updated.teamACaptain, "Virat Kohli");
+  assert.deepEqual(updated.impactSubs, []);
 });
 
 // impactPlayerMaxSubs -- a tournament's own rule book (e.g. Billund's) can allow more than the
 // standard 1 substitution per team.
-test("SecondInningsSetup: impactPlayerMaxSubs lets a team substitute more than once before its card disappears", () => {
+test("SecondInningsSetup: impactPlayerMaxSubs lets a team substitute more than once before it's out of swaps", () => {
   globalThis.saveTransition = () => {};
   const match = impactMatch({
     rules: { impactPlayerEnabled: true, impactPlayerMaxSubs: 2 },
@@ -247,5 +291,9 @@ test("SecondInningsSetup: impactPlayerMaxSubs lets a team substitute more than o
   assert.equal(updated.impactSubs.length, 2);
 
   act(() => { inst.update(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } })); });
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Impact Player — Riverside CC/); // both used now
+  const finalHtml = JSON.stringify(inst.toJSON());
+  assert.match(finalHtml, /Impact Player — Riverside CC/); // still shown, for Undo
+  assert.match(finalHtml, /No substitutions left for this team/);
+  // Only one "Player going off" form left -- Oakwood CC's own, untouched card.
+  assert.equal((finalHtml.match(/Player going off/g) || []).length, 1);
 });

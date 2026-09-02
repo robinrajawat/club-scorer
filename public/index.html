@@ -34235,23 +34235,66 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
   const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
   const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
   const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
+  // Recorded on the sub itself (not re-derived at undo time) so undoLastImpactSub can restore
+  // exactly what this substitution cleared, even if captain/keeper has changed again since.
+  const wasCaptain = match[captainKey] === outName;
+  const wasKeeper = match[keeperKey] === outName;
   const updatedMatch = {
     ...match,
     [rosterKey]: (match[rosterKey] || []).map(n => n === outName ? inName : n),
     [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
     [usedKey]: (match[usedKey] || 0) + 1,
-    [captainKey]: match[captainKey] === outName ? "" : match[captainKey],
-    [keeperKey]: match[keeperKey] === outName ? "" : match[keeperKey],
+    [captainKey]: wasCaptain ? "" : match[captainKey],
+    [keeperKey]: wasKeeper ? "" : match[keeperKey],
     impactSubs: [...(match.impactSubs || []), {
       team,
       outName,
-      inName
+      inName,
+      wasCaptain,
+      wasKeeper
     }]
   };
   setMatch(updatedMatch);
   saveTransition(updatedMatch, setMatch);
 }
+// Reverses the most recent substitution THIS team made (mirrors the app's other undo affordances,
+// e.g. "Undo last ball" -- always the last action, never an arbitrary pick from history, so there's
+// no ambiguity about what "undo" means once more than one sub has happened). Puts the incoming
+// player back on the bench (they haven't taken the field yet -- this is a correction, not a second
+// real substitution), restores captain/keeper if this sub was the one that cleared it, and drops
+// the logged entry entirely rather than leaving a cancelled-out record for the scorecard to show.
 // GENERATED-FN-END: confirmImpactSub
+// GENERATED-FN-START: undoLastImpactSub
+function undoLastImpactSub(match, setMatch, team) {
+  const subs = match.impactSubs || [];
+  let lastIndex = -1;
+  for (let i = subs.length - 1; i >= 0; i--) {
+    if (subs[i].team === team) {
+      lastIndex = i;
+      break;
+    }
+  }
+  if (lastIndex === -1) return;
+  const sub = subs[lastIndex];
+  const isTeamA = team === match.teamA;
+  const rosterKey = isTeamA ? "teamARoster" : "teamBRoster";
+  const benchKey = isTeamA ? "teamABench" : "teamBBench";
+  const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
+  const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
+  const updatedMatch = {
+    ...match,
+    [rosterKey]: (match[rosterKey] || []).map(n => n === sub.inName ? sub.outName : n),
+    [benchKey]: [...(match[benchKey] || []), sub.inName],
+    [usedKey]: Math.max(0, (match[usedKey] || 0) - 1),
+    [captainKey]: sub.wasCaptain ? sub.outName : match[captainKey],
+    [keeperKey]: sub.wasKeeper ? sub.outName : match[keeperKey],
+    impactSubs: subs.filter((_, i) => i !== lastIndex)
+  };
+  setMatch(updatedMatch);
+  saveTransition(updatedMatch, setMatch);
+}
+// GENERATED-FN-END: undoLastImpactSub
 // GENERATED-FN-START: ImpactPlayerCard
 function ImpactPlayerCard({
   match,
@@ -34260,9 +34303,25 @@ function ImpactPlayerCard({
 }) {
   const [outName, setOutName] = useState("");
   const [inName, setInName] = useState("");
+  if (!match.rules || !match.rules.impactPlayerEnabled) {
+    return null;
+  }
   const bench = benchFor(match, team);
   const remaining = impactSubsRemainingFor(match, team);
-  if (!match.rules || !match.rules.impactPlayerEnabled || remaining <= 0 || bench.length === 0) {
+  const subs = match.impactSubs || [];
+  let lastSubIndex = -1;
+  for (let i = subs.length - 1; i >= 0; i--) {
+    if (subs[i].team === team) {
+      lastSubIndex = i;
+      break;
+    }
+  }
+  const lastSub = lastSubIndex === -1 ? null : subs[lastSubIndex];
+  const canOfferNew = remaining > 0 && bench.length > 0;
+  // Nothing to offer and nothing to undo -- e.g. the rule's on but this team never had a bench to
+  // draw from. Once ANY substitution has happened, the card stays (in a reduced form below) purely
+  // so it's never a one-way door -- see the "correct the substitution" gap this replaced.
+  if (!canOfferNew && !lastSub) {
     return null;
   }
   const canConfirm = outName.trim() && inName.trim();
@@ -34271,6 +34330,48 @@ function ImpactPlayerCard({
     setOutName("");
     setInName("");
   }
+  const undoRow = lastSub && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: canOfferNew ? 14 : 0,
+      paddingTop: canOfferNew ? 14 : 0,
+      borderTop: canOfferNew ? `1px solid ${COLORS.creamDark}` : "none",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.4
+    }
+  }, "Last: ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, lastSub.outName), " → ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, lastSub.inName)), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => undoLastImpactSub(match, setMatch, team),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: `1.5px solid ${COLORS.creamDark}`,
+      borderRadius: 20,
+      padding: "6px 12px",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 11.5,
+      color: COLORS.ink,
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "Undo"));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -34289,7 +34390,7 @@ function ImpactPlayerCard({
       textTransform: "uppercase",
       marginBottom: 6
     }
-  }, `Impact Player — ${team}`), /*#__PURE__*/React.createElement("div", {
+  }, `Impact Player — ${team}`), canOfferNew ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -34322,7 +34423,14 @@ function ImpactPlayerCard({
       width: "100%",
       marginTop: 4
     }
-  }, "Confirm substitution"));
+  }, "Confirm substitution")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, "No substitutions left for this team."), undoRow);
 }
 // GENERATED-FN-END: ImpactPlayerCard
 // Best-effort self-heal for one-time transition saves (second-innings setup, super-over openers)
@@ -34358,6 +34466,22 @@ function SecondInningsSetup({
   const [confirmGoBack, setConfirmGoBack] = useState(false);
   const inn = match.innings[1];
   const target = match.innings[0].runs + 1;
+  // Whether either team has anything Impact-Player-related to show right now -- a substitution
+  // still to make, or a past one still undoable. Kept local rather than exported: it only exists
+  // to decide whether this screen's own first step is worth showing at all, same reasoning as
+  // ImpactPlayerCard's own "nothing to offer and nothing to undo" null-return just above.
+  function teamHasImpactActivity(team) {
+    if (!match.rules || !match.rules.impactPlayerEnabled) return false;
+    const canOfferNew = impactSubsRemainingFor(match, team) > 0 && benchFor(match, team).length > 0;
+    const hasPastSub = (match.impactSubs || []).some(s => s.team === team);
+    return canOfferNew || hasPastSub;
+  }
+  const impactAvailable = teamHasImpactActivity(inn.bowlingTeam) || teamHasImpactActivity(inn.battingTeam);
+  // A separate first step, not inline above the lineup pickers -- cramming both onto one screen
+  // meant a lot of scrolling just to reach "Start 2nd Innings", and there was no way back up to fix
+  // a substitution once you'd scrolled past it. Skips straight to lineups when there's nothing
+  // Impact-Player-related to do, so the common case (the rule's off) sees no extra step at all.
+  const [step, setStep] = useState(impactAvailable ? "impact" : "lineups");
   const canStart = striker.trim() && nonStriker.trim() && striker.trim() !== nonStriker.trim() && bowler.trim();
   function start() {
     const updated = {
@@ -34395,14 +34519,7 @@ function SecondInningsSetup({
     setMatch(updatedMatch);
     saveTransition(updatedMatch, setMatch);
   }
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "24px 16px 60px",
-      maxWidth: 560,
-      margin: "0 auto",
-      animation: "cs-fadeIn 0.3s ease"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
+  const header = /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -34463,7 +34580,84 @@ function SecondInningsSetup({
     }
   }, /*#__PURE__*/React.createElement(Undo2, {
     size: 15
-  }), "Correct"))), /*#__PURE__*/React.createElement("div", {
+  }), "Correct")));
+  const overlays = /*#__PURE__*/React.createElement(React.Fragment, null, showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
+    match: {
+      ...match,
+      innings: [match.innings[0]]
+    },
+    onClose: () => setShowScorecard(false)
+  }), confirmGoBack && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Back to 1st innings?",
+    message: `This reopens ${match.innings[0].battingTeam}'s completed innings so you can fix a mistake — the 2nd innings hasn't started yet, so nothing from it is lost. You'll pick openers again when you're ready to move on.`,
+    confirmLabel: "Go back",
+    cancelLabel: "Cancel",
+    variant: "default",
+    onConfirm: () => {
+      setConfirmGoBack(false);
+      goBackToFirstInnings();
+    },
+    onCancel: () => setConfirmGoBack(false)
+  }));
+  if (step === "impact") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "24px 16px 60px",
+        maxWidth: 560,
+        margin: "0 auto",
+        animation: "cs-fadeIn 0.3s ease"
+      }
+    }, header, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 14,
+        color: COLORS.inkSoft,
+        marginBottom: 20,
+        lineHeight: 1.5
+      }
+    }, "Either team can make an Impact Player substitution now, before the chase starts."), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
+      match: match,
+      setMatch: setMatch,
+      team: inn.bowlingTeam
+    }), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
+      match: match,
+      setMatch: setMatch,
+      team: inn.battingTeam
+    }), /*#__PURE__*/React.createElement(Btn, {
+      variant: "primary",
+      onClick: () => setStep("lineups"),
+      style: {
+        width: "100%"
+      }
+    }, "Continue to lineups"), overlays);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "24px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto",
+      animation: "cs-fadeIn 0.3s ease"
+    }
+  }, header, impactAvailable && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setStep("impact"),
+    className: "cs-btn cs-shine",
+    "aria-label": "Back to Impact Player",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      background: "none",
+      border: "none",
+      padding: 0,
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      color: COLORS.gold,
+      cursor: "pointer"
+    }
+  }, "← Impact Player"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 14,
@@ -34475,15 +34669,7 @@ function SecondInningsSetup({
     style: {
       color: COLORS.ink
     }
-  }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
-    match: match,
-    setMatch: setMatch,
-    team: inn.bowlingTeam
-  }), /*#__PURE__*/React.createElement(ImpactPlayerCard, {
-    match: match,
-    setMatch: setMatch,
-    team: inn.battingTeam
-  }), /*#__PURE__*/React.createElement("div", {
+  }, target), " runs to win from ", match.oversLimit, " overs."), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -34530,24 +34716,7 @@ function SecondInningsSetup({
     style: {
       width: "100%"
     }
-  }, "Start 2nd Innings"), showScorecard && /*#__PURE__*/React.createElement(ScorecardOverlay, {
-    match: {
-      ...match,
-      innings: [match.innings[0]]
-    },
-    onClose: () => setShowScorecard(false)
-  }), confirmGoBack && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Back to 1st innings?",
-    message: `This reopens ${match.innings[0].battingTeam}'s completed innings so you can fix a mistake — the 2nd innings hasn't started yet, so nothing from it is lost. You'll pick openers again when you're ready to move on.`,
-    confirmLabel: "Go back",
-    cancelLabel: "Cancel",
-    variant: "default",
-    onConfirm: () => {
-      setConfirmGoBack(false);
-      goBackToFirstInnings();
-    },
-    onCancel: () => setConfirmGoBack(false)
-  }));
+  }, "Start 2nd Innings"), overlays);
 }
 // GENERATED-FN-END: SecondInningsSetup
 // GENERATED-FN-START: PlayerOfMatchCard
