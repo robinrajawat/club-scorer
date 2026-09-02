@@ -538,6 +538,20 @@ export function TournamentsScreen({
         ...r,
         impactPlayerEnabled: v
       }))
+    }), tournamentRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Substitutions allowed per team",
+      value: tournamentRules.impactPlayerMaxSubs,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        impactPlayerMaxSubs: v
+      })),
+      options: [{
+        value: 1,
+        label: "1 (standard)"
+      }, {
+        value: 2,
+        label: "2"
+      }]
     })));
   }
   return /*#__PURE__*/React.createElement("div", {

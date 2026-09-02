@@ -178,7 +178,7 @@ test("SecondInningsSetup: confirming a substitution swaps the roster/bench, mark
 
   assert.deepEqual(updated.teamARoster, ["Hardik Pandya", "Rohit Sharma"]);
   assert.deepEqual(updated.teamABench, []);
-  assert.equal(updated.teamAImpactUsed, true);
+  assert.equal(updated.teamAImpactUsed, 1);
   assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya" }]);
   // Untouched -- only Riverside CC's own fields change.
   assert.deepEqual(updated.teamBRoster, ["Ben Stokes", "Joe Root"]);
@@ -213,4 +213,39 @@ test("SecondInningsSetup: a team's Impact Player card disappears once its swap i
   const html = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(html, /Impact Player — Riverside CC/);
   assert.match(html, /Impact Player — Oakwood CC/);
+});
+
+// impactPlayerMaxSubs -- a tournament's own rule book (e.g. Billund's) can allow more than the
+// standard 1 substitution per team.
+test("SecondInningsSetup: impactPlayerMaxSubs lets a team substitute more than once before its card disappears", () => {
+  globalThis.saveTransition = () => {};
+  const match = impactMatch({
+    rules: { impactPlayerEnabled: true, impactPlayerMaxSubs: 2 },
+    teamABench: ["Hardik Pandya", "Suryakumar Yadav"]
+  });
+  let updated = match;
+  const inst = renderer.create(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } }));
+  assert.match(JSON.stringify(inst.toJSON()), /2 substitutions remaining/);
+
+  const [outPicker1, inPicker1] = inst.root.findAllByType(PlayerPicker).slice(0, 2);
+  act(() => { outPicker1.props.onChange("Virat Kohli"); });
+  act(() => { inPicker1.props.onChange("Hardik Pandya"); });
+  act(() => { inst.root.findAllByType(Btn).find(b => b.props.children === "Confirm substitution" && !b.props.disabled).props.onClick(); });
+  assert.equal(updated.teamAImpactUsed, 1);
+
+  act(() => { inst.update(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } })); });
+  const midHtml = JSON.stringify(inst.toJSON());
+  assert.match(midHtml, /Impact Player — Riverside CC/); // still has one more
+  assert.match(midHtml, /Last substitution remaining/);
+
+  const [outPicker2, inPicker2] = inst.root.findAllByType(PlayerPicker).slice(0, 2);
+  act(() => { outPicker2.props.onChange("Rohit Sharma"); });
+  act(() => { inPicker2.props.onChange("Suryakumar Yadav"); });
+  act(() => { inst.root.findAllByType(Btn).find(b => b.props.children === "Confirm substitution" && !b.props.disabled).props.onClick(); });
+  assert.equal(updated.teamAImpactUsed, 2);
+  assert.deepEqual(updated.teamARoster, ["Hardik Pandya", "Suryakumar Yadav"]);
+  assert.equal(updated.impactSubs.length, 2);
+
+  act(() => { inst.update(React.createElement(SecondInningsSetup, { match: updated, setMatch: m => { updated = m; } })); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Impact Player — Riverside CC/); // both used now
 });

@@ -14,7 +14,7 @@ import { afterEach, beforeEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { SetupScreen } from "../../../src/components/setupScreen.js";
-import { Btn, TeamChips } from "../../../src/components/formUiAtoms.js";
+import { Btn, TeamChips, RuleChoice } from "../../../src/components/formUiAtoms.js";
 import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { Field } from "../../../src/components/screenAtoms.js";
 
@@ -53,6 +53,13 @@ function input(inst, placeholder) {
 
 function btn(inst, text) {
   return inst.root.findAllByType(Btn).find(b => b.props.children === text);
+}
+
+// Finds the wrapping <div style={{marginTop:14}}> a toggle/nullable-number rule block renders as
+// in the match rules editor, scoped by its own label text -- lets tests disambiguate between the
+// several "Off"-labeled toggle buttons the rules editor now has.
+function ruleBlock(inst, labelText) {
+  return inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.marginTop === 14 && hasText(n.props.children, labelText))[0];
 }
 
 test("SetupScreen: shows 'New Match' and starts on the Teams & Format page", () => {
@@ -258,4 +265,37 @@ test("SetupScreen: with saved squads, teamABench/teamBBench (squad minus Playing
   assert.deepEqual(started.teamABench, ["C. Patel"]);
   assert.deepEqual(started.teamBRoster, ["D. Singh", "E. Rao"]);
   assert.deepEqual(started.teamBBench, []); // squad exactly fills the XI, nothing left on the bench
+});
+
+test("SetupScreen: 'Substitutions allowed per team' only appears once Impact Player is turned on, and flows through to onStart", () => {
+  let started = null;
+  const inst = render({ onStart: m => { started = m; } });
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Customize").props.onClick(); });
+
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Substitutions allowed per team"), undefined);
+
+  act(() => { ruleBlock(inst, "Impact Player substitution").findByType("button").props.onClick(); });
+  const maxSubsChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Substitutions allowed per team");
+  assert.ok(maxSubsChoice);
+  assert.deepEqual(maxSubsChoice.props.options.map(o => o.value), [1, 2]);
+  act(() => { maxSubsChoice.props.onChange(2); });
+
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+
+  assert.equal(started.rules.impactPlayerEnabled, true);
+  assert.equal(started.rules.impactPlayerMaxSubs, 2);
 });

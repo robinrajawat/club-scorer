@@ -5982,12 +5982,17 @@ function benchFor(match, teamName) {
   const bench = teamName === match.teamA ? match.teamABench : match.teamBBench;
   return bench || [];
 }
-// Whether this team has already used its one Impact Player substitution -- the "one per team, no
-// return" rule is enforced entirely by this flag (gates the substitution UI from rendering again)
-// plus the outgoing player being dropped from rosterFor's pool at the point of substitution, never
-// by clearing the rest of the bench (see confirmImpactSub in inningsSetupScreens.js).
-function impactSubUsedFor(match, teamName) {
-  return Boolean(teamName === match.teamA ? match.teamAImpactUsed : match.teamBImpactUsed);
+// How many Impact Player substitutions this team still has available -- match.rules'
+// impactPlayerMaxSubs (default 1, the standard Impact Player Laws) minus however many this team
+// has actually made so far (teamAImpactUsed/teamBImpactUsed, a count, not a boolean -- some
+// tournaments' own rule book allows more than one, e.g. up to 2). The "no return" half of the
+// rule -- an outgoing player can't come back -- is enforced separately, by that player being
+// dropped from rosterFor's pool at the point of substitution (see confirmImpactSub in
+// inningsSetupScreens.js), never by clearing the rest of the bench.
+function impactSubsRemainingFor(match, teamName) {
+  const used = (teamName === match.teamA ? match.teamAImpactUsed : match.teamBImpactUsed) || 0;
+  const max = (match.rules && match.rules.impactPlayerMaxSubs) || 1;
+  return Math.max(0, max - used);
 }
 function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
@@ -6056,7 +6061,8 @@ const DEFAULT_RULES = {
   playersPerSide: 11,
   retirementRuns: null,
   wideNoballCountsAsBall: false,
-  impactPlayerEnabled: false
+  impactPlayerEnabled: false,
+  impactPlayerMaxSubs: 1
 };
 // The number of batsmen a given team actually has for this match — NOT always 11. Uses the
 // playing-XI/roster recorded for that team at match start (teamARoster/teamBRoster, capped to
@@ -6215,7 +6221,7 @@ function nonStandardRulesText(rules) {
   if (rules.timeCapMinutes) bits.push(`${rules.timeCapMinutes}-min innings target`);
   if (rules.retirementRuns) bits.push(`retire at ${rules.retirementRuns}`);
   if (rules.wideNoballCountsAsBall) bits.push("wide/no-ball counts as a ball (except final over)");
-  if (rules.impactPlayerEnabled) bits.push("Impact Player substitution");
+  if (rules.impactPlayerEnabled) bits.push(rules.impactPlayerMaxSubs > 1 ? `Impact Player substitution (up to ${rules.impactPlayerMaxSubs} per team)` : "Impact Player substitution");
   return bits.length ? bits.join(" · ") : null;
 }
 
@@ -19187,7 +19193,7 @@ function SetupScreen({
   // the core facts — balls/over and max overs per bowler are worth seeing at a glance even when
   // they're the standard values, since "is this actually a normal match" is exactly what someone
   // glancing at a collapsed card wants to confirm before they trust it and move on.
-  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? "Impact Player" : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
+  const rulesSummaryText = [`${matchRules.ballsPerOver}-ball overs`, matchRules.maxOversPerBowler ? `max ${matchRules.maxOversPerBowler} ov/bowler` : "no bowler limit", matchRules.powerplayOvers ? `${matchRules.powerplayOvers}-over powerplay` : "no powerplay", matchRules.timeCapMinutes ? `${matchRules.timeCapMinutes}-min innings target` : null, matchRules.retirementRuns ? `retire at ${matchRules.retirementRuns}` : null, matchRules.freeHit ? "Free Hit" : null, matchRules.wideNoballCountsAsBall ? "Wd/Nb counts as ball" : null, matchRules.impactPlayerEnabled ? `Impact Player${matchRules.impactPlayerMaxSubs > 1 ? ` (${matchRules.impactPlayerMaxSubs} subs)` : ""}` : null, matchRules.superOver ? "Super Over" : null].filter(Boolean).join(" · ");
   const umpiresSummaryText = umpiresText({
     umpire1: umpire1.trim(),
     umpire2: umpire2.trim()
@@ -19679,7 +19685,21 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.impactPlayerEnabled ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.impactPlayerEnabled ? "On" : "Off")), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Substitutions allowed per team",
+    value: matchRules.impactPlayerMaxSubs,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      impactPlayerMaxSubs: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -20875,6 +20895,20 @@ function TournamentsScreen({
         ...r,
         impactPlayerEnabled: v
       }))
+    }), tournamentRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+      label: "Substitutions allowed per team",
+      value: tournamentRules.impactPlayerMaxSubs,
+      onChange: v => setTournamentRules(r => ({
+        ...r,
+        impactPlayerMaxSubs: v
+      })),
+      options: [{
+        value: 1,
+        label: "1 (standard)"
+      }, {
+        value: 2,
+        label: "2"
+      }]
     })));
   }
   return /*#__PURE__*/React.createElement("div", {
@@ -34109,19 +34143,21 @@ function SuperOverOpenersSetup({
 }
 
 // Applies one Impact Player substitution: swaps outName for inName in that team's XI (and out of
-// its bench), marks the team's one-per-match swap as used, drops outName from captain/keeper if
-// they held either (same "can't stay captain/keeper once out of the XI" rule toggleAXI enforces at
-// setup time), and logs it to match.impactSubs for the scorecard. Every picker on the app already
-// reads the XI via rosterFor, so updating teamARoster/teamBRoster here is the entire mechanism --
-// nothing else needs to know a substitution happened. Its sibling export just below,
-// ImpactPlayerCard, carries no comment of its own -- see docs/history.md's "React component
-// extraction" section for why a comment directly above a non-first export in a multi-export file
-// gets glued onto the wrong one by generate.js's splice mechanism. In short: ImpactPlayerCard
-// renders one team's substitution card -- nothing unless the rule is on, this team still has an
-// unused swap, AND actually has a bench to draw from (a team entered as free-form names with no
-// saved squad has no wider pool, same gap rosterFor/benchFor already have). Shown for both teams
-// on the same Innings Break screen, since the Laws allow either side to make its one substitution
-// any time before the start of the other team's innings -- this screen is exactly that point.
+// its bench), counts one more against the team's impactPlayerMaxSubs allowance (a tournament's own
+// rule book can set this above the standard 1 -- e.g. Billund's allows up to 2), drops outName
+// from captain/keeper if they held either (same "can't stay captain/keeper once out of the XI"
+// rule toggleAXI enforces at setup time), and logs it to match.impactSubs for the scorecard. Every
+// picker on the app already reads the XI via rosterFor, so updating teamARoster/teamBRoster here
+// is the entire mechanism -- nothing else needs to know a substitution happened. Its sibling
+// export just below, ImpactPlayerCard, carries no comment of its own -- see docs/history.md's
+// "React component extraction" section for why a comment directly above a non-first export in a
+// multi-export file gets glued onto the wrong one by generate.js's splice mechanism. In short:
+// ImpactPlayerCard renders one team's substitution card -- nothing unless the rule is on, this
+// team still has at least one substitution remaining, AND actually has a bench to draw from (a
+// team entered as free-form names with no saved squad has no wider pool, same gap
+// rosterFor/benchFor already have). Shown for both teams on the same Innings Break screen, since
+// the Laws allow either side to make its substitution(s) any time before the start of the other
+// team's innings -- this screen is exactly that point.
 // GENERATED-FN-END: SuperOverOpenersSetup
 // GENERATED-FN-START: confirmImpactSub
 function confirmImpactSub(match, setMatch, team, outName, inName) {
@@ -34135,7 +34171,7 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
     ...match,
     [rosterKey]: (match[rosterKey] || []).map(n => n === outName ? inName : n),
     [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
-    [usedKey]: true,
+    [usedKey]: (match[usedKey] || 0) + 1,
     [captainKey]: match[captainKey] === outName ? "" : match[captainKey],
     [keeperKey]: match[keeperKey] === outName ? "" : match[keeperKey],
     impactSubs: [...(match.impactSubs || []), {
@@ -34157,7 +34193,8 @@ function ImpactPlayerCard({
   const [outName, setOutName] = useState("");
   const [inName, setInName] = useState("");
   const bench = benchFor(match, team);
-  if (!match.rules || !match.rules.impactPlayerEnabled || impactSubUsedFor(match, team) || bench.length === 0) {
+  const remaining = impactSubsRemainingFor(match, team);
+  if (!match.rules || !match.rules.impactPlayerEnabled || remaining <= 0 || bench.length === 0) {
     return null;
   }
   const canConfirm = outName.trim() && inName.trim();
@@ -34192,7 +34229,7 @@ function ImpactPlayerCard({
       marginBottom: 14,
       lineHeight: 1.5
     }
-  }, "One substitution allowed per team. The player going off takes no further part in the match."), /*#__PURE__*/React.createElement(Field, {
+  }, remaining > 1 ? `${remaining} substitutions remaining for this team. The player going off takes no further part in the match.` : "Last substitution remaining for this team. The player going off takes no further part in the match."), /*#__PURE__*/React.createElement(Field, {
     label: "Player going off"
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: rosterFor(match, team),
@@ -35830,8 +35867,10 @@ function CricketScorer() {
       teamBRoster: setup.teamBRoster || [],
       teamABench: setup.teamABench || [],
       teamBBench: setup.teamBBench || [],
-      teamAImpactUsed: false,
-      teamBImpactUsed: false,
+      // Count of Impact Player substitutions each team has made so far, not a boolean -- a
+      // tournament's own rule book can allow more than the standard 1 (impactPlayerMaxSubs).
+      teamAImpactUsed: 0,
+      teamBImpactUsed: 0,
       // {team, outName, inName} per Impact Player substitution actually made -- see
       // confirmImpactSub in inningsSetupScreens.js. Stays empty for any match that never uses the
       // rule, same as penalties/fallOfWickets' own "nothing happened, empty array" convention.
