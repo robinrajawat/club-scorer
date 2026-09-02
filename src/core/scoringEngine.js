@@ -634,7 +634,18 @@ export function applyBall(inning, event) {
   }];
   if (legalBall) {
     cur.legalBalls += 1;
-    cur.freeHitActive = false; // a fair (or fair-but-illegal-for-batsman... i.e. any counted) ball consumes the free hit
+    // BUG FIX: this used to be unconditional on `legalBall` alone. Under the wideNoballCountsAsBall
+    // house rule, a wide or no-ball IS `legalBall` (it counts toward the over) -- so the very
+    // no-ball that just set freeHitActive true a few lines up (or a wide, which never touches it at
+    // all) immediately cleared it again in this same commit, before the next delivery ever got a
+    // chance to be the free hit. A wide/no-ball is never "the free hit delivery" being faced --
+    // under standard cricket law a no-ball on a free hit grants another one, and a wide doesn't
+    // touch the free hit either way -- only a genuine fair delivery (or a wicket/bye/legbye off one)
+    // actually consumes it. event.extraKind covers a wicket whose underlying ball was a wide/noball,
+    // which must be excluded the same way for the same reason.
+    if (event.kind !== "wide" && event.kind !== "noball" && event.extraKind !== "wide" && event.extraKind !== "noball") {
+      cur.freeHitActive = false;
+    }
     // Was hardcoded to `< 10` — same bug class as checkInningEnd's allOut and needsNewBatsman
     // (see maxWicketsFor). cur.maxWickets is baked in at newInning time since applyBall has no
     // access to the match object (rosters) to compute it live.
