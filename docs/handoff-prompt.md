@@ -317,8 +317,8 @@ to "doesn't count as a legal delivery" as if the flip were still pending
 when it had already happened). Now tensed correctly against
 `isInLastOvers(inning)`.
 
-**2026-09-02 (continued) — co-owner invites shipped, a same-day production bug, and cleanup
-(PRs #83–#85 + one cleanup PR):**
+**2026-09-02 (continued) — co-owner invites shipped, a same-day production bug, cleanup, and the
+"This Over" rendering bug finally nailed down (PRs #83–#87):**
 
 - **PR #83** — fixed a real bug: the one-line ball commentary has no self-clearing timer (unlike
   `celebration`/`milestoneToast`), and `MatchScreen` never unmounts across the innings break (it
@@ -342,43 +342,50 @@ when it had already happened). Now tensed correctly against
   `ReferenceError` on load from the moment PR #84 merged until #85 landed a few minutes later.
   **See `docs/co-owner-invites-plan.md`'s postscript for the full account and the general lesson**
   — worth reading before any future branch reconstruction that touches `public/index.html`.
-- **Cleanup PR** — with the rules confirmed published and no old-style invites outstanding,
+- **PR #86 (cleanup)** — with the rules confirmed published and no old-style invites outstanding,
   retired `federationCoOwnerInviteCodes` entirely: its rules block, the matching self-redeem
   branch on `federations/{federationId}`, `redeemFederationCoOwnerInvite`/`revokeFederationInvite`
   in `index.html`, `FederationsPanel`'s old pending-invites/revoke UI, and `TeamsScreen`'s
   "Have a federation co-owner invite?" redemption box. `clubJoinCodes` (plain club **member**
   invites) is untouched and stays permanent — that migration was always out of scope.
+- **PR #87 — the "mystery apostrophe" / "This Over" rendering bug, finally reproduced and fixed.**
+  Multiple earlier sessions (see the retired entry below, kept struck through for the trail) tried
+  and failed to reproduce this by exercising `OversStrip`'s React render tree — because the actual
+  bug isn't there at all. `MatchScreen` reserves a hardcoded `paddingBottom` under its scrollable
+  content (40px collapsed / 118px expanded) to keep it clear of the fixed-position scoring pad
+  docked at the bottom of the screen. That number was tuned once and never revisited as the pad
+  grew new conditional rows — the Big Hit/Maximum Hit button row chief among them. On any match
+  with either configured, the pad's real height comfortably exceeds 118px, so the last visible
+  content above it — exactly the "This Over" ball strip — renders partially *underneath* the pad:
+  hidden, clipped, or with just a sliver of a badge/label peeking past its rounded top corner.
+  Confirmed with a real headless-Chromium repro (Big Hit + Maximum Hit configured, scrolled to the
+  bottom): **26px of overlap** (ball labels `1.1`/`1.2`/`1.3` fully hidden) with the old hardcoded
+  118px, a clean **+8px** clearance after the fix. Fixed by measuring the pad's actual rendered
+  height with a `ResizeObserver` (`getBoundingClientRect()`, not the observer entry's own
+  `contentRect` — that excludes the pad's own padding) and using the measured value instead of a
+  guessed constant, so it self-corrects for anything that changes the pad's height in the future.
+  Also shipped, same PR: a defense-in-depth CSS change disabling native text-selection UI
+  app-wide (kept selectable on `input`/`textarea`) — an earlier, unconfirmed theory for the same
+  report (an iOS text-selection handle looking like a stray mark) that's harmless either way and
+  not ruled out as a contributing factor on some devices.
 
 **Open items handed off, unresolved as of 2026-09-02:**
-- **Mystery apostrophe in the "This Over" ball strip** — user has now sent
-  a screenshot (a stray `'` floating next to a ball badge, over `2.1`,
-  disappears on its own). Investigated hard this session: rebuilt
-  `OversStrip`/`MatchScreen` standalone in a real browser (Chromium via
-  Playwright, globally installed — see below) with `GLOBAL_CSS` and real
-  click interactions, scored balls one-by-one and across an over boundary,
-  screenshotted mid-animation — could not reproduce it. Suspect it may be
-  Safari/iOS-specific (the user's earlier PWA report was iPhone) or tied to
-  a specific player name/data shape not yet tried. Next step: ask for the
-  browser/device, whether any player name in that match has an apostrophe
-  (e.g. "O'Brien"), and ideally a screen recording or the exact ball
-  sequence right before it appears. **Playwright itself isn't in this
-  repo's `node_modules`** (no `package.json` dependency) but is available
-  globally (`npm root -g` → `/opt/node22/lib/node_modules/playwright`) with
-  Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` — bare
-  specifier resolution needs the script to live under that global
-  `node_modules` (or an import map + local shims for `react`/`react-dom`
-  UMD builds if reproducing browser-only rendering, since this sandbox's
-  proxy blocks the CDN `esm.sh` route) — see this session's throwaway
-  `_repro_*` files (already deleted) for the working pattern if picking
-  this back up.
 - **30-minute escalating time-penalty rule** — still open from the
   2026-09-01 entry above; not touched this session. Distinct from the
-  (already-shipped) plain "time cap per innings" flag.
+  (already-shipped) plain "time cap per innings" flag. The only real open
+  item left as of this handoff.
 - **"Stuck on Impact Player screen" report** — still unreproduced as of the
   2026-09-02 entry above; needs a real repro before assuming it's resolved.
-- Co-owner invites (above) and the second-innings stale-commentary bug are
-  **both done**, not open — noting them here only because they were open
-  questions in earlier handoffs.
+- ~~Mystery apostrophe in the "This Over" ball strip~~ — **fixed in PR #87
+  above**, with a confirmed root cause and measured before/after evidence
+  (not just a guess this time). Ask the user to confirm it's actually gone
+  on their device before fully closing this out — a real repro was never
+  obtained from the reporting device itself, only reconstructed in a
+  browser from the same match configuration (Big Hit + Maximum Hit rules).
+  If it recurs, it's a different bug from the one just fixed.
+- Co-owner invites and the second-innings stale-commentary bug (both
+  earlier in this same continued session) are **done**, not open — noting
+  them here only because they were open questions in earlier handoffs.
 
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the
