@@ -18,6 +18,14 @@ function hasText(node, str) {
   return false;
 }
 
+// The create-tournament form is paginated like SetupScreen's own "New Match" flow (details ->
+// rules -> review), so every test that used to fill in teams and hit "Create" in one step now
+// walks the same Next/Review buttons a real user would.
+function clickNav(inst, text) {
+  const b = inst.root.findAllByType(Btn).find(x => x.props.children === text);
+  act(() => { b.props.onClick(); });
+}
+
 afterEach(() => {
   delete globalThis.Modal;
 });
@@ -96,6 +104,8 @@ test("TournamentsScreen: creating a tournament selects teams and calls onCreateT
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
 
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
     createBtn.props.onClick();
@@ -131,6 +141,8 @@ test("TournamentsScreen: with 4+ teams selected, turning on group split sends gr
   act(() => { groupToggle.props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /Split into groups/);
 
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
     createBtn.props.onClick();
@@ -156,6 +168,8 @@ test("TournamentsScreen: creating a tournament with no rules customization sends
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
 
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
     createBtn.props.onClick();
@@ -179,6 +193,7 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
 
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
@@ -192,6 +207,7 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
   act(() => { ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.onChange(2); });
   act(() => { ruleBlock(inst, "Free hit after a no-ball").findByType("button").props.onClick(); });
 
+  clickNav(inst, "Review"); // rules -> review
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
     createBtn.props.onClick();
@@ -208,6 +224,11 @@ test("TournamentsScreen: 'Players per side' offers 10, not just 6/7/8/9/11", () 
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
   const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
   act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
   const playersPerSide = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Players per side");
@@ -228,6 +249,7 @@ test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time ca
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
 
@@ -240,6 +262,7 @@ test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time ca
   act(() => { ruleBlock(inst, "Wide/no-ball counts as a ball").findByType("button").props.onClick(); });
   act(() => { ruleBlock(inst, "Impact Player substitution").findByType("button").props.onClick(); });
 
+  clickNav(inst, "Review"); // rules -> review
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {
     createBtn.props.onClick();
@@ -259,6 +282,11 @@ test("TournamentsScreen: a nullable rule can be seeded then cleared back to null
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
   const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
   act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
 
@@ -268,6 +296,65 @@ test("TournamentsScreen: a nullable rule can be seeded then cleared back to null
   const clearBtn = ruleBlock(inst, "Retirement run cap").findAllByType("button").find(b => b.props.children === "None");
   act(() => { clearBtn.props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /None — tap to set one/);
+});
+
+test("TournamentsScreen: create form is paginated -- starts on 'Teams & Format', Next is blocked until name/2 teams are set", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /"Step ","1"," of ","3"," · ","Teams & Format"/);
+  const nextBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Next");
+  assert.equal(nextBtn.props.disabled, true);
+
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  assert.equal(inst.root.findAllByType(Btn).find(b => b.props.children === "Next").props.disabled, false);
+});
+
+test("TournamentsScreen: Back goes to the previous page; Back on the first page cancels", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  assert.equal(inst.root.findAllByType(Btn).find(b => b.props.children === "Back" || b.props.children === "Cancel").props.children, "Cancel");
+
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  assert.match(JSON.stringify(inst.toJSON()), /"Step ","2"," of ","3"," · ","Match Rules"/);
+
+  clickNav(inst, "Back"); // rules -> details, name/teams preserved
+  assert.match(JSON.stringify(inst.toJSON()), /"Step ","1"," of ","3"," · ","Teams & Format"/);
+  assert.equal(inst.root.findByType("input").props.value, "Billund Cup");
+
+  const cancelBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Cancel");
+  act(() => { cancelBtn.props.onClick(); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Tournament name/);
+});
+
+test("TournamentsScreen: review page summarizes the tournament before creating", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+  act(() => { ruleBlock(inst, "Super Over if the match ties").findByType("button").props.onClick(); });
+  clickNav(inst, "Review"); // rules -> review
+
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"Step ","3"," of ","3"," · ","Review"/);
+  assert.match(text, /Billund Cup/);
+  assert.match(text, /Riverside CC, Oakwood CC/);
+  assert.match(text, /Super Over on a tie/);
+  assert.ok(inst.root.findAllByType(Btn).find(b => b.props.children === "Creating…" || b.props.children === "Create"));
 });
 
 test("TournamentsScreen: canManage=false hides 'New Tournament' and shows an owner-only note", () => {

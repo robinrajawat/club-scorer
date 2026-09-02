@@ -7,6 +7,7 @@ import { LoadingNote } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
 import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
+import { nonStandardRulesText } from "../core/shareAndFormat.js";
 
 // The "Cups" list: club/federation source chips, create-tournament (with optional group-stage
 // split) and create-series forms, a status/search filter over the list, and each tournament as a
@@ -194,6 +195,16 @@ export function TournamentsScreen({
   const [tournamentRules, setTournamentRules] = useState({
     ...DEFAULT_RULES
   });
+  // Same paginated pattern as SetupScreen's own "New Match" flow -- one page at a time instead of
+  // one long scroll past teams, groups, and (now that it covers every match rule, not just 5) a
+  // much longer rules editor than when this form was first built.
+  const CREATE_TOURNAMENT_PAGE_ORDER = ["details", "rules", "review"];
+  const CREATE_TOURNAMENT_PAGE_LABELS = {
+    details: "Teams & Format",
+    rules: "Match Rules",
+    review: "Review"
+  };
+  const [currentPage, setCurrentPage] = useState(CREATE_TOURNAMENT_PAGE_ORDER[0]);
   // The advance-per-group picker offers 1/2/3 unconditionally, with no upper bound tied to how
   // many teams actually end up in the smallest group -- so it's entirely possible to pick a
   // combination that's mathematically impossible (e.g. 4 teams split into 4 groups of 1, with
@@ -256,7 +267,27 @@ export function TournamentsScreen({
     setTournamentRules({
       ...DEFAULT_RULES
     });
+    setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setCreating(true);
+  }
+  const currentPageIndex = CREATE_TOURNAMENT_PAGE_ORDER.indexOf(currentPage);
+  // "details" is the only page with fields that can actually block moving on -- rules and review
+  // are both always valid (rules is optional by design, review has nothing left to fill in).
+  // Matches submitCreate's own gating exactly -- advanceExceedsGroupSize only ever shows an
+  // advisory warning below (never blocked Create before this form was paginated), so it doesn't
+  // block Next either.
+  const detailsPageValid = name.trim() && selectedTeams.length >= 2;
+  const createPageValid = currentPage === "details" ? detailsPageValid : true;
+  function goNextPage() {
+    if (!createPageValid || currentPageIndex >= CREATE_TOURNAMENT_PAGE_ORDER.length - 1) return;
+    setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[currentPageIndex + 1]);
+  }
+  function goBackPage() {
+    if (currentPageIndex === 0) {
+      setCreating(false);
+      return;
+    }
+    setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[currentPageIndex - 1]);
   }
   async function submitCreate() {
     if (!name.trim() || selectedTeams.length < 2 || busy) return;
@@ -813,13 +844,23 @@ export function TournamentsScreen({
       marginBottom: 16,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement(Field, {
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 14
+    }
+  }, "Step ", currentPageIndex + 1, " of ", CREATE_TOURNAMENT_PAGE_ORDER.length, " · ", CREATE_TOURNAMENT_PAGE_LABELS[currentPage]), currentPage === "details" && /*#__PURE__*/React.createElement(Field, {
     label: "Tournament name"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: name,
     onChange: setName,
     placeholder: "e.g. Summer T20 League"
-  })), /*#__PURE__*/React.createElement("div", {
+  })), currentPage === "details" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -827,7 +868,7 @@ export function TournamentsScreen({
       color: COLORS.inkSoft,
       margin: "14px 0 8px"
     }
-  }, "Participating teams (", selectedTeams.length, " selected)"), /*#__PURE__*/React.createElement("div", {
+  }, "Participating teams (", selectedTeams.length, " selected)"), currentPage === "details" && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -851,7 +892,7 @@ export function TournamentsScreen({
       fontWeight: 600,
       fontSize: 12.5
     }
-  }, n))), federationTeamOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, n))), currentPage === "details" && federationTeamOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -861,7 +902,7 @@ export function TournamentsScreen({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "From federation clubs"), federationTeamOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "From federation clubs"), currentPage === "details" && federationTeamOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -890,7 +931,7 @@ export function TournamentsScreen({
       opacity: 0.65,
       fontWeight: 500
     }
-  }, "\u00b7 ", t.clubName)))), selectedTeams.length >= 2 && !useGroups && /*#__PURE__*/React.createElement("div", {
+  }, "\u00b7 ", t.clubName)))), currentPage === "details" && selectedTeams.length >= 2 && !useGroups && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -898,7 +939,7 @@ export function TournamentsScreen({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, `${selectedTeams.length} teams, one round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), selectedTeams.length >= 4 && /*#__PURE__*/React.createElement("div", {
+  }, `${selectedTeams.length} teams, one round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), currentPage === "details" && selectedTeams.length >= 4 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 4,
       marginBottom: 14
@@ -1079,7 +1120,15 @@ export function TournamentsScreen({
       padding: "1.5px 6px",
       borderRadius: 8
     }
-  }, GROUP_LABELS[teamGroupIndex(t)].replace("Group ", ""))))))), renderTournamentRulesSection(), error && /*#__PURE__*/React.createElement("div", {
+  }, GROUP_LABELS[teamGroupIndex(t)].replace("Group ", ""))))))), currentPage === "rules" && renderTournamentRulesSection(), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink,
+      lineHeight: 1.8,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each \u2192 ${numGroups * advancePerGroup} qualifiers \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -1092,18 +1141,18 @@ export function TournamentsScreen({
       gap: 8
     }
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setCreating(false),
+    onClick: goBackPage,
     style: {
       flex: 1
     }
-  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
+  }, currentPageIndex === 0 ? "Cancel" : "Back"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !name.trim() || selectedTeams.length < 2 || busy,
-    onClick: submitCreate,
+    disabled: currentPage === "review" ? !name.trim() || selectedTeams.length < 2 || busy : !createPageValid,
+    onClick: () => currentPage === "review" ? submitCreate() : goNextPage(),
     style: {
       flex: 2
     }
-  }, busy ? "Creating\u2026" : "Create"))), visibleTournaments.length > 0 ? visibleTournaments.map(t => /*#__PURE__*/React.createElement("button", {
+  }, currentPage === "review" ? busy ? "Creating\u2026" : "Create" : currentPageIndex === CREATE_TOURNAMENT_PAGE_ORDER.length - 2 ? "Review" : "Next"))), visibleTournaments.length > 0 ? visibleTournaments.map(t => /*#__PURE__*/React.createElement("button", {
     key: t.id,
     onClick: () => onOpenTournament(t),
     className: "cs-btn",
