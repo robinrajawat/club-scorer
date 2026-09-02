@@ -1821,11 +1821,24 @@ export function MatchScreen({
       margin: "10px 12px 0",
       fontFamily: "'Inter'",
       fontSize: 12.5,
-      fontStyle: "italic",
       color: COLORS.inkSoft,
       textAlign: "center"
     }
-  }, ballCommentary), /*#__PURE__*/React.createElement("div", {
+  }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      // Same color grouping BallBadge already uses elsewhere (green four, gold six/bonus hit, red
+      // wicket, purple wide/no-ball) -- so the outcome reads at a glance instead of blending into
+      // plain gray text regardless of what actually happened on the ball.
+      color: {
+        four: COLORS.turf,
+        six: COLORS.gold,
+        wicket: COLORS.ball,
+        wide: "#7b3fa0",
+        noball: "#7b3fa0"
+      }[ballCommentary.kind] || COLORS.ink
+    }
+  }, ballCommentary.outcome)), /*#__PURE__*/React.createElement("div", {
     style: {
       margin: "14px 12px 0"
     }
