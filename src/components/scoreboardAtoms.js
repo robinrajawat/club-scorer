@@ -33,7 +33,20 @@ export function OversStrip({
   const [activeIndex, setActiveIndex] = useState(lastIndex);
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+      const el = scrollRef.current;
+      el.scrollLeft = el.scrollWidth;
+      // Forces a synchronous layout flush right after the jump above. Best working theory for a
+      // long-reported glitch where "Not started" (the fresh empty over this jump usually lands on)
+      // renders with a stray leftover mark and part of its text missing, stuck until some other
+      // state change forces React to touch this DOM again: iOS Safari can leave stale/mistiled
+      // paint behind when scrollLeft is set programmatically (not via a user gesture) on a
+      // scroll-snap container in the same tick a new child was inserted, rather than repainting the
+      // newly-scrolled-to area cleanly. Reading offsetHeight forces the browser to recompute layout
+      // before the next paint instead of coalescing it with whatever comes later, which is the
+      // standard nudge for this class of WebKit stale-paint bug. Unconfirmed without a repro on the
+      // reporting device (this app's test suite runs headless, which never reproduced it either),
+      // but reading a layout property back has no functional effect either way.
+      void el.offsetHeight;
     }
     setActiveIndex(lastIndex);
   }, [totalBalls, safeOvers.length]);
@@ -91,7 +104,13 @@ export function OversStrip({
       display: "flex",
       overflowX: "auto",
       scrollSnapType: "x mandatory",
-      WebkitOverflowScrolling: "touch"
+      WebkitOverflowScrolling: "touch",
+      // Promotes this scroller to its own compositing layer -- part of the same stale-paint
+      // mitigation as the offsetHeight read in the effect above (see its comment). A container
+      // whose content changes AND scroll position jumps programmatically in the same tick is
+      // exactly where iOS Safari has historically left old tile content behind after the jump.
+      WebkitTransform: "translateZ(0)",
+      transform: "translateZ(0)"
     }
   }, safeOvers.map((balls, i) => {
     const isCurrent = i === lastIndex;
