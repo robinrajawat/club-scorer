@@ -32319,6 +32319,16 @@ function MatchScreen({
   // raced ours — see applySaveResult below and the resolution modal near the end of this file.
   const inningIdx = match.currentInningIndex;
   const inning = match.innings[inningIdx];
+  // The one-line ball commentary has no self-clearing timer (unlike celebration/milestoneToast,
+  // both of which dismiss themselves) -- it's meant to persist until the next ball. That's right
+  // mid-innings, but MatchScreen itself never unmounts across the innings break (it just renders
+  // SecondInningsSetup in place of the normal scoring UI while awaitingSecondInningsSetup is true,
+  // then reverts to this same component instance), so without this the LAST ball of the first
+  // innings kept showing here as soon as the second innings' scoring screen appeared, describing a
+  // delivery from a different innings entirely.
+  useEffect(() => {
+    setBallCommentary(null);
+  }, [inningIdx]);
   // NRR qualification banner: only meaningful once a scenario was saved (see
   // QualificationCalculatorModal) FOR one of this match's two teams, and only shown once the
   // batting order it assumed actually matches reality — showing a wrong-order calculation would
