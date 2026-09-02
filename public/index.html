@@ -37363,7 +37363,15 @@ function CricketScorer() {
       replace: true
     });
     setPresetTournament(null);
-    if (setup.rules) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
+    // BUG FIX: this used to run unconditionally, so a tournament's own rules (Free Hit, custom
+    // wide/no-ball runs, whatever house rules that competition set) got remembered as THIS DEVICE's
+    // own default -- meaning the very next standalone "New Match" from Home (no tournament
+    // involved) silently inherited them instead of starting from DEFAULT_RULES/standard, which is
+    // what someone starting a plain friendly expects. Mirrors SetupScreen's own reasoning for why a
+    // tournament's defaultRules take priority OVER this saved value when one IS in play (see its
+    // matchRules comment) -- the same asymmetry applies here: a tournament's rules are allowed to
+    // flow INTO its own matches, but must never flow back OUT into becoming everyone's new default.
+    if (setup.rules && !setup.tournamentId) handleSaveRules(setup.rules); // remember as the default seed for next match's setup screen
     // Came from "Score this fixture" — link the new match back onto that fixture so it shows as
     // played instead of staying listed as upcoming. Not awaited, same as elsewhere this fire-
     // and-forget pattern is already used (e.g. handleDelete's tournament cleanup below) — a
