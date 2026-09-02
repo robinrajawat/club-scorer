@@ -20117,7 +20117,27 @@ function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None")))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "None")), matchRules.retirementRuns !== null && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      marginTop: 6,
+      lineHeight: 1.5
+    }
+  }, "Return timing and order are down to your competition's own rules — e.g. some require the rest of the batting order to bat first, or returning in the order retired. The app doesn't enforce this; it's on the scorer to apply.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, "New batsman ready time"), " — how long an incoming batsman has to be ready is down to your competition's own rules. There's no automatic clock; if they're not ready in time, record it as Timed Out from the Next Batsman prompt during scoring — a scorer judgment call, same as the umpire's in real play.")), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
