@@ -3399,19 +3399,34 @@ async function inviteCoOwner(scope, entityId, email) {
     };
   }
 }
-// Loads every coOwnerInvites row that involves me: ones I sent (entityId among clubs/federations I
-// own/co-own) or ones addressed to me (my own signed-in email) — feeds the Inbox screen's
-// co-owner-invites section and its notification badge, same "two queries, merge by id" shape as
-// loadMyFederationRequests. Firestore 'in' tops out at 10 ids, same limit that function accepts.
-async function loadMyCoOwnerInvites(clubIds, federationIds) {
+// Loads every coOwnerInvites row that involves me: ones I personally sent (createdBy == my uid) or
+// ones addressed to me (my own signed-in email) — feeds the Inbox screen's co-owner-invites section
+// and its notification badge.
+//
+// BUG FIX: this used to query `where("entityId", "in", entityIds)` for "ones I sent" — filtering by
+// the club/federation I own rather than by who actually created the invite. That query can never
+// succeed under firestore.rules' coOwnerInviteCanList: Firestore can only allow a `list`/query
+// request when it can prove, from the query's OWN filter alone, that every possible result document
+// satisfies the rule — and neither OR-branch of coOwnerInviteCanList (recipient-by-email,
+// creator-by-uid) says anything about entityId, so an entityId-filtered query is categorically
+// unprovable and gets denied outright, regardless of what data actually exists (confirmed directly:
+// even a `where("entityId","==",...)` query for a real, owned club failed identically to the `in`
+// version). Querying `createdBy == my uid` instead structurally matches the rule's creator-by-uid
+// branch, so Firestore can prove it and the query succeeds.
+//
+// Real, deliberate narrowing versus the old (never-actually-working) intent: a co-owner who didn't
+// personally create a given invite still won't see it here, only its actual creator will — same gap
+// already flagged in firestore.rules' comment on coOwnerInviteCanList. Closing that would mean
+// denormalizing owner/co-owner uids onto the invite doc itself at send time.
+async function loadMyCoOwnerInvites() {
   if (!auth.currentUser) return [];
   try {
-    const entityIds = [...(clubIds || []), ...(federationIds || [])].slice(0, 10);
     const myEmail = (auth.currentUser.email || "").toLowerCase();
-    const queries = [db.collection("coOwnerInvites").where("email", "==", myEmail).get()];
-    if (entityIds.length) {
-      queries.push(db.collection("coOwnerInvites").where("entityId", "in", entityIds).get());
-    }
+    const myUid = auth.currentUser.uid;
+    const queries = [
+      db.collection("coOwnerInvites").where("email", "==", myEmail).get(),
+      db.collection("coOwnerInvites").where("createdBy", "==", myUid).get()
+    ];
     const snaps = await Promise.all(queries);
     const seen = new Map();
     snaps.forEach(snap => snap.docs.forEach(d => seen.set(d.id, {
@@ -37173,24 +37188,21 @@ function CricketScorer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
   async function refreshMyCoOwnerInvites() {
-    const rows = await loadMyCoOwnerInvites(myOwnedClubIds, myOwnedFederationIds);
+    const rows = await loadMyCoOwnerInvites();
     setMyCoOwnerInvites(rows);
   }
-  // Same trigger condition as the federationRequests effect above (the owner/co-owner set changing,
-  // or signing in) -- feeds the Inbox screen's co-owner-invites section and the other half of its
-  // badge count, alongside federationRequestsNeedingAction below.
+  // Feeds the Inbox screen's co-owner-invites section and the other half of its badge count,
+  // alongside federationRequestsNeedingAction below. Unlike the federationRequests effect above,
+  // this doesn't depend on myOwnedClubIds/myOwnedFederationIds at all — loadMyCoOwnerInvites now
+  // queries by my own uid/email only (see its comment), not by which entities I own.
   useEffect(() => {
-    // Unlike the federationRequests effect above, this isn't gated on owning/co-owning anything —
-    // an invite addressed to my own email is loaded regardless (loadMyCoOwnerInvites's recipient
-    // query only needs me to be signed in), since anyone can be invited to co-own something they
-    // don't otherwise administer yet.
     if (!user) {
       setMyCoOwnerInvites([]);
       return;
     }
     refreshMyCoOwnerInvites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  }, [user]);
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
