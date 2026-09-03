@@ -1527,32 +1527,37 @@ export function CricketScorer() {
     return result;
   }
   // Recipient accepting/declining a co-owner or member invite -- see respondCoOwnerInvite in
-  // index.html. On accept, mirrors the resulting coOwnerUids (coOwner role, club or federation)
-  // or memberUids-only (member role, club only) grant onto local clubs/federationsById state so
-  // it shows up without waiting for a full refresh.
+  // index.html. On accept, mirrors the resulting grant onto local clubs/federationsById state so
+  // it shows up without waiting for a full refreshClubs().
+  //
+  // BUG FIX: this used to patch the club/federation already in local state via
+  // cs.map(c => c.id === result.entityId ? {...} : c) -- a no-op for the common case of accepting
+  // an invite to somewhere you had NO prior access to (the whole point of an invite), since
+  // .map() only updates an element that's already present, it never adds a new one. The club (or
+  // federation) -- and, for a club, its teams, since nothing ever called loadClubTeams for an id
+  // that was never in clubTeamsById -- would silently stay invisible for the rest of the session,
+  // fixed only by a full reload (which reruns refreshClubs() from scratch and picks it up
+  // correctly, since the underlying Firestore write was always correct -- this was purely a local
+  // state bug). Fixed by using the real, freshly-fetched entity respondCoOwnerInvite now returns
+  // (result.entity) and inserting/replacing it wholesale, the same "filter out any stale copy,
+  // concat the real one" shape handleJoinClub already uses correctly for the equivalent
+  // code-based join -- plus loading its teams explicitly, same as that function does too.
   async function handleRespondCoOwnerInvite(inviteId, accept) {
     const result = await respondCoOwnerInvite(inviteId, accept);
-    if (result.ok) {
-      if (accept && result.scope === "club") {
-        setClubs(cs => cs.map(c => c.id === result.entityId ? {
-          ...c,
-          memberUids: [...new Set([...(c.memberUids || []), user.uid])],
-          coOwnerUids: result.role === "member" ? (c.coOwnerUids || []) : [...new Set([...(c.coOwnerUids || []), user.uid])],
-          memberNames: { ...(c.memberNames || {}),
-            [user.uid]: user.displayName || user.email || "Member"
-          }
-        } : c));
-      } else if (accept && result.scope === "federation") {
-        setFederationsById(prev => {
-          const fed = prev[result.entityId];
-          if (!fed) return prev;
-          return { ...prev,
-            [result.entityId]: { ...fed,
-              coOwnerUids: [...new Set([...(fed.coOwnerUids || []), user.uid])]
-            }
-          };
-        });
+    if (result.ok && accept && result.entity) {
+      if (result.scope === "club") {
+        setClubs(cs => [...cs.filter(c => c.id !== result.entityId), result.entity]);
+        const teamList = await loadClubTeams(result.entityId);
+        setClubTeamsById(prev => ({ ...prev,
+          [result.entityId]: teamList
+        }));
+      } else if (result.scope === "federation") {
+        setFederationsById(prev => ({ ...prev,
+          [result.entityId]: result.entity
+        }));
       }
+    }
+    if (result.ok) {
       setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
         ...inv,
         status: accept ? "accepted" : "declined"
