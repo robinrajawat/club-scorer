@@ -596,20 +596,21 @@ export function CricketScorer() {
   const myOwnedClubIds = clubs.filter(c => isClubOwner(c, user && user.uid)).map(c => c.id);
   const myOwnedFederationIds = Object.values(federationsById).filter(f => f && user && (f.createdBy === user.uid || (f.coOwnerUids || []).includes(user.uid))).map(f => f.id);
   async function refreshMyFederationRequests() {
-    const rows = await loadMyFederationRequests(myOwnedClubIds, myOwnedFederationIds);
+    const rows = await loadMyFederationRequests();
     setMyFederationRequests(rows);
   }
-  // Reloads whenever the set of clubs/federations I own or co-own changes (sign-in, club/
-  // federation created, ownership granted) — feeds the Inbox screen's requests section, and half
-  // of its combined badge count (see pendingPollItems below for the other half).
+  // Feeds the Inbox screen's requests section, and half of its combined badge count (see
+  // pendingPollItems below for the other half). Unlike before, doesn't depend on
+  // myOwnedClubIds/myOwnedFederationIds -- loadMyFederationRequests now queries by fromUid/
+  // toOwnerUids on the request itself (see its comment), not by which entities I currently own.
   useEffect(() => {
-    if (!user || (myOwnedClubIds.length === 0 && myOwnedFederationIds.length === 0)) {
+    if (!user) {
       setMyFederationRequests([]);
       return;
     }
     refreshMyFederationRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  }, [user]);
   async function refreshMyCoOwnerInvites() {
     const rows = await loadMyCoOwnerInvites();
     setMyCoOwnerInvites(rows);

@@ -3330,10 +3330,18 @@ async function inviteCoOwner(scope, entityId, email, role) {
     error: "Enter a valid email address."
   };
   try {
+    // Snapshot the club/federation's name onto the invite itself -- the recipient isn't a member
+    // (or, for a club, may never become one if they decline) so they have NO read access to the
+    // real /clubs or /federations doc to look this up themselves; without this, the Inbox card had
+    // nothing to show but "a club"/"a federation". The sender (this call) already has read access
+    // to their own entity, club (membership) or federation (open read) either way.
+    const entityDoc = await db.collection(scope === "club" ? "clubs" : "federations").doc(entityId).get();
+    const entityName = (entityDoc.data() || {}).name || "";
     const ref = db.collection("coOwnerInvites").doc();
     const doc = {
       scope,
       entityId,
+      entityName,
       email: cleaned,
       role: role || "coOwner",
       createdBy: auth.currentUser.uid,
@@ -4218,6 +4226,11 @@ async function setClubVisibility(clubId, isPublic) {
         clubId,
         name: club.name || "",
         ownerName: (club.memberNames || {})[club.ownerUid] || "",
+        // Not for search -- lets a federation owner (who isn't a club member) read this club's
+        // owner/co-owner uids client-side to build toOwnerUids on a "federation_to_club" request.
+        // See firestore.rules' comment on this collection for the full reasoning.
+        ownerUid: club.ownerUid,
+        coOwnerUids: club.coOwnerUids || [],
         updatedAt: Date.now()
       });
     } else {
@@ -4290,12 +4303,30 @@ async function searchPublicClubs(term) {
 // Club owner requesting to join a PUBLIC federation, or a federation owner inviting a PUBLIC
 // club — direction is "club_to_federation" or "federation_to_club". Only ever creates one pending
 // request; see firestore.rules for who's allowed to accept/decline/cancel it.
+//
+// toOwnerUids snapshots the RECEIVING side's owner/co-owner uids at send time -- see
+// firestore.rules' BUG FIX comment on this collection for why: `list` can't be gated on a live
+// get()-based ownership check (same wall coOwnerInvites hit), so this is what makes the request
+// findable by its recipient at all. For "club_to_federation" the sender already has open read
+// access to the federation doc to read this from; for "federation_to_club" the sender (a
+// federation owner) is never a member of the target club, so this reads /clubDirectory instead
+// (see its rules comment for why that mirror carries ownerUid/coOwnerUids in the first place).
 async function requestFederationAffiliation(direction, clubId, federationId) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
   };
   try {
+    let toOwnerUids;
+    if (direction === "club_to_federation") {
+      const fedDoc = await db.collection("federations").doc(federationId).get();
+      const fed = fedDoc.data() || {};
+      toOwnerUids = [...new Set([...(fed.coOwnerUids || []), fed.createdBy].filter(Boolean))];
+    } else {
+      const dirDoc = await db.collection("clubDirectory").doc(clubId).get();
+      const dir = dirDoc.data() || {};
+      toOwnerUids = [...new Set([...(dir.coOwnerUids || []), dir.ownerUid].filter(Boolean))];
+    }
     const ref = db.collection("federationRequests").doc();
     const reqDoc = {
       direction,
@@ -4304,6 +4335,7 @@ async function requestFederationAffiliation(direction, clubId, federationId) {
       status: "pending",
       fromUid: auth.currentUser.uid,
       fromName: auth.currentUser.displayName || auth.currentUser.email || "",
+      toOwnerUids,
       createdAt: Date.now()
     };
     await ref.set(reqDoc);
@@ -4399,21 +4431,20 @@ async function completeAcceptedFederationRequest(requestId, clubId, federationId
     };
   }
 }
-// Loads every federationRequests row touching a club or federation I own/co-own — used for both
-// the notification badge count and the Requests inbox. `clubIds`/`federationIds` are the caller's
-// own owned/co-owned ids (Firestore 'in' tops out at 10, generous for how many clubs/federations
-// one person realistically owns/co-owns).
-async function loadMyFederationRequests(clubIds, federationIds) {
+// Loads every federationRequests row touching me — ones I sent (fromUid == my uid) or ones
+// addressed to a club/federation I own/co-own as of when they were sent (toOwnerUids -- see
+// requestFederationAffiliation's comment and firestore.rules' BUG FIX comment on this collection
+// for why it's no longer a clubId/federationId query: neither field is something a get()-free
+// list rule can vouch for, so that shape was permission-denied unconditionally). Used for both the
+// notification badge count and the Requests inbox.
+async function loadMyFederationRequests() {
   if (!auth.currentUser) return [];
   try {
-    const queries = [];
-    if (clubIds && clubIds.length) {
-      queries.push(db.collection("federationRequests").where("clubId", "in", clubIds.slice(0, 10)).get());
-    }
-    if (federationIds && federationIds.length) {
-      queries.push(db.collection("federationRequests").where("federationId", "in", federationIds.slice(0, 10)).get());
-    }
-    if (!queries.length) return [];
+    const myUid = auth.currentUser.uid;
+    const queries = [
+      db.collection("federationRequests").where("fromUid", "==", myUid).get(),
+      db.collection("federationRequests").where("toOwnerUids", "array-contains", myUid).get()
+    ];
     const snaps = await Promise.all(queries);
     const seen = new Map();
     snaps.forEach(snap => snap.docs.forEach(d => seen.set(d.id, {
@@ -15265,6 +15296,11 @@ function InboxScreen({
   const [coOwnerBusyId, setCoOwnerBusyId] = useState(null);
   const [error, setError] = useState("");
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
+  // Accepting/declining a co-owner invite used to give NO feedback at all -- the card just
+  // vanished from the incoming list with nothing to confirm it worked. This is the one-time
+  // confirmation shown right after responding, cleared on the next navigation into this screen
+  // (see the recipient's own click handler below for where it's set).
+  const [justRespondedCoOwnerInvite, setJustRespondedCoOwnerInvite] = useState(null); // {name, accept, role} | null
   function clubById(id) {
     return clubs.find(c => c.id === id) || null;
   }
@@ -15291,17 +15327,57 @@ function InboxScreen({
   const needsFinalize = requests.filter(r => r.direction === "club_to_federation" && r.status === "accepted" && isMyClub(r.clubId));
   const myEmailLower = (currentEmail || "").toLowerCase();
   const incomingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
-  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.createdBy === currentUid);
+  // Sending an invite used to give the sender no way to ever find out what happened to it -- an
+  // accepted/declined invite just dropped out of this same status==="pending" filter and was gone
+  // for good. Keeping a resolved one visible for a week (the same expiry window a still-pending
+  // invite gets, see CLUB_INVITE_TTL_DAYS in index.html) gives the sender one real chance to see
+  // the outcome next time they open their Inbox, then lets it quietly age out like everything else
+  // here rather than needing an explicit dismiss action this collection's rules don't support
+  // anyway (delete is `false` -- see firestore.rules).
+  const RESOLVED_COOWNER_INVITE_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
+  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => {
+    if (inv.createdBy !== currentUid) return false;
+    if (inv.status === "pending") return true;
+    if (inv.status === "accepted" || inv.status === "declined") {
+      return inv.respondedAt && Date.now() - inv.respondedAt < RESOLVED_COOWNER_INVITE_VISIBLE_MS;
+    }
+    return false; // cancelled -- the sender already knows, they did it themselves
+  });
+  // Prefers the name snapshotted onto the invite itself at send time (see inviteCoOwner in
+  // index.html) -- the recipient of an incoming invite has no read access to the real club/
+  // federation doc (not a member yet), so clubName/fedName's own-data lookup would come up empty
+  // for them specifically. Falls back to that lookup for any invite sent before this field
+  // existed, and for the sender's own outgoing card (already has full access either way).
   function coOwnerInviteEntityName(inv) {
+    if (inv.entityName) return inv.entityName;
     return inv.scope === "club" ? clubName(inv.entityId) : fedName(inv.entityId);
+  }
+  // The "sent" card's own copy, branching on how it was resolved -- see outgoingCoOwnerInvites
+  // above for why a resolved one still shows up here at all.
+  function outgoingCoOwnerInviteLine(inv) {
+    const name = coOwnerInviteEntityName(inv);
+    const roleWord = inv.role === "member" ? "join" : "co-own";
+    if (inv.status === "accepted") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, inv.email), " accepted your invite to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name));
+    if (inv.status === "declined") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, inv.email), " declined your invite to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name));
+    return /*#__PURE__*/React.createElement(React.Fragment, null, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name), " — waiting on a response");
   }
   async function handleRespondCoOwner(inv, accept) {
     if (coOwnerBusyId) return;
     setCoOwnerBusyId(inv.id);
     setError("");
+    setJustRespondedCoOwnerInvite(null);
+    const name = coOwnerInviteEntityName(inv);
     const result = await onRespondCoOwnerInvite(inv.id, accept);
     setCoOwnerBusyId(null);
-    if (!result.ok) setError(result.error || "Couldn't respond to that invite.");
+    if (!result.ok) {
+      setError(result.error || "Couldn't respond to that invite.");
+      return;
+    }
+    setJustRespondedCoOwnerInvite({
+      name,
+      accept,
+      role: inv.role
+    });
   }
   async function handleCancelCoOwner(inv) {
     if (coOwnerBusyId) return;
@@ -15417,7 +15493,19 @@ function InboxScreen({
       color: COLORS.ball,
       lineHeight: 1.5
     }
-  }, error), isEmpty && /*#__PURE__*/React.createElement("div", {
+  }, error), justRespondedCoOwnerInvite && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "color-mix(in srgb, " + COLORS.turfFixed + " 12%, transparent)",
+      border: `1.5px solid color-mix(in srgb, ${COLORS.turfFixed} 35%, transparent)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      lineHeight: 1.5
+    }
+  }, justRespondedCoOwnerInvite.accept ? /*#__PURE__*/React.createElement(React.Fragment, null, "You're now a ", justRespondedCoOwnerInvite.role === "member" ? "member" : "co-owner", " of ", /*#__PURE__*/React.createElement("strong", null, justRespondedCoOwnerInvite.name), ".") : /*#__PURE__*/React.createElement(React.Fragment, null, "You declined the invite to ", /*#__PURE__*/React.createElement("strong", null, justRespondedCoOwnerInvite.name), ".")), isEmpty && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
@@ -15634,7 +15722,7 @@ function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), inv.role === "member" ? " to join " : " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+  }, outgoingCoOwnerInviteLine(inv)), inv.status === "pending" && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwner(inv),
     disabled: coOwnerBusyId === inv.id,
     className: "cs-btn",
@@ -37125,20 +37213,21 @@ function CricketScorer() {
   const myOwnedClubIds = clubs.filter(c => isClubOwner(c, user && user.uid)).map(c => c.id);
   const myOwnedFederationIds = Object.values(federationsById).filter(f => f && user && (f.createdBy === user.uid || (f.coOwnerUids || []).includes(user.uid))).map(f => f.id);
   async function refreshMyFederationRequests() {
-    const rows = await loadMyFederationRequests(myOwnedClubIds, myOwnedFederationIds);
+    const rows = await loadMyFederationRequests();
     setMyFederationRequests(rows);
   }
-  // Reloads whenever the set of clubs/federations I own or co-own changes (sign-in, club/
-  // federation created, ownership granted) — feeds the Inbox screen's requests section, and half
-  // of its combined badge count (see pendingPollItems below for the other half).
+  // Feeds the Inbox screen's requests section, and half of its combined badge count (see
+  // pendingPollItems below for the other half). Unlike before, doesn't depend on
+  // myOwnedClubIds/myOwnedFederationIds -- loadMyFederationRequests now queries by fromUid/
+  // toOwnerUids on the request itself (see its comment), not by which entities I currently own.
   useEffect(() => {
-    if (!user || (myOwnedClubIds.length === 0 && myOwnedFederationIds.length === 0)) {
+    if (!user) {
       setMyFederationRequests([]);
       return;
     }
     refreshMyFederationRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  }, [user]);
   async function refreshMyCoOwnerInvites() {
     const rows = await loadMyCoOwnerInvites();
     setMyCoOwnerInvites(rows);

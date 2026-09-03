@@ -793,13 +793,24 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Public directories — a lightweight denormalized entry (name + owner name only) so a club or
-    // federation can be found by search WITHOUT exposing the real document (roster, member uids,
-    // pending invites, description). A club/federation owner publishes exactly one of these the
-    // moment they flip visibility to "public" (see setClubVisibility/setFederationVisibility in
-    // index.html), and it's deleted the instant they go private again. Same "found by design"
-    // trust level as the /players directory above — read is open to any signed-in user so the
-    // search UI can just list the whole (small) collection and filter client-side.
+    // Public directories — a lightweight denormalized entry so a club or federation can be found
+    // by search WITHOUT exposing the real document (roster, pending invites, description). A
+    // club/federation owner publishes exactly one of these the moment they flip visibility to
+    // "public" (see setClubVisibility/setFederationVisibility in index.html), and it's deleted the
+    // instant they go private again. Same "found by design" trust level as the /players directory
+    // above — read is open to any signed-in user so the search UI can just list the whole (small)
+    // collection and filter client-side.
+    //
+    // /clubDirectory also carries ownerUid/coOwnerUids (not just name/ownerName) — not for search,
+    // but so a federation owner proposing a "federation_to_club" request (see /federationRequests
+    // below) can read the target PUBLIC club's owner/co-owner uids client-side to denormalize them
+    // onto the request as toOwnerUids, without needing club membership: reading the real /clubs
+    // doc requires being a member (see clubs/{clubId} read rule), which a federation owner
+    // proposing to a club they don't belong to never is. This mirror can go stale if the club's
+    // ownership changes after it last republished (only setClubVisibility(true) refreshes it, same
+    // pre-existing staleness as name/ownerName) — accepted for the same reason those already are:
+    // a spoofed or stale value here can't itself grant anything, since federationRequests' create
+    // rule validates toOwnerUids against the REAL /clubs doc, not this mirror.
     // ---------------------------------------------------------------------
     match /clubDirectory/{clubId} {
       allow get, list: if request.auth != null;
@@ -834,11 +845,38 @@ service cloud.firestore {
     // to "accepted" here, because a federation must never get direct write access to a club
     // document; the requesting club's OWNER finishes the join themselves the next time they see
     // the acceptance (status -> "joined", see completeAcceptedFederationRequest in index.html).
+    //
+    // BUG FIX: `list`/`get` used to be gated on canSeeRequest doing a LIVE
+    // isClubOwner(get(clubs/data.clubId)) / isFederationOwner(get(federations/data.federationId))
+    // check — the exact same get()-in-a-list-rule shape flagged (but not fixed) when coOwnerInvites
+    // hit this same wall; see that collection's BUG FIX comment below for the full mechanism
+    // (Firestore can't prove a list request's rule holds without first fetching a document, and
+    // fetching is the very thing being authorized, so it refuses the whole request outright,
+    // regardless of what data exists). Confirmed here too: loadMyFederationRequests' client query
+    // filters by clubId/federationId, neither of which a get()-free rule can vouch for, so this
+    // was permission-denied unconditionally the whole time this shape existed — worse than
+    // coOwnerInvites' equivalent bug, since (unlike a co-owner invite's recipient-by-email path)
+    // there was no field on this doc a get()-free rule COULD check for the receiving side at all.
+    //
+    // Fix: denormalize the receiving side's owner/co-owner uids onto the request doc itself at
+    // create time (toOwnerUids), validated against live ownership in the create rule (get() has no
+    // circularity problem in create/update, only in list) so a client can't spoof its way into
+    // someone else's toOwnerUids. `get`/`list` then only need fromUid (the sender) or membership in
+    // toOwnerUids (the receiving side) — both plain resource.data/request.auth comparisons, no
+    // cross-document lookup. For "federation_to_club" the federation owner computing toOwnerUids
+    // client-side needs the target club's owner/co-owner uids without being a club member — see
+    // /clubDirectory below, now carrying ownerUid/coOwnerUids for exactly this (a public club is
+    // already a precondition of this direction, same precondition clubDirectory itself requires).
+    // Real, deliberate narrowing: toOwnerUids is a snapshot as of when the request was created — an
+    // owner/co-owner added to the receiving side afterward won't see this request in their list
+    // (though a still-current owner who WAS on it at creation time can still act on it via `update`
+    // below, which uses live ownership, not this snapshot, since update has no list-style
+    // circularity to route around). Not closed here.
     // ---------------------------------------------------------------------
     match /federationRequests/{requestId} {
       function canSeeRequest(data) {
-        return isClubOwner(get(/databases/$(database)/documents/clubs/$(data.clubId)).data)
-          || isFederationOwner(get(/databases/$(database)/documents/federations/$(data.federationId)).data);
+        return data.get('fromUid', '') == request.auth.uid
+          || request.auth.uid in data.get('toOwnerUids', []);
       }
       allow get: if request.auth != null && canSeeRequest(resource.data);
       allow list: if request.auth != null && canSeeRequest(resource.data);
@@ -847,17 +885,27 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.clubId is string
         && request.resource.data.federationId is string
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toOwnerUids is list
         && (
           (
             request.resource.data.direction == 'club_to_federation' &&
             isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data) &&
-            get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('visibility', 'private') == 'public'
+            get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('visibility', 'private') == 'public' &&
+            request.resource.data.toOwnerUids.hasOnly(
+              get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('coOwnerUids', [])
+                .concat([get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.createdBy])
+            )
           )
           ||
           (
             request.resource.data.direction == 'federation_to_club' &&
             isFederationOwner(get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data) &&
-            get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('visibility', 'private') == 'public'
+            get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('visibility', 'private') == 'public' &&
+            request.resource.data.toOwnerUids.hasOnly(
+              get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('coOwnerUids', [])
+                .concat([get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.ownerUid])
+            )
           )
         );
 
