@@ -1133,7 +1133,7 @@ function renderMatchCard(m, i, {
       color: COLORS.ball,
       marginBottom: 10
     }
-  }, "Delete this match?"), /*#__PURE__*/React.createElement("div", {
+  }, matchToConfirmDelete.status !== "complete" ? "Delete this in-progress match?" : "Delete this match?"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -1141,7 +1141,13 @@ function renderMatchCard(m, i, {
       lineHeight: 1.6,
       marginBottom: 18
     }
-  }, matchToConfirmDelete.teamA, " vs ", matchToConfirmDelete.teamB, " will be permanently removed from your saved matches. This can\u2019t be undone."), /*#__PURE__*/React.createElement("div", {
+  }, matchToConfirmDelete.status !== "complete"
+    // Same swipe-and-confirm path as a completed match, but a completed one is just historical
+    // data at that point -- this one is still live, so an accidental swipe here throws away
+    // everything scored so far, not a finished record sitting safely in the background. Called
+    // out explicitly rather than reusing the completed-match wording verbatim.
+    ? `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} is still in progress \u2014 deleting it throws away everything scored so far, not just a finished record. This can\u2019t be undone.`
+    : `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} will be permanently removed from your saved matches. This can\u2019t be undone.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
