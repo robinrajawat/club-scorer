@@ -474,6 +474,21 @@ test("MatchScreen: the next-bowler prompt appears at an over boundary, and confi
   assert.equal(ctx.inning.bowlerName, "Y");
 });
 
+// BUG FIX: this used to sum every ball's raw runs including byes/leg-byes, overstating the
+// bowler's own figures for that over compared to what's actually recorded against them (byes/
+// leg-byes are never charged to a bowler -- see applyBall's identical exclusion for maiden
+// detection). A misfield that ran byes made the recap contradict the bowler's real stats.
+test("MatchScreen: the next-bowler prompt's over recap excludes byes/leg-byes from the bowler's runs", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const overBoundaryInning = buildInning("Riverside CC", "Oakwood CC", {
+    legalBalls: 6, bowlerName: "", lastBowlerName: "X",
+    overs: [[{ kind: "run", runs: 1 }, { kind: "bye", runs: 4 }, { kind: "legbye", runs: 2 }], []]
+  });
+  const ctx = renderMatch(baseMatch({ innings: [overBoundaryInning] }));
+  const text = JSON.stringify(ctx.inst.toJSON());
+  assert.match(text, /"X",": ","1"," run"/, "only the 1 genuine run off the bat counts toward X's own figures, not the 6 in byes/leg-byes");
+});
+
 test("MatchScreen: ending the innings early via the match menu marks it complete and starts the next one", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());

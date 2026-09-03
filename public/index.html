@@ -32635,7 +32635,13 @@ function MatchScreen({
   // true, applyBall has already pushed a fresh empty over onto the end of inning.overs (see the
   // over-completion branch there), so the just-finished over sits one slot back, not at the end.
   const justCompletedOver = needsNewBowler ? inning.overs[inning.overs.length - 2] || [] : [];
-  const justCompletedOverRuns = justCompletedOver.reduce((s, b) => s + (b.runs || 0), 0);
+  // BUG FIX: this summed every ball's raw runs, including byes/leg-byes -- but the text it feeds
+  // ("{bowler}: N runs ... that over") explicitly attributes the total to the bowler, and byes/
+  // leg-byes are never charged to a bowler's own figures (see applyBall's identical exclusion for
+  // maiden-over detection, and the bye/legbye branch never touching bowler.runs at all). A misfield
+  // that ran byes made this recap overstate the just-finished over compared to the bowler's actual
+  // recorded figures shown everywhere else in the app.
+  const justCompletedOverRuns = justCompletedOver.reduce((s, b) => s + (b.kind === "bye" || b.kind === "legbye" ? 0 : b.runs || 0), 0);
   const justCompletedOverWickets = justCompletedOver.filter(b => b.kind === "wicket").length;
   const bowlingRosterNames = rosterFor(match, inning.bowlingTeam);
   const eligibleAfterMaxOvers = bowlingRosterNames.filter(n => n !== inning.lastBowlerName && !atMaxOvers.includes(n));
