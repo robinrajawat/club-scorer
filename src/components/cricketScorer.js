@@ -2395,6 +2395,7 @@ export function CricketScorer() {
     },
     user: user,
     profile: profile,
+    isProfilePublic: isProfilePublic,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
