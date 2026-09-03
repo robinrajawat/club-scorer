@@ -643,10 +643,23 @@ service cloud.firestore {
     function coOwnerInviteIsRecipient(data) {
       return request.auth.token.email.lower() == data.email;
     }
+    // BUG FIX: reported live -- an owner who'd just sent an invite couldn't see it in their own
+    // "Pending co-owner invites" list, with the client logging a genuine `permission-denied` on the
+    // read-back query (confirmed via the invite/club docs directly in the Firestore console: the
+    // sender was correctly `ownerUid` and in `memberUids` on the target club, so this wasn't a data
+    // problem). data.createdBy == request.auth.uid is checked FIRST now, ahead of (and short-
+    // circuiting past, via ||) the cross-collection get() ownership lookup -- the person who
+    // created this exact invite is always allowed to see it, with no need to prove club/federation
+    // ownership via an indirect get() at all. Also switched the scope dispatch from a ternary to
+    // explicit `&&`/`||` guards: a club-scoped invite's `get()` now only ever targets `clubs/...`,
+    // never `federations/...` even as an unreached branch, removing any doubt about whether
+    // Firestore's `?:` short-circuits get() calls the same way `&&`/`||` unambiguously do. This
+    // still needs a manual paste into Firebase Console -> Firestore Database -> Rules -> Publish,
+    // same as every change to this file -- see the top-of-file comment.
     function coOwnerInviteIsSender(data) {
-      return data.scope == 'club'
-        ? isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data)
-        : isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data);
+      return data.createdBy == request.auth.uid
+        || (data.scope == 'club' && isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data))
+        || (data.scope == 'federation' && isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data));
     }
     match /coOwnerInvites/{inviteId} {
       // Same "list re-validates resource.data per returned doc" shape as /federationRequests'
