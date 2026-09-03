@@ -168,6 +168,7 @@ const FUNCTIONS = [
   { name: "GoogleGLogo", file: "src/components/icons.js" },
   { name: "Hand", file: "src/components/icons.js" },
   { name: "Hash", file: "src/components/icons.js" },
+  { name: "Heart", file: "src/components/icons.js" },
   { name: "HelpCircle", file: "src/components/icons.js" },
   { name: "InboxIcon", file: "src/components/icons.js" },
   { name: "Info", file: "src/components/icons.js" },
