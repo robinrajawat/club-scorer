@@ -383,7 +383,14 @@ export function applyBall(inning, event) {
     // (a plain four/six's total is always even), but a bonus-hit tier's configured total can be
     // odd (e.g. Maximum Hit at 15), and without this check that odd total was wrongly treated as
     // 15 genuine running singles and rotated the strike.
-    if (!isFour && !isSix && event.runs % 2 === 1) strikeChanges = true;
+    //
+    // BUG FIX: this used to check event.runs (the full total) rather than battedRuns (the total
+    // minus any overthrow bonus). An overthrow is runs awarded on top of what the batsmen actually
+    // ran -- same "bonus, not running" reasoning boundaryHitByBat above already relies on -- so it
+    // must never affect whether they've crossed. E.g. 1 completed run (odd -- they DID cross) plus
+    // a 1-run overthrow bonus totals event.runs:2 (even), which silently kept the same batsman on
+    // strike despite them having actually run an odd number of times.
+    if (!isFour && !isSix && battedRuns % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wide") {
     legalBall = isWideNoballLegal(cur);
     runsThisBall = (cur.wideRuns || 1) + (event.runs || 0);
@@ -391,7 +398,11 @@ export function applyBall(inning, event) {
     bowler.runs += runsThisBall;
     cur.extras.wide += runsThisBall;
     display = event.runs ? `Wd+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Wd";
-    if ((event.runs || 0) % 2 === 1) strikeChanges = true;
+    // BUG FIX: same overthrow-vs-actually-run distinction as the "run" branch above -- event.runs
+    // here is the further running beyond the fixed wide penalty, but an overthrow bonus mixed into
+    // that total was never physically run by the batsmen, so it must be excluded from the parity
+    // check that decides whether they've crossed.
+    if (((event.runs || 0) - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
     // wideNoballCountsAsBall (see isWideNoballLegal) makes this ball count toward the over AND the
     // bowler's own personal figures -- without this, the innings' over-count advanced correctly
     // while the bowler's ballsBowled silently missed credit for every wide that counted, throwing
@@ -420,7 +431,10 @@ export function applyBall(inning, event) {
       sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };
     display = event.runs ? `Nb+${runsDisplay(event.runs, event.overthrow, event.shortRun)}` : "Nb";
-    if ((event.runs || 0) % 2 === 1) strikeChanges = true;
+    // BUG FIX: same overthrow-vs-actually-run distinction as the "run"/"wide" branches -- battedRuns
+    // (just computed above) already excludes the overthrow bonus, so reuse it here too instead of
+    // the raw event.runs, which an overthrow could push to the wrong parity.
+    if (battedRuns % 2 === 1) strikeChanges = true;
     if (cur.freeHitEnabled) cur.freeHitActive = true;
     // Same reasoning as the wide branch above -- credit the bowler's own ballsBowled when this
     // no-ball counts as legal under wideNoballCountsAsBall.
@@ -435,7 +449,10 @@ export function applyBall(inning, event) {
     };
     bowler.ballsBowled += 1;
     display = `${event.kind === "bye" ? "B" : "Lb"}${runsDisplay(event.runs, event.overthrow, event.shortRun)}`;
-    if (event.runs % 2 === 1) strikeChanges = true;
+    // BUG FIX: same overthrow-vs-actually-run distinction as the other branches above -- a bye/
+    // leg-bye's overthrow bonus was never physically run by the batsmen either, so it must be
+    // excluded from the parity check that decides whether they've crossed.
+    if ((event.runs - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
     legalBall = event.legal !== false;
