@@ -22,6 +22,8 @@ export function InboxScreen({
   coOwnerInvites = [],
   onRespondCoOwnerInvite,
   onCancelCoOwnerInvite,
+  activity = [],
+  onMarkActivityRead,
   pollItems = [],
   onPollsChanged,
   onBack
@@ -174,7 +176,27 @@ export function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0;
+  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here (there's
+  // no way to delete one, see firestore.rules), just "what happened lately that I should know
+  // about." 30 is generous for how often club/federation membership actually changes.
+  const sortedActivity = [...activity].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 30);
+  const unreadActivityIds = activity.filter(item => !item.read).map(item => item.id);
+  function activityEntityName(item) {
+    if (item.entityName) return item.entityName;
+    return item.scope === "club" ? clubName(item.entityId) : fedName(item.entityId);
+  }
+  function activityLine(item) {
+    const name = activityEntityName(item);
+    const actor = /*#__PURE__*/React.createElement("strong", null, item.actorName || "Someone");
+    const entity = /*#__PURE__*/React.createElement("strong", null, name);
+    if (item.kind === "joined") return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " joined ", entity, item.role === "coOwner" ? " as a co-owner" : "");
+    if (item.kind === "left") return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " left ", entity);
+    if (item.kind === "removed") return /*#__PURE__*/React.createElement(React.Fragment, null, "You were removed from ", entity, " by ", actor);
+    if (item.kind === "role_changed") return item.role === "member" ? /*#__PURE__*/React.createElement(React.Fragment, null, actor, " removed your co-owner rights on ", entity, " — you're still a member") : /*#__PURE__*/React.createElement(React.Fragment, null, actor, " made you a co-owner of ", entity);
+    if (item.kind === "invite_response") return item.accepted ? /*#__PURE__*/React.createElement(React.Fragment, null, actor, " accepted your invite to ", entity) : /*#__PURE__*/React.createElement(React.Fragment, null, actor, " declined your invite to ", entity);
+    return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " — ", entity);
+  }
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0 && sortedActivity.length === 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -471,7 +493,54 @@ export function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      ...sectionTitleStyle
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Activity"), unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onMarkActivityRead && onMarkActivityRead(unreadActivityIds),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "Mark all read")), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
+    key: item.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.02}s backwards`,
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 8
+    }
+  }, !item.read && /*#__PURE__*/React.createElement("span", {
+    "aria-label": "Unread",
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: COLORS.turfFixed,
+      marginTop: 6,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...descStyle,
+      marginBottom: 0,
+      opacity: item.read ? 0.65 : 1
+    }
+  }, activityLine(item))))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,

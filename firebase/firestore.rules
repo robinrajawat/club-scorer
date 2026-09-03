@@ -973,6 +973,77 @@ service cloud.firestore {
       allow delete: if isAppAdminAuth();
     }
 
+    // ---------------------------------------------------------------------
+    // Activity notifications — a durable, per-recipient record of a club/federation membership
+    // event: someone joined, left, was removed, had their role changed, or responded to a
+    // co-owner/member invite. This app has no server, no push, no email, so this collection IS the
+    // notification system: written by the OTHER party's client at the moment of the real
+    // membership-changing write (see notifyActivity's call sites in index.html — respondCoOwnerInvite,
+    // joinClubWithCode, leaveClub, removeClubMember, removeClubCoOwner, removeFederationCoOwner),
+    // read by the recipient the next time they open their Inbox.
+    //
+    // `create` can't validate full narrative correctness (e.g. that "removed" actually happened) --
+    // that would mean re-deriving what a Firestore rule fundamentally can't see, the OLD value of a
+    // field that's already been overwritten by the companion write. What it CAN and does check: one
+    // of the two parties (actorUid, who must be the caller — no writing on someone else's behalf —
+    // or forUid, the recipient) must currently be verifiable owner-tier on the named club/
+    // federation, so a stranger with no standing in that club/federation at all can't spam an
+    // arbitrary uid. This single "one side is owner-tier" check covers every kind without a
+    // per-kind branch: for joined/left the ACTOR is the one who joined/left (maybe just a plain
+    // member) and the RECIPIENT is the owner being told about it; for removed/role_changed the
+    // ACTOR is the owner who acted and the RECIPIENT is the affected person (maybe just a plain
+    // member); for invite_response the ACTOR is whoever responded (not owner-tier if they declined,
+    // or if they accepted a plain member-role invite) and the RECIPIENT is the invite's sender (an
+    // owner/co-owner, by construction of coOwnerInvites' own create rule) — recipient-side coverage
+    // handles every one of these on its own even when the actor-side check doesn't.
+    //
+    // Same "get() is fine in create, only list has the circularity problem" distinction as every
+    // other collection in this file that hit that wall (coOwnerInvites, federationRequests above).
+    // ---------------------------------------------------------------------
+    function isClubOwnerTierUid(club, uid) {
+      return uid == club.ownerUid || uid in club.get('coOwnerUids', []);
+    }
+    function isFederationOwnerTierUid(federation, uid) {
+      return uid == federation.createdBy || uid in federation.get('coOwnerUids', []);
+    }
+    match /activity/{activityId} {
+      allow get: if request.auth != null && resource.data.forUid == request.auth.uid;
+      allow list: if request.auth != null && resource.data.forUid == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.forUid is string
+        && request.resource.data.forUid != request.auth.uid
+        && request.resource.data.scope in ['club', 'federation']
+        && request.resource.data.kind in ['joined', 'left', 'removed', 'role_changed', 'invite_response']
+        && request.resource.data.entityId is string
+        && (
+          (
+            request.resource.data.scope == 'club' &&
+            (
+              isClubOwnerTierUid(get(/databases/$(database)/documents/clubs/$(request.resource.data.entityId)).data, request.auth.uid)
+              || isClubOwnerTierUid(get(/databases/$(database)/documents/clubs/$(request.resource.data.entityId)).data, request.resource.data.forUid)
+            )
+          )
+          ||
+          (
+            request.resource.data.scope == 'federation' &&
+            (
+              isFederationOwnerTierUid(get(/databases/$(database)/documents/federations/$(request.resource.data.entityId)).data, request.auth.uid)
+              || isFederationOwnerTierUid(get(/databases/$(database)/documents/federations/$(request.resource.data.entityId)).data, request.resource.data.forUid)
+            )
+          )
+        );
+
+      // The recipient may only ever flip their own `read` flag -- nothing else about a
+      // notification is theirs to change, and no one (including the actor who sent it) can ever
+      // edit what it says after the fact.
+      allow update: if request.auth != null && resource.data.forUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      allow delete: if false;
+    }
+
     // Existence-only admin registry -- a doc at /admins/{uid} means that uid is an admin, checked
     // by isAppAdminAuth() above. A user may only read their OWN doc (existence, no field
     // values needed), never list the collection, so this can't be used to enumerate who else is

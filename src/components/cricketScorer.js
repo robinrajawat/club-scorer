@@ -253,6 +253,7 @@ export function CricketScorer() {
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
+  const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -627,6 +628,26 @@ export function CricketScorer() {
     refreshMyCoOwnerInvites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+  async function refreshMyActivity() {
+    const rows = await loadMyActivity();
+    setMyActivity(rows);
+  }
+  // Feeds the Inbox screen's Activity section and the last third of its badge count. Same
+  // "queries by my own uid, not by what I own" shape as the coOwnerInvites effect above -- see
+  // loadMyActivity's own comment.
+  useEffect(() => {
+    if (!user) {
+      setMyActivity([]);
+      return;
+    }
+    refreshMyActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  async function handleMarkActivityRead(activityIds) {
+    await markActivityRead(activityIds);
+    const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+    setMyActivity(items => items.map(item => ids.includes(item.id) ? { ...item, read: true } : item));
+  }
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -646,6 +667,9 @@ export function CricketScorer() {
   // someone else responds, same asymmetry as federationRequestsNeedingAction above.
   const myEmailLower = (user && user.email || "").toLowerCase();
   const coOwnerInvitesNeedingAction = myCoOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
+  // Activity notifications never require an action the way an invite/request does -- they're
+  // informational -- so "needs my attention" here just means unread.
+  const unreadActivityCount = myActivity.filter(item => !item.read).length;
   async function refreshPendingPollItems() {
     const items = await loadPendingPollItems(clubs, clubTeamsById);
     setPendingPollItems(items);
@@ -2362,7 +2386,7 @@ export function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length,
+    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -2662,6 +2686,8 @@ export function CricketScorer() {
     coOwnerInvites: myCoOwnerInvites,
     onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    activity: myActivity,
+    onMarkActivityRead: handleMarkActivityRead,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")
