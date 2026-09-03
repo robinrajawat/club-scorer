@@ -15,6 +15,7 @@ import { ConfirmModal } from "./formUiAtoms.js";
 export function AuthBar({
   user,
   profile,
+  isProfilePublic,
   onOpenAccount,
   onOpenSharedLinks,
   onOpenHelp,
@@ -155,7 +156,28 @@ export function AuthBar({
     style: {
       color: COLORS.pitch
     }
-  }), user ? "Manage account" : "Sign in"), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1
+    }
+  }, user ? "Manage account" : "Sign in"), user && /*#__PURE__*/React.createElement("span", {
+    // Same public==gold/private==willow color pairing as VisibilitySwitch (the toggle this badge
+    // is just a preview of, on AccountScreen's "Discoverable for invites") -- a static echo of it
+    // here so whether you're findable by name is visible from the menu itself, not only once
+    // you've already opened Account to check.
+    style: {
+      flexShrink: 0,
+      border: `1px solid ${isProfilePublic ? COLORS.gold : COLORS.willow}`,
+      borderRadius: 20,
+      padding: "2px 7px",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 9.5,
+      color: isProfilePublic ? COLORS.gold : COLORS.inkSoft,
+      textTransform: "uppercase",
+      letterSpacing: 0.4
+    }
+  }, isProfilePublic ? "Public" : "Private")), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
     className: "cs-btn",
