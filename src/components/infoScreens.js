@@ -345,29 +345,24 @@ export function AboutScreen({
     }
   }, "About")), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      marginBottom: 12
+      textAlign: "center",
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "inline-block",
       borderRadius: "50%",
       boxShadow: "0 3px 10px rgba(45,80,22,0.25)",
-      flexShrink: 0
+      marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
-    size: 44
+    size: 48
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
+      fontSize: 19,
       color: COLORS.pitch,
-      marginBottom: 2
+      marginBottom: 4
     }
   }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -376,7 +371,7 @@ export function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.4
     }
-  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer."))), /*#__PURE__*/React.createElement("div", {
+  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer.")), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.cardDivider,
