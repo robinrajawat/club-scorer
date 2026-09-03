@@ -307,30 +307,54 @@ service cloud.firestore {
           request.resource.data.memberNames.diff(resource.data.get('memberNames', {})).affectedKeys().hasOnly([request.auth.uid])
         )
         ||
-        // (F) Self-redeeming a PENDING /coOwnerInvites doc addressed to MY signed-in email — the
-        // unified co-owner-invite flow (see inviteCoOwner/respondCoOwnerInvite in index.html and
-        // the /coOwnerInvites rules below; replaces minting new coOwner-role /clubJoinCodes, though
-        // any already issued before this shipped still redeem via branch (B) until they're used or
-        // expire). Adds me to BOTH memberUids and coOwnerUids in one write — co-owner implies
-        // membership, so coOwnerUids alone would leave me unable to even read the club (see the
-        // read rule above) — while the actual /coOwnerInvites doc itself is flipped to "accepted"
-        // by a SEPARATE write to that collection, governed by its own rules, not this one. Doesn't
-        // re-check the invite's status here (unlike branch (B)'s code check) because the client
-        // deliberately does this club write BEFORE that one, precisely so this get() still sees
-        // the invite as it was minted — checking scope/entityId/email/expiry here is enough, since
-        // reusing an already-accepted invite can only ever re-grant access to the same one email
-        // it was already addressed to, never escalate to anyone else.
+        // (F) Self-redeeming a PENDING /coOwnerInvites doc addressed to MY signed-in email, role
+        // "coOwner" (missing role on an old invite from before this field existed also counts as
+        // "coOwner" — that was the only role that ever existed then) — the unified invite flow
+        // (see inviteCoOwner/respondCoOwnerInvite in index.html and the /coOwnerInvites rules
+        // below; replaces minting new coOwner-role /clubJoinCodes, though any already issued
+        // before this shipped still redeem via branch (B) until they're used or expire). Adds me
+        // to BOTH memberUids and coOwnerUids in one write — co-owner implies membership, so
+        // coOwnerUids alone would leave me unable to even read the club (see the read rule above)
+        // — while the actual /coOwnerInvites doc itself is flipped to "accepted" by a SEPARATE
+        // write to that collection, governed by its own rules, not this one. Doesn't re-check the
+        // invite's status here (unlike branch (B)'s code check) because the client deliberately
+        // does this club write BEFORE that one, precisely so this get() still sees the invite as
+        // it was minted — checking scope/entityId/email/expiry here is enough, since reusing an
+        // already-accepted invite can only ever re-grant access to the same one email it was
+        // already addressed to, never escalate to anyone else. See (G) below for role "member".
         (
           !(request.auth.uid in resource.data.memberUids) &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
           request.resource.data.name == resource.data.name &&
           'coOwnerInviteAccepted' in request.resource.data &&
           get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'club' &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.get('role', 'coOwner') == 'coOwner' &&
           get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == clubId &&
           get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
           get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time &&
           request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
           request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid])
+        )
+        ||
+        // (G) Same self-redeeming flow as (F), for role "member" — grants ONLY memberUids, never
+        // coOwnerUids. This is the low-friction replacement for clubJoinCodes' role:"member" invite
+        // (see the top of this file's permission-model paragraph): the owner just needs an email,
+        // no code to copy/send, and it still requires the recipient to explicitly accept via their
+        // own Inbox (see respondCoOwnerInvite in index.html) — deliberately kept as one invite
+        // pattern for every role rather than adding a no-accept-needed path, even though a plain
+        // member grants far less than a co-owner.
+        (
+          !(request.auth.uid in resource.data.memberUids) &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.name == resource.data.name &&
+          'coOwnerInviteAccepted' in request.resource.data &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'club' &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.get('role', 'coOwner') == 'member' &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == clubId &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
+          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time &&
+          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
+          request.resource.data.get('coOwnerUids', []) == resource.data.get('coOwnerUids', [])
         )
       );
 
@@ -618,27 +642,26 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Unified co-owner invites, addressed to one email — replaces the co-owner-invite half of
-    // BOTH /clubJoinCodes (role: "coOwner") and the now-retired federationCoOwnerInviteCodes with
-    // one collection covering both scopes (federationCoOwnerInviteCodes was ONLY ever used for
-    // co-owner invites — unlike clubJoinCodes, which also serves plain club member invites and
-    // stays alive for that — so once every invite minted under it was confirmed redeemed or
-    // expired, both its rules here and the federations/{id} update rule's old redemption branch
-    // were removed outright rather than kept alive indefinitely; see docs/co-owner-invites-plan.md
-    // for the migration this collection replaced it with). Unlike either bearer code, this is a real
-    // record-per-invite the recipient's OWN client can query by their own email
-    // (`where("email","==",myEmail)`), so it shows up in their Inbox on its own — no code to mint,
-    // copy, or send out-of-band. Exactly the same migration `federationJoinCodes ->
-    // federationRequests` already did for federation affiliation, applied to co-owner invites; see
-    // docs/co-owner-invites-plan.md for the full design and rollout sequencing. Plain club MEMBER
-    // invites are untouched — still /clubJoinCodes role:"member", no Inbox ask for those, narrower
-    // scope than this migration took on.
+    // Unified invites, addressed to one email — one collection covering every role/scope
+    // combination that ever needed an email-locked invite: club co-owner, club plain member, and
+    // federation co-owner (a federation has no plain-member tier of its own, so `role` there is
+    // always "coOwner"). Started out narrower — see the BUG FIX block below for the get()-in-list
+    // saga this collection went through while it only covered co-owner invites — then absorbed
+    // club member invites too, retiring clubJoinCodes' role:"member" create path the same way it
+    // already retired federationCoOwnerInviteCodes outright (once every invite minted under a
+    // retired path was confirmed redeemed or expired, its rules were removed rather than kept
+    // alive indefinitely; see docs/co-owner-invites-plan.md for the original migration this
+    // mirrors). Unlike a bearer code, this is a real record-per-invite the recipient's OWN client
+    // can query by their own email (`where("email","==",myEmail)`), so it shows up in their Inbox
+    // on its own — no code to mint, copy, or send out-of-band, for ANY role.
     //
-    // clubJoinCodes' rules stay alive above (unchanged) — plain club member invites still mint
-    // and redeem through it, permanently, not just through a transition window. The other old
-    // collection, federationCoOwnerInviteCodes, served ONLY co-owner invites, so once every one
-    // ever minted was confirmed redeemed or expired, its rules (and the federations/{id} update
-    // rule's matching redemption branch) were removed outright above rather than kept alive.
+    // clubJoinCodes' rules stay alive above (unchanged) — read/redeem-only now, purely so any
+    // member-role code already minted before this collection absorbed member invites still works
+    // until it's used or expires; nothing mints a new one any more (see inviteCoOwner's comment in
+    // index.html). federationCoOwnerInviteCodes, the OTHER old collection, served only co-owner
+    // invites, so once every one ever minted was confirmed redeemed or expired, its rules (and the
+    // federations/{id} update rule's matching redemption branch) were removed outright above
+    // rather than kept alive.
     // ---------------------------------------------------------------------
     // BUG FIX (round 3 -- the actual root cause): rounds 1/2 (createdBy-first, defensive
     // .get(field,default) reads) both landed and were confirmed live, and the symptom STILL didn't
@@ -698,13 +721,17 @@ service cloud.firestore {
         && request.resource.data.scope in ['club', 'federation']
         && request.resource.data.entityId is string
         && request.resource.data.email is string
+        // A federation has no plain-member tier, so role "member" is only ever valid for a club
+        // invite — see clubs/{clubId} branches (F)/(G) above for how each role gets redeemed.
+        && request.resource.data.get('role', 'coOwner') in ['member', 'coOwner']
+        && (request.resource.data.scope == 'club' || request.resource.data.get('role', 'coOwner') == 'coOwner')
         && coOwnerInviteIsSender(request.resource.data);
 
       // Recipient may only flip pending -> accepted/declined; sender may only flip pending ->
       // cancelled. Either way, status (and respondedAt) is the only thing this write may change —
-      // the accept side-effect itself (joining coOwnerUids, and memberUids for a club) is a
-      // SEPARATE write to the club/federation doc, authorized by that doc's own rules (see branch
-      // (F) on both clubs/{clubId} and federations/{federationId} above), not this one.
+      // the accept side-effect itself (joining coOwnerUids and/or memberUids, per role — see
+      // clubs/{clubId} branches (F)/(G) and federations/{federationId} branch (F) above) is a
+      // SEPARATE write to the club/federation doc, authorized by that doc's own rules, not this one.
       allow update: if request.auth != null && resource.data.status == 'pending' && (
         (coOwnerInviteIsRecipient(resource.data) && request.resource.data.status in ['accepted', 'declined'])
         || (coOwnerInviteIsSender(resource.data) && request.resource.data.status == 'cancelled')

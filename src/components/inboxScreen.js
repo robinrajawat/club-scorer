@@ -296,7 +296,7 @@ export function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), inv.role === "member" ? " invited you to be a member of " : " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -399,7 +399,7 @@ export function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), inv.role === "member" ? " to join " : " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwner(inv),
     disabled: coOwnerBusyId === inv.id,
     className: "cs-btn",

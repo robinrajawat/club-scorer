@@ -132,11 +132,11 @@ test("ClubPanel: 'Edit club name & description' saves changed fields via onRenam
   assert.equal(addressCalled, false);
 });
 
-test("ClubPanel: as owner, 'Manage' reveals invite/umpire/member controls; inviting a member calls onInvite and shows the code", async () => {
+test("ClubPanel: as owner, 'Manage' reveals invite/umpire/member controls; inviting a member calls onInvite and shows a confirmation, no code", async () => {
   let invitedWith = null;
   const inst = render({
     clubs: [club()], activeClubId: "c1", currentUid: "owner1",
-    onInvite: (id, email) => { invitedWith = { id, email }; return Promise.resolve({ ok: true, code: "INV123" }); }
+    onInvite: (id, email) => { invitedWith = { id, email }; return Promise.resolve({ ok: true }); }
   });
   openManage(inst);
   const inviteBtn = inst.root.findAllByType("button").find(b => b.props.children === "Invite someone");
@@ -151,7 +151,8 @@ test("ClubPanel: as owner, 'Manage' reveals invite/umpire/member controls; invit
     await new Promise(r => setTimeout(r, 0));
   });
   assert.deepEqual(invitedWith, { id: "c1", email: "sam@example.com" });
-  assert.match(JSON.stringify(inst.toJSON()), /INV123/);
+  assert.match(JSON.stringify(inst.toJSON()), /Invite sent to/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
 });
 
 test("ClubPanel: inviting a co-owner by email calls onInviteCoOwner and shows a confirmation, no code", async () => {
@@ -187,7 +188,7 @@ test("ClubPanel: a pending co-owner invite shows in the manage panel with a Canc
     onCancelCoOwnerInvite: id => { cancelledId = id; return Promise.resolve({ ok: true }); }
   });
   openManage(inst);
-  assert.match(JSON.stringify(inst.toJSON()), /Pending co-owner invites/);
+  assert.match(JSON.stringify(inst.toJSON()), /Pending invites/);
   assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
   const cancelBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Cancel invite to sam@example.com");
   await act(async () => {

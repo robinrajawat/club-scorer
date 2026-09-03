@@ -57,9 +57,8 @@ export function ClubPanel({
   const [findFedOpen, setFindFedOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteCode, setInviteCode] = useState(null);
+  const [inviteSent, setInviteSent] = useState(null); // email just invited, once sent
   const [inviteBusy, setInviteBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
   const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
   const [coOwnerInviteSent, setCoOwnerInviteSent] = useState(null); // email just invited, once sent
@@ -256,14 +255,14 @@ export function ClubPanel({
     const result = await onInvite(activeClub.id, inviteEmail.trim());
     setInviteBusy(false);
     if (!result.ok) {
-      setError(result.error || "Couldn't generate an invite.");
+      setError(result.error || "Couldn't send that invite.");
       return;
     }
-    setInviteCode(result.code);
+    setInviteSent(inviteEmail.trim());
   }
   function handleSelect(id) {
     setInviteOpen(false);
-    setInviteCode(null);
+    setInviteSent(null);
     setCoOwnerInviteOpen(false);
     setCoOwnerInviteSent(null);
     setError("");
@@ -870,58 +869,30 @@ export function ClubPanel({
     }
   }, "Invite people"), /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      lineHeight: 1.5,
+      marginBottom: 6
+    }
+  }, "A member can sign in and view this club's teams and tournaments \u2014 no edit access, and no roster change of its own. Meant for players: they don't need this to be added to a team, only if they'd like to check the roster or schedule themselves."), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap"
     }
-  }, (inviteCode ? /*#__PURE__*/React.createElement("div", {
+  }, (inviteSent ? /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inviteCode).catch(() => {});
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    },
-    style: {
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      fontFamily: "'IBM Plex Mono'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      letterSpacing: 0.5,
-      cursor: "pointer",
-      alignSelf: "flex-start"
-    }
-  }, copied ? "Copied!" : inviteCode), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
+      fontSize: 11.5,
       color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Send this code to ", inviteEmail, " \u2014 it only works while they're signed in with that exact email."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setInviteCode(null);
-      setInviteEmail("");
-      setInviteOpen(true);
-    },
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
       fontFamily: "'Inter'",
-      fontSize: 11,
-      cursor: "pointer",
-      textDecoration: "underline",
-      padding: 0,
-      alignSelf: "flex-start"
+      lineHeight: 1.5
     }
-  }, "Invite someone else")) : inviteOpen ? /*#__PURE__*/React.createElement("div", {
+  }, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, inviteSent), " \u2014 they'll see it in their Inbox next time they sign in with that email.") : inviteOpen ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -957,7 +928,11 @@ export function ClubPanel({
       padding: "0 4px"
     }
   }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => setInviteOpen(true),
+    onClick: () => {
+      setInviteOpen(true);
+      setInviteEmail("");
+      setInviteSent(null);
+    },
     style: {
       padding: "6px 10px",
       borderRadius: 8,
@@ -1360,7 +1335,7 @@ export function ClubPanel({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "Pending co-owner invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
+  }, "Pending invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
     key: inv.id,
     style: {
       display: "flex",
@@ -1377,7 +1352,16 @@ export function ClubPanel({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, inv.email), /*#__PURE__*/React.createElement("button", {
+  }, inv.email), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }, inv.role === "coOwner" ? "Co-owner" : "Member"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwnerInviteClick(inv.id),
     disabled: cancelCoOwnerInviteBusyId === inv.id,
     "aria-label": `Cancel invite to ${inv.email}`,

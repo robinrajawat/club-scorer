@@ -2791,10 +2791,12 @@ async function saveTeams(teams) {
 // teams or tournaments, invite anyone, or remove members.
 //
 // Every invite in this app — becoming a member, or becoming a co-owner — is addressed to one
-// specific email address (see inviteClubMemberByEmail/inviteClubCoOwnerByEmail below) and can
-// only be redeemed by someone signed in as that exact email. This replaces the old anonymous
-// "share this code with your team" pattern; a code is still what gets pasted in to redeem, but
-// it's now bound to a person, not just a click.
+// specific email address and can only be redeemed by someone signed in as that exact email.
+// Both roles go through the same unified coOwnerInvites collection now (see inviteCoOwner
+// below, role: "member" or "coOwner") — no bearer code to copy/send out-of-band, the invite
+// just shows up in the recipient's Inbox. clubJoinCodes and joinClubWithCode below stay alive
+// read/redeem-only, purely so any already-outstanding member-role code from before this
+// migration still works until it's used or expires; nothing mints a new one any more.
 // GENERATED-FN-START: isClubOwner
 function isClubOwner(club, uid) {
   return !!club && !!uid && (club.ownerUid === uid || (club.coOwnerUids || []).includes(uid));
@@ -3306,63 +3308,18 @@ function parseBulkPlayers(text) {
   return rows;
 }
 // GENERATED-FN-END: parseBulkPlayers
-// Owner-only. Mints a time-limited invite addressed to one email. Whoever redeems it while signed
-// in as that exact email is added to memberUids only — no ownership rights.
-async function inviteClubMemberByEmail(clubId, email) {
-  if (!auth.currentUser) return {
-    ok: false,
-    error: "Sign in first."
-  };
-  const cleaned = (email || "").trim().toLowerCase();
-  if (!cleaned || !cleaned.includes("@")) return {
-    ok: false,
-    error: "Enter a valid email address."
-  };
-  try {
-    const code = genMatchCode();
-    const createdAt = Date.now();
-    const expiresAt = ttlTimestamp(CLUB_INVITE_TTL_DAYS);
-    await db.collection("clubJoinCodes").doc(code).set({
-      clubId,
-      email: cleaned,
-      role: "member",
-      createdBy: auth.currentUser.uid,
-      createdAt,
-      expiresAt
-    });
-    // Mirrors a lightweight summary onto the club doc itself so the owner can see and revoke
-    // pending invites — clubJoinCodes disallows `list` (a stranger shouldn't be able to enumerate
-    // invite codes), so this is the only way to show "who have I invited?" without that.
-    await db.collection("clubs").doc(clubId).update({
-      [`pendingInvites.${code}`]: {
-        email: cleaned,
-        role: "member",
-        createdAt,
-        expiresAt
-      }
-    }).catch(e => console.error("invite: pendingInvites mirror failed", e));
-    return {
-      ok: true,
-      code,
-      createdAt,
-      expiresAt
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e.code === "permission-denied" ? "Only the club owner can invite others." : e.message || "Couldn't generate an invite code."
-    };
-  }
-}
-// Owner-only (club or federation, per `scope`). Unified co-owner invite, addressed to one email —
-// replaces minting a coOwner-role clubJoinCodes/federationCoOwnerInviteCodes doc (formerly
-// inviteClubCoOwnerByEmail/inviteFederationCoOwnerByEmail, both retired in favor of this) with a
+// Owner-only (club or federation, per `scope`). Unified invite, addressed to one email — for a
+// club, `role` is "member" (view access only) or "coOwner" (full manage rights); a federation has
+// no plain-member tier, so it's always "coOwner" there. Replaces minting a role-specific
+// clubJoinCodes/federationCoOwnerInviteCodes doc (formerly inviteClubMemberByEmail/
+// inviteClubCoOwnerByEmail/inviteFederationCoOwnerByEmail, all retired in favor of this) with a
 // real coOwnerInvites record the recipient's own client can query by their own email — see
 // loadMyCoOwnerInvites below. No bearer code to generate, copy, or send out-of-band: the invitee
 // sees it in their Inbox the next time they open it while signed in with that exact email. See
 // docs/co-owner-invites-plan.md for the full design this mirrors (the same
-// federationJoinCodes -> federationRequests migration, applied here).
-async function inviteCoOwner(scope, entityId, email) {
+// federationJoinCodes -> federationRequests migration, applied here; member-role invites joined
+// this same collection later, see firestore.rules for the role-aware accept rules).
+async function inviteCoOwner(scope, entityId, email, role) {
   if (!auth.currentUser) return {
     ok: false,
     error: "Sign in first."
@@ -3378,6 +3335,7 @@ async function inviteCoOwner(scope, entityId, email) {
       scope,
       entityId,
       email: cleaned,
+      role: role || "coOwner",
       createdBy: auth.currentUser.uid,
       createdByName: auth.currentUser.displayName || auth.currentUser.email || "",
       createdAt: Date.now(),
@@ -3442,9 +3400,11 @@ async function loadMyCoOwnerInvites() {
 // Recipient accepts or declines a still-pending invite addressed to them. Accepting adds them to
 // the target club/federation's coOwnerUids (and, for a club, memberUids too — co-owner implies
 // membership) BEFORE flipping the invite itself to "accepted", deliberately in that order — see
-// the coOwnerInviteAccepted branch on clubs/{clubId} and federations/{federationId} in
+// the coOwnerInviteAccepted branches on clubs/{clubId} and federations/{federationId} in
 // firestore.rules for why. Same "recipient already has implicit write access to add themselves
-// once accepted" pattern as respondFederationRequest's federation_to_club accept branch.
+// once accepted" pattern as respondFederationRequest's federation_to_club accept branch. A
+// club-scope invite with role "member" (legacy invites with no role field are treated as
+// "coOwner") only ever grants memberUids — never coOwnerUids.
 async function respondCoOwnerInvite(inviteId, accept) {
   try {
     const snap = await db.collection("coOwnerInvites").doc(inviteId).get();
@@ -3453,14 +3413,19 @@ async function respondCoOwnerInvite(inviteId, accept) {
       error: "That invite no longer exists."
     };
     const invite = snap.data();
+    const role = invite.role || "coOwner";
     if (accept) {
       const collection = invite.scope === "club" ? "clubs" : "federations";
-      const update = invite.scope === "club" ? {
-        memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
-        [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
+      const update = invite.scope !== "club" ? {
         coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
         coOwnerInviteAccepted: inviteId
+      } : role === "member" ? {
+        memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+        [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
+        coOwnerInviteAccepted: inviteId
       } : {
+        memberUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
+        [`memberNames.${auth.currentUser.uid}`]: auth.currentUser.displayName || auth.currentUser.email || "Member",
         coOwnerUids: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid),
         coOwnerInviteAccepted: inviteId
       };
@@ -3473,7 +3438,8 @@ async function respondCoOwnerInvite(inviteId, accept) {
     return {
       ok: true,
       scope: invite.scope,
-      entityId: invite.entityId
+      entityId: invite.entityId,
+      role
     };
   } catch (e) {
     return {
@@ -4134,7 +4100,9 @@ async function inviteFederationByEmail(federationId, email) {
       createdBy: auth.currentUser.uid,
       createdAt
     });
-    // Best-effort mirror for the pending-invites list (see inviteClubMemberByEmail for why).
+    // Best-effort mirror for the pending-invites list — federationJoinCodes disallows `list` (a
+    // stranger shouldn't be able to enumerate invite codes), so this is the only way to show "who
+    // have I invited?" without that.
     // Unlike a club invite, redeeming this one writes only to the CLUB doc (see
     // joinFederationWithCode) — this app never lets one club's write touch another document it
     // doesn't own — so this entry can't auto-clear on redemption the way club/co-owner invites
@@ -12646,9 +12614,8 @@ function ClubPanel({
   const [findFedOpen, setFindFedOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteCode, setInviteCode] = useState(null);
+  const [inviteSent, setInviteSent] = useState(null); // email just invited, once sent
   const [inviteBusy, setInviteBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
   const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
   const [coOwnerInviteSent, setCoOwnerInviteSent] = useState(null); // email just invited, once sent
@@ -12845,14 +12812,14 @@ function ClubPanel({
     const result = await onInvite(activeClub.id, inviteEmail.trim());
     setInviteBusy(false);
     if (!result.ok) {
-      setError(result.error || "Couldn't generate an invite.");
+      setError(result.error || "Couldn't send that invite.");
       return;
     }
-    setInviteCode(result.code);
+    setInviteSent(inviteEmail.trim());
   }
   function handleSelect(id) {
     setInviteOpen(false);
-    setInviteCode(null);
+    setInviteSent(null);
     setCoOwnerInviteOpen(false);
     setCoOwnerInviteSent(null);
     setError("");
@@ -13459,58 +13426,30 @@ function ClubPanel({
     }
   }, "Invite people"), /*#__PURE__*/React.createElement("div", {
     style: {
+      fontSize: 11,
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      lineHeight: 1.5,
+      marginBottom: 6
+    }
+  }, "A member can sign in and view this club's teams and tournaments \u2014 no edit access, and no roster change of its own. Meant for players: they don't need this to be added to a team, only if they'd like to check the roster or schedule themselves."), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
       gap: 8,
       flexWrap: "wrap"
     }
-  }, (inviteCode ? /*#__PURE__*/React.createElement("div", {
+  }, (inviteSent ? /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inviteCode).catch(() => {});
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    },
-    style: {
-      padding: "6px 10px",
-      borderRadius: 8,
-      border: `1px solid ${COLORS.willow}`,
-      background: COLORS.surface,
-      fontFamily: "'IBM Plex Mono'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      letterSpacing: 0.5,
-      cursor: "pointer",
-      alignSelf: "flex-start"
-    }
-  }, copied ? "Copied!" : inviteCode), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
+      fontSize: 11.5,
       color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Send this code to ", inviteEmail, " \u2014 it only works while they're signed in with that exact email."), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setInviteCode(null);
-      setInviteEmail("");
-      setInviteOpen(true);
-    },
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
       fontFamily: "'Inter'",
-      fontSize: 11,
-      cursor: "pointer",
-      textDecoration: "underline",
-      padding: 0,
-      alignSelf: "flex-start"
+      lineHeight: 1.5
     }
-  }, "Invite someone else")) : inviteOpen ? /*#__PURE__*/React.createElement("div", {
+  }, "Invite sent to ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: COLORS.ink
+    }
+  }, inviteSent), " \u2014 they'll see it in their Inbox next time they sign in with that email.") : inviteOpen ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -13546,7 +13485,11 @@ function ClubPanel({
       padding: "0 4px"
     }
   }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => setInviteOpen(true),
+    onClick: () => {
+      setInviteOpen(true);
+      setInviteEmail("");
+      setInviteSent(null);
+    },
     style: {
       padding: "6px 10px",
       borderRadius: 8,
@@ -13949,7 +13892,7 @@ function ClubPanel({
       color: COLORS.inkSoft,
       marginBottom: 6
     }
-  }, "Pending co-owner invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
+  }, "Pending invites"), pendingCoOwnerInvites.map(inv => /*#__PURE__*/React.createElement("div", {
     key: inv.id,
     style: {
       display: "flex",
@@ -13966,7 +13909,16 @@ function ClubPanel({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, inv.email), /*#__PURE__*/React.createElement("button", {
+  }, inv.email), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: COLORS.inkSoft,
+      flexShrink: 0
+    }
+  }, inv.role === "coOwner" ? "Co-owner" : "Member"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwnerInviteClick(inv.id),
     disabled: cancelCoOwnerInviteBusyId === inv.id,
     "aria-label": `Cancel invite to ${inv.email}`,
@@ -15579,7 +15531,7 @@ function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("strong", null, inv.createdByName || "Someone"), inv.role === "member" ? " invited you to be a member of " : " invited you to be a co-owner of ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -15682,7 +15634,7 @@ function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), inv.role === "member" ? " to join " : " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwner(inv),
     disabled: coOwnerBusyId === inv.id,
     className: "cs-btn",
@@ -38038,15 +37990,16 @@ function CricketScorer() {
       }
     });
   }
+  // Sends a member invite -- unified with co-owner invites (same coOwnerInvites doc shape, role:
+  // "member" instead of "coOwner"; see inviteCoOwner in index.html), so a member invite no longer
+  // mints a bearer code to copy and send out-of-band: it shows up in the recipient's Inbox
+  // automatically, the same as a co-owner invite. Appends locally for the same reason
+  // handleInviteCoOwner below does -- shows up in the sender's own pending-invites list
+  // immediately, without waiting on the next refreshMyCoOwnerInvites().
   async function handleInviteClubMember(clubId, email) {
-    const result = await inviteClubMemberByEmail(clubId, email);
+    const result = await inviteCoOwner("club", clubId, email, "member");
     if (result.ok) {
-      mirrorPendingInvite(setClubs, clubId, result.code, {
-        email: email.trim().toLowerCase(),
-        role: "member",
-        createdAt: result.createdAt,
-        expiresAt: result.expiresAt
-      });
+      setMyCoOwnerInvites(prev => [...prev, result.invite]);
     }
     return result;
   }
@@ -38060,9 +38013,10 @@ function CricketScorer() {
     }
     return result;
   }
-  // Recipient accepting/declining a co-owner invite -- see respondCoOwnerInvite in index.html. On
-  // accept, mirrors the resulting coOwnerUids (and, for a club, memberUids) grant onto local
-  // clubs/federationsById state so it shows up without waiting for a full refresh.
+  // Recipient accepting/declining a co-owner or member invite -- see respondCoOwnerInvite in
+  // index.html. On accept, mirrors the resulting coOwnerUids (coOwner role, club or federation)
+  // or memberUids-only (member role, club only) grant onto local clubs/federationsById state so
+  // it shows up without waiting for a full refresh.
   async function handleRespondCoOwnerInvite(inviteId, accept) {
     const result = await respondCoOwnerInvite(inviteId, accept);
     if (result.ok) {
@@ -38070,7 +38024,7 @@ function CricketScorer() {
         setClubs(cs => cs.map(c => c.id === result.entityId ? {
           ...c,
           memberUids: [...new Set([...(c.memberUids || []), user.uid])],
-          coOwnerUids: [...new Set([...(c.coOwnerUids || []), user.uid])],
+          coOwnerUids: result.role === "member" ? (c.coOwnerUids || []) : [...new Set([...(c.coOwnerUids || []), user.uid])],
           memberNames: { ...(c.memberNames || {}),
             [user.uid]: user.displayName || user.email || "Member"
           }
