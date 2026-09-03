@@ -1922,7 +1922,7 @@ export function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
     const t = {
       id: uid(),
       name,
@@ -1931,6 +1931,16 @@ export function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
+      // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
+      // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
+      // this function only ever declared six parameters -- the venue was silently dropped on every
+      // tournament creation, with no error, no missing field on screen (the create form just closes
+      // normally). The only way to actually see it apply was to add it again afterward via the
+      // tournament detail screen's own "Add a venue" flow (editTournamentVenue), same fields
+      // (venue/venueLat/venueLng), just never wired in at creation time.
+      venue: venueInfo ? venueInfo.venue : null,
+      venueLat: venueInfo ? venueInfo.venueLat : null,
+      venueLng: venueInfo ? venueInfo.venueLng : null,
       createdAt: Date.now()
     };
     if (activeTournamentFederationId) {
