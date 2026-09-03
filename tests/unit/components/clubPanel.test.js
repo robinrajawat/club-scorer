@@ -277,3 +277,31 @@ test("ClubPanel: requesting affiliation with a found federation calls onRequestF
   });
   assert.deepEqual(requestedWith, { direction: "club_to_federation", clubId: "c1", fedId: "fed1" });
 });
+
+test("ClubPanel: searching for a member by name and picking a result fills the invite email and opens the form", async () => {
+  const inst = render({
+    clubs: [club()], activeClubId: "c1", currentUid: "owner1",
+    onSearchPublicUsers: () => Promise.resolve([{ uid: "u9", name: "Sam Green", email: "sam@example.com", photoURL: null }])
+  });
+  openManage(inst);
+  const searchToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Search by name instead"));
+  act(() => { searchToggle.props.onClick(); });
+
+  const searchField = inst.root.findAllByType("input").find(i => i.props.type !== "file");
+  act(() => { searchField.props.onChange({ target: { value: "Sam" } }); });
+  const searchBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Search"));
+  await act(async () => {
+    searchBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Sam Green/);
+  assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
+
+  const useBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Use"));
+  await act(async () => {
+    useBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const emailField = inst.root.findAllByType("input").find(i => i.props.value === "sam@example.com");
+  assert.ok(emailField, "invite email field should be pre-filled with the picked user's email");
+});

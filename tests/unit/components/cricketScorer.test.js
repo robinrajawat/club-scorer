@@ -85,14 +85,16 @@ async function render(url) {
   globalThis.loadTournaments = () => Promise.resolve([]);
   globalThis.loadBetaStatus = () => Promise.resolve(false);
   globalThis.loadClubs = () => Promise.resolve([]);
-  // All three run on every signed-in mount regardless of what the user owns -- co-owner invites
+  // All four run on every signed-in mount regardless of what the user owns -- co-owner invites
   // cover ones addressed to my own email, federationRequests cover ones I sent (fromUid) or that
   // were addressed to something I owned as of send time (toOwnerUids), activity covers
-  // notifications addressed to my own uid -- see each function's own comment in index.html -- so
-  // all three need a stub even for a test whose signed-in user owns nothing.
+  // notifications addressed to my own uid, profile visibility is just "do I have a
+  // userDirectory doc" -- see each function's own comment in index.html -- so all four need a
+  // stub even for a test whose signed-in user owns nothing.
   globalThis.loadMyCoOwnerInvites = () => Promise.resolve([]);
   globalThis.loadMyFederationRequests = () => Promise.resolve([]);
   globalThis.loadMyActivity = () => Promise.resolve([]);
+  globalThis.loadMyProfileVisibility = () => Promise.resolve(false);
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
   globalThis.loadMyPlayerProfile = () => Promise.resolve(null);

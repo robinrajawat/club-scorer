@@ -17,7 +17,10 @@ export function SearchAndRequestPanel({
   linkedLabelById = {},
   actionLabel,
   onRequest,
-  emptyHint
+  emptyHint,
+  avatarKey, // optional: field holding a photo URL, rendered as a small round avatar if truthy
+  secondaryKey = "ownerName", // optional: field shown as the secondary line under the name
+  secondaryPrefix = "Owner: " // optional: text before that field's value
 }) {
   const [term, setTerm] = useState("");
   const [results, setResults] = useState(null); // null = not searched yet
@@ -93,7 +96,16 @@ export function SearchAndRequestPanel({
         padding: "8px 0",
         borderBottom: `1px dashed ${COLORS.willow}`
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, avatarKey && item[avatarKey] ? /*#__PURE__*/React.createElement("img", {
+      src: item[avatarKey],
+      alt: "",
+      style: {
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        flexShrink: 0
+      }
+    }) : null, /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1,
         minWidth: 0
@@ -108,13 +120,13 @@ export function SearchAndRequestPanel({
         textOverflow: "ellipsis",
         whiteSpace: "nowrap"
       }
-    }, item.name), item.ownerName && /*#__PURE__*/React.createElement("div", {
+    }, item.name), item[secondaryKey] && /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 11,
         color: COLORS.inkSoft
       }
-    }, "Owner: ", item.ownerName)), /*#__PURE__*/React.createElement(Btn, {
+    }, secondaryPrefix, item[secondaryKey])), /*#__PURE__*/React.createElement(Btn, {
       onClick: () => submit(item),
       disabled: already || busyId === id,
       style: {

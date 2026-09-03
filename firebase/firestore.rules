@@ -833,6 +833,36 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Public user directory — lets a signed-in person opt their OWN account into being findable by
+    // name (see setMyProfileVisibility in index.html), so a club/federation owner inviting a
+    // co-owner or member isn't limited to "already know their exact email" the way every invite
+    // flow otherwise is. Private by default: a doc here only exists if that person deliberately
+    // published one, deleted the instant they opt back out (same publish/unpublish shape as
+    // clubDirectory/federationDirectory above) — nobody is discoverable without asking to be.
+    //
+    // Unlike a club or federation, an account has no separate "owner" who could vouch for it, so
+    // the create/update rule instead pins every field to the caller's own verified identity: name
+    // is theirs to set freely (same as the profile display name elsewhere in the app), but email
+    // must equal their own token email and photoURL must equal their own token's `picture` claim
+    // exactly (or be absent/null) — same "can't spoof a photo" reasoning as players' auto-link
+    // branch (B) on clubs/{clubId}. Nothing here can be used to impersonate or misdirect an invite
+    // to someone else, since every field a searcher would act on is independently re-derived from
+    // the searcher's own knowledge of the real person, not just trusted from this doc blindly --
+    // and the actual invite this feeds into still targets the plain `email` field either way,
+    // identical to typing it in by hand.
+    // ---------------------------------------------------------------------
+    match /userDirectory/{uid} {
+      allow get, list: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.email == request.auth.token.email.lower()
+        && request.resource.data.get('photoURL', null) == request.auth.token.get('picture', null);
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------------
     // Federation <-> club affiliation requests. Replaces the old federationJoinCodes email/code
     // flow entirely (that collection's rules above are dead now, kept only so nothing throws for
     // whatever's mid-flight; nothing in the app creates new ones any more). Either side can

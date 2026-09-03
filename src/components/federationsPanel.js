@@ -23,6 +23,7 @@ export function FederationsPanel({
   onCreateFederation,
   onSearchPublicFederations,
   onSearchPublicClubs,
+  onSearchPublicUsers,
   onRequestFederationAffiliation,
   onSetFederationVisibility,
   onLeaveFederation,
@@ -68,6 +69,7 @@ export function FederationsPanel({
   const [emailInviteBusy, setEmailInviteBusy] = useState(false);
   const [emailInviteError, setEmailInviteError] = useState("");
   const [emailInviteResult, setEmailInviteResult] = useState(null); // {kind, email, code}
+  const [coOwnerSearchOpen, setCoOwnerSearchOpen] = useState(false);
   const [leaveBusyClubId, setLeaveBusyClubId] = useState(null);
   const [confirmKick, setConfirmKick] = useState(null); // { federationId, clubId, clubName } | null
   const [confirmLeave, setConfirmLeave] = useState(null); // { clubId, federationId, federationName } | null
@@ -228,6 +230,19 @@ export function FederationsPanel({
     setEmailInviteText("");
     setEmailInviteError("");
     setEmailInviteResult(null);
+    setCoOwnerSearchOpen(false);
+  }
+  // Picking a name-search result never sends the invite directly -- it just fills in the email
+  // field of the already-familiar email-invite form, same as if that email had been typed by
+  // hand. See ClubPanel's identical pickSearchedMember/pickSearchedCoOwner for the same reasoning.
+  function pickSearchedFederationCoOwner(item) {
+    setEmailInviteText(item.email);
+    setEmailInviteError("");
+    setEmailInviteResult(null);
+    setCoOwnerSearchOpen(false);
+    return Promise.resolve({
+      ok: true
+    });
   }
   async function submitEmailInvite(federationId) {
     if (!emailInviteText.trim() || emailInviteBusy) return;
@@ -836,7 +851,37 @@ export function FederationsPanel({
       cursor: "pointer",
       padding: "0 4px"
     }
-  }, "Cancel")), emailInviteError && /*#__PURE__*/React.createElement("div", {
+  }, "Cancel")), emailInviteKind === "coOwner" && onSearchPublicUsers && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, coOwnerSearchOpen ? /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+    placeholder: "Search by name",
+    idKey: "uid",
+    avatarKey: "photoURL",
+    secondaryKey: "email",
+    secondaryPrefix: "",
+    actionLabel: "Use",
+    alreadyLinkedLabel: "Selected",
+    emptyHint: "No one found — they may not have made their profile discoverable yet.",
+    onSearch: onSearchPublicUsers,
+    onRequest: pickSearchedFederationCoOwner
+  }) : /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setCoOwnerSearchOpen(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, "Search by name instead")), emailInviteError && /*#__PURE__*/React.createElement("div", {
     style: {
       color: COLORS.ball,
       fontSize: 11.5,

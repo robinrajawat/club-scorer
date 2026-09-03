@@ -59,3 +59,20 @@ test("SearchAndRequestPanel: shows the error when onRequest reports failure", as
   await requestBtn.props.onClick();
   assert.match(JSON.stringify(inst.toJSON()), /Already pending/);
 });
+
+test("SearchAndRequestPanel: avatarKey/secondaryKey/secondaryPrefix render a photo and a custom secondary line instead of the default owner-name one", async () => {
+  const inst = renderer.create(React.createElement(SearchAndRequestPanel, {
+    placeholder: "Name", idKey: "uid", actionLabel: "Use",
+    avatarKey: "photoURL", secondaryKey: "email", secondaryPrefix: "",
+    onSearch: () => Promise.resolve([{ uid: "u1", name: "Sam Green", email: "sam@example.com", photoURL: "https://x.test/p.png" }]),
+    onRequest: () => Promise.resolve({ ok: true })
+  }));
+  const searchBtn = inst.root.findAllByType(Btn)[0];
+  await searchBtn.props.onClick();
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Sam Green/);
+  assert.match(text, /sam@example\.com/);
+  assert.doesNotMatch(text, /Owner: /);
+  const avatar = inst.root.findAllByType("img").find(i => i.props.src === "https://x.test/p.png");
+  assert.ok(avatar);
+});

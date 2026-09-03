@@ -3,6 +3,7 @@ import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight, Users, GoogleGLogo, InboxIcon } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
+import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { PLAYER_ROLES, PLAYER_HANDS } from "./playerModals.js";
 
 // The signed-in-or-not account/settings screen: profile display name, own public player-profile
@@ -40,11 +41,14 @@ export function AccountScreen({
   onBack,
   redirectError,
   linkStatus,
-  onClearLinkStatus
+  onClearLinkStatus,
+  isProfilePublic = false,
+  onSetProfileVisibility
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [profileVisBusy, setProfileVisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -283,6 +287,14 @@ export function AccountScreen({
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
+  async function handleSetProfileVisibility(isPublic) {
+    if (profileVisBusy || !onSetProfileVisibility) return;
+    setProfileVisBusy(true);
+    setActionError("");
+    const result = await onSetProfileVisibility(isPublic);
+    setProfileVisBusy(false);
+    if (result && result.ok === false) setActionError(result.error || "Couldn't update your visibility.");
+  }
   async function handleGenerateDummy() {
     setDummyBusy(true);
     setDummyStatus("");
@@ -485,6 +497,43 @@ export function AccountScreen({
       marginTop: 6
     }
   }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.cardDivider,
+      margin: "14px 0"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Discoverable for invites"), onSetProfileVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: isProfilePublic,
+    busy: profileVisBusy,
+    onChange: handleSetProfileVisibility,
+    publicHint: "Public — findable by name",
+    privateHint: "Private — not findable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, isProfilePublic ? "A club or federation owner can find you by name (with your email and photo) when inviting a co-owner or member — same as typing your exact email, just easier to find." : "Off by default. A club or federation owner can only invite you by typing your exact email address until you turn this on."), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.cardDivider,
