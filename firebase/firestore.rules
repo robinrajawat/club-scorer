@@ -737,7 +737,12 @@ service cloud.firestore {
         || (coOwnerInviteIsSender(resource.data) && request.resource.data.status == 'cancelled')
       ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']);
 
-      allow delete: if false;
+      // Only the sender can clear one, and only once it's resolved (accepted/declined/cancelled) --
+      // this is the sender's own "here's what happened to the invite I sent" acknowledgement card
+      // (see outgoingCoOwnerInvites in inboxScreen.js), not the invite itself while it's still live.
+      // A pending invite is withdrawn via the update rule above (status -> cancelled), never deleted
+      // outright, so the recipient can't have it silently vanish out from under them mid-flight.
+      allow delete: if request.auth != null && coOwnerInviteIsSender(resource.data) && resource.data.status != 'pending';
     }
 
     // A directory entry publishes one club's team name as visible to every OTHER club sharing

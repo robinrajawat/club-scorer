@@ -140,6 +140,31 @@ test("InboxScreen: an outgoing co-owner invite I sent shows a Cancel invite link
   assert.equal(cancelledId, "inv2");
 });
 
+test("InboxScreen: a resolved outgoing co-owner invite shows a Clear link, wired to onDeleteCoOwnerInvite, but a still-pending one doesn't", async () => {
+  let clearedId = null;
+  const coOwnerInvites = [
+    { id: "inv2", scope: "federation", entityId: "fed1", email: "sam@example.com", status: "accepted", createdBy: "owner1", respondedAt: Date.now() },
+    { id: "inv3", scope: "club", entityId: "c1", email: "pat@example.com", status: "pending", createdBy: "owner1" }
+  ];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({
+    coOwnerInvites,
+    onDeleteCoOwnerInvite: id => { clearedId = id; return Promise.resolve({ ok: true }); }
+  })));
+  const clearBtns = inst.root.findAllByType("button").filter(b => hasText(b.props.children, "Clear"));
+  assert.equal(clearBtns.length, 1);
+  await act(async () => {
+    clearBtns[0].props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(clearedId, "inv2");
+});
+
+test("InboxScreen: no Clear link on outgoing co-owner invites when onDeleteCoOwnerInvite isn't provided", () => {
+  const coOwnerInvites = [{ id: "inv2", scope: "federation", entityId: "fed1", email: "sam@example.com", status: "accepted", createdBy: "owner1", respondedAt: Date.now() }];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({ coOwnerInvites })));
+  assert.equal(inst.root.findAllByType("button").find(b => hasText(b.props.children, "Clear")), undefined);
+});
+
 test("InboxScreen: tapping a poll item opens AvailabilityPollModal for that item's team, and closing it calls onPollsChanged", async () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   globalThis.loadTeamPolls = () => Promise.resolve([]);

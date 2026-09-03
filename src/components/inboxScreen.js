@@ -22,6 +22,7 @@ export function InboxScreen({
   coOwnerInvites = [],
   onRespondCoOwnerInvite,
   onCancelCoOwnerInvite,
+  onDeleteCoOwnerInvite,
   activity = [],
   onMarkActivityRead,
   onDeleteActivity,
@@ -68,9 +69,8 @@ export function InboxScreen({
   // accepted/declined invite just dropped out of this same status==="pending" filter and was gone
   // for good. Keeping a resolved one visible for a week (the same expiry window a still-pending
   // invite gets, see CLUB_INVITE_TTL_DAYS in index.html) gives the sender one real chance to see
-  // the outcome next time they open their Inbox, then lets it quietly age out like everything else
-  // here rather than needing an explicit dismiss action this collection's rules don't support
-  // anyway (delete is `false` -- see firestore.rules).
+  // the outcome next time they open their Inbox even if they never act on it, and it can also be
+  // cleared immediately with the "Clear" button below (see onDeleteCoOwnerInvite / firestore.rules).
   const RESOLVED_COOWNER_INVITE_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
   const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => {
     if (inv.createdBy !== currentUid) return false;
@@ -123,6 +123,14 @@ export function InboxScreen({
     const result = await onCancelCoOwnerInvite(inv.id);
     setCoOwnerBusyId(null);
     if (!result.ok) setError(result.error || "Couldn't cancel that invite.");
+  }
+  async function handleDeleteCoOwnerInvite(inv) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onDeleteCoOwnerInvite(inv.id);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't clear that invite.");
   }
   async function handleRespond(r, accept) {
     if (busyId) return;
@@ -495,7 +503,22 @@ export function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite"), inv.status !== "pending" && onDeleteCoOwnerInvite && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeleteCoOwnerInvite(inv),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Clear")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
