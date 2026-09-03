@@ -41,6 +41,7 @@ export function ClubPanel({
   onRefreshMyMemberName,
   onSetVisibility,
   onSearchPublicFederations,
+  onSearchPublicUsers,
   onRequestFederationAffiliation,
   onOpenRecords,
   onAddUmpire,
@@ -59,10 +60,12 @@ export function ClubPanel({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSent, setInviteSent] = useState(null); // email just invited, once sent
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false);
   const [coOwnerInviteOpen, setCoOwnerInviteOpen] = useState(false);
   const [coOwnerInviteEmail, setCoOwnerInviteEmail] = useState("");
   const [coOwnerInviteSent, setCoOwnerInviteSent] = useState(null); // email just invited, once sent
   const [coOwnerInviteBusy, setCoOwnerInviteBusy] = useState(false);
+  const [coOwnerSearchOpen, setCoOwnerSearchOpen] = useState(false);
   const [cancelCoOwnerInviteBusyId, setCancelCoOwnerInviteBusyId] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [renameText, setRenameText] = useState("");
@@ -260,11 +263,36 @@ export function ClubPanel({
     }
     setInviteSent(inviteEmail.trim());
   }
+  // Picking a name-search result never sends the invite directly -- it just fills in the email
+  // field of the already-familiar "type email, tap Invite" form and opens it, same as if that
+  // email had been typed by hand. Keeps a single, already-tested code path for what actually
+  // authorizes and sends an invite (submitInvite/submitCoOwnerInvite above), rather than a second
+  // one that only runs when the person was found by search.
+  function pickSearchedMember(item) {
+    setInviteEmail(item.email);
+    setInviteSent(null);
+    setInviteOpen(true);
+    setMemberSearchOpen(false);
+    return Promise.resolve({
+      ok: true
+    });
+  }
+  function pickSearchedCoOwner(item) {
+    setCoOwnerInviteEmail(item.email);
+    setCoOwnerInviteSent(null);
+    setCoOwnerInviteOpen(true);
+    setCoOwnerSearchOpen(false);
+    return Promise.resolve({
+      ok: true
+    });
+  }
   function handleSelect(id) {
     setInviteOpen(false);
     setInviteSent(null);
+    setMemberSearchOpen(false);
     setCoOwnerInviteOpen(false);
     setCoOwnerInviteSent(null);
+    setCoOwnerSearchOpen(false);
     setError("");
     setRenaming(false);
     setDescEditing(false);
@@ -944,7 +972,37 @@ export function ClubPanel({
       fontSize: 12,
       cursor: "pointer"
     }
-  }, "Invite someone"))))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
+  }, "Invite someone"))), onSearchPublicUsers && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, memberSearchOpen ? /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+    placeholder: "Search by name",
+    idKey: "uid",
+    avatarKey: "photoURL",
+    secondaryKey: "email",
+    secondaryPrefix: "",
+    actionLabel: "Use",
+    alreadyLinkedLabel: "Selected",
+    emptyHint: "No one found — they may not have made their profile discoverable yet.",
+    onSearch: onSearchPublicUsers,
+    onRequest: pickSearchedMember
+  }) : /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMemberSearchOpen(true),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, "Search by name instead")))), activeIsOwner && manageOpen && /*#__PURE__*/React.createElement("div", {
   style: {
     marginTop: 10,
     paddingTop: 10,
@@ -1248,7 +1306,37 @@ export function ClubPanel({
     fontWeight: 600,
     fontSize: 11.5
   }
-}, "+ Invite a co-owner by email"))))), activeIsOwner && manageOpen && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
+}, "+ Invite a co-owner by email"), onSearchPublicUsers && /*#__PURE__*/React.createElement("div", {
+  style: {
+    marginTop: 8
+  }
+}, coOwnerSearchOpen ? /*#__PURE__*/React.createElement(SearchAndRequestPanel, {
+  placeholder: "Search by name",
+  idKey: "uid",
+  avatarKey: "photoURL",
+  secondaryKey: "email",
+  secondaryPrefix: "",
+  actionLabel: "Use",
+  alreadyLinkedLabel: "Selected",
+  emptyHint: "No one found — they may not have made their profile discoverable yet.",
+  onSearch: onSearchPublicUsers,
+  onRequest: pickSearchedCoOwner
+}) : /*#__PURE__*/React.createElement("button", {
+  type: "button",
+  onClick: () => setCoOwnerSearchOpen(true),
+  className: "cs-btn",
+  style: {
+    background: "none",
+    border: "none",
+    color: COLORS.pitch,
+    fontFamily: "'Inter'",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline"
+  }
+}, "Search by name instead")))))), activeIsOwner && manageOpen && activeClub.pendingInvites && Object.keys(activeClub.pendingInvites).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,

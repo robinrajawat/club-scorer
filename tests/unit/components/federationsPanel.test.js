@@ -222,6 +222,39 @@ test("FederationsPanel: inviting a co-owner by email calls onInviteFederationCoO
   assert.match(JSON.stringify(inst.toJSON()), /sam@example\.com/);
 });
 
+test("FederationsPanel: searching for a co-owner by name and picking a result fills the invite email", async () => {
+  const inst = render({
+    federationsById: { fed1: federation() },
+    onSearchPublicUsers: () => Promise.resolve([{ uid: "u9", name: "Sam Green", email: "sam@example.com", photoURL: null }])
+  });
+  await act(async () => {
+    openManage(inst);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const coOwnerBtn = inst.root.findAllByType("button").find(b => b.props.children === "+ Invite a co-owner");
+  act(() => { coOwnerBtn.props.onClick(); });
+
+  const searchToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Search by name instead"));
+  act(() => { searchToggle.props.onClick(); });
+
+  const searchField = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search by name");
+  act(() => { searchField.props.onChange({ target: { value: "Sam" } }); });
+  const searchBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Search"));
+  await act(async () => {
+    searchBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Sam Green/);
+
+  const useBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Use"));
+  await act(async () => {
+    useBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const emailField = inst.root.findAllByType("input").find(i => i.props.value === "sam@example.com");
+  assert.ok(emailField, "invite email field should be pre-filled with the picked user's email");
+});
+
 test("FederationsPanel: a pending co-owner invite shows in the manage panel with a Cancel action wired to onCancelCoOwnerInvite", async () => {
   let cancelledId = null;
   const inst = render({

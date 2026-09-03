@@ -254,6 +254,7 @@ export function CricketScorer() {
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
+  const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -647,6 +648,22 @@ export function CricketScorer() {
     await markActivityRead(activityIds);
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.map(item => ids.includes(item.id) ? { ...item, read: true } : item));
+  }
+  // Loads whether I've already published myself to /userDirectory -- feeds AccountScreen's toggle
+  // state on mount, same "queries by my own uid" shape as the coOwnerInvites/activity effects
+  // above.
+  useEffect(() => {
+    if (!user) {
+      setIsProfilePublic(false);
+      return;
+    }
+    loadMyProfileVisibility().then(setIsProfilePublic);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  async function handleSetProfileVisibility(isPublic) {
+    const result = await setMyProfileVisibility(isPublic);
+    if (result.ok) setIsProfilePublic(isPublic);
+    return result;
   }
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
@@ -2507,6 +2524,7 @@ export function CricketScorer() {
     onCreateFederation: handleCreateFederation,
     onSearchPublicFederations: searchPublicFederations,
     onSearchPublicClubs: searchPublicClubs,
+    onSearchPublicUsers: searchPublicUsers,
     onRequestFederationAffiliation: handleRequestFederationAffiliation,
     onSetFederationVisibility: handleSetFederationVisibility,
     onLeaveFederation: handleLeaveFederation,
@@ -2639,7 +2657,9 @@ export function CricketScorer() {
     onBack: () => setScreen("home"),
     redirectError: authError,
     linkStatus: linkStatus,
-    onClearLinkStatus: () => setLinkStatus("")
+    onClearLinkStatus: () => setLinkStatus(""),
+    isProfilePublic: isProfilePublic,
+    onSetProfileVisibility: handleSetProfileVisibility
   })), screen === "help" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "help",
     direction: navDirection

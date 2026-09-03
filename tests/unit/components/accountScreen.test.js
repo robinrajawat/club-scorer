@@ -218,3 +218,19 @@ test("AccountScreen: linkStatus banner renders and its dismiss button calls onCl
   act(() => { dismissBtn.props.onClick(); });
   assert.equal(cleared, true);
 });
+
+test("AccountScreen: 'Discoverable for invites' toggle reflects isProfilePublic and calls onSetProfileVisibility", async () => {
+  let setTo = null;
+  const inst = render({
+    user: { uid: "u1", displayName: "Robin", email: "robin@x.com", providerData: [] },
+    isProfilePublic: false,
+    onSetProfileVisibility: isPublic => { setTo = isPublic; return Promise.resolve({ ok: true }); }
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Discoverable for invites/);
+  const toggle = inst.root.findByProps({ "aria-label": "Make public" });
+  await act(async () => {
+    toggle.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(setTo, true);
+});
