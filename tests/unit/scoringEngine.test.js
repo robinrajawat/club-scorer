@@ -390,6 +390,26 @@ test("applyBall: a plain odd run total (genuine running, not a boundary) still r
   assert.equal(after.strikerName, "P2", "sanity check -- ordinary odd-run strike rotation is unaffected");
 });
 
+// BUG FIX: an overthrow is a bonus tacked onto the completed/running portion of a ball -- the
+// batsmen never physically run for it (same "bonus, not running" reasoning boundaryHitByBat/
+// battedRuns already rely on elsewhere in applyBall) -- so it must never affect whether they've
+// crossed. Every branch below used to check the ball's raw total (including the overthrow bonus)
+// for strike-rotation parity instead of just the completed portion, so an overthrow that happened
+// to flip the total's parity relative to what was actually run silently left the wrong batsman on
+// strike for the next ball -- and every stat attributed to "whoever's on strike" from then on.
+test("applyBall: an overthrow bonus never affects strike rotation -- only the completed/running portion's parity does", () => {
+  // 1 completed run (odd -- crosses) + a 1-run overthrow bonus (total 2, even) must still rotate.
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "run", runs: 2, overthrow: 1 }).strikerName, "P2");
+  // 2 completed runs (even -- no cross) + a 1-run overthrow bonus (total 3, odd) must NOT rotate.
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "run", runs: 3, overthrow: 1 }).strikerName, "P1");
+  // Same distinction on a wide: 1 run of further running (odd) + a 1-run overthrow (total 2, even).
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "wide", runs: 2, overthrow: 1 }).strikerName, "P2");
+  // Same on a no-ball: 1 run off the bat (odd) + a 1-run overthrow (total 2, even).
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "noball", runs: 2, overthrow: 1 }).strikerName, "P2");
+  // Same on a leg bye: 1 run (odd) + a 1-run overthrow (total 2, even).
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "legbye", runs: 2, overthrow: 1 }).strikerName, "P2");
+});
+
 test("newInning: bigHitRuns defaults to null (rule off) and carries through when set", () => {
   const off = newInning("TeamA", "TeamB", rules, 10);
   assert.equal(off.bigHitRuns, null);
