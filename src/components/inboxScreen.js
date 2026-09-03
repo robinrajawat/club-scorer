@@ -30,6 +30,11 @@ export function InboxScreen({
   const [coOwnerBusyId, setCoOwnerBusyId] = useState(null);
   const [error, setError] = useState("");
   const [openPoll, setOpenPoll] = useState(null); // {clubId, clubName, team, code} | null
+  // Accepting/declining a co-owner invite used to give NO feedback at all -- the card just
+  // vanished from the incoming list with nothing to confirm it worked. This is the one-time
+  // confirmation shown right after responding, cleared on the next navigation into this screen
+  // (see the recipient's own click handler below for where it's set).
+  const [justRespondedCoOwnerInvite, setJustRespondedCoOwnerInvite] = useState(null); // {name, accept, role} | null
   function clubById(id) {
     return clubs.find(c => c.id === id) || null;
   }
@@ -56,17 +61,57 @@ export function InboxScreen({
   const needsFinalize = requests.filter(r => r.direction === "club_to_federation" && r.status === "accepted" && isMyClub(r.clubId));
   const myEmailLower = (currentEmail || "").toLowerCase();
   const incomingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
-  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => inv.status === "pending" && inv.createdBy === currentUid);
+  // Sending an invite used to give the sender no way to ever find out what happened to it -- an
+  // accepted/declined invite just dropped out of this same status==="pending" filter and was gone
+  // for good. Keeping a resolved one visible for a week (the same expiry window a still-pending
+  // invite gets, see CLUB_INVITE_TTL_DAYS in index.html) gives the sender one real chance to see
+  // the outcome next time they open their Inbox, then lets it quietly age out like everything else
+  // here rather than needing an explicit dismiss action this collection's rules don't support
+  // anyway (delete is `false` -- see firestore.rules).
+  const RESOLVED_COOWNER_INVITE_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
+  const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => {
+    if (inv.createdBy !== currentUid) return false;
+    if (inv.status === "pending") return true;
+    if (inv.status === "accepted" || inv.status === "declined") {
+      return inv.respondedAt && Date.now() - inv.respondedAt < RESOLVED_COOWNER_INVITE_VISIBLE_MS;
+    }
+    return false; // cancelled -- the sender already knows, they did it themselves
+  });
+  // Prefers the name snapshotted onto the invite itself at send time (see inviteCoOwner in
+  // index.html) -- the recipient of an incoming invite has no read access to the real club/
+  // federation doc (not a member yet), so clubName/fedName's own-data lookup would come up empty
+  // for them specifically. Falls back to that lookup for any invite sent before this field
+  // existed, and for the sender's own outgoing card (already has full access either way).
   function coOwnerInviteEntityName(inv) {
+    if (inv.entityName) return inv.entityName;
     return inv.scope === "club" ? clubName(inv.entityId) : fedName(inv.entityId);
+  }
+  // The "sent" card's own copy, branching on how it was resolved -- see outgoingCoOwnerInvites
+  // above for why a resolved one still shows up here at all.
+  function outgoingCoOwnerInviteLine(inv) {
+    const name = coOwnerInviteEntityName(inv);
+    const roleWord = inv.role === "member" ? "join" : "co-own";
+    if (inv.status === "accepted") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, inv.email), " accepted your invite to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name));
+    if (inv.status === "declined") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, inv.email), " declined your invite to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name));
+    return /*#__PURE__*/React.createElement(React.Fragment, null, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), " to ", roleWord, " ", /*#__PURE__*/React.createElement("strong", null, name), " — waiting on a response");
   }
   async function handleRespondCoOwner(inv, accept) {
     if (coOwnerBusyId) return;
     setCoOwnerBusyId(inv.id);
     setError("");
+    setJustRespondedCoOwnerInvite(null);
+    const name = coOwnerInviteEntityName(inv);
     const result = await onRespondCoOwnerInvite(inv.id, accept);
     setCoOwnerBusyId(null);
-    if (!result.ok) setError(result.error || "Couldn't respond to that invite.");
+    if (!result.ok) {
+      setError(result.error || "Couldn't respond to that invite.");
+      return;
+    }
+    setJustRespondedCoOwnerInvite({
+      name,
+      accept,
+      role: inv.role
+    });
   }
   async function handleCancelCoOwner(inv) {
     if (coOwnerBusyId) return;
@@ -182,7 +227,19 @@ export function InboxScreen({
       color: COLORS.ball,
       lineHeight: 1.5
     }
-  }, error), isEmpty && /*#__PURE__*/React.createElement("div", {
+  }, error), justRespondedCoOwnerInvite && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "color-mix(in srgb, " + COLORS.turfFixed + " 12%, transparent)",
+      border: `1.5px solid color-mix(in srgb, ${COLORS.turfFixed} 35%, transparent)`,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      lineHeight: 1.5
+    }
+  }, justRespondedCoOwnerInvite.accept ? /*#__PURE__*/React.createElement(React.Fragment, null, "You're now a ", justRespondedCoOwnerInvite.role === "member" ? "member" : "co-owner", " of ", /*#__PURE__*/React.createElement("strong", null, justRespondedCoOwnerInvite.name), ".") : /*#__PURE__*/React.createElement(React.Fragment, null, "You declined the invite to ", /*#__PURE__*/React.createElement("strong", null, justRespondedCoOwnerInvite.name), ".")), isEmpty && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
@@ -399,7 +456,7 @@ export function InboxScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: descStyle
-  }, "You invited ", /*#__PURE__*/React.createElement("strong", null, inv.email), inv.role === "member" ? " to join " : " to co-own ", /*#__PURE__*/React.createElement("strong", null, coOwnerInviteEntityName(inv)), " \u2014 waiting on a response"), /*#__PURE__*/React.createElement("button", {
+  }, outgoingCoOwnerInviteLine(inv)), inv.status === "pending" && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleCancelCoOwner(inv),
     disabled: coOwnerBusyId === inv.id,
     className: "cs-btn",
