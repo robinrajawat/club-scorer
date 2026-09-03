@@ -104,6 +104,32 @@ test("ResultScreen: a tied match with superOver rule shows 'Start Super Over', w
   assert.equal(latestMatch.writeSeq, 5);
 });
 
+// BUG FIX: matchWinner (appLogic.js) already follows match.superOverMatchId to resolve who
+// actually won for points/NRR/knockout advancement, but this banner used to just say "Match tied"
+// forever, even once the linked Super Over had actually finished and decided the match -- the only
+// way to see who really won was to tap into the separate Super Over match and read its own screen.
+test("ResultScreen: once the linked Super Over is complete and decisive, the banner names the actual winner instead of just 'Match tied'", async () => {
+  const tied = completeMatch({
+    innings: [inning({ battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC", runs: 150 }), inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 150 })],
+    rules: { superOver: true },
+    superOverMatchId: "so1"
+  });
+  const superOver = completeMatch({
+    id: "so1", isSuperOver: true,
+    innings: [inning({ battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC", runs: 10 }), inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 14 })]
+  });
+  globalThis.loadMatch = id => { assert.equal(id, "so1"); return Promise.resolve(superOver); };
+  let inst;
+  await act(async () => {
+    inst = renderer.create(React.createElement(ResultScreen, { match: tied, setMatch: () => {}, onExit: () => {} }));
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Match tied.*Oakwood CC won the Super Over/, "Oakwood chased the Super Over's target (14 > 10) so they're the actual winner");
+  // "Start Super Over" must not be offered again -- one was already played and decided.
+  assert.equal(inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Start Super Over")), undefined);
+});
+
 test("ResultScreen: 'View Super Over' loads the linked match via loadMatch", async () => {
   const linked = completeMatch({ id: "so1", isSuperOver: true });
   globalThis.loadMatch = id => { assert.equal(id, "so1"); return Promise.resolve(linked); };

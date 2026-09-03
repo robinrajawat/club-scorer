@@ -234,6 +234,36 @@ test("matchResultText: No result takes priority even with only one innings, then
   assert.equal(matchResultText(defended), "A won by 30 runs");
 });
 
+// BUG FIX: matchWinner (appLogic.js) already follows match.superOverMatchId to resolve who
+// actually won for points/NRR/knockout advancement, but this text never reflected it -- a tied
+// match with a completed, decisive Super Over kept showing plain "Match tied" forever.
+test("matchResultText: a tied match names the actual winner once its linked Super Over is complete and decisive", () => {
+  const tied = {
+    status: "complete",
+    innings: [{ battingTeam: "A", runs: 150 }, { battingTeam: "B", runs: 150, maxWickets: 10 }]
+  };
+  // No Super Over passed at all -- unaffected, still plain "Match tied".
+  assert.equal(matchResultText(tied), "Match tied");
+  // A Super Over that hasn't finished yet -- still just "Match tied", nothing to report.
+  const inProgressSuperOver = { status: "in-progress", innings: [{ battingTeam: "A", runs: 5 }] };
+  assert.equal(matchResultText(tied, inProgressSuperOver), "Match tied");
+  // A Super Over that itself tied -- no decisive winner to name, still plain "Match tied".
+  const tiedSuperOver = { status: "complete", innings: [{ battingTeam: "A", runs: 10 }, { battingTeam: "B", runs: 10 }] };
+  assert.equal(matchResultText(tied, tiedSuperOver), "Match tied");
+  // A decisive, complete Super Over -- now names the actual winner.
+  const decisiveSuperOver = { status: "complete", innings: [{ battingTeam: "A", runs: 10 }, { battingTeam: "B", runs: 14 }] };
+  assert.equal(matchResultText(tied, decisiveSuperOver), "Match tied — B won the Super Over");
+  const otherWayRound = { status: "complete", innings: [{ battingTeam: "A", runs: 15 }, { battingTeam: "B", runs: 8 }] };
+  assert.equal(matchResultText(tied, otherWayRound), "Match tied — A won the Super Over");
+  // A decisively-won match (not tied at all) ignores any superOverMatch passed in -- there's
+  // nothing to append to a result that was never a tie in the first place.
+  const defended = {
+    status: "complete",
+    innings: [{ battingTeam: "A", runs: 150 }, { battingTeam: "B", runs: 120, maxWickets: 10 }]
+  };
+  assert.equal(matchResultText(defended, decisiveSuperOver), "A won by 30 runs");
+});
+
 test("matchScoreLine: live score line while in progress, falls back to matchResultText once complete", () => {
   const live = {
     status: "live", currentInningIndex: 0,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronLeft, Trophy, Undo2 } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
@@ -27,13 +27,36 @@ export function ResultScreen({
   onExit
 }) {
   const [i1, i2] = match.innings;
-  const resultText = matchResultText(match);
+  // A tied match's OWN regulation-time result never changes, but "Match tied" isn't the final word
+  // once a linked Super Over (match.superOverMatchId) has actually been played and decided --
+  // matchWinner (appLogic.js) already follows that same link for points/NRR/knockout advancement,
+  // so this banner shouldn't keep telling an incomplete story just because the two matches are
+  // separate documents. Fetched lazily (there's no back-write onto this match when the Super Over
+  // finishes) and reset whenever the linked id changes, same pattern as handleViewSuperOver below.
+  const [linkedSuperOver, setLinkedSuperOver] = useState(null);
+  useEffect(() => {
+    if (!match.superOverMatchId) {
+      setLinkedSuperOver(null);
+      return;
+    }
+    let cancelled = false;
+    loadMatch(match.superOverMatchId).then(m => {
+      if (!cancelled) setLinkedSuperOver(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [match.superOverMatchId]);
+  const resultText = matchResultText(match, linkedSuperOver);
   const toss = tossText(match.toss);
   const houseRules = nonStandardRulesText(match.rules);
   const impactSubs = impactSubsText(match.impactSubs);
   const [startingSuperOver, setStartingSuperOver] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
-  const isTied = resultText === "Match tied";
+  // startsWith, not ===, since a decided Super Over appends " — {team} won the Super Over" to
+  // this same string (see matchResultText) -- still a tie in every way that matters here (offering
+  // a NEW Super Over, reopening the innings), just no longer literally the bare "Match tied" text.
+  const isTied = !!resultText && resultText.startsWith("Match tied");
   const canOfferSuperOver = isTied && match.rules && match.rules.superOver && !match.superOverMatchId;
   // Extends the same "reopen for corrections" mechanism the innings break already offers
   // (goBackToFirstInnings, above) one step further: the match's LAST innings only, from full
