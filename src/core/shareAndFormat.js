@@ -195,7 +195,15 @@ export function umpiresText(match) {
   return `Umpire${names.length === 1 ? "" : "s"}: ${names.join(", ")}`;
 }
 
-export function matchResultText(match) {
+// superOverMatch: the linked Super Over match (match.superOverMatchId), when the caller has it
+// loaded -- optional, and undefined by default, so every existing caller that doesn't pass one
+// keeps seeing plain "Match tied" exactly as before. matchWinner (appLogic.js) already follows
+// this exact link for points/NRR/knockout advancement -- a tie is never the final word there once
+// a Super Over decides it -- but this human-readable text used to tell a different, incomplete
+// story: "Match tied" forever, even long after the Super Over that decided it had finished. The
+// two teams' own regulation-time result genuinely was a tie, so that half of the sentence stays;
+// this only adds who actually won once there's a decisive Super Over to report.
+export function matchResultText(match, superOverMatch) {
   const [i1, i2] = match.innings;
   if (match.status !== "complete") return null;
   // Checked before the !i2 guard below deliberately -- "Abandon match" (declareNoResult) can be
@@ -213,6 +221,11 @@ export function matchResultText(match) {
     const wicketsInHand = maxWicketsFor(match, i2) - i2.wickets;
     return `${i2.battingTeam} won by ${wicketsInHand} wicket${wicketsInHand === 1 ? "" : "s"}`;
   } else if (i2.runs === target - 1) {
+    if (superOverMatch && superOverMatch.status === "complete" && superOverMatch.innings && superOverMatch.innings[1]) {
+      const [s1, s2] = superOverMatch.innings;
+      if (s2.runs > s1.runs) return `Match tied — ${s2.battingTeam} won the Super Over`;
+      if (s1.runs > s2.runs) return `Match tied — ${s1.battingTeam} won the Super Over`;
+    }
     return "Match tied";
   }
   const margin = target - 1 - i2.runs;
