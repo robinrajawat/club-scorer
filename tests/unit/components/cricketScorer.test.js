@@ -39,6 +39,7 @@ import renderer, { act } from "react-test-renderer";
 import { CricketScorer } from "../../../src/components/cricketScorer.js";
 import { WelcomeScreen } from "../../../src/components/welcomeScreen.js";
 import { HomeScreen } from "../../../src/components/homeScreen.js";
+import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js";
 import { SetupScreen } from "../../../src/components/setupScreen.js";
 import { AccountScreen } from "../../../src/components/accountScreen.js";
 import { FollowScreen } from "../../../src/components/followScreen.js";
@@ -144,6 +145,7 @@ afterEach(() => {
   delete globalThis.fetchSharedMatch;
   delete globalThis.saveMatch;
   delete globalThis.saveRules;
+  delete globalThis.saveTournaments;
   delete globalThis.db;
   delete globalThis.Modal;
 });
@@ -269,6 +271,36 @@ test("CricketScorer: starting a standalone match (no tournament) does remember i
     await new Promise(r => setTimeout(r, 0));
   });
   assert.deepEqual(savedRules, { ballsPerOver: 6, freeHit: true });
+});
+
+// BUG FIX: TournamentsScreen's create form has always collected an optional default venue and
+// passed it as onCreateTournament's 7th argument (see tournamentsScreen.test.js's own coverage of
+// that), but handleCreateTournament here only ever declared six parameters -- the venue was
+// silently dropped on every tournament creation, with no error and nothing visibly missing on
+// screen (the create flow just closes normally). Only reachable/catchable at this integration
+// point: both sides individually looked correct in isolation (the screen sent the right payload;
+// the handler just never had a parameter to receive it).
+test("CricketScorer: a venue set while creating a tournament is actually saved on it, not silently dropped", async () => {
+  let saved = null;
+  globalThis.saveTournaments = list => { saved = list; return Promise.resolve(); };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTournaments(); });
+  const tournamentsScreen = inst.root.findByType(TournamentsScreen);
+  await act(async () => {
+    await tournamentsScreen.props.onCreateTournament(
+      "Summer Cup", ["Riverside CC", "Oakwood CC"], null, null, null, null,
+      { venue: "Riverside Oval", venueLat: 12.34, venueLng: 56.78 }
+    );
+  });
+  assert.ok(saved, "saveTournaments should have been called");
+  const created = saved.find(t => t.name === "Summer Cup");
+  assert.ok(created, "the new tournament should be in the saved list");
+  assert.equal(created.venue, "Riverside Oval");
+  assert.equal(created.venueLat, 12.34);
+  assert.equal(created.venueLng, 56.78);
 });
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {
