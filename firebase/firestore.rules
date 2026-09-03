@@ -640,26 +640,30 @@ service cloud.firestore {
     // ever minted was confirmed redeemed or expired, its rules (and the federations/{id} update
     // rule's matching redemption branch) were removed outright above rather than kept alive.
     // ---------------------------------------------------------------------
+    // BUG FIX (round 2): the createdBy-first fix below didn't actually clear the reported symptom
+    // -- the client kept logging the exact same permission-denied on the read-back query even
+    // after this file's rules were confirmed live and matching. Root cause: `list` rule evaluation
+    // in Firestore runs the rule against EVERY document a query would return, and if it throws
+    // (not just returns false) for even ONE of them, the WHOLE query is denied -- not just that
+    // one row. Every field access here (data.email, data.scope, data.entityId, data.createdBy) was
+    // plain dot-notation, which THROWS outright if the field is missing, unlike every other helper
+    // in this file (isClubOwner, isFederationOwner, and both branches below) which defensively
+    // uses `.get(field, default)` for exactly this reason. A stray/malformed coOwnerInvites
+    // document -- e.g. leftover test data from when this collection was first built (PR #84/#85),
+    // predating some of these fields, or anything ever written by hand in the console -- sitting
+    // anywhere in the SAME result set as a real invite would silently take the real one down with
+    // it. Switched every field read here to `.get(field, default)`, and guarded each get()-based
+    // ownership check so it only ever runs once its own scope/entityId are confirmed present --
+    // never on a document missing either.
     function coOwnerInviteIsRecipient(data) {
-      return request.auth.token.email.lower() == data.email;
+      return request.auth.token.email.lower() == data.get('email', '');
     }
-    // BUG FIX: reported live -- an owner who'd just sent an invite couldn't see it in their own
-    // "Pending co-owner invites" list, with the client logging a genuine `permission-denied` on the
-    // read-back query (confirmed via the invite/club docs directly in the Firestore console: the
-    // sender was correctly `ownerUid` and in `memberUids` on the target club, so this wasn't a data
-    // problem). data.createdBy == request.auth.uid is checked FIRST now, ahead of (and short-
-    // circuiting past, via ||) the cross-collection get() ownership lookup -- the person who
-    // created this exact invite is always allowed to see it, with no need to prove club/federation
-    // ownership via an indirect get() at all. Also switched the scope dispatch from a ternary to
-    // explicit `&&`/`||` guards: a club-scoped invite's `get()` now only ever targets `clubs/...`,
-    // never `federations/...` even as an unreached branch, removing any doubt about whether
-    // Firestore's `?:` short-circuits get() calls the same way `&&`/`||` unambiguously do. This
-    // still needs a manual paste into Firebase Console -> Firestore Database -> Rules -> Publish,
-    // same as every change to this file -- see the top-of-file comment.
     function coOwnerInviteIsSender(data) {
-      return data.createdBy == request.auth.uid
-        || (data.scope == 'club' && isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data))
-        || (data.scope == 'federation' && isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data));
+      return data.get('createdBy', '') == request.auth.uid
+        || (data.get('scope', '') == 'club' && data.get('entityId', '') != ''
+            && isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data))
+        || (data.get('scope', '') == 'federation' && data.get('entityId', '') != ''
+            && isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data));
     }
     match /coOwnerInvites/{inviteId} {
       // Same "list re-validates resource.data per returned doc" shape as /federationRequests'
