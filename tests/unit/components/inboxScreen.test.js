@@ -163,3 +163,32 @@ test("InboxScreen: tapping a poll item opens AvailabilityPollModal for that item
   });
   assert.equal(pollsChanged, true);
 });
+
+test("InboxScreen: activity items render with an unread dot, prefer entityName over a local lookup, and 'Mark all read' calls onMarkActivityRead with only the unread ids", async () => {
+  let markedIds = null;
+  const activity = [
+    { id: "a1", kind: "joined", scope: "club", entityId: "unknown-club", entityName: "Riverside CC", actorName: "Sam", role: "member", read: false, createdAt: 2000 },
+    { id: "a2", kind: "removed", scope: "club", entityId: "unknown-club", entityName: "Riverside CC", actorName: "Pat", read: true, createdAt: 1000 }
+  ];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({
+    activity,
+    onMarkActivityRead: ids => { markedIds = ids; return Promise.resolve(); }
+  })));
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Sam.*joined.*Riverside CC/);
+  assert.match(json, /You were removed from.*Riverside CC.*by.*Pat/);
+
+  const markAllBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Mark all read"));
+  await act(async () => {
+    markAllBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(markedIds, ["a1"]);
+});
+
+test("InboxScreen: 'Mark all read' is hidden once every activity item is already read", () => {
+  const activity = [{ id: "a1", kind: "left", scope: "club", entityId: "c1", entityName: "Riverside CC", actorName: "Sam", read: true, createdAt: 1000 }];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({ activity })));
+  const markAllBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Mark all read"));
+  assert.equal(markAllBtn, undefined);
+});

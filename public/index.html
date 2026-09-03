@@ -3405,6 +3405,55 @@ async function loadMyCoOwnerInvites() {
     return [];
   }
 }
+// Loads every activity notification addressed to me -- see /activity in firestore.rules for the
+// full model. A single, get()-free where("forUid","==",myUid) query, so no list-rule circularity
+// risk here at all (see the coOwnerInvites/federationRequests sagas above for what that would look
+// like if forUid were instead something requiring a cross-document lookup to verify).
+async function loadMyActivity() {
+  if (!auth.currentUser) return [];
+  try {
+    const snap = await db.collection("activity").where("forUid", "==", auth.currentUser.uid).get();
+    return snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (e) {
+    console.error("activity load failed", e);
+    return [];
+  }
+}
+// Recipient marking one notification (or several) as read -- the only field they're ever allowed
+// to touch on their own activity doc, see firestore.rules.
+async function markActivityRead(activityIds) {
+  const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+  await Promise.all(ids.map(id => db.collection("activity").doc(id).update({
+    read: true
+  }).catch(e => console.error("markActivityRead failed", id, e))));
+}
+// Best-effort write to the OTHER party's activity feed -- this app has no server, no push, no
+// email, so this collection (see its comment in firestore.rules) IS the notification system, and
+// this is the one place every membership-changing action funnels through to write into it. Called
+// from the ACTOR's own client, right after (or, for a couple of call sites, right before, so
+// firestore.rules' create validation still sees pre-change state) the real write it's a companion
+// to. Deliberately swallows its own failure (permission-denied, offline, whatever) rather than
+// letting a notification problem look like the real action failed -- same "best-effort, .catch()
+// and move on" pattern as the pendingInvites mirror writes elsewhere in this file. Never notifies
+// yourself (e.g. cancelling your own invite doesn't need to tell you that).
+function notifyActivity(forUid, kind, scope, entityId, entityName, extra) {
+  if (!auth.currentUser || !forUid || forUid === auth.currentUser.uid) return;
+  db.collection("activity").add({
+    forUid,
+    kind,
+    scope,
+    entityId,
+    entityName: entityName || "",
+    actorUid: auth.currentUser.uid,
+    actorName: auth.currentUser.displayName || auth.currentUser.email || "Someone",
+    createdAt: Date.now(),
+    read: false,
+    ...(extra || {})
+  }).catch(e => console.error("notifyActivity failed", kind, scope, entityId, e));
+}
 // Recipient accepts or declines a still-pending invite addressed to them. Accepting adds them to
 // the target club/federation's coOwnerUids (and, for a club, memberUids too — co-owner implies
 // membership) BEFORE flipping the invite itself to "accepted", deliberately in that order — see
@@ -3413,6 +3462,15 @@ async function loadMyCoOwnerInvites() {
 // once accepted" pattern as respondFederationRequest's federation_to_club accept branch. A
 // club-scope invite with role "member" (legacy invites with no role field are treated as
 // "coOwner") only ever grants memberUids — never coOwnerUids.
+//
+// Notifies on the way out: a decline notifies just the invite's sender ("invite_response"); an
+// accept notifies every current owner-tier uid of the entity (re-read after the membership write,
+// so it reflects who actually administers it right now, the accepting person included if this was
+// a coOwner-role invite) with "joined" -- broader than just the sender, since anyone who
+// co-administers the club/federation would want to know, not only whoever happened to send this
+// particular invite. Deliberately not both: an accept already reaches the sender via the "joined"
+// broadcast (they're owner-tier), so a separate "invite_response" for the same event would just be
+// the same news twice.
 async function respondCoOwnerInvite(inviteId, accept) {
   try {
     const snap = await db.collection("coOwnerInvites").doc(inviteId).get();
@@ -3438,6 +3496,17 @@ async function respondCoOwnerInvite(inviteId, accept) {
         coOwnerInviteAccepted: inviteId
       };
       await db.collection(collection).doc(invite.entityId).update(update);
+      const entityDoc = await db.collection(collection).doc(invite.entityId).get();
+      const entity = entityDoc.data() || {};
+      const ownerTierUids = invite.scope === "club" ? [...new Set([...(entity.coOwnerUids || []), entity.ownerUid].filter(Boolean))] : [...new Set([...(entity.coOwnerUids || []), entity.createdBy].filter(Boolean))];
+      ownerTierUids.forEach(uid => notifyActivity(uid, "joined", invite.scope, invite.entityId, invite.entityName, {
+        role
+      }));
+    } else {
+      notifyActivity(invite.createdBy, "invite_response", invite.scope, invite.entityId, invite.entityName, {
+        accepted: false,
+        role
+      });
     }
     await db.collection("coOwnerInvites").doc(inviteId).update({
       status: accept ? "accepted" : "declined",
@@ -3536,11 +3605,16 @@ async function joinClubWithCode(code) {
       [`pendingInvites.${cleaned}`]: firebase.firestore.FieldValue.delete()
     });
     const clubDoc = await db.collection("clubs").doc(clubId).get();
+    const club = clubDoc.data() || {};
+    const ownerTierUids = [...new Set([...(club.coOwnerUids || []), club.ownerUid].filter(Boolean))];
+    ownerTierUids.forEach(uid => notifyActivity(uid, "joined", "club", clubId, club.name, {
+      role: "member"
+    }));
     return {
       ok: true,
       club: {
         id: clubDoc.id,
-        ...clubDoc.data()
+        ...club
       }
     };
   } catch (e) {
@@ -3555,11 +3629,15 @@ async function joinClubWithCode(code) {
 async function leaveClub(clubId) {
   if (!auth.currentUser) return;
   try {
+    const clubDoc = await db.collection("clubs").doc(clubId).get();
+    const club = clubDoc.data() || {};
+    const ownerTierUids = [...new Set([...(club.coOwnerUids || []), club.ownerUid].filter(Boolean))];
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
       coOwnerUids: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
       [`memberNames.${auth.currentUser.uid}`]: firebase.firestore.FieldValue.delete()
     });
+    ownerTierUids.forEach(uid => notifyActivity(uid, "left", "club", clubId, club.name));
   } catch (e) {
     console.error("leave club failed", e);
   }
@@ -3567,11 +3645,14 @@ async function leaveClub(clubId) {
 // Owner-only.
 async function removeClubMember(clubId, uid) {
   try {
+    const clubDoc = await db.collection("clubs").doc(clubId).get();
+    const club = clubDoc.data() || {};
     await db.collection("clubs").doc(clubId).update({
       memberUids: firebase.firestore.FieldValue.arrayRemove(uid),
       coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid),
       [`memberNames.${uid}`]: firebase.firestore.FieldValue.delete()
     });
+    notifyActivity(uid, "removed", "club", clubId, club.name);
     return {
       ok: true
     };
@@ -3604,8 +3685,13 @@ async function refreshMyMemberName(clubId) {
 // of deleting the club).
 async function removeClubCoOwner(clubId, uid) {
   try {
+    const clubDoc = await db.collection("clubs").doc(clubId).get();
+    const club = clubDoc.data() || {};
     await db.collection("clubs").doc(clubId).update({
       coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
+    });
+    notifyActivity(uid, "role_changed", "club", clubId, club.name, {
+      role: "member"
     });
     return {
       ok: true
@@ -4522,12 +4608,25 @@ async function kickClubFromFederation(federationId, clubId) {
     };
   }
 }
-// Owner-only. Revokes co-ownership without touching the federation's clubs/teams directory.
+// Owner/co-owner removing a DIFFERENT co-owner, or a co-owner removing THEMSELVES (self-leave) --
+// see federations/{federationId} update rule branch (C) for why both are the same write. Doesn't
+// touch the federation's clubs/teams directory.
 async function removeFederationCoOwner(federationId, uid) {
   try {
+    const fedDoc = await db.collection("federations").doc(federationId).get();
+    const fed = fedDoc.data() || {};
+    const isSelf = !!auth.currentUser && uid === auth.currentUser.uid;
     await db.collection("federations").doc(federationId).update({
       coOwnerUids: firebase.firestore.FieldValue.arrayRemove(uid)
     });
+    if (isSelf) {
+      // Self-leave: notify the REMAINING owner tier, not the leaver themselves (they already know)
+      // -- same shape as leaveClub's notification.
+      const ownerTierUids = [...new Set([...(fed.coOwnerUids || []), fed.createdBy].filter(Boolean))];
+      ownerTierUids.forEach(otherUid => notifyActivity(otherUid, "left", "federation", federationId, fed.name));
+    } else {
+      notifyActivity(uid, "removed", "federation", federationId, fed.name);
+    }
     return {
       ok: true
     };
@@ -15288,6 +15387,8 @@ function InboxScreen({
   coOwnerInvites = [],
   onRespondCoOwnerInvite,
   onCancelCoOwnerInvite,
+  activity = [],
+  onMarkActivityRead,
   pollItems = [],
   onPollsChanged,
   onBack
@@ -15440,7 +15541,27 @@ function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0;
+  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here (there's
+  // no way to delete one, see firestore.rules), just "what happened lately that I should know
+  // about." 30 is generous for how often club/federation membership actually changes.
+  const sortedActivity = [...activity].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 30);
+  const unreadActivityIds = activity.filter(item => !item.read).map(item => item.id);
+  function activityEntityName(item) {
+    if (item.entityName) return item.entityName;
+    return item.scope === "club" ? clubName(item.entityId) : fedName(item.entityId);
+  }
+  function activityLine(item) {
+    const name = activityEntityName(item);
+    const actor = /*#__PURE__*/React.createElement("strong", null, item.actorName || "Someone");
+    const entity = /*#__PURE__*/React.createElement("strong", null, name);
+    if (item.kind === "joined") return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " joined ", entity, item.role === "coOwner" ? " as a co-owner" : "");
+    if (item.kind === "left") return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " left ", entity);
+    if (item.kind === "removed") return /*#__PURE__*/React.createElement(React.Fragment, null, "You were removed from ", entity, " by ", actor);
+    if (item.kind === "role_changed") return item.role === "member" ? /*#__PURE__*/React.createElement(React.Fragment, null, actor, " removed your co-owner rights on ", entity, " — you're still a member") : /*#__PURE__*/React.createElement(React.Fragment, null, actor, " made you a co-owner of ", entity);
+    if (item.kind === "invite_response") return item.accepted ? /*#__PURE__*/React.createElement(React.Fragment, null, actor, " accepted your invite to ", entity) : /*#__PURE__*/React.createElement(React.Fragment, null, actor, " declined your invite to ", entity);
+    return /*#__PURE__*/React.createElement(React.Fragment, null, actor, " — ", entity);
+  }
+  const isEmpty = incoming.length === 0 && outgoing.length === 0 && needsFinalize.length === 0 && pollItems.length === 0 && incomingCoOwnerInvites.length === 0 && outgoingCoOwnerInvites.length === 0 && sortedActivity.length === 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -15737,7 +15858,54 @@ function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      ...sectionTitleStyle
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Activity"), unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onMarkActivityRead && onMarkActivityRead(unreadActivityIds),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "Mark all read")), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
+    key: item.id,
+    style: {
+      ...cardStyle,
+      animation: `cs-slideUp 0.3s ease ${idx * 0.02}s backwards`,
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 8
+    }
+  }, !item.read && /*#__PURE__*/React.createElement("span", {
+    "aria-label": "Unread",
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: COLORS.turfFixed,
+      marginTop: 6,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...descStyle,
+      marginBottom: 0,
+      opacity: item.read ? 0.65 : 1
+    }
+  }, activityLine(item))))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,
@@ -36870,6 +37038,7 @@ function CricketScorer() {
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
+  const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -37244,6 +37413,26 @@ function CricketScorer() {
     refreshMyCoOwnerInvites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+  async function refreshMyActivity() {
+    const rows = await loadMyActivity();
+    setMyActivity(rows);
+  }
+  // Feeds the Inbox screen's Activity section and the last third of its badge count. Same
+  // "queries by my own uid, not by what I own" shape as the coOwnerInvites effect above -- see
+  // loadMyActivity's own comment.
+  useEffect(() => {
+    if (!user) {
+      setMyActivity([]);
+      return;
+    }
+    refreshMyActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+  async function handleMarkActivityRead(activityIds) {
+    await markActivityRead(activityIds);
+    const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+    setMyActivity(items => items.map(item => ids.includes(item.id) ? { ...item, read: true } : item));
+  }
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -37263,6 +37452,9 @@ function CricketScorer() {
   // someone else responds, same asymmetry as federationRequestsNeedingAction above.
   const myEmailLower = (user && user.email || "").toLowerCase();
   const coOwnerInvitesNeedingAction = myCoOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
+  // Activity notifications never require an action the way an invite/request does -- they're
+  // informational -- so "needs my attention" here just means unread.
+  const unreadActivityCount = myActivity.filter(item => !item.read).length;
   async function refreshPendingPollItems() {
     const items = await loadPendingPollItems(clubs, clubTeamsById);
     setPendingPollItems(items);
@@ -38979,7 +39171,7 @@ function CricketScorer() {
     onLoadPublicPlayers: loadPublicPlayers,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length,
+    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -39279,6 +39471,8 @@ function CricketScorer() {
     coOwnerInvites: myCoOwnerInvites,
     onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    activity: myActivity,
+    onMarkActivityRead: handleMarkActivityRead,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")
