@@ -12443,14 +12443,16 @@ function AboutScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Data & privacy")), /*#__PURE__*/React.createElement("div", {
+  }, "Data & privacy")), ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
-      lineHeight: 1.7
+      lineHeight: 1.7,
+      marginBottom: idx < 3 ? 10 : 0
     }
-  }, "Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone. Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side. Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off. There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."))));
+  }, para)))));
 }
 // GENERATED-FN-END: AboutScreen
 // GENERATED-FN-START: SharedLinksScreen
