@@ -194,8 +194,10 @@ export function computeQualificationTarget({
   rivalNRR,
   battingFirst,
   oversLimit,
-  knownRuns
+  knownRuns,
+  ballsPerOver
 }) {
+  const BPO = ballsPerOver || 6;
   const RF = stats.runsFor,
     OF = stats.oversFor,
     RA = stats.runsAgainst,
@@ -237,9 +239,17 @@ export function computeQualificationTarget({
       };
     }
     const maxOversExact = (RF + R_A) / requiredForRate - OF;
+    // Same "landing exactly on the tie boundary doesn't actually beat it" concern maxConcede
+    // above already guards against, but in balls -- the discrete unit overs come in -- instead
+    // of runs: finishing in EXACTLY maxOversExact overs only TIES the rival's NRR, so the number
+    // actually worth telling the scorer is the last legal ball strictly before that threshold,
+    // not the threshold itself (which decimalOversToLabel would otherwise floor straight to when
+    // it happens to land exactly on a ball boundary).
+    const maxBallsExact = Math.ceil(maxOversExact * BPO - 1e-9) - 1;
     return {
       kind: "chaseWithin",
       maxOversExact,
+      maxOversForDisplay: Math.max(0, maxBallsExact) / BPO,
       achievable: maxOversExact > 0
     };
   }
