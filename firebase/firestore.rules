@@ -1071,7 +1071,11 @@ service cloud.firestore {
       allow update: if request.auth != null && resource.data.forUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
 
-      allow delete: if false;
+      // The recipient can clear their own notification once they've seen it -- this is their own
+      // copy of "you were told about X", not the historical record of X itself (that's the real
+      // club/federation doc, or the coOwnerInvites doc, neither of which this touches), so deleting
+      // it has no effect on anyone else or on what actually happened.
+      allow delete: if request.auth != null && resource.data.forUid == request.auth.uid;
     }
 
     // Existence-only admin registry -- a doc at /admins/{uid} means that uid is an admin, checked

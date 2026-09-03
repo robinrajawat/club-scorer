@@ -24,6 +24,7 @@ export function InboxScreen({
   onCancelCoOwnerInvite,
   activity = [],
   onMarkActivityRead,
+  onDeleteActivity,
   pollItems = [],
   onPollsChanged,
   onBack
@@ -176,11 +177,12 @@ export function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here (there's
-  // no way to delete one, see firestore.rules), just "what happened lately that I should know
-  // about." 30 is generous for how often club/federation membership actually changes.
+  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here, just
+  // "what happened lately that I should know about." 30 is generous for how often club/federation
+  // membership actually changes, and anything older can just be cleared (see onDeleteActivity).
   const sortedActivity = [...activity].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 30);
   const unreadActivityIds = activity.filter(item => !item.read).map(item => item.id);
+  const allActivityIds = activity.map(item => item.id);
   function activityEntityName(item) {
     if (item.entityName) return item.entityName;
     return item.scope === "club" ? clubName(item.entityId) : fedName(item.entityId);
@@ -500,7 +502,13 @@ export function InboxScreen({
       justifyContent: "space-between",
       ...sectionTitleStyle
     }
-  }, /*#__PURE__*/React.createElement("span", null, "Activity"), unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("span", null, "Activity"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => onMarkActivityRead && onMarkActivityRead(unreadActivityIds),
     className: "cs-btn",
     style: {
@@ -515,7 +523,22 @@ export function InboxScreen({
       textTransform: "none",
       letterSpacing: 0
     }
-  }, "Mark all read")), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "Mark all read"), onDeleteActivity && allActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDeleteActivity(allActivityIds),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "Clear all"))), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
     key: item.id,
     style: {
       ...cardStyle,
@@ -538,9 +561,24 @@ export function InboxScreen({
     style: {
       ...descStyle,
       marginBottom: 0,
-      opacity: item.read ? 0.65 : 1
+      opacity: item.read ? 0.65 : 1,
+      flex: 1
     }
-  }, activityLine(item))))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, activityLine(item)), onDeleteActivity && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDeleteActivity(item.id),
+    "aria-label": "Clear this notification",
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: "0 2px",
+      flexShrink: 0,
+      fontSize: 16,
+      lineHeight: 1
+    }
+  }, "×")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,
