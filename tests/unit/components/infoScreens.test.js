@@ -68,6 +68,18 @@ test("AboutScreen: renders without crashing and wires onBack to its back button"
   assert.equal(back, true);
 });
 
+test("AboutScreen: Data & privacy starts collapsed behind a teaser, and expands to the full text on tap", () => {
+  const inst = renderer.create(React.createElement(AboutScreen, { onBack: () => {} }));
+  const toggle = inst.root.findAllByType("button").find(b => b.props["aria-expanded"] !== undefined);
+  assert.equal(toggle.props["aria-expanded"], false);
+  assert.match(JSON.stringify(inst.toJSON()), /tap to read/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Firestore/);
+
+  act(() => { toggle.props.onClick(); });
+  assert.equal(toggle.props["aria-expanded"], true);
+  assert.match(JSON.stringify(inst.toJSON()), /Firestore/);
+});
+
 test("FeedbackScreen: sends via the (stubbed) submitFeedback and shows a thank-you", async () => {
   let sentWith = null;
   globalThis.submitFeedback = payload => { sentWith = payload; return Promise.resolve({ ok: true }); };
