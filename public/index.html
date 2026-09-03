@@ -3568,6 +3568,21 @@ async function cancelCoOwnerInvite(inviteId) {
     };
   }
 }
+// Sender clearing their own resolved (accepted/declined/cancelled) invite's acknowledgement card
+// -- see the delete rule on /coOwnerInvites for why this only ever works once it's resolved.
+async function deleteCoOwnerInvite(inviteId) {
+  try {
+    await db.collection("coOwnerInvites").doc(inviteId).delete();
+    return {
+      ok: true
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.code === "permission-denied" ? "You can't clear that invite." : e.message || "Couldn't clear that invite."
+    };
+  }
+}
 // Owner-only (any owner/co-owner of the club, same as every other club-level action — unlike
 // federation invites, club invites aren't locked to whoever personally sent them). Deletes the
 // join code itself, so it can never be redeemed after this, and drops it from the club's
@@ -12428,14 +12443,16 @@ function AboutScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Data & privacy")), /*#__PURE__*/React.createElement("div", {
+  }, "Data & privacy")), ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
-      lineHeight: 1.7
+      lineHeight: 1.7,
+      marginBottom: idx < 3 ? 10 : 0
     }
-  }, "Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone. Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side. Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off. There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."))));
+  }, para)))));
 }
 // GENERATED-FN-END: AboutScreen
 // GENERATED-FN-START: SharedLinksScreen
@@ -15665,6 +15682,7 @@ function InboxScreen({
   coOwnerInvites = [],
   onRespondCoOwnerInvite,
   onCancelCoOwnerInvite,
+  onDeleteCoOwnerInvite,
   activity = [],
   onMarkActivityRead,
   onDeleteActivity,
@@ -15711,9 +15729,8 @@ function InboxScreen({
   // accepted/declined invite just dropped out of this same status==="pending" filter and was gone
   // for good. Keeping a resolved one visible for a week (the same expiry window a still-pending
   // invite gets, see CLUB_INVITE_TTL_DAYS in index.html) gives the sender one real chance to see
-  // the outcome next time they open their Inbox, then lets it quietly age out like everything else
-  // here rather than needing an explicit dismiss action this collection's rules don't support
-  // anyway (delete is `false` -- see firestore.rules).
+  // the outcome next time they open their Inbox even if they never act on it, and it can also be
+  // cleared immediately with the "Clear" button below (see onDeleteCoOwnerInvite / firestore.rules).
   const RESOLVED_COOWNER_INVITE_VISIBLE_MS = 7 * 24 * 60 * 60 * 1000;
   const outgoingCoOwnerInvites = coOwnerInvites.filter(inv => {
     if (inv.createdBy !== currentUid) return false;
@@ -15766,6 +15783,14 @@ function InboxScreen({
     const result = await onCancelCoOwnerInvite(inv.id);
     setCoOwnerBusyId(null);
     if (!result.ok) setError(result.error || "Couldn't cancel that invite.");
+  }
+  async function handleDeleteCoOwnerInvite(inv) {
+    if (coOwnerBusyId) return;
+    setCoOwnerBusyId(inv.id);
+    setError("");
+    const result = await onDeleteCoOwnerInvite(inv.id);
+    setCoOwnerBusyId(null);
+    if (!result.ok) setError(result.error || "Couldn't clear that invite.");
   }
   async function handleRespond(r, accept) {
     if (busyId) return;
@@ -16138,7 +16163,22 @@ function InboxScreen({
       padding: 0,
       textDecoration: "underline"
     }
-  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Cancel invite"), inv.status !== "pending" && onDeleteCoOwnerInvite && /*#__PURE__*/React.createElement("button", {
+    onClick: () => handleDeleteCoOwnerInvite(inv),
+    disabled: coOwnerBusyId === inv.id,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: 0,
+      textDecoration: "underline"
+    }
+  }, coOwnerBusyId === inv.id ? "\u2026" : "Clear")))), sortedActivity.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -38684,6 +38724,13 @@ function CricketScorer() {
     }
     return result;
   }
+  async function handleDeleteCoOwnerInvite(inviteId) {
+    const result = await deleteCoOwnerInvite(inviteId);
+    if (result.ok) {
+      setMyCoOwnerInvites(prev => prev.filter(inv => inv.id !== inviteId));
+    }
+    return result;
+  }
   async function handleRevokeClubInvite(clubId, code) {
     const result = await revokeClubInvite(clubId, code);
     if (result.ok) {
@@ -39820,6 +39867,7 @@ function CricketScorer() {
     coOwnerInvites: myCoOwnerInvites,
     onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    onDeleteCoOwnerInvite: handleDeleteCoOwnerInvite,
     activity: myActivity,
     onMarkActivityRead: handleMarkActivityRead,
     onDeleteActivity: handleDeleteActivity,

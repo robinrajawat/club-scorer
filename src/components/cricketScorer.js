@@ -1580,6 +1580,13 @@ export function CricketScorer() {
     }
     return result;
   }
+  async function handleDeleteCoOwnerInvite(inviteId) {
+    const result = await deleteCoOwnerInvite(inviteId);
+    if (result.ok) {
+      setMyCoOwnerInvites(prev => prev.filter(inv => inv.id !== inviteId));
+    }
+    return result;
+  }
   async function handleRevokeClubInvite(clubId, code) {
     const result = await revokeClubInvite(clubId, code);
     if (result.ok) {
@@ -2716,6 +2723,7 @@ export function CricketScorer() {
     coOwnerInvites: myCoOwnerInvites,
     onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
+    onDeleteCoOwnerInvite: handleDeleteCoOwnerInvite,
     activity: myActivity,
     onMarkActivityRead: handleMarkActivityRead,
     onDeleteActivity: handleDeleteActivity,
