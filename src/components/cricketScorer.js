@@ -611,24 +611,21 @@ export function CricketScorer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
   async function refreshMyCoOwnerInvites() {
-    const rows = await loadMyCoOwnerInvites(myOwnedClubIds, myOwnedFederationIds);
+    const rows = await loadMyCoOwnerInvites();
     setMyCoOwnerInvites(rows);
   }
-  // Same trigger condition as the federationRequests effect above (the owner/co-owner set changing,
-  // or signing in) -- feeds the Inbox screen's co-owner-invites section and the other half of its
-  // badge count, alongside federationRequestsNeedingAction below.
+  // Feeds the Inbox screen's co-owner-invites section and the other half of its badge count,
+  // alongside federationRequestsNeedingAction below. Unlike the federationRequests effect above,
+  // this doesn't depend on myOwnedClubIds/myOwnedFederationIds at all — loadMyCoOwnerInvites now
+  // queries by my own uid/email only (see its comment), not by which entities I own.
   useEffect(() => {
-    // Unlike the federationRequests effect above, this isn't gated on owning/co-owning anything —
-    // an invite addressed to my own email is loaded regardless (loadMyCoOwnerInvites's recipient
-    // query only needs me to be signed in), since anyone can be invited to co-own something they
-    // don't otherwise administer yet.
     if (!user) {
       setMyCoOwnerInvites([]);
       return;
     }
     refreshMyCoOwnerInvites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, myOwnedClubIds.join(","), myOwnedFederationIds.join(",")]);
+  }, [user]);
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
