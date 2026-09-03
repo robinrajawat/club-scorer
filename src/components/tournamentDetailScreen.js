@@ -73,6 +73,15 @@ export function TournamentDetailScreen({
   const standings = matches ? computeStandings(tournament, matches) : [];
   const groupStandings = matches ? computeGroupStandings(tournament, matches) : null;
   const tournamentMatches = matches ? matches.filter(m => m.tournamentId === tournament.id).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : [];
+  // "In progress" here deliberately means "is there ongoing activity this delete would interrupt
+  // right now" -- a live match still being scored, or a scheduled fixture nobody's started yet --
+  // NOT "has a champion been crowned" (computeTournamentPlacement/FixturesSection's own knockout-
+  // decided check). Those two are genuinely different questions: a plain round-robin tournament
+  // with every fixture played and complete has nothing left to interrupt, even though it may never
+  // resolve a knockout "champion" at all (no bracket stage was ever configured for it) -- tying
+  // this warning to that instead would keep calling a fully-finished tournament "in progress"
+  // forever.
+  const tournamentInProgress = tournamentMatches.some(m => m.status !== "complete") || (tournament.fixtures || []).some(f => !f.matchId);
   const completedTournamentMatches = tournamentMatches.filter(m => m.status === "complete");
   const tournamentPlayerStats = computePlayerStats(completedTournamentMatches);
   const tournamentBatters = [...tournamentPlayerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 10);
@@ -993,8 +1002,14 @@ export function TournamentDetailScreen({
     standings: standings
   })
   ), confirmDeleteTournament && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Delete this tournament?",
-    message: `Delete "${tournament.name}"? Matches already scored in it are untouched, but the tournament and its table go away for good.`,
+    title: tournamentInProgress ? "Delete this in-progress tournament?" : "Delete this tournament?",
+    message: tournamentInProgress
+      // Matches already scored survive either way (see the completed-tournament wording below),
+      // but an in-progress tournament still has its own live state at risk -- fixtures still to be
+      // played, standings still being tracked -- that a completed one doesn't, so this is called
+      // out explicitly rather than reusing the completed-tournament wording verbatim.
+      ? `"${tournament.name}" is still in progress — deleting it loses its schedule, groups, and standings while the tournament is still ongoing. Matches already scored in it are untouched, but the tournament and its table go away for good.`
+      : `Delete "${tournament.name}"? Matches already scored in it are untouched, but the tournament and its table go away for good.`,
     confirmLabel: "Delete",
     onConfirm: confirmDelete,
     onCancel: () => setConfirmDeleteTournament(false)

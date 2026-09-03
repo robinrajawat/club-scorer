@@ -111,6 +111,25 @@ test("HomeScreen: deleting a match opens a confirm dialog, and confirming calls 
   assert.equal(deletedId, "m1");
 });
 
+// An in-progress match still has live scoring state at risk -- not just a finished record like a
+// completed match -- so an accidental swipe-and-confirm there deserves a distinct, stronger
+// warning instead of the same wording used for both.
+test("HomeScreen: the delete confirmation warns more strongly for an in-progress match than a completed one", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  const inProgress = render({ matches: [match({ status: "in-progress" })] });
+  act(() => { inProgress.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
+  const inProgressText = JSON.stringify(inProgress.toJSON());
+  assert.match(inProgressText, /Delete this in-progress match\?/);
+  assert.match(inProgressText, /is still in progress — deleting it throws away everything scored so far/);
+
+  const completed = render({ matches: [match({ status: "complete" })] });
+  act(() => { completed.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
+  const completedText = JSON.stringify(completed.toJSON());
+  assert.match(completedText, /Delete this match\?/);
+  assert.doesNotMatch(completedText, /Delete this in-progress match\?/);
+  assert.match(completedText, /will be permanently removed from your saved matches/);
+});
+
 test("HomeScreen: 'In Progress'/'Completed' sections both render and collapse independently", () => {
   const inst = render({
     matches: [match({ id: "live1", status: "in-progress" }), match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]

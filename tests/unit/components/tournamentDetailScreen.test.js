@@ -24,6 +24,7 @@ afterEach(() => {
   delete globalThis.loadTournamentMatches;
   delete globalThis.downloadCSV;
   delete globalThis.Modal;
+  delete globalThis.loadFixturePollSummary;
 });
 
 function tournamentFixture(overrides = {}) {
@@ -169,6 +170,34 @@ test("TournamentDetailScreen: 'Delete' opens a ConfirmModal, and confirming call
   const modal = inst.root.findByType(ConfirmModal);
   act(() => { modal.props.onConfirm(); });
   assert.equal(deleted.id, "t1");
+});
+
+// An in-progress tournament still has live state at risk (a scheduled fixture not yet played, or
+// a match still being scored) -- not just a finished record like a fully-completed one -- so it
+// deserves a distinct, stronger delete warning instead of the same wording used for both.
+test("TournamentDetailScreen: the delete confirmation warns more strongly while a fixture is still unplayed", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
+  const withUnplayedFixture = tournamentFixture({
+    fixtures: [
+      { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC", date: "", matchId: "m1" },
+      { id: "f2", teamA: "Oakwood CC", teamB: "Riverside CC", date: "", matchId: null }
+    ]
+  });
+  const inst = await renderScreen(withUnplayedFixture, [completedMatch()]);
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Delete").props.onClick(); });
+  const modal = inst.root.findByType(ConfirmModal);
+  assert.equal(modal.props.title, "Delete this in-progress tournament?");
+  assert.match(modal.props.message, /is still in progress — deleting it loses its schedule, groups, and standings/);
+});
+
+test("TournamentDetailScreen: the delete confirmation stays the plain wording once every fixture is complete", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  const inst = await renderScreen(tournamentFixture(), [completedMatch()]);
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Delete").props.onClick(); });
+  const modal = inst.root.findByType(ConfirmModal);
+  assert.equal(modal.props.title, "Delete this tournament?");
+  assert.match(modal.props.message, /Matches already scored in it are untouched/);
 });
 
 test("TournamentDetailScreen: the share button opens TournamentShareModal", async () => {
