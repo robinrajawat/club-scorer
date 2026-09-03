@@ -371,6 +371,69 @@ test("MatchScreen: Undo reverts the last committed ball", async () => {
   assert.equal(ctx.inning.runs, 0);
 });
 
+// BUG FIX: confirmNewBowler used to commit with no preceding pushHistory() -- unlike every other
+// committed action in this file (see the "Timed Out isn't fixable with Undo" precedent above, the
+// project's own standard: a committed action must go through pushHistory()+commit() so Undo
+// genuinely reverts it). Without it, "Undo last ball" right after picking the wrong bowler for a
+// new over had no checkpoint of its own to step back to -- before this fix, tapping Undo here was
+// simply a no-op (there was no history entry to pop at all, since this inning was never scored
+// through a real committed ball first), which happens every single over of every match.
+test("MatchScreen: picking a new bowler pushes its own Undo checkpoint", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const overBoundaryInning = buildInning("Riverside CC", "Oakwood CC", {
+    legalBalls: 6, runs: 3, bowlerName: "", lastBowlerName: "X",
+    overs: [[{ kind: "run", runs: 3 }], []]
+  });
+  const ctx = renderMatch(baseMatch({ innings: [overBoundaryInning] }));
+
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("Y"); });
+  const confirmBtn = btn(ctx, "Confirm");
+  await act(async () => {
+    confirmBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.bowlerName, "Y");
+
+  const undoBtn = ctx.inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Undo last ball"));
+  await act(async () => {
+    undoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.bowlerName, "", "the bowler pick itself reverts, not some earlier ball");
+  assert.equal(ctx.inning.runs, 3, "the already-scored over is untouched -- Undo didn't reach past the bowler pick");
+});
+
+// Same fix, the confirmNewBatsman side: its non-wicket branch (picking a replacement after e.g. a
+// retirement, as opposed to the pendingWicket branch just above it, which already pushes its own
+// history since that commit IS the dismissal itself) had the same missing-checkpoint bug.
+test("MatchScreen: picking a replacement batsman after a retirement pushes its own Undo checkpoint", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const retireBtn = ctx.inst.root.findAllByType("button").find(b => b.props.children === "Retire");
+  act(() => { retireBtn.props.onClick(); });
+  const retireHurtBtn = btn(ctx, "Retired hurt (not out)");
+  act(() => { retireHurtBtn.props.onClick(); });
+  assert.equal(ctx.inning.strikerName, "", "sanity check -- needs a replacement batsman");
+
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  const confirmBtn = btn(ctx, "Confirm");
+  await act(async () => {
+    confirmBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.strikerName, "C");
+
+  const undoBtn = ctx.inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Undo last ball"));
+  await act(async () => {
+    undoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.strikerName, "", "the replacement pick itself reverts, not the retirement underneath it");
+  assert.equal(ctx.inning.batsmen.A.retiredHurt, true, "the retirement that opened this slot is still intact");
+});
+
 test("MatchScreen: Swap Strike swaps the striker and non-striker", () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());

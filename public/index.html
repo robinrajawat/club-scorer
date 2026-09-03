@@ -33112,6 +33112,14 @@ function MatchScreen({
       }));
       setPendingWicket(null);
     } else {
+      // Same fix as confirmNewBowler's own -- a committed action with no preceding pushHistory()
+      // has no checkpoint of its own for Undo to step back to, so "Undo last ball" right after
+      // picking the wrong replacement here (e.g. after a retirement) silently reverted the
+      // PREVIOUS delivery instead. This branch only runs when there's no pendingWicket (the
+      // pendingWicket branch above already pushes its own history, since that commit IS the wicket
+      // delivery itself) -- this one is purely "assign a name to the open slot," same shape as
+      // confirmNewBowler.
+      pushHistory();
       const updated = {
         ...inning,
         strikerName: newBatsmanName.trim()
@@ -33385,6 +33393,14 @@ function MatchScreen({
   }
   function confirmNewBowler() {
     if (!newBowlerName.trim()) return;
+    // BUG FIX: this used to commit with no preceding pushHistory(), unlike every other committed
+    // action in this file (see the "Timed Out isn't fixable with Undo" precedent above -- the
+    // project's own standard is that a committed action must go through pushHistory()+commit() so
+    // Undo genuinely reverts it). Without it, "Undo last ball" right after picking the wrong bowler
+    // for a new over had no checkpoint to step back to for THIS pick -- it silently reverted the
+    // PREVIOUS delivery instead (the ball that ended the last over), which happens every single
+    // over of every match, not some rare edge case.
+    pushHistory();
     const updated = {
       ...inning,
       bowlerName: newBowlerName.trim()
