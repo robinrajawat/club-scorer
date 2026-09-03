@@ -981,7 +981,7 @@ async function deleteFeedback(feedbackId) {
 // to pre-diagnose or point at a file/function -- that's the point of the fix session itself.
 // GENERATED-FN-START: buildClaudeFixPrompt
 function buildClaudeFixPrompt(item) {
-  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/cricket-scorer):`, "", `"${item.message}"`, ""];
+  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/club-scorer):`, "", `"${item.message}"`, ""];
   if (item.url) lines.push(`Page: ${item.url}`);
   if (item.userAgent) lines.push(`Browser: ${item.userAgent}`);
   if (item.createdAt) lines.push(`Reported: ${new Date(item.createdAt).toLocaleString()}`);
@@ -12193,7 +12193,7 @@ function AboutScreen({
       flexWrap: "wrap"
     }
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer", "_blank", "noopener,noreferrer"),
+    onClick: () => window.open("https://github.com/robinrajawat/club-scorer", "_blank", "noopener,noreferrer"),
     style: {
       flex: "1 1 auto",
       minHeight: 40,
@@ -12201,7 +12201,7 @@ function AboutScreen({
       fontSize: 13
     }
   }, "View source"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
+    onClick: () => window.open("https://github.com/robinrajawat/club-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
     style: {
       flex: "1 1 auto",
       minHeight: 40,
