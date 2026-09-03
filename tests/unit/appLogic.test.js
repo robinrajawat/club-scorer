@@ -8,7 +8,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  computeStandings, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal
+  computeStandings, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal,
+  computeQualificationTarget, decimalOversToLabel
 } from "../../src/core/appLogic.js";
 
 test("normal result: winner gets 2pts and positive NRR, loser gets 0pts and negative NRR", () => {
@@ -158,4 +159,28 @@ test("oversLeftTrueDecimal: true decimal overs, distinct from cricket's X.Y nota
   // 4 balls into an over is 4/6 = 0.6667 true decimal, NOT ".4" as cricket notation would show.
   const withPartial = oversLeftTrueDecimal(50, 4);
   assert.ok(Math.abs(withPartial - (49 + 2 / 6)) < 1e-9, `got ${withPartial}`);
+});
+
+// BUG FIX: chasing down to EXACTLY the raw maxOversExact threshold only ties the rival's NRR,
+// the same "landing exactly on the boundary doesn't actually beat it" concern the "restrict"
+// branch already guards against for runs (maxConcede = ceil(maxConcedeExact) - 1), just in
+// balls instead. maxOversForDisplay is the corrected, actually-achievable figure the UI should
+// show instead of the raw threshold.
+test("computeQualificationTarget: chasing scenario corrects the overs figure so it lands strictly inside the qualifying range, not exactly on the tie boundary", () => {
+  const stats = { runsFor: 0, oversFor: 0, runsAgainst: 0, oversAgainst: 0 };
+  const result = computeQualificationTarget({
+    stats, rivalNRR: 0, battingFirst: false, oversLimit: 20, knownRuns: 120
+  });
+  assert.equal(result.kind, "chaseWithin");
+  // Raw threshold: 121 runs (target+1) / 6 overs = 20.16667 overs -- an exact 121-ball boundary.
+  assert.ok(Math.abs(result.maxOversExact - 121 / 6) < 1e-9, `got ${result.maxOversExact}`);
+  // Finishing at the raw threshold only TIES the rival's NRR...
+  const nrrAtRawThreshold = (0 + 121) / (0 + result.maxOversExact) - (0 + 120) / (0 + 20);
+  assert.ok(Math.abs(nrrAtRawThreshold) < 1e-9, `expected a tie, got NRR delta ${nrrAtRawThreshold}`);
+  // ...so the corrected display figure must be one ball earlier (20.0 overs, not 20.1), which
+  // genuinely beats the rival's NRR.
+  assert.equal(result.maxOversForDisplay, 20);
+  assert.equal(decimalOversToLabel(result.maxOversForDisplay, 6), "20.0");
+  const nrrAtDisplayed = (0 + 121) / (0 + result.maxOversForDisplay) - (0 + 120) / (0 + 20);
+  assert.ok(nrrAtDisplayed > 0, `expected this to beat the rival, got NRR delta ${nrrAtDisplayed}`);
 });

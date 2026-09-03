@@ -141,7 +141,8 @@ export function MatchScreen({
           rivalNRR: qualScenario.rivalNRR,
           battingFirst: qualScenario.battingFirst,
           oversLimit: qualScenario.oversLimit,
-          knownRuns: firstInning.runs
+          knownRuns: firstInning.runs,
+          ballsPerOver: inning.ballsPerOver
         });
       } else {
         qualPending = true;
@@ -1167,7 +1168,7 @@ export function MatchScreen({
       background: qualPending ? "rgba(184,137,43,0.12)" : qualResult.achievable ? "rgba(74,124,46,0.12)" : "rgba(139,30,30,0.1)",
       color: qualPending ? "#8a641f" : qualResult.achievable ? COLORS.turf : COLORS.ball
     }
-  }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversExact, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
+  }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversForDisplay, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turfFixed} 0%, ${COLORS.pitchFixed} 45%, ${COLORS.pitchDarkFixed} 100%)`,
       padding: "16px 16px 22px",

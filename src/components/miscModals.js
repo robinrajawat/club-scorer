@@ -448,7 +448,7 @@ export function QualificationCalculatorModal({
       color: result.achievable ? COLORS.turf : COLORS.ball,
       lineHeight: 1.5
     }
-  }, !result.achievable ? "Not achievable this match \u2014 even the best possible result on this side of it wouldn't reach that NRR." : result.kind === "restrict" ? `Restrict ${rivalTeam || "them"} to ${Math.max(0, result.maxConcede)} or fewer.` : result.anyWinWorks ? "Any win at all gets you there." : `Chase it down within ${decimalOversToLabel(result.maxOversExact, 6)} overs.`), /*#__PURE__*/React.createElement("div", {
+  }, !result.achievable ? "Not achievable this match \u2014 even the best possible result on this side of it wouldn't reach that NRR." : result.kind === "restrict" ? `Restrict ${rivalTeam || "them"} to ${Math.max(0, result.maxConcede)} or fewer.` : result.anyWinWorks ? "Any win at all gets you there." : `Chase it down within ${decimalOversToLabel(result.maxOversForDisplay, 6)} overs.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
