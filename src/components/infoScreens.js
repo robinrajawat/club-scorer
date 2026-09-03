@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Info } from "./icons.js";
+import { ChevronLeft, Info, Heart, Shield } from "./icons.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { POLL_TTL_DAYS } from "../core/shareAndFormat.js";
@@ -408,7 +408,7 @@ export function AboutScreen({
       gap: 6,
       marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement(Info, {
+  }, /*#__PURE__*/React.createElement(Heart, {
     size: 14,
     style: {
       color: COLORS.inkSoft
@@ -477,7 +477,7 @@ export function AboutScreen({
       gap: 6,
       marginBottom: 10
     }
-  }, /*#__PURE__*/React.createElement(Info, {
+  }, /*#__PURE__*/React.createElement(Shield, {
     size: 14,
     style: {
       color: COLORS.inkSoft

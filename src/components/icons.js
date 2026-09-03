@@ -202,6 +202,10 @@ export const Hash = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/
   y2: "21"
 }));
 
+export const Heart = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+}));
+
 export const HelpCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "12",
   cy: "12",
