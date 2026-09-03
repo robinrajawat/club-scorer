@@ -527,6 +527,35 @@ export function MatchScreen({
       }, 1000);
     }
   }
+  // Wide/No Ball are the two "Extra" kinds with a mandatory fixed penalty of their own, so unlike
+  // Bye/Leg Bye (there's no such thing as "just a bye" -- every one needs an actual runs count
+  // picked) the overwhelmingly common case for these is exactly that fixed penalty and nothing
+  // else. The primary tap here commits that 0-extra-runs case immediately, the same one-tap-and-
+  // done shape every button on the main scoring pad (0/1/2/3/4/6) already has -- landing on a
+  // THIRD screen just to tap "0" was the one score-a-ball path in the app that took three taps
+  // instead of one or two. The small "+runs" button is the escape hatch for the rarer case where
+  // the ball was also run/hit for more -- opens the exact same runs picker this always used to.
+  function extraQuickPick(kind, label) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement(Btn, {
+      onClick: () => handleExtra(kind, 0),
+      style: {
+        flex: 1
+      }
+    }, label), /*#__PURE__*/React.createElement(Btn, {
+      onClick: () => setShowExtra(kind),
+      style: {
+        flex: "0 0 auto",
+        minHeight: 48,
+        padding: "14px 10px",
+        fontSize: 12.5
+      }
+    }, `${label} +runs`));
+  }
   function handlePenalty() {
     // Penalty runs are always exactly 5 (Laws 41/42) and, in the common case this covers, go to
     // the batting side. Not tied to a delivery — no ball consumed, no bowler/batsman impact — but
@@ -2415,11 +2444,7 @@ export function MatchScreen({
       gridTemplateColumns: "1fr 1fr",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowExtra("wide")
-  }, "Wide"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowExtra("noball")
-  }, "No Ball"), /*#__PURE__*/React.createElement(Btn, {
+  }, extraQuickPick("wide", "Wide"), extraQuickPick("noball", "No Ball"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => setShowExtra("bye")
   }, "Bye"), /*#__PURE__*/React.createElement(Btn, {
     onClick: () => setShowExtra("legbye")

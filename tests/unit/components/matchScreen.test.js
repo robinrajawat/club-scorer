@@ -290,20 +290,38 @@ test("MatchScreen: a Caught wicket requires a fielder before Confirm is enabled"
   assert.equal(ctx.inning.batsmen.A.how, "c Y b X");
 });
 
-test("MatchScreen: a Wide extra credits runs to the team without consuming a legal ball", async () => {
+// BUG FIX (UX): tapping "Wide"/"No Ball" used to always navigate to a third screen just to tap
+// "0" for the overwhelmingly common plain-extra case -- the one score-a-ball path in the app that
+// took three taps instead of one or two, unlike every other quick-score button. "Wide" (and "No
+// Ball", see extraQuickPick in matchScreen.js) now commits that 0-extra-runs case on this same
+// tap; the rarer case where the ball was also run/hit for more still has its own "+runs" button.
+test("MatchScreen: tapping 'Wide' commits a plain wide immediately, without a third tap for '0'", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
   act(() => { btn(ctx, "Extra").props.onClick(); });
-  act(() => { modalBtn(ctx, "Wide").props.onClick(); });
-  // The 0/1/2/3/4 picker here is runs ON TOP OF the standard wide penalty (byes run off a wide),
-  // not the total -- "0" is a plain wide with nothing extra.
-  const zeroBtn = modalBtn(ctx, 0);
   await act(async () => {
-    zeroBtn.props.onClick();
+    modalBtn(ctx, "Wide").props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(ctx.inning.runs, 1);
   assert.equal(ctx.inning.extras.wide, 1);
+  assert.equal(ctx.inning.legalBalls, 0);
+});
+
+test("MatchScreen: the Wide/No Ball '+runs' button still reaches the runs-on-top picker for the rarer case", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  act(() => { btn(ctx, "Extra").props.onClick(); });
+  act(() => { modalBtn(ctx, "Wide +runs").props.onClick(); });
+  // The 0/1/2/3/4 picker here is runs ON TOP OF the standard wide penalty (byes run off a wide),
+  // not the total -- "2" means 1 (the wide) + 2 = 3 total.
+  const twoBtn = modalBtn(ctx, 2);
+  await act(async () => {
+    twoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.runs, 3);
+  assert.equal(ctx.inning.extras.wide, 3);
   assert.equal(ctx.inning.legalBalls, 0);
 });
 
@@ -318,14 +336,14 @@ test("MatchScreen: the Wide/No Ball legality note reads forward-looking before t
 
   const beforeLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 0 })] }));
   act(() => { btn(beforeLastOver, "Extra").props.onClick(); });
-  act(() => { modalBtn(beforeLastOver, "Wide").props.onClick(); });
+  act(() => { modalBtn(beforeLastOver, "Wide +runs").props.onClick(); });
   const beforeText = JSON.stringify(beforeLastOver.inst.toJSON());
   assert.match(beforeText, /counts as a legal delivery this over/);
   assert.match(beforeText, /this flips back to the standard rule in the last over/);
 
   const inLastOver = renderMatch(baseMatch({ innings: [buildInning("Riverside CC", "Oakwood CC", { ...rules, legalBalls: 6 })] }));
   act(() => { btn(inLastOver, "Extra").props.onClick(); });
-  act(() => { modalBtn(inLastOver, "Wide").props.onClick(); });
+  act(() => { modalBtn(inLastOver, "Wide +runs").props.onClick(); });
   const inText = JSON.stringify(inLastOver.inst.toJSON());
   assert.match(inText, /doesn't count as a legal delivery, so it's re-bowled/);
   assert.match(inText, /back to the standard rule for the last over/);
