@@ -3430,6 +3430,13 @@ async function markActivityRead(activityIds) {
     read: true
   }).catch(e => console.error("markActivityRead failed", id, e))));
 }
+// Recipient clearing one notification (or several) from their own Inbox -- this only removes
+// their own copy of "you were told about X", never the real club/federation/coOwnerInvites data
+// that X actually happened, see firestore.rules.
+async function deleteActivity(activityIds) {
+  const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+  await Promise.all(ids.map(id => db.collection("activity").doc(id).delete().catch(e => console.error("deleteActivity failed", id, e))));
+}
 // Best-effort write to the OTHER party's activity feed -- this app has no server, no push, no
 // email, so this collection (see its comment in firestore.rules) IS the notification system, and
 // this is the one place every membership-changing action funnels through to write into it. Called
@@ -12428,7 +12435,7 @@ function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.7
     }
-  }, "Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone. Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side. Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."))));
+  }, "Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone. Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side. Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off. There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."))));
 }
 // GENERATED-FN-END: AboutScreen
 // GENERATED-FN-START: SharedLinksScreen
@@ -15660,6 +15667,7 @@ function InboxScreen({
   onCancelCoOwnerInvite,
   activity = [],
   onMarkActivityRead,
+  onDeleteActivity,
   pollItems = [],
   onPollsChanged,
   onBack
@@ -15812,11 +15820,12 @@ function InboxScreen({
     }
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("strong", null, fedName(r.federationId)), " invited ", /*#__PURE__*/React.createElement("strong", null, clubName(r.clubId)), " to affiliate");
   }
-  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here (there's
-  // no way to delete one, see firestore.rules), just "what happened lately that I should know
-  // about." 30 is generous for how often club/federation membership actually changes.
+  // Newest first, capped -- an unbounded, ever-growing activity feed isn't the goal here, just
+  // "what happened lately that I should know about." 30 is generous for how often club/federation
+  // membership actually changes, and anything older can just be cleared (see onDeleteActivity).
   const sortedActivity = [...activity].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 30);
   const unreadActivityIds = activity.filter(item => !item.read).map(item => item.id);
+  const allActivityIds = activity.map(item => item.id);
   function activityEntityName(item) {
     if (item.entityName) return item.entityName;
     return item.scope === "club" ? clubName(item.entityId) : fedName(item.entityId);
@@ -16136,7 +16145,13 @@ function InboxScreen({
       justifyContent: "space-between",
       ...sectionTitleStyle
     }
-  }, /*#__PURE__*/React.createElement("span", null, "Activity"), unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("span", null, "Activity"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, unreadActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => onMarkActivityRead && onMarkActivityRead(unreadActivityIds),
     className: "cs-btn",
     style: {
@@ -16151,7 +16166,22 @@ function InboxScreen({
       textTransform: "none",
       letterSpacing: 0
     }
-  }, "Mark all read")), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "Mark all read"), onDeleteActivity && allActivityIds.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDeleteActivity(allActivityIds),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      cursor: "pointer",
+      padding: 0,
+      textTransform: "none",
+      letterSpacing: 0
+    }
+  }, "Clear all"))), sortedActivity.map((item, idx) => /*#__PURE__*/React.createElement("div", {
     key: item.id,
     style: {
       ...cardStyle,
@@ -16174,9 +16204,24 @@ function InboxScreen({
     style: {
       ...descStyle,
       marginBottom: 0,
-      opacity: item.read ? 0.65 : 1
+      opacity: item.read ? 0.65 : 1,
+      flex: 1
     }
-  }, activityLine(item))))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
+  }, activityLine(item)), onDeleteActivity && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDeleteActivity(item.id),
+    "aria-label": "Clear this notification",
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: "0 2px",
+      flexShrink: 0,
+      fontSize: 16,
+      lineHeight: 1
+    }
+  }, "×")))), openPoll && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
     clubId: openPoll.clubId,
     clubName: openPoll.clubName,
     team: openPoll.team,
@@ -37708,6 +37753,11 @@ function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.map(item => ids.includes(item.id) ? { ...item, read: true } : item));
   }
+  async function handleDeleteActivity(activityIds) {
+    await deleteActivity(activityIds);
+    const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+    setMyActivity(items => items.filter(item => !ids.includes(item.id)));
+  }
   // Loads whether I've already published myself to /userDirectory -- feeds AccountScreen's toggle
   // state on mount, same "queries by my own uid" shape as the coOwnerInvites/activity effects
   // above.
@@ -39772,6 +39822,7 @@ function CricketScorer() {
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
     activity: myActivity,
     onMarkActivityRead: handleMarkActivityRead,
+    onDeleteActivity: handleDeleteActivity,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")

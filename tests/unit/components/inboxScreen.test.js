@@ -192,3 +192,36 @@ test("InboxScreen: 'Mark all read' is hidden once every activity item is already
   const markAllBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Mark all read"));
   assert.equal(markAllBtn, undefined);
 });
+
+test("InboxScreen: 'Clear all' calls onDeleteActivity with every activity id, and a per-item '×' clears just that one", async () => {
+  let clearedWith = null;
+  const activity = [
+    { id: "a1", kind: "joined", scope: "club", entityId: "unknown-club", entityName: "Riverside CC", actorName: "Sam", role: "member", read: false, createdAt: 2000 },
+    { id: "a2", kind: "removed", scope: "club", entityId: "unknown-club", entityName: "Riverside CC", actorName: "Pat", read: true, createdAt: 1000 }
+  ];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({
+    activity,
+    onDeleteActivity: ids => { clearedWith = ids; return Promise.resolve(); }
+  })));
+
+  const clearOneBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Clear this notification");
+  await act(async () => {
+    clearOneBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(clearedWith, "a1");
+
+  const clearAllBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Clear all"));
+  await act(async () => {
+    clearAllBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(clearedWith, ["a1", "a2"]);
+});
+
+test("InboxScreen: activity has no clear affordances when onDeleteActivity isn't provided", () => {
+  const activity = [{ id: "a1", kind: "left", scope: "club", entityId: "c1", entityName: "Riverside CC", actorName: "Sam", read: true, createdAt: 1000 }];
+  const inst = renderer.create(React.createElement(InboxScreen, baseProps({ activity })));
+  assert.equal(inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Clear this notification"), undefined);
+  assert.equal(inst.root.findAllByType("button").find(b => hasText(b.props.children, "Clear all")), undefined);
+});

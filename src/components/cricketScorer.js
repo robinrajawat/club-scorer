@@ -649,6 +649,11 @@ export function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.map(item => ids.includes(item.id) ? { ...item, read: true } : item));
   }
+  async function handleDeleteActivity(activityIds) {
+    await deleteActivity(activityIds);
+    const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
+    setMyActivity(items => items.filter(item => !ids.includes(item.id)));
+  }
   // Loads whether I've already published myself to /userDirectory -- feeds AccountScreen's toggle
   // state on mount, same "queries by my own uid" shape as the coOwnerInvites/activity effects
   // above.
@@ -2713,6 +2718,7 @@ export function CricketScorer() {
     onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
     activity: myActivity,
     onMarkActivityRead: handleMarkActivityRead,
+    onDeleteActivity: handleDeleteActivity,
     pollItems: pendingPollItems,
     onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")
