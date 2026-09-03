@@ -335,7 +335,7 @@ export function ballLabelsForOver(overIndex, balls) {
 // anywhere window isn't available, including Node).
 
 export function buildClaudeFixPrompt(item) {
-  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/cricket-scorer):`, "", `"${item.message}"`, ""];
+  const lines = [`This is a ${item.kind === "error" ? "user-reported crash" : "user feedback report"} from Cricket Scorer (single-file app, index.html in robinrajawat/club-scorer):`, "", `"${item.message}"`, ""];
   if (item.url) lines.push(`Page: ${item.url}`);
   if (item.userAgent) lines.push(`Browser: ${item.userAgent}`);
   if (item.createdAt) lines.push(`Reported: ${new Date(item.createdAt).toLocaleString()}`);

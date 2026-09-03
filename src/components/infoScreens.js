@@ -380,7 +380,7 @@ export function AboutScreen({
       flexWrap: "wrap"
     }
   }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer", "_blank", "noopener,noreferrer"),
+    onClick: () => window.open("https://github.com/robinrajawat/club-scorer", "_blank", "noopener,noreferrer"),
     style: {
       flex: "1 1 auto",
       minHeight: 40,
@@ -388,7 +388,7 @@ export function AboutScreen({
       fontSize: 13
     }
   }, "View source"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => window.open("https://github.com/robinrajawat/cricket-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
+    onClick: () => window.open("https://github.com/robinrajawat/club-scorer/blob/main/LICENSE", "_blank", "noopener,noreferrer"),
     style: {
       flex: "1 1 auto",
       minHeight: 40,
