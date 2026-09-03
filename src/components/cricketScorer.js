@@ -1461,15 +1461,16 @@ export function CricketScorer() {
       }
     });
   }
+  // Sends a member invite -- unified with co-owner invites (same coOwnerInvites doc shape, role:
+  // "member" instead of "coOwner"; see inviteCoOwner in index.html), so a member invite no longer
+  // mints a bearer code to copy and send out-of-band: it shows up in the recipient's Inbox
+  // automatically, the same as a co-owner invite. Appends locally for the same reason
+  // handleInviteCoOwner below does -- shows up in the sender's own pending-invites list
+  // immediately, without waiting on the next refreshMyCoOwnerInvites().
   async function handleInviteClubMember(clubId, email) {
-    const result = await inviteClubMemberByEmail(clubId, email);
+    const result = await inviteCoOwner("club", clubId, email, "member");
     if (result.ok) {
-      mirrorPendingInvite(setClubs, clubId, result.code, {
-        email: email.trim().toLowerCase(),
-        role: "member",
-        createdAt: result.createdAt,
-        expiresAt: result.expiresAt
-      });
+      setMyCoOwnerInvites(prev => [...prev, result.invite]);
     }
     return result;
   }
@@ -1483,9 +1484,10 @@ export function CricketScorer() {
     }
     return result;
   }
-  // Recipient accepting/declining a co-owner invite -- see respondCoOwnerInvite in index.html. On
-  // accept, mirrors the resulting coOwnerUids (and, for a club, memberUids) grant onto local
-  // clubs/federationsById state so it shows up without waiting for a full refresh.
+  // Recipient accepting/declining a co-owner or member invite -- see respondCoOwnerInvite in
+  // index.html. On accept, mirrors the resulting coOwnerUids (coOwner role, club or federation)
+  // or memberUids-only (member role, club only) grant onto local clubs/federationsById state so
+  // it shows up without waiting for a full refresh.
   async function handleRespondCoOwnerInvite(inviteId, accept) {
     const result = await respondCoOwnerInvite(inviteId, accept);
     if (result.ok) {
@@ -1493,7 +1495,7 @@ export function CricketScorer() {
         setClubs(cs => cs.map(c => c.id === result.entityId ? {
           ...c,
           memberUids: [...new Set([...(c.memberUids || []), user.uid])],
-          coOwnerUids: [...new Set([...(c.coOwnerUids || []), user.uid])],
+          coOwnerUids: result.role === "member" ? (c.coOwnerUids || []) : [...new Set([...(c.coOwnerUids || []), user.uid])],
           memberNames: { ...(c.memberNames || {}),
             [user.uid]: user.displayName || user.email || "Member"
           }
