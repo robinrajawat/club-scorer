@@ -141,7 +141,8 @@ export function MatchScreen({
           rivalNRR: qualScenario.rivalNRR,
           battingFirst: qualScenario.battingFirst,
           oversLimit: qualScenario.oversLimit,
-          knownRuns: firstInning.runs
+          knownRuns: firstInning.runs,
+          ballsPerOver: inning.ballsPerOver
         });
       } else {
         qualPending = true;
@@ -222,7 +223,13 @@ export function MatchScreen({
   // true, applyBall has already pushed a fresh empty over onto the end of inning.overs (see the
   // over-completion branch there), so the just-finished over sits one slot back, not at the end.
   const justCompletedOver = needsNewBowler ? inning.overs[inning.overs.length - 2] || [] : [];
-  const justCompletedOverRuns = justCompletedOver.reduce((s, b) => s + (b.runs || 0), 0);
+  // BUG FIX: this summed every ball's raw runs, including byes/leg-byes -- but the text it feeds
+  // ("{bowler}: N runs ... that over") explicitly attributes the total to the bowler, and byes/
+  // leg-byes are never charged to a bowler's own figures (see applyBall's identical exclusion for
+  // maiden-over detection, and the bye/legbye branch never touching bowler.runs at all). A misfield
+  // that ran byes made this recap overstate the just-finished over compared to the bowler's actual
+  // recorded figures shown everywhere else in the app.
+  const justCompletedOverRuns = justCompletedOver.reduce((s, b) => s + (b.kind === "bye" || b.kind === "legbye" ? 0 : b.runs || 0), 0);
   const justCompletedOverWickets = justCompletedOver.filter(b => b.kind === "wicket").length;
   const bowlingRosterNames = rosterFor(match, inning.bowlingTeam);
   const eligibleAfterMaxOvers = bowlingRosterNames.filter(n => n !== inning.lastBowlerName && !atMaxOvers.includes(n));
@@ -1161,7 +1168,7 @@ export function MatchScreen({
       background: qualPending ? "rgba(184,137,43,0.12)" : qualResult.achievable ? "rgba(74,124,46,0.12)" : "rgba(139,30,30,0.1)",
       color: qualPending ? "#8a641f" : qualResult.achievable ? COLORS.turf : COLORS.ball
     }
-  }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversExact, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
+  }, qualPending ? `NRR target vs ${qualScenario.rivalTeam}: locks in once this innings ends.` : !qualResult.achievable ? `Even the best result here won't get ${qualMyTeam} past ${qualScenario.rivalTeam} on NRR.` : qualResult.kind === "restrict" ? `For NRR vs ${qualScenario.rivalTeam}: restrict them to ${Math.max(0, qualResult.maxConcede)} or fewer.` : qualResult.anyWinWorks ? `For NRR vs ${qualScenario.rivalTeam}: any win gets you there.` : `For NRR vs ${qualScenario.rivalTeam}: chase it down within ${decimalOversToLabel(qualResult.maxOversForDisplay, inning.ballsPerOver || 6)} overs.`), /*#__PURE__*/React.createElement("div", {
     style: {
       background: `linear-gradient(160deg, ${COLORS.turfFixed} 0%, ${COLORS.pitchFixed} 45%, ${COLORS.pitchDarkFixed} 100%)`,
       padding: "16px 16px 22px",
