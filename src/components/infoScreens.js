@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Info, Heart, Shield } from "./icons.js";
+import { ChevronLeft, ChevronDown, Info, Heart, Shield } from "./icons.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
-import { LoadingNote } from "./illustrations.js";
+import { LoadingNote, AppMark } from "./illustrations.js";
 import { POLL_TTL_DAYS } from "../core/shareAndFormat.js";
 
 // Secondary, mostly-static account/info screens: HelpScreen (searchable FAQ, using
@@ -287,6 +287,9 @@ export function HelpScreen({
 export function AboutScreen({
   onBack
 }) {
+  // Collapsed by default -- this is the least inviting section (four paragraphs of policy text)
+  // and the one people open Settings to check, not to read start to finish every time.
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -342,20 +345,38 @@ export function AboutScreen({
     }
   }, "About")), /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderRadius: "50%",
+      boxShadow: "0 3px 10px rgba(45,80,22,0.25)",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(AppMark, {
+    size: 44
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 18,
       color: COLORS.pitch,
-      marginBottom: 4
+      marginBottom: 2
     }
   }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 12
+      lineHeight: 1.4
     }
-  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer."), /*#__PURE__*/React.createElement("div", {
+  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer."))), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.cardDivider,
@@ -470,12 +491,27 @@ export function AboutScreen({
       background: COLORS.cardDivider,
       margin: "14px 0"
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPrivacyOpen(o => !o),
+    "aria-expanded": privacyOpen,
+    className: "cs-btn",
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 6,
-      marginBottom: 10
+      justifyContent: "space-between",
+      width: "100%",
+      background: "none",
+      border: "none",
+      padding: 0,
+      marginBottom: privacyOpen ? 10 : 0,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
     }
   }, /*#__PURE__*/React.createElement(Shield, {
     size: 14,
@@ -491,7 +527,21 @@ export function AboutScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Data & privacy")), ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "Data & privacy")), /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 15,
+    style: {
+      color: COLORS.inkSoft,
+      transform: privacyOpen ? "rotate(180deg)" : "none",
+      transition: "transform 0.15s ease"
+    }
+  })), !privacyOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       fontFamily: "'Inter'",
