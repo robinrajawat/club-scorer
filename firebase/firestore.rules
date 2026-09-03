@@ -640,23 +640,46 @@ service cloud.firestore {
     // ever minted was confirmed redeemed or expired, its rules (and the federations/{id} update
     // rule's matching redemption branch) were removed outright above rather than kept alive.
     // ---------------------------------------------------------------------
-    // BUG FIX (round 2): the createdBy-first fix below didn't actually clear the reported symptom
-    // -- the client kept logging the exact same permission-denied on the read-back query even
-    // after this file's rules were confirmed live and matching. Root cause: `list` rule evaluation
-    // in Firestore runs the rule against EVERY document a query would return, and if it throws
-    // (not just returns false) for even ONE of them, the WHOLE query is denied -- not just that
-    // one row. Every field access here (data.email, data.scope, data.entityId, data.createdBy) was
-    // plain dot-notation, which THROWS outright if the field is missing, unlike every other helper
-    // in this file (isClubOwner, isFederationOwner, and both branches below) which defensively
-    // uses `.get(field, default)` for exactly this reason. A stray/malformed coOwnerInvites
-    // document -- e.g. leftover test data from when this collection was first built (PR #84/#85),
-    // predating some of these fields, or anything ever written by hand in the console -- sitting
-    // anywhere in the SAME result set as a real invite would silently take the real one down with
-    // it. Switched every field read here to `.get(field, default)`, and guarded each get()-based
-    // ownership check so it only ever runs once its own scope/entityId are confirmed present --
-    // never on a document missing either.
+    // BUG FIX (round 3 -- the actual root cause): rounds 1/2 (createdBy-first, defensive
+    // .get(field,default) reads) both landed and were confirmed live, and the symptom STILL didn't
+    // clear -- every list/query against this collection kept failing permission-denied, even a
+    // query matching ZERO real documents (confirmed directly in the browser console, bypassing the
+    // app entirely: both `where("entityId","in",[...])` and the plain `where("entityId","==",...)`
+    // equivalent failed identically; a `where("email","==", <a value matching no document at
+    // all>)` query ALSO failed). That last one is the tell: an empty result set has nothing for a
+    // per-document rule to evaluate against, so a rule that's merely "false for this data" can
+    // never explain it -- something about the QUERY ITSELF was categorically unprovable.
+    //
+    // The actual mechanism: Firestore's rule engine, before it will run a `list`/query request at
+    // all, must be able to prove the rule holds for anything the query's own filters could
+    // possibly return -- and it must do this WITHOUT first fetching a document, since fetching is
+    // the very thing authorization is gating. A rule branch like
+    // `get(/databases/.../clubs/$(data.entityId))` needs `data.entityId`, a field that only exists
+    // once a candidate document has actually been read -- circular, and Firestore can't resolve
+    // it, so it refuses the ENTIRE list request outright. Confirmed this is all-or-nothing, not
+    // per-branch: `data.createdBy == request.auth.uid` alone needs no get() and would be trivially
+    // provable, but sitting in the same `||` expression as the get()-based ownership fallback took
+    // the whole compound expression down with it anyway. A plain `get` (single document, ID
+    // already known up front) has none of this circularity -- confirmed empirically too, all real
+    // invite documents passed individual `get` checks under the exact same rule that denied every
+    // list attempt.
+    //
+    // Fix: `list` now uses a narrower, get()-free check (coOwnerInviteCanList) -- recipient-by-
+    // email, or creator-by-uid, both plain resource.data/request.auth comparisons with no cross-
+    // document lookup at all. `get` keeps the full check (coOwnerInviteIsSender), including the
+    // club/federation-ownership fallback, since a single-document get has no such restriction.
+    // Real, deliberate narrowing versus the original design: a co-owner who didn't personally
+    // create a given invite currently can't find it via list (only its actual sender or its
+    // recipient can) -- would need denormalizing owner/co-owner uids onto the invite doc itself
+    // at send time to close that gap without any get() in a list-reachable rule. Not done here;
+    // flagging it since /federationRequests' `allow list: if ... canSeeRequest(resource.data)`
+    // a little further down has this exact same get()-in-a-list-rule shape and is likely equally
+    // broken, just not yet reported -- same fix pattern would apply there too.
     function coOwnerInviteIsRecipient(data) {
       return request.auth.token.email.lower() == data.get('email', '');
+    }
+    function coOwnerInviteCanList(data) {
+      return coOwnerInviteIsRecipient(data) || data.get('createdBy', '') == request.auth.uid;
     }
     function coOwnerInviteIsSender(data) {
       return data.get('createdBy', '') == request.auth.uid
@@ -666,12 +689,9 @@ service cloud.firestore {
             && isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data));
     }
     match /coOwnerInvites/{inviteId} {
-      // Same "list re-validates resource.data per returned doc" shape as /federationRequests'
-      // canSeeRequest above — lets the recipient query by their own email, and the sender query by
-      // entityId, without opening this up to a wholesale dump the way a bare `allow list: if true`
-      // would.
-      allow get, list: if request.auth != null
+      allow get: if request.auth != null
         && (coOwnerInviteIsRecipient(resource.data) || coOwnerInviteIsSender(resource.data));
+      allow list: if request.auth != null && coOwnerInviteCanList(resource.data);
 
       allow create: if request.auth != null
         && request.resource.data.status == 'pending'
