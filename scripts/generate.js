@@ -166,6 +166,7 @@ const FUNCTIONS = [
   { name: "ChevronRight", file: "src/components/icons.js" },
   { name: "Circle", file: "src/components/icons.js" },
   { name: "Download", file: "src/components/icons.js" },
+  { name: "FileText", file: "src/components/icons.js" },
   { name: "Globe", file: "src/components/icons.js" },
   { name: "GoogleGLogo", file: "src/components/icons.js" },
   { name: "Hand", file: "src/components/icons.js" },
