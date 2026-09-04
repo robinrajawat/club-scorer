@@ -1635,7 +1635,23 @@ function getFollowCodeFromUrl() {
     return null;
   }
 }
+
+// A liveMatches doc id, unlike a follow/tournament/poll code, is never shown to a person to type
+// in by hand (uid() output, lowercase base36) -- so this deliberately doesn't force-uppercase it
+// the way those do. Still stripped down to a safe charset rather than trusted as-is.
 // GENERATED-FN-END: getFollowCodeFromUrl
+// GENERATED-FN-START: getFollowMatchIdFromUrl
+function getFollowMatchIdFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("followMatch");
+    if (!raw) return null;
+    const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+// GENERATED-FN-END: getFollowMatchIdFromUrl
 // GENERATED-FN-START: getTournamentFollowCodeFromUrl
 function getTournamentFollowCodeFromUrl() {
   try {
@@ -6849,7 +6865,25 @@ function buildFollowUrl(code) {
     return `?follow=${code}`;
   }
 }
+
+// Same shape as buildFollowUrl, for a match reached via the Home screen's Live now feed / app-wide
+// search (a /liveMatches doc id) rather than an explicitly-generated view code -- lets a viewer who
+// found a match that way forward the exact thing they're watching, not just the scorer who
+// generated a code in the first place. See getFollowMatchIdFromUrl for the matching URL parser.
 // GENERATED-FN-END: buildFollowUrl
+// GENERATED-FN-START: buildFollowMatchUrl
+function buildFollowMatchUrl(matchId) {
+  try {
+    const {
+      origin,
+      pathname
+    } = window.location;
+    return `${origin}${pathname}?followMatch=${matchId}`;
+  } catch (e) {
+    return `?followMatch=${matchId}`;
+  }
+}
+// GENERATED-FN-END: buildFollowMatchUrl
 // GENERATED-FN-START: buildLiveShareText
 function buildLiveShareText(match, code) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
@@ -32662,6 +32696,15 @@ function FollowScreen({
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
   const [tab, setTab] = useState(0);
+  // Brief "Copied!" confirmation after the Share button falls back to clipboard (no
+  // navigator.share on this browser) -- see handleShare below.
+  const [linkCopied, setLinkCopied] = useState(false);
+  // Wall-clock time a real snapshot last actually arrived (not just re-rendered) -- feeds the
+  // "might be stale" hint below. `now` exists purely to force a re-render on a timer so that hint
+  // can appear/disappear on its own even while no new snapshot ever arrives (a dropped connection
+  // looks identical to a quiet passage of play until you compare against the clock, not the data).
+  const [lastUpdateAt, setLastUpdateAt] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
   // Boundary/wicket pops and milestone toasts for the person following along, not just the
   // scorer -- same BallCelebration/MilestoneToast components MatchScreen uses, but there's no
   // direct "a six just happened" event here to hang off of the way handleRun/celebrateWicket have
@@ -32820,6 +32863,7 @@ function FollowScreen({
       }
       const m = unpackMatchFromFirestore(doc.data());
       setMatch(m);
+      setLastUpdateAt(Date.now());
       const startedIdx = m.innings.reduce((acc, inn, idx) => inn.battingOrder && inn.battingOrder.length > 0 ? idx : acc, 0);
       setTab(startedIdx);
       setStatus("found");
@@ -32850,6 +32894,14 @@ function FollowScreen({
     if (typeof document === "undefined" || !match) return;
     document.title = `${matchScoreLine(match) || `${match.teamA} vs ${match.teamB}`} · Club Scorer`;
   }, [match]);
+  // Ticks `now` every 15s purely to re-evaluate the staleness hint below on a clock, independent
+  // of whether a new snapshot ever arrives -- 15s is plenty precise for a hint that only kicks in
+  // once several minutes have passed, and doesn't re-render this screen anywhere near as often as
+  // a genuinely live match already does on its own from real snapshots.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -32927,6 +32979,34 @@ function FollowScreen({
   const resultText = matchResultText(match);
   const inningsBreak = match.awaitingSecondInningsSetup && match.status !== "complete";
   const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
+  // Several minutes with no snapshot at all, on a match that isn't finished, is unusual enough to
+  // be worth a gentle nudge -- normal gaps between overs/wickets/drinks breaks are nowhere near
+  // this long. Never shown once the match is complete: no further update is expected anyway, so
+  // flagging one that "hasn't arrived" would just be a false alarm.
+  const STALE_AFTER_MS = 3 * 60 * 1000;
+  const isStale = match.status !== "complete" && lastUpdateAt != null && now - lastUpdateAt > STALE_AFTER_MS;
+  // Builds whichever URL this screen was actually reached by -- a code-based link if code is set,
+  // the newer matchId-based one otherwise (see buildFollowMatchUrl/getFollowMatchIdFromUrl) --
+  // then prefers the native share sheet when the browser has one, falling back to a clipboard copy
+  // with a brief "Copied!" confirmation otherwise. No third path: a browser with neither still
+  // leaves the link visible in the address bar to copy by hand.
+  function handleShare() {
+    const url = code ? buildFollowUrl(code) : matchId ? buildFollowMatchUrl(matchId) : null;
+    if (!url) return;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({
+        title: `${match.teamA} vs ${match.teamB} \u2014 Club Scorer`,
+        text: matchScoreLine(match) || undefined,
+        url
+      }).catch(() => {});
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: wrapStyle
   }, /*#__PURE__*/React.createElement(BallCelebration, {
@@ -32975,7 +33055,42 @@ function FollowScreen({
       textTransform: "uppercase",
       opacity: 0.85
     }
-  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live")), /*#__PURE__*/React.createElement("button", {
+  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live"), isStale && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      opacity: 0.75,
+      fontStyle: "italic"
+    }
+  }, "· No updates in a while")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleShare,
+    className: "cs-btn",
+    "aria-label": "Share this match",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.creamFixed,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      padding: "6px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, linkCopied ? /*#__PURE__*/React.createElement(Check, {
+    size: 13
+  }) : /*#__PURE__*/React.createElement(Share, {
+    size: 13
+  }), linkCopied ? "Copied!" : "Share"), /*#__PURE__*/React.createElement("button", {
     onClick: onExit,
     className: "cs-btn",
     style: {
@@ -32989,7 +33104,7 @@ function FollowScreen({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Exit")), /*#__PURE__*/React.createElement("div", {
+  }, "Exit"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
@@ -33006,27 +33121,38 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+  }, resultText || inningsBreakText)), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
     style: {
+      maxWidth: 560,
+      margin: "14px auto 0",
+      padding: "16px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "12px 16px",
+      textAlign: "center",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)",
       fontFamily: "'Inter'",
       fontSize: 12.5,
-      opacity: 0.9,
-      maxWidth: 560,
-      margin: "6px auto 0",
-      textAlign: "center"
+      color: COLORS.inkSoft
     }
   }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
     style: {
       fontWeight: 700,
-      // Only six/wicket get a distinct color here (gold / the header's own "live" red, both
-      // guaranteed to read against the dark green header background) -- MatchScreen's own
-      // four/wide/no-ball colors (turf green, purple) were tuned for its cream background and
-      // would have poor contrast on this one, so those stay plain cream-white bold instead of
-      // reusing that same palette verbatim.
+      // Same kind-color grouping MatchScreen's own commit()-driven commentary line uses -- this
+      // now sits on the same cream/surface background that one does (moved out of the sticky
+      // header below, which otherwise grew without bound every time this had something to say,
+      // permanently eating into the scorecard's own space since the header stays pinned while
+      // scrolling), so there's no more dark-background contrast reason to deviate from it.
       color: {
+        four: COLORS.turf,
         six: COLORS.gold,
-        wicket: COLORS.live
-      }[ballCommentary.kind] || COLORS.creamFixed
+        wicket: COLORS.ball,
+        wide: "#7b3fa0",
+        noball: "#7b3fa0"
+      }[ballCommentary.kind] || COLORS.ink
     }
   }, ballCommentary.outcome))), overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -37935,15 +38061,21 @@ const SCREEN_DEPTH = {
 function CricketScorer() {
   const initialAuthAction = useRef(getAuthActionFromUrl()).current;
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
+  // A "?followMatch=ID" link (see buildFollowMatchUrl) -- the Share button on FollowScreen itself
+  // builds one of these when it was reached via a matchId rather than a code (i.e. via the Home
+  // screen's Live now feed or app-wide search, neither of which involves a code at all), so a
+  // viewer who found a match that way can still forward the exact thing they're watching.
+  const initialFollowMatchId = useRef(getFollowMatchIdFromUrl()).current;
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
-  // (a tap, not a "?live=CODE" link) -- see openLiveMatch/handleOpenLiveMatch below. Exactly one of
-  // followCode/followMatchId is ever set at a time; FollowScreen itself treats them as equivalent.
-  const [followMatchId, setFollowMatchId] = useState(null);
+  // (a tap), search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch below.
+  // Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself treats them
+  // as equivalent.
+  const [followMatchId, setFollowMatchId] = useState(initialFollowMatchId);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -38051,7 +38183,7 @@ function CricketScorer() {
   // tournament from My Tournaments (personal) should return there on Back, opening one from Cups
   // (a club/federation) should return to Cups, same as it always did.
   const [tournamentDetailReturnScreen, setTournamentDetailReturnScreen] = useState("tournaments");
-  const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
+  const [loading, setLoading] = useState(!initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   // isFeedbackAdmin(user) (hardcoded-email, instant) covers this account with zero delay/flicker.
@@ -39033,6 +39165,7 @@ function CricketScorer() {
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("follow");
+      url.searchParams.delete("followMatch");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     } catch (e) {
       /* noop — worst case the param stays in the address bar */
@@ -39041,9 +39174,10 @@ function CricketScorer() {
     setFollowMatchId(null);
     setScreen("home");
   }
-  // Tapping a card in the Home screen's "Live now" feed -- same destination screen as a "?live="
-  // link (exitFollow above clears both, so either path leaves cleanly), just reached by matchId
-  // instead of a code, with no URL param to set since this was never a link someone navigated to.
+  // Tapping a card in the Home screen's "Live now" feed or an app-wide search result -- same
+  // destination screen as a "?follow=" or "?followMatch=" link (exitFollow above clears both
+  // params, so every path leaves cleanly), just reached by matchId instead of a code, with no URL
+  // param to set here since a tap (unlike a link) never touches the address bar to begin with.
   function openLiveMatch(id) {
     setFollowMatchId(id);
     setScreen("follow");
@@ -40069,7 +40203,7 @@ function CricketScorer() {
     WebkitTextSizeAdjust: "100%",
     touchAction: "manipulation"
   };
-  if (loading || !authChecked && !initialFollowCode && !initialTournamentFollowCode) {
+  if (loading || !authChecked && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         ...wrapStyle,

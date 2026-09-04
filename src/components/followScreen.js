@@ -4,8 +4,9 @@ import { LoadingBallIllustration } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
 import { BallBadge } from "./matchDisplayAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
+import { Share, Check } from "./icons.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
-import { matchResultText, matchScoreLine } from "../core/shareAndFormat.js";
+import { matchResultText, matchScoreLine, buildFollowUrl, buildFollowMatchUrl } from "../core/shareAndFormat.js";
 import { lastBallCommentary } from "../core/scoringEngine.js";
 
 // Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
@@ -36,6 +37,15 @@ export function FollowScreen({
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
   const [tab, setTab] = useState(0);
+  // Brief "Copied!" confirmation after the Share button falls back to clipboard (no
+  // navigator.share on this browser) -- see handleShare below.
+  const [linkCopied, setLinkCopied] = useState(false);
+  // Wall-clock time a real snapshot last actually arrived (not just re-rendered) -- feeds the
+  // "might be stale" hint below. `now` exists purely to force a re-render on a timer so that hint
+  // can appear/disappear on its own even while no new snapshot ever arrives (a dropped connection
+  // looks identical to a quiet passage of play until you compare against the clock, not the data).
+  const [lastUpdateAt, setLastUpdateAt] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
   // Boundary/wicket pops and milestone toasts for the person following along, not just the
   // scorer -- same BallCelebration/MilestoneToast components MatchScreen uses, but there's no
   // direct "a six just happened" event here to hang off of the way handleRun/celebrateWicket have
@@ -194,6 +204,7 @@ export function FollowScreen({
       }
       const m = unpackMatchFromFirestore(doc.data());
       setMatch(m);
+      setLastUpdateAt(Date.now());
       const startedIdx = m.innings.reduce((acc, inn, idx) => inn.battingOrder && inn.battingOrder.length > 0 ? idx : acc, 0);
       setTab(startedIdx);
       setStatus("found");
@@ -224,6 +235,14 @@ export function FollowScreen({
     if (typeof document === "undefined" || !match) return;
     document.title = `${matchScoreLine(match) || `${match.teamA} vs ${match.teamB}`} · Club Scorer`;
   }, [match]);
+  // Ticks `now` every 15s purely to re-evaluate the staleness hint below on a clock, independent
+  // of whether a new snapshot ever arrives -- 15s is plenty precise for a hint that only kicks in
+  // once several minutes have passed, and doesn't re-render this screen anywhere near as often as
+  // a genuinely live match already does on its own from real snapshots.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -301,6 +320,34 @@ export function FollowScreen({
   const resultText = matchResultText(match);
   const inningsBreak = match.awaitingSecondInningsSetup && match.status !== "complete";
   const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
+  // Several minutes with no snapshot at all, on a match that isn't finished, is unusual enough to
+  // be worth a gentle nudge -- normal gaps between overs/wickets/drinks breaks are nowhere near
+  // this long. Never shown once the match is complete: no further update is expected anyway, so
+  // flagging one that "hasn't arrived" would just be a false alarm.
+  const STALE_AFTER_MS = 3 * 60 * 1000;
+  const isStale = match.status !== "complete" && lastUpdateAt != null && now - lastUpdateAt > STALE_AFTER_MS;
+  // Builds whichever URL this screen was actually reached by -- a code-based link if code is set,
+  // the newer matchId-based one otherwise (see buildFollowMatchUrl/getFollowMatchIdFromUrl) --
+  // then prefers the native share sheet when the browser has one, falling back to a clipboard copy
+  // with a brief "Copied!" confirmation otherwise. No third path: a browser with neither still
+  // leaves the link visible in the address bar to copy by hand.
+  function handleShare() {
+    const url = code ? buildFollowUrl(code) : matchId ? buildFollowMatchUrl(matchId) : null;
+    if (!url) return;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({
+        title: `${match.teamA} vs ${match.teamB} \u2014 Club Scorer`,
+        text: matchScoreLine(match) || undefined,
+        url
+      }).catch(() => {});
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: wrapStyle
   }, /*#__PURE__*/React.createElement(BallCelebration, {
@@ -349,7 +396,42 @@ export function FollowScreen({
       textTransform: "uppercase",
       opacity: 0.85
     }
-  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live")), /*#__PURE__*/React.createElement("button", {
+  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live"), isStale && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      opacity: 0.75,
+      fontStyle: "italic"
+    }
+  }, "· No updates in a while")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: handleShare,
+    className: "cs-btn",
+    "aria-label": "Share this match",
+    style: {
+      background: "rgba(242,236,217,0.14)",
+      border: "1px solid rgba(242,236,217,0.35)",
+      borderRadius: 8,
+      color: COLORS.creamFixed,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      padding: "6px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, linkCopied ? /*#__PURE__*/React.createElement(Check, {
+    size: 13
+  }) : /*#__PURE__*/React.createElement(Share, {
+    size: 13
+  }), linkCopied ? "Copied!" : "Share"), /*#__PURE__*/React.createElement("button", {
     onClick: onExit,
     className: "cs-btn",
     style: {
@@ -363,7 +445,7 @@ export function FollowScreen({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Exit")), /*#__PURE__*/React.createElement("div", {
+  }, "Exit"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
@@ -380,27 +462,38 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+  }, resultText || inningsBreakText)), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
     style: {
+      maxWidth: 560,
+      margin: "14px auto 0",
+      padding: "16px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "12px 16px",
+      textAlign: "center",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)",
       fontFamily: "'Inter'",
       fontSize: 12.5,
-      opacity: 0.9,
-      maxWidth: 560,
-      margin: "6px auto 0",
-      textAlign: "center"
+      color: COLORS.inkSoft
     }
   }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
     style: {
       fontWeight: 700,
-      // Only six/wicket get a distinct color here (gold / the header's own "live" red, both
-      // guaranteed to read against the dark green header background) -- MatchScreen's own
-      // four/wide/no-ball colors (turf green, purple) were tuned for its cream background and
-      // would have poor contrast on this one, so those stay plain cream-white bold instead of
-      // reusing that same palette verbatim.
+      // Same kind-color grouping MatchScreen's own commit()-driven commentary line uses -- this
+      // now sits on the same cream/surface background that one does (moved out of the sticky
+      // header below, which otherwise grew without bound every time this had something to say,
+      // permanently eating into the scorecard's own space since the header stays pinned while
+      // scrolling), so there's no more dark-background contrast reason to deviate from it.
       color: {
+        four: COLORS.turf,
         six: COLORS.gold,
-        wicket: COLORS.live
-      }[ballCommentary.kind] || COLORS.creamFixed
+        wicket: COLORS.ball,
+        wide: "#7b3fa0",
+        noball: "#7b3fa0"
+      }[ballCommentary.kind] || COLORS.ink
     }
   }, ballCommentary.outcome))), overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
     style: {
