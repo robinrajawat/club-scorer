@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
 import {
-  PlayerAvatar, TextField, RuleChoice, TeamChips, PinnableChip, HomeUtilityButton, Btn, ConfirmModal
+  PlayerAvatar, TextField, RuleChoice, TeamChips, PinnableChip, Btn, ConfirmModal
 } from "../../../src/components/formUiAtoms.js";
 
 test("PlayerAvatar: shows the photo when one's set, otherwise colored initials", () => {
@@ -68,17 +68,6 @@ test("PinnableChip: shows a pin icon only when pinned, calls onSelect on click",
     label: "Eagles", active: false, pinned: true, onSelect: () => {}, onTogglePin: () => {}
   })).root;
   assert.equal(pinnedRoot.findAllByType("svg").length, 1);
-});
-
-test("HomeUtilityButton: renders the given icon component and label, calls onClick", () => {
-  let clicked = false;
-  const FakeIcon = () => React.createElement("svg", { "data-fake-icon": true });
-  const root = renderer.create(React.createElement(HomeUtilityButton, {
-    icon: FakeIcon, label: "New match", onClick: () => { clicked = true; }
-  })).root;
-  assert.equal(root.findAllByType(FakeIcon).length, 1);
-  root.findByType("button").props.onClick();
-  assert.equal(clicked, true);
 });
 
 test("Btn: applies the variant's styling and disabled state, renders children", () => {

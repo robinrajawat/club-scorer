@@ -225,43 +225,6 @@ export function PinnableChip({
   }), label);
 }
 
-export function HomeUtilityButton({
-  icon: IconComp,
-  label,
-  onClick
-}) {
-  return /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onClick,
-    className: "cs-btn",
-    "aria-label": label,
-    style: {
-      flex: 1,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 5,
-      padding: "8px 4px",
-      background: "none",
-      border: "none",
-      borderRadius: 12,
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(IconComp, {
-    size: 19,
-    style: {
-      color: COLORS.turf
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      color: COLORS.inkSoft
-    }
-  }, label));
-}
-
 export function ConfirmModal({
   title,
   message,

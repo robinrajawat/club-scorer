@@ -5,14 +5,11 @@ import { EmptyStateBallIllustration, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
-// The full-list destination behind each "See all" on the Home screen's Live now / Live
-// tournaments preview strips -- those strips only ever show a handful of cards (see
-// LIVE_HOME_LIMIT in homeScreen.js), this is the unbounded view of the same two live feeds
-// (/liveMatches, /liveTournaments), kept as separate sections rather than one interleaved list
-// since they lead to genuinely different destinations: a match card opens the live scoring/
-// scorecard screen, a tournament card opens FollowTournamentScreen's read-only standings
-// snapshot -- a tournament here is for watching a table, not scoring. Covered by
-// tests/unit/components/liveScreen.test.js.
+// The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
+// /liveTournaments), kept as separate sections rather than one interleaved list since they lead
+// to genuinely different destinations: a match card opens the live scoring/scorecard screen, a
+// tournament card opens FollowTournamentScreen's read-only standings snapshot -- a tournament
+// here is for watching a table, not scoring. Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
   liveMatches = [],
   onOpenLiveMatch,
@@ -22,9 +19,9 @@ export function LiveScreen({
   showTabBar = false,
   loading = false
 }) {
-  // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
-  // this account's own tournaments, liveTournaments (the public mirror) fills the gap for anyone
-  // else's non-private one, and a match whose tournament is neither just gets no badge at all.
+  // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
+  // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
+  // neither just gets no badge at all.
   const liveTournamentNameById = {};
   liveTournaments.forEach(t => {
     liveTournamentNameById[t.tournamentId] = t.name;
