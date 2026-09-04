@@ -1,7 +1,7 @@
 import React from "react";
 import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight, Trophy } from "./icons.js";
-import { EmptyStateBallIllustration } from "./illustrations.js";
+import { EmptyStateBallIllustration, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
@@ -20,7 +20,8 @@ export function LiveScreen({
   onOpenLiveTournament,
   tournamentNameById = {},
   onBack,
-  showTabBar = false
+  showTabBar = false,
+  loading = false
 }) {
   // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
   // this account's own tournaments, liveTournaments (the public mirror) fills the gap for anyone
@@ -197,7 +198,16 @@ export function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, "Live"), isEmpty && /*#__PURE__*/React.createElement("div", {
+  }, "Live"), isEmpty && loading && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px"
+    }
+  }, /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading…",
+    size: 22,
+    style: { justifyContent: "center" }
+  })), isEmpty && !loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"

@@ -41,6 +41,20 @@ test("LiveScreen: shows an empty state and neither section when both feeds are e
   assert.doesNotMatch(json, /Tournaments \(/);
 });
 
+test("LiveScreen: shows a loading indicator instead of the empty state while loading and both feeds are still empty", () => {
+  const inst = render({ loading: true });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Loading/);
+  assert.doesNotMatch(json, /Nothing live right now/);
+});
+
+test("LiveScreen: shows real data instead of the loading indicator once at least one feed has something, even while still loading", () => {
+  const inst = render({ loading: true, liveMatches: [liveMatch()] });
+  const json = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(json, /Loading…/);
+  assert.match(json, /Riverside CC/);
+});
+
 test("LiveScreen: back button calls onBack", () => {
   let backCalled = false;
   const inst = render({ onBack: () => { backCalled = true; } });

@@ -283,6 +283,11 @@ export function CricketScorer() {
   const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
   const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
+  // Whether each feed's first snapshot has arrived yet -- lets LiveScreen tell "still loading" apart
+  // from "confirmed, genuinely nothing live right now" instead of flashing the empty state for the
+  // brief window before onSnapshot's first callback fires (see the two useEffects just below).
+  const [liveMatchesLoaded, setLiveMatchesLoaded] = useState(false);
+  const [liveTournamentsLoaded, setLiveTournamentsLoaded] = useState(false);
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -429,13 +434,19 @@ export function CricketScorer() {
   // without re-subscribing every time Home is revisited -- one live subscription for as long as the
   // tab is open is simpler and no more expensive than that would be.
   useEffect(() => {
-    return loadLiveMatches(setLiveMatches);
+    return loadLiveMatches(list => {
+      setLiveMatches(list);
+      setLiveMatchesLoaded(true);
+    });
   }, []);
   // Same reasoning as the "Live now" subscription just above, for shared tournaments' standings
   // (/liveTournaments -- see loadLiveTournaments in index.html and refreshTournamentStandingsLive/
   // shareTournament for what writes it).
   useEffect(() => {
-    return loadLiveTournaments(setLiveTournaments);
+    return loadLiveTournaments(list => {
+      setLiveTournaments(list);
+      setLiveTournamentsLoaded(true);
+    });
   }, []);
   useEffect(() => {
     if (!user || !pendingGoogleLink) return;
@@ -2617,6 +2628,7 @@ export function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
+    loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     onBack: () => setScreen("home"),
     showTabBar: true
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
