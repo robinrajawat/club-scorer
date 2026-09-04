@@ -20053,7 +20053,6 @@ function LiveScreen({
   liveTournaments = [],
   onOpenLiveTournament,
   tournamentNameById = {},
-  onBack,
   showTabBar = false
 }) {
   // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
@@ -20205,26 +20204,7 @@ function LiveScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
@@ -20336,7 +20316,6 @@ function MyTeamsScreen({
   activeClubId = null,
   onSelectClub,
   currentUid,
-  onBack,
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
@@ -20386,26 +20365,7 @@ function MyTeamsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -23007,7 +22967,6 @@ function TournamentsScreen({
   onCreateSeries,
   onOpenTournament,
   onOpenRecords,
-  onBack,
   currentUid,
   clubsLoading,
   federationsLoading,
@@ -23517,26 +23476,7 @@ function TournamentsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -28212,7 +28152,6 @@ function AvailabilityPollModal({
 // GENERATED-FN-START: TeamsScreen
 function TeamsScreen({
   onManageTeams,
-  onBack,
   clubs,
   activeClubId,
   currentUid,
@@ -28332,26 +28271,7 @@ function TeamsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -41253,7 +41173,6 @@ function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
-    onBack: () => setScreen("home"),
     showTabBar: true
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
@@ -41293,7 +41212,6 @@ function CricketScorer() {
     currentUid: user && user.uid,
     pinnedClubIds: pinnedClubIds,
     onTogglePinClub: handleTogglePinClub,
-    onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
       setPresetTeamSeed(null);
@@ -41315,7 +41233,6 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
     onManageTeams: () => setScreen("my-teams"),
-    onBack: () => setScreen("home"),
     clubs: clubs,
     activeClubId: activeClubAdminId,
     currentUid: user && user.uid,
@@ -41400,7 +41317,6 @@ function CricketScorer() {
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
     onOpenRecords: handleOpenRecords,
-    onBack: () => setScreen("home"),
     currentUid: user && user.uid,
     clubsLoading: clubsLoading,
     federationsLoading: federationsLoading,

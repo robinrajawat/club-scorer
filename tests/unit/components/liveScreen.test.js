@@ -30,7 +30,7 @@ function liveMatch(overrides = {}) {
 }
 
 function render(props) {
-  return renderer.create(React.createElement(LiveScreen, { onBack: () => {}, ...props }));
+  return renderer.create(React.createElement(LiveScreen, { ...props }));
 }
 
 test("LiveScreen: shows an empty state and neither section when both feeds are empty", () => {
@@ -39,14 +39,6 @@ test("LiveScreen: shows an empty state and neither section when both feeds are e
   assert.match(json, /Nothing live right now/);
   assert.doesNotMatch(json, /Matches \(/);
   assert.doesNotMatch(json, /Tournaments \(/);
-});
-
-test("LiveScreen: back button calls onBack", () => {
-  let backCalled = false;
-  const inst = render({ onBack: () => { backCalled = true; } });
-  const back = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Home"));
-  act(() => { back.props.onClick(); });
-  assert.equal(backCalled, true);
 });
 
 test("LiveScreen: lists every live match (uncapped), with its score line and tournament badge, and opens it on tap", () => {

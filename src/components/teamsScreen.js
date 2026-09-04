@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronDown, ChevronLeft, ChevronRight, Info, Pencil, Shield } from "./icons.js";
+import { ChevronDown, ChevronRight, Info, Pencil, Shield } from "./icons.js";
 import { Btn, TextField } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { EditPlayerModal, PLAYER_ROLES } from "./playerModals.js";
@@ -17,7 +17,6 @@ import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 export function TeamsScreen({
   onManageTeams,
-  onBack,
   clubs,
   activeClubId,
   currentUid,
@@ -137,26 +136,7 @@ export function TeamsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 16,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
