@@ -179,6 +179,58 @@ test("SetupScreen: walking every page to Start Match calls onStart with the asse
   assert.deepEqual(started.toss, { wonBy: "Oakwood CC", decision: "Bowl" });
 });
 
+test("SetupScreen: Visibility defaults to public, and the review-page toggle flips onStart's private flag", () => {
+  let started = null;
+  const inst = render({ onStart: m => { started = m; } });
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+
+  const visibilityBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make private");
+  assert.ok(visibilityBtn, "expected a public-by-default Visibility toggle on the review page");
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, false);
+
+  started = null;
+  act(() => { visibilityBtn.props.onClick(); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, true);
+});
+
+test("SetupScreen: a private tournament's fixture defaults Visibility to private too", () => {
+  let started = null;
+  const inst = render({
+    onStart: m => { started = m; },
+    presetTournament: { id: "t1", name: "Winter Cup", private: true, fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
+  });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  assert.ok(inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make public"), "expected the toggle to already read Private");
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, true);
+});
+
 test("SetupScreen: umpires are optional and pass through to onStart", () => {
   let started = null;
   const inst = render({ onStart: m => { started = m; } });

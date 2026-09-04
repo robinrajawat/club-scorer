@@ -189,6 +189,57 @@ test("HomeScreen: searching narrows the matches shown", () => {
   assert.doesNotMatch(text, /Hawks CC/);
 });
 
+test("HomeScreen: typing a search query lazily fetches app-wide live/recent matches once and shows a matching one under 'Across Club Scorer'", async () => {
+  let loadCalls = 0;
+  const inst = render({
+    onLoadRecentMatches: () => { loadCalls++; return Promise.resolve([liveMatch({ id: "other1", teamA: "Hawks CC", teamB: "Eagles CC" })]); }
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  await act(async () => {
+    search.props.onChange({ target: { value: "Hawks" } });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Across Club Scorer/);
+  assert.match(text, /Hawks CC/);
+  assert.equal(loadCalls, 1);
+  // A second keystroke re-filters the already-fetched list in memory, no second fetch.
+  await act(async () => {
+    search.props.onChange({ target: { value: "Hawks C" } });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(loadCalls, 1);
+});
+
+test("HomeScreen: a recent-match search result already in this account's own Saved Matches is not shown twice", async () => {
+  const inst = render({
+    matches: [match({ id: "own1", teamA: "Hawks CC", teamB: "Eagles CC" })],
+    onLoadRecentMatches: () => Promise.resolve([liveMatch({ id: "own1", teamA: "Hawks CC", teamB: "Eagles CC" })])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  await act(async () => {
+    search.props.onChange({ target: { value: "Hawks" } });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Across Club Scorer/);
+});
+
+test("HomeScreen: tapping an 'Across Club Scorer' result calls onOpenLiveMatch with its id", async () => {
+  let openedId = null;
+  const inst = render({
+    onOpenLiveMatch: id => { openedId = id; },
+    onLoadRecentMatches: () => Promise.resolve([liveMatch({ id: "other1", teamA: "Hawks CC", teamB: "Eagles CC" })])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  await act(async () => {
+    search.props.onChange({ target: { value: "Hawks" } });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const row = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Hawks CC"));
+  act(() => { row.props.onClick(); });
+  assert.equal(openedId, "other1");
+});
+
 test("HomeScreen: the 'Teams' search chip lists matching teams and opens one via onOpenTeam", () => {
   let opened = null;
   const inst = render({
