@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
+import { AlertTriangle, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
 import { Btn, TextField, PinnableChip, RuleChoice } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { LoadingNote } from "./illustrations.js";
@@ -195,7 +195,6 @@ export function TournamentsScreen({
   onCreateSeries,
   onOpenTournament,
   onOpenRecords,
-  onBack,
   currentUid,
   clubsLoading,
   federationsLoading,
@@ -705,26 +704,7 @@ export function TournamentsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",

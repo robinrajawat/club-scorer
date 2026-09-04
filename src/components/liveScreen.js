@@ -1,6 +1,6 @@
 import React from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, ChevronRight, Trophy } from "./icons.js";
+import { ChevronRight, Trophy } from "./icons.js";
 import { EmptyStateBallIllustration } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
@@ -19,7 +19,6 @@ export function LiveScreen({
   liveTournaments = [],
   onOpenLiveTournament,
   tournamentNameById = {},
-  onBack,
   showTabBar = false
 }) {
   // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
@@ -171,26 +170,7 @@ export function LiveScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      marginBottom: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 16
-  }), " Home"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 24,
