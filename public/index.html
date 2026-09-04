@@ -18685,8 +18685,6 @@ function HomeScreen({
   onNew,
   onOpen,
   onDelete,
-  onManageTeams,
-  onOpenClubs,
   onOpenClub,
   onOpenFederation,
   user,
@@ -18721,11 +18719,7 @@ function HomeScreen({
   onOpenTeam,
   onGetShareCode,
   onGetViewCode,
-  liveMatches = [],
   onOpenLiveMatch,
-  liveTournaments = [],
-  onOpenLiveTournament,
-  onOpenLive,
   onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint,
@@ -18804,19 +18798,6 @@ function HomeScreen({
     };
   }, [query, searchScope, recentMatches, hasRecentMatchSearch]);
   const q = query.trim().toLowerCase();
-  // Resolves a tournament's name for the "Live now" strip below, which spans every match app-wide
-  // (not just this account's own) -- tournamentNameById alone can't cover that, since it's built
-  // from tournaments this account actually knows about (personal/club/federation). liveTournaments
-  // (the public /liveTournaments mirror, same data source as the "Live tournaments" strip) fills
-  // that gap for any non-private tournament, which is the only kind that can show up in "Live now"
-  // via someone else's match anyway. tournamentNameById still wins when both have an entry, since
-  // it's the more authoritative source for anything this account actually owns. A tournament with
-  // neither -- private, or not yet auto-published -- just falls back to the bare Trophy badge.
-  const liveTournamentNameById = {};
-  liveTournaments.forEach(t => {
-    liveTournamentNameById[t.tournamentId] = t.name;
-  });
-  const tournamentNameForBadge = id => tournamentNameById[id] || liveTournamentNameById[id] || null;
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
   // scroll hunting for a specific date. Venue isn't included: local-only/offline matches never
@@ -18862,16 +18843,13 @@ function HomeScreen({
   const UPCOMING_HOME_LIMIT = 4;
   const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
   const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
-  // Both "Live now" and "Live tournaments" are previews, not the full feed -- capped to a couple of
-  // cards' worth so two live sections stacked on top of each other don't dominate the screen above
-  // the fold. A trailing "See all" card (matching each strip's own card size, so it reads as part
-  // of the same scroll rather than a different kind of thing) opens the full, uncapped list on its
-  // own screen (see onOpenLive / LiveScreen) whenever there's more than fits in the preview.
-  const LIVE_HOME_LIMIT = 3;
-  const visibleLiveMatches = liveMatches.slice(0, LIVE_HOME_LIMIT);
-  const hiddenLiveMatchCount = liveMatches.length - visibleLiveMatches.length;
-  const visibleLiveTournaments = liveTournaments.slice(0, LIVE_HOME_LIMIT);
-  const hiddenLiveTournamentCount = liveTournaments.length - visibleLiveTournaments.length;
+  // The hero "Continue scoring" card at the very top of the screen -- everyone else's live
+  // matches moved to the Live tab (see TabBar/LiveScreen), but a match THIS account is actively
+  // scoring is a different thing entirely: the one action someone opening the app mid-match is
+  // almost certainly here for, so it gets the most prominent slot on the page, above even Next
+  // up. Not deduped against the "In Progress" list further down Saved Matches -- same
+  // teaser-plus-full-list relationship as Next up has with the full Upcoming list.
+  const inProgressOwnMatches = matches.filter(m => m.status === "in-progress");
   // Cups (tournaments + series), teams, clubs, federations, and Help/FAQ entries -- all already
   // sitting in memory (tournaments/teams/clubs are loaded right after sign-in for other reasons;
   // HELP_SECTIONS is static), so unlike Players these cost nothing to search and only ever show
@@ -19162,50 +19140,6 @@ function renderMatchCard(m, i, {
       }
     }, `See all ${count}`);
   }
-  // The trailing card at the end of the Live now / Live tournaments preview strips once there's
-  // more than LIVE_HOME_LIMIT worth to show -- same footprint as the strip's own cards so it reads
-  // as part of the same horizontal scroll, opens the full uncapped list on its own screen (see
-  // onOpenLive / LiveScreen) rather than expanding in place, since a strip that grows taller than
-  // its neighbors on every visit is the crowding this preview/full-list split exists to avoid.
-  function liveSeeAllCard(key, count, onClick) {
-    return /*#__PURE__*/React.createElement("button", {
-      key,
-      type: "button",
-      onClick: () => onClick && onClick(),
-      className: "cs-btn",
-      style: {
-        flexShrink: 0,
-        width: 110,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        textAlign: "center",
-        background: "none",
-        border: `1.5px dashed ${COLORS.cardDivider}`,
-        borderRadius: 14,
-        padding: "12px 10px",
-        cursor: "pointer"
-      }
-    }, /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 15,
-      style: { color: COLORS.turf }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 12,
-        color: COLORS.turf
-      }
-    }, "See all"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11,
-        color: COLORS.inkSoft
-      }
-    }, "+", count));
-  }
   function categorySectionLabel(text) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -19336,58 +19270,7 @@ function renderMatchCard(m, i, {
     onSynced: onPendingSynced
   })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
     onDismiss: onDismissInstallHint
-  }), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onNew,
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 7,
-      width: "100%",
-      padding: "15px",
-      boxSizing: "border-box",
-      // Flat single-tone fill and a plain soft shadow, deliberately not routed through Btn's
-      // "primary" variant -- that variant (used app-wide) always gets a gradient fill plus
-      // .cs-shine's glossy top-highlight overlay, which is the app's established language for
-      // buttons generally but reads dated specifically here, on the one button that's supposed to
-      // be the calm, confident focal point of the whole screen. Scoped to just this button rather
-      // than stripping shine from Btn's primary variant everywhere -- that's used on hundreds of
-      // buttons across the whole app and would be a much bigger, unrequested visual-language
-      // change; this CTA earning its own bespoke treatment is the proportionate version of that.
-      background: COLORS.pitchFixed,
-      color: "#fff",
-      border: "none",
-      borderRadius: 14,
-      marginBottom: 10,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 16,
-      cursor: "pointer",
-      boxShadow: "0 2px 8px rgba(45,80,22,0.25)"
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 19,
-    strokeWidth: 2.5
-  }), "New Match"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      marginBottom: 22
-    }
-  }, /*#__PURE__*/React.createElement(HomeUtilityButton, {
-    icon: Users,
-    label: "Teams",
-    onClick: onManageTeams
-  }), /*#__PURE__*/React.createElement(HomeUtilityButton, {
-    icon: Trophy,
-    label: "Cups",
-    onClick: onOpenTournaments
-  }), /*#__PURE__*/React.createElement(HomeUtilityButton, {
-    icon: Shield,
-    label: "Clubs",
-    onClick: onOpenClubs
-  })), liveMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), inProgressOwnMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
     }
@@ -19418,32 +19301,22 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Live now")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      overflowX: "auto",
-      paddingBottom: 2,
-      marginLeft: -20,
-      marginRight: -20,
-      paddingLeft: 20,
-      paddingRight: 20
-    }
-  }, visibleLiveMatches.map(m => /*#__PURE__*/React.createElement("button", {
+  }, "Continue scoring")), inProgressOwnMatches.map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
     type: "button",
-    onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
+    onClick: () => onOpen(m.id),
     className: "cs-btn",
     style: {
-      flexShrink: 0,
-      width: 190,
+      display: "block",
+      width: "100%",
       textAlign: "left",
       background: COLORS.surface,
       border: "none",
-      borderRadius: 14,
-      padding: "12px 14px",
+      borderRadius: 16,
+      padding: "16px",
+      marginBottom: 8,
       cursor: "pointer",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      boxShadow: "0 2px 10px rgba(42,36,32,0.08), 0 6px 20px rgba(42,36,32,0.06)"
     }
   }, m.tournamentId && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19451,131 +19324,61 @@ function renderMatchCard(m, i, {
       alignItems: "center",
       gap: 4,
       fontFamily: "'Inter'",
-      fontSize: 10,
+      fontSize: 10.5,
       fontWeight: 700,
       letterSpacing: 0.5,
       textTransform: "uppercase",
       color: COLORS.gold,
-      marginBottom: 3,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
+      marginBottom: 4
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
-    size: 10,
-    style: {
-      flexShrink: 0
-    }
-  }), tournamentNameForBadge(m.tournamentId)), /*#__PURE__*/React.createElement("div", {
+    size: 11
+  }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
-      fontSize: 13,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
+      fontSize: 17,
+      color: COLORS.ink
     }
   }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", m.teamB), (m.innings ? matchScoreLine(m) : m.scoreLine) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginTop: 3,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
+      fontSize: 15,
+      fontWeight: 700,
+      color: COLORS.turf,
+      marginTop: 4
     }
-  }, matchScoreLine(m)))), hiddenLiveMatchCount > 0 && liveSeeAllCard("live-matches-see-all", hiddenLiveMatchCount, onOpenLive))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 22
-    }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, m.innings ? matchScoreLine(m) : m.scoreLine), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
+      justifyContent: "center",
       gap: 6,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    "aria-hidden": "true",
-    style: {
-      width: 7,
-      height: 7,
-      borderRadius: "50%",
-      background: COLORS.live,
-      boxShadow: "0 0 0 3px rgba(230,84,75,0.18)",
-      animation: "cs-pulse 1.6s ease infinite",
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 700,
-      letterSpacing: 1.2,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Live tournaments")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      overflowX: "auto",
-      paddingBottom: 2,
-      marginLeft: -20,
-      marginRight: -20,
-      paddingLeft: 20,
-      paddingRight: 20
-    }
-  }, visibleLiveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
-    key: t.tournamentId,
-    type: "button",
-    onClick: () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode),
-    className: "cs-btn",
-    style: {
-      flexShrink: 0,
-      width: 190,
-      textAlign: "left",
-      background: COLORS.surface,
-      border: "none",
-      borderRadius: 14,
-      padding: "12px 14px",
-      cursor: "pointer",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
+      width: "100%",
+      marginTop: 12,
+      padding: "10px",
+      background: COLORS.pitchFixed,
+      color: "#fff",
+      borderRadius: 12,
       fontFamily: "'Inter'",
       fontWeight: 700,
-      fontSize: 13,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
+      fontSize: 13.5
     }
-  }, t.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginTop: 3
-    }
-  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))), hiddenLiveTournamentCount > 0 && liveSeeAllCard("live-tournaments-see-all", hiddenLiveTournamentCount, onOpenLive)))
-  // The nearest scheduled-but-not-yet-started fixture, surfaced here so it's visible without
-  // scrolling past Live now/Live tournaments and expanding the "Upcoming" fold further down --
-  // most sessions on this screen are resuming or starting an already-planned tournament match, not
-  // an ad-hoc one, and that path used to require a scroll and a tap just to see what's next.
+  }, "Resume scoring", /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 15
+  })))))
+  // The nearest scheduled-but-not-yet-started fixture, surfaced here right under the "Continue
+  // scoring" hero rather than only inside the collapsed "Upcoming" fold further down -- most
+  // sessions on this screen are resuming or starting an already-planned tournament match, not an
+  // ad-hoc one, and that path used to require a scroll and a tap just to see what's next.
   // sortedUpcomingFixtures[0] is the same nearest-first ordering the full Upcoming list already
   // uses; this doesn't hide or dedupe it from that list below -- a short teaser plus the full,
-  // browsable list, same relationship as the Live strips have with their own "See all".
+  // browsable list.
   , sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
@@ -19601,7 +19404,21 @@ function renderMatchCard(m, i, {
     onEditVenue: onEditVenue,
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  })), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement(Btn, {
+    onClick: onNew,
+    style: {
+      paddingLeft: 22,
+      paddingRight: 22
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 17
+  }), "New Match")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -39374,6 +39191,21 @@ function CricketScorer() {
       }
     }
   }
+  // TabBar's onSelect -- a plain setScreen would work for "home" and "live" (neither carries any
+  // extra context to reset), but "my-teams" and "tournaments" both do: the same reset each
+  // screen's other, non-tab entry points (onManageTeams and onOpenTournaments, both still used
+  // elsewhere) already apply before navigating, so tapping the tab from some other club/
+  // tournament's context doesn't silently carry that scoping over. "teams" (the Clubs tab) needs
+  // no reset -- its own former entry point (onOpenClubs) never reset activeClubAdminId either.
+  function selectTab(next) {
+    if (next === "my-teams") {
+      setActiveClubAdminId(null);
+    } else if (next === "tournaments") {
+      setActiveTournamentClubId(null);
+      setActiveTournamentFederationId(null);
+    }
+    setScreen(next);
+  }
   // Seeds the current history entry with the starting screen (so the very first swipe-back has
   // a real {screen} to fall back to instead of landing on whatever a later replaceState call
   // elsewhere leaves behind — see the auth-action/follow-code URL cleanups, which replace state
@@ -41341,11 +41173,6 @@ function CricketScorer() {
     onNew: () => setScreen("setup"),
     onOpen: openMatch,
     onDelete: handleDelete,
-    onManageTeams: () => {
-      setActiveClubAdminId(null);
-      setScreen("my-teams");
-    },
-    onOpenClubs: () => setScreen("teams"),
     onOpenClub: clubId => {
       setActiveClubAdminId(clubId);
       setTeamsTab("clubs");
@@ -41408,11 +41235,7 @@ function CricketScorer() {
     },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
-    liveMatches: liveMatches,
     onOpenLiveMatch: openLiveMatch,
-    liveTournaments: liveTournaments,
-    onOpenLiveTournament: openLiveTournament,
-    onOpenLive: () => setScreen("live"),
     showTabBar: true,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
@@ -41808,7 +41631,7 @@ function CricketScorer() {
     }
   }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
-    onSelect: setScreen
+    onSelect: selectTab
   }));
 }
 // GENERATED-FN-END: CricketScorer
