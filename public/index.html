@@ -480,6 +480,28 @@ const MessageCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__
   d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
 }));
 // GENERATED-FN-END: MessageCircle
+// GENERATED-FN-START: House
+const House = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+}));
+// GENERATED-FN-END: House
+// GENERATED-FN-START: Radio
+const Radio = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "2"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M19.1 4.9C23 8.8 23 15.1 19.1 19"
+}));
+// GENERATED-FN-END: Radio
 // GENERATED-FN-START: InboxIcon
 const InboxIcon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "22 12 16 12 14 15 10 15 8 12 2 12"
@@ -18706,7 +18728,8 @@ function HomeScreen({
   onOpenLive,
   onLoadRecentMatches,
   showInstallHint = false,
-  onDismissInstallHint
+  onDismissInstallHint,
+  showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -19199,7 +19222,14 @@ function renderMatchCard(m, i, {
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "28px 16px 40px",
+      paddingTop: 28,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // Reserves clearance under the fixed TabBar (see cricketScorer.js) when it's showing, so the
+      // last bit of scrollable content here doesn't render partially hidden underneath it -- same
+      // fixed-bar-overlap bug class as MatchScreen's scoring pad (see docs/history.md's "This
+      // Over" writeup), just avoided from the start here since TabBar's height never changes.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -20206,7 +20236,8 @@ function LiveScreen({
   liveTournaments = [],
   onOpenLiveTournament,
   tournamentNameById = {},
-  onBack
+  onBack,
+  showTabBar = false
 }) {
   // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
   // this account's own tournaments, liveTournaments (the public mirror) fills the gap for anyone
@@ -20348,7 +20379,12 @@ function LiveScreen({
 
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -20395,6 +20431,85 @@ function LiveScreen({
   }, sectionLabel(COLORS.live, `Matches (${liveMatches.length})`), liveMatches.map(renderMatchRow)), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${liveTournaments.length})`), liveTournaments.map(renderTournamentRow)));
 }
 // GENERATED-FN-END: LiveScreen
+// GENERATED-FN-START: TABS
+const TABS = [
+  { screen: "home", label: "Home", Icon: House },
+  { screen: "live", label: "Live", Icon: Radio },
+  { screen: "tournaments", label: "Cups", Icon: Trophy },
+  { screen: "my-teams", label: "Teams", Icon: Users },
+  { screen: "teams", label: "Clubs", Icon: Shield }
+];
+
+// Fixed height (safe-area padding aside) -- unlike MatchScreen's scoring pad, this bar's content
+// never changes shape, so a plain constant is safe here rather than needing MatchScreen's
+// ResizeObserver-measured approach (see docs/history.md's "This Over" rendering-bug writeup for
+// why that measuring exists at all). Exported so CricketScorer can reserve the same amount of
+// bottom padding under each tab screen's own scrollable content -- otherwise the last bit of
+// content on any of the five tab screens renders partially hidden underneath this bar, the exact
+// bug class that history already hit once with the scoring pad.
+// GENERATED-FN-END: TABS
+// GENERATED-FN-START: TAB_BAR_HEIGHT
+const TAB_BAR_HEIGHT = 58;
+// GENERATED-FN-END: TAB_BAR_HEIGHT
+// GENERATED-FN-START: TabBar
+function TabBar({ active, onSelect }) {
+  return /*#__PURE__*/React.createElement("nav", {
+    "aria-label": "Primary",
+    style: {
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 40,
+      background: COLORS.cream,
+      borderTop: `1px solid ${COLORS.cardDivider}`,
+      boxShadow: "0 -4px 16px rgba(42,36,32,0.08)",
+      paddingBottom: "env(safe-area-inset-bottom)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      maxWidth: 560,
+      margin: "0 auto",
+      height: TAB_BAR_HEIGHT
+    }
+  }, TABS.map(({ screen, label, Icon }) => {
+    const isActive = active === screen;
+    return /*#__PURE__*/React.createElement("button", {
+      key: screen,
+      type: "button",
+      onClick: () => onSelect(screen),
+      className: "cs-btn",
+      "aria-label": label,
+      "aria-current": isActive ? "page" : undefined,
+      style: {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 3,
+        background: "none",
+        border: "none",
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      size: 21,
+      style: {
+        color: isActive ? COLORS.pitch : COLORS.inkSoft,
+        strokeWidth: isActive ? "2.4" : "2"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: isActive ? 700 : 600,
+        color: isActive ? COLORS.pitch : COLORS.inkSoft
+      }
+    }, label));
+  })));
+}
+// GENERATED-FN-END: TabBar
 // GENERATED-FN-START: MyTeamsScreen
 function MyTeamsScreen({
   teams = [],
@@ -20410,7 +20525,8 @@ function MyTeamsScreen({
   onDeleteTeam,
   onMoveTeam,
   pinnedClubIds = [],
-  onTogglePinClub
+  onTogglePinClub,
+  showTabBar = false
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
@@ -20444,7 +20560,12 @@ function MyTeamsScreen({
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -23076,7 +23197,8 @@ function TournamentsScreen({
   pinnedClubIds = [],
   onTogglePinClub,
   pinnedFederationIds = [],
-  onTogglePinFederation
+  onTogglePinFederation,
+  showTabBar = false
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -23569,7 +23691,12 @@ function TournamentsScreen({
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -28324,7 +28451,8 @@ function TeamsScreen({
   onRemovePoolPlayer,
   onCreateTeamFromPool,
   pinnedClubIds = [],
-  onTogglePinClub
+  onTogglePinClub,
+  showTabBar = false
 }) {
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
@@ -28378,7 +28506,12 @@ function TeamsScreen({
   poolTeamGroups.sort((a, b) => a.tag.localeCompare(b.tag));
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 40px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -38882,6 +39015,7 @@ const SCREEN_DEPTH = {
   "auth-action": 0,
   setup: 1,
   teams: 1,
+  "my-teams": 1,
   match: 1,
   account: 1,
   follow: 1,
@@ -38895,7 +39029,17 @@ const SCREEN_DEPTH = {
   "inbox": 1,
   "tournament-detail": 2
 };
+
+// The five screens TabBar (see tabBar.js) offers direct navigation to -- the persistent bottom
+// bar only renders while `screen` is one of these, hidden everywhere else (mid-match scoring,
+// setup wizard, edit/detail screens reached by drilling in further) since it would just compete
+// with those screens' own fixed-position UI (MatchScreen's scoring pad chief among them) or with
+// their own single-purpose back button. "teams" here is TeamsScreen -- confusingly the Clubs
+// browser, not the roster screen (that's "my-teams") -- see tabBar.js's own TABS list.
 // GENERATED-FN-END: SCREEN_DEPTH
+// GENERATED-FN-START: TAB_BAR_SCREENS
+const TAB_BAR_SCREENS = ["home", "live", "tournaments", "my-teams", "teams"];
+// GENERATED-FN-END: TAB_BAR_SCREENS
 // GENERATED-FN-START: CricketScorer
 function CricketScorer() {
   const initialAuthAction = useRef(getAuthActionFromUrl()).current;
@@ -41269,6 +41413,7 @@ function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     onOpenLive: () => setScreen("live"),
+    showTabBar: true,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -41285,7 +41430,8 @@ function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("home"),
+    showTabBar: true
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -41339,7 +41485,8 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId)
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId),
+    showTabBar: true
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
@@ -41399,7 +41546,8 @@ function CricketScorer() {
     onAddPoolPlayers: handleAddPoolPlayers,
     onUpdatePoolPlayer: handleUpdatePoolPlayer,
     onRemovePoolPlayer: handleRemovePoolPlayer,
-    onCreateTeamFromPool: handleCreateTeamFromPool
+    onCreateTeamFromPool: handleCreateTeamFromPool,
+    showTabBar: true
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -41436,7 +41584,8 @@ function CricketScorer() {
     pinnedClubIds: pinnedClubIds,
     onTogglePinClub: handleTogglePinClub,
     pinnedFederationIds: pinnedFederationIds,
-    onTogglePinFederation: handleTogglePinFederation
+    onTogglePinFederation: handleTogglePinFederation,
+    showTabBar: true
   })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "records",
     direction: navDirection
@@ -41657,7 +41806,10 @@ function CricketScorer() {
       color: COLORS.inkSoft,
       fontSize: 13
     }
-  }, "Opening match\u2026"))));
+  }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
+    active: screen,
+    onSelect: setScreen
+  }));
 }
 // GENERATED-FN-END: CricketScorer
 // GENERATED-FN-START: ErrorBoundary

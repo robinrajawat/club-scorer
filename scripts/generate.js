@@ -173,6 +173,7 @@ const FUNCTIONS = [
   { name: "Hash", file: "src/components/icons.js" },
   { name: "Heart", file: "src/components/icons.js" },
   { name: "HelpCircle", file: "src/components/icons.js" },
+  { name: "House", file: "src/components/icons.js" },
   { name: "InboxIcon", file: "src/components/icons.js" },
   { name: "Info", file: "src/components/icons.js" },
   { name: "LogIn", file: "src/components/icons.js" },
@@ -185,6 +186,7 @@ const FUNCTIONS = [
   { name: "Pin", file: "src/components/icons.js" },
   { name: "Plus", file: "src/components/icons.js" },
   { name: "Printer", file: "src/components/icons.js" },
+  { name: "Radio", file: "src/components/icons.js" },
   { name: "Share", file: "src/components/icons.js" },
   { name: "Shield", file: "src/components/icons.js" },
   { name: "Sun", file: "src/components/icons.js" },
@@ -281,6 +283,9 @@ const FUNCTIONS = [
   { name: "TeamsScreen", file: "src/components/teamsScreen.js" },
   { name: "HomeScreen", file: "src/components/homeScreen.js" },
   { name: "LiveScreen", file: "src/components/liveScreen.js" },
+  { name: "TABS", file: "src/components/tabBar.js" },
+  { name: "TAB_BAR_HEIGHT", file: "src/components/tabBar.js" },
+  { name: "TabBar", file: "src/components/tabBar.js" },
   { name: "SETUP_PAGE_LABELS", file: "src/components/setupScreen.js" },
   { name: "SetupScreen", file: "src/components/setupScreen.js" },
   { name: "TeamEditScreen", file: "src/components/teamEditScreen.js" },
@@ -290,6 +295,7 @@ const FUNCTIONS = [
   { name: "FONT_LINK", file: "src/components/cricketScorer.js" },
   { name: "GLOBAL_CSS", file: "src/components/cricketScorer.js" },
   { name: "SCREEN_DEPTH", file: "src/components/cricketScorer.js" },
+  { name: "TAB_BAR_SCREENS", file: "src/components/cricketScorer.js" },
   { name: "CricketScorer", file: "src/components/cricketScorer.js" },
   { name: "ErrorBoundary", file: "src/components/errorBoundary.js" }
 ];

@@ -8,6 +8,7 @@ import { MoveTeamMenu } from "./shareMenus.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { isClubOwner } from "../core/miscHelpers.js";
+import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // "My Teams" screen: every team this person can score for, merged across their personal teams and
 // every club they belong to (with a source chip picker once there's more than one source), plus
@@ -33,7 +34,8 @@ export function MyTeamsScreen({
   onDeleteTeam,
   onMoveTeam,
   pinnedClubIds = [],
-  onTogglePinClub
+  onTogglePinClub,
+  showTabBar = false
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
@@ -67,7 +69,12 @@ export function MyTeamsScreen({
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }

@@ -10,6 +10,7 @@ import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
 import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
 import { nonStandardRulesText, buildMapsUrl } from "../core/shareAndFormat.js";
+import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // The "Cups" list: club/federation source chips, create-tournament (with optional group-stage
 // split) and create-series forms, a status/search filter over the list, and each tournament as a
@@ -201,7 +202,8 @@ export function TournamentsScreen({
   pinnedClubIds = [],
   onTogglePinClub,
   pinnedFederationIds = [],
-  onTogglePinFederation
+  onTogglePinFederation,
+  showTabBar = false
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -694,7 +696,12 @@ export function TournamentsScreen({
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }
