@@ -26,7 +26,7 @@ export const TABS = [
 // bug class that history already hit once with the scoring pad.
 export const TAB_BAR_HEIGHT = 58;
 
-export function TabBar({ active, onSelect }) {
+export function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
   return /*#__PURE__*/React.createElement("nav", {
     "aria-label": "Primary",
     style: {
@@ -54,7 +54,7 @@ export function TabBar({ active, onSelect }) {
       type: "button",
       onClick: () => onSelect(screen),
       className: "cs-btn",
-      "aria-label": label,
+      "aria-label": screen === "home" && homeBadgeCount > 0 ? `${label}, ${homeBadgeCount} pending` : label,
       "aria-current": isActive ? "page" : undefined,
       style: {
         flex: 1,
@@ -67,13 +67,37 @@ export function TabBar({ active, onSelect }) {
         border: "none",
         cursor: "pointer"
       }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: { position: "relative", display: "inline-flex" }
     }, /*#__PURE__*/React.createElement(Icon, {
       size: 21,
       style: {
         color: isActive ? COLORS.pitch : COLORS.inkSoft,
         strokeWidth: isActive ? "2.4" : "2"
       }
-    }), /*#__PURE__*/React.createElement("span", {
+    }), screen === "home" && homeBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        position: "absolute",
+        top: -3,
+        right: -6,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+        minWidth: 13,
+        height: 13,
+        padding: "0 3px",
+        borderRadius: 7,
+        background: COLORS.ballFixed,
+        color: "#fff",
+        fontFamily: "'Inter'",
+        fontSize: 9,
+        fontWeight: 700,
+        lineHeight: 1,
+        boxShadow: `0 0 0 1.5px ${COLORS.cream}`
+      }
+    }, homeBadgeCount > 9 ? "9+" : homeBadgeCount)), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 10.5,
