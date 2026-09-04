@@ -1858,6 +1858,20 @@ async function refreshTournamentStandingsLive(tournamentId) {
     console.error("[refreshTournamentStandingsLive] failed — tournamentId:", tournamentId, "code:", e.code, "message:", e.message);
   }
 }
+// Called when a tournament is switched to private after already being live in the Home screen's
+// "Live tournaments" feed (see handleToggleTournamentVisibility in cricketScorer.js) — an
+// immediate removal, not just skipping the next write, so it disappears from discovery right
+// away rather than lingering until its TTL catches up. Deliberately doesn't touch
+// /tournamentMatches/{id} or /tournamentViews/{code}: going private only opts out of discovery,
+// same as a private match — a share/view link a person already generated keeps working exactly
+// as before (see the Data & privacy section in the About screen).
+async function removeTournamentFromLiveFeed(tournamentId) {
+  try {
+    await db.collection("liveTournaments").doc(tournamentId).delete();
+  } catch (e) {
+    console.error("[removeTournamentFromLiveFeed] failed — tournamentId:", tournamentId, "code:", e.code, "message:", e.message);
+  }
+}
 
 // ---------- Storage helpers ----------
 // Three tiers, chosen per-match / per-call:
@@ -2446,10 +2460,11 @@ async function saveMatch(match) {
   // pure local-only match (no signed-in account, no shareCode) even though nothing technically
   // stops it from reaching Firestore here too \u2014 "Continue without an account" already promises
   // matches stay on this device only, and this feature shouldn't quietly break that promise.
-  // Skipped entirely for a match marked private (see SetupScreen's Visibility toggle and a
-  // tournament's own private flag, which a fixture inherits by default) \u2014 that match simply never
-  // reaches this collection, live or after completion, the same "never written, not just hidden"
-  // approach /liveMatches itself already uses for local-only matches.
+  // Skipped entirely for a match marked private (see SetupScreen's Visibility toggle, MatchScreen's
+  // own "This match" menu -- the same toggle, now editable after creation too -- and a tournament's
+  // own private flag, which a fixture inherits by default) \u2014 that match simply never reaches this
+  // collection, live or after completion, the same "never written, not just hidden" approach
+  // /liveMatches itself already uses for local-only matches.
   // A completed match keeps its doc rather than being deleted, so it stays findable for
   // RECENT_MATCH_RETENTION_DAYS after the game ends \u2014 an in-progress match keeps the much shorter
   // LIVE_MATCH_FEED_TTL_DAYS instead, as an abandoned-mid-game safety net rather than a real
@@ -2467,6 +2482,17 @@ async function saveMatch(match) {
       // working either way. Worst case a match lingers in (or is briefly missing from) the Home
       // screen's Live feed until the next save reconciles it.
       console.error("[saveMatch] live-match feed mirror write failed \u2014 id:", match.id, "code:", e.code, "message:", e.message);
+    }
+  } else if (!result.structuralError && match.private) {
+    // Actively removes it rather than just skipping the write above \u2014 otherwise flipping an
+    // already-live match to private (MatchScreen's Visibility toggle) would leave its stale
+    // /liveMatches doc from before the flip sitting there, still discoverable, until its TTL
+    // eventually caught up. Harmless no-op if it was never written here to begin with (a match
+    // that started private, or a pure local-only match).
+    try {
+      await db.collection("liveMatches").doc(match.id).delete();
+    } catch (e) {
+      console.error("[saveMatch] live-match feed removal failed \u2014 id:", match.id, "code:", e.code, "message:", e.message);
     }
   }
   // Best-effort live standings refresh: any client that just saved a COMPLETED match tagged with
@@ -25409,6 +25435,7 @@ function TournamentDetailScreen({
   onStartMatch,
   onStartFixtureMatch,
   onUpdateTournament,
+  onToggleVisibility,
   onOpenMatch,
   onDeleteTournament,
   onOpenRecords,
@@ -25684,7 +25711,43 @@ function TournamentDetailScreen({
     }
     // Explicitly framed as the tournament's DEFAULT, not "the" venue -- a fixture that sets its
     // own venue still overrides this one (see fixtureRow.js's `fixture.venue || tournament.venue`).
-  }, "\ud83d\udccd Add a default venue for every fixture")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, "\ud83d\udccd Add a default venue for every fixture")), canManage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18,
+      marginTop: -8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !tournament.private,
+    onChange: () => onToggleVisibility && onToggleVisibility(tournament),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginTop: 4
+    }
+    // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
+    // wording, now editable after the fact too.
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: tournament.venue || "",
     initialLat: tournament.venueLat,
     initialLng: tournament.venueLng,
@@ -35021,6 +35084,19 @@ function MatchScreen({
   // threshold varies by competition and isn't something this app models) -- this is entirely the
   // scorer's own judgment call, same reasoning as endInningEarly already being a judgment call
   // rather than something the app tries to infer on its own.
+  // Flips this match's own Visibility (the same flag SetupScreen's Review page collects before the
+  // match starts -- see its own VisibilitySwitch), now editable after the fact too. Just flips the
+  // field and re-saves through the normal queueSave -> saveMatch path -- saveMatch itself handles
+  // both directions of the /liveMatches Home-feed mirror (writes it fresh when now public, deletes
+  // it immediately when now private), so nothing further is needed here.
+  function toggleVisibility() {
+    const updated = {
+      ...match,
+      private: !match.private
+    };
+    setMatch(updated);
+    queueSave(updated);
+  }
   function declareNoResult() {
     pushHistory();
     const updated = {
@@ -35622,7 +35698,43 @@ function MatchScreen({
       color: COLORS.inkSoft,
       marginBottom: 14
     }
-  }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), isChasing && /*#__PURE__*/React.createElement("button", {
+  }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !match.private,
+    onChange: pub => toggleVisibility(),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, match.private ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "2px 0 6px"
+    }
+  }), isChasing && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       setShowMatchMenu(false);
@@ -40450,6 +40562,31 @@ function CricketScorer() {
       ok: true
     };
   }
+  // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
+  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, then syncs
+  // the discoverability side effect handleUpdateTournament itself has no reason to know about:
+  // going private removes it from /liveTournaments immediately (removeTournamentFromLiveFeed),
+  // rather than waiting for its TTL to catch up; going public republishes it right away IF it's
+  // already shared (has a shareCode) -- refreshTournamentStandingsLive both recomputes standings
+  // and writes /liveTournaments in one call, self-healing even if this tournament's /tournamentViews
+  // snapshot had gone stale while it was private. A tournament that's public but never shared has
+  // no shareCode yet, so there's nothing to (re)publish -- sharing itself stays a separate,
+  // deliberate action (TournamentShareModal), never implied by a Visibility flip alone.
+  async function handleToggleTournamentVisibility(tournament) {
+    const updated = {
+      ...tournament,
+      private: !tournament.private
+    };
+    const result = await handleUpdateTournament(updated);
+    if (result.ok) {
+      if (updated.private) {
+        removeTournamentFromLiveFeed(updated.id);
+      } else if (updated.shareCode) {
+        refreshTournamentStandingsLive(updated.id);
+      }
+    }
+    return result;
+  }
   // Saves an updated tournament doc back to whichever of the three storage locations it actually
   // lives in, addressed by the tournament's own _clubId/_federationId tag (allTournamentsFlat
   // attaches this to every entry) rather than assuming which one's "currently active" -- shared by
@@ -40932,6 +41069,7 @@ function CricketScorer() {
     onStartMatch: handleStartMatchInTournament,
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateTournament: handleUpdateTournament,
+    onToggleVisibility: handleToggleTournamentVisibility,
     onOpenMatch: id => {
       openMatch(id);
     },

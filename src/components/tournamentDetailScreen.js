@@ -4,6 +4,7 @@ import { CalendarClock, Cap, ChevronLeft, Download, Pencil, Plus, Share, Trophy 
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { StandingsTable } from "./tableAtoms.js";
+import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { ExportTournamentPdfButton } from "./exportButtons.js";
 import { TournamentPrintReport } from "./scorecard.js";
 import { TournamentShareModal, QualificationCalculatorModal } from "./miscModals.js";
@@ -29,6 +30,7 @@ export function TournamentDetailScreen({
   onStartMatch,
   onStartFixtureMatch,
   onUpdateTournament,
+  onToggleVisibility,
   onOpenMatch,
   onDeleteTournament,
   onOpenRecords,
@@ -304,7 +306,43 @@ export function TournamentDetailScreen({
     }
     // Explicitly framed as the tournament's DEFAULT, not "the" venue -- a fixture that sets its
     // own venue still overrides this one (see fixtureRow.js's `fixture.venue || tournament.venue`).
-  }, "\ud83d\udccd Add a default venue for every fixture")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, "\ud83d\udccd Add a default venue for every fixture")), canManage && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18,
+      marginTop: -8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !tournament.private,
+    onChange: () => onToggleVisibility && onToggleVisibility(tournament),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginTop: 4
+    }
+    // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
+    // wording, now editable after the fact too.
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: tournament.venue || "",
     initialLat: tournament.venueLat,
     initialLng: tournament.venueLng,
