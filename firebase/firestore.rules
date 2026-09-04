@@ -183,6 +183,25 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Public "Live tournaments" home-feed mirror — same shape/trust model/reasoning as /liveMatches
+    // above, one tier down: every currently-shared, non-private tournament, so the Home screen's
+    // "Live tournaments" strip can be found without a link, same as "Live now" already does for
+    // matches. Written by shareTournament (manual refresh) and refreshTournamentStandingsLive (live
+    // auto-refresh) in index.html whenever a non-private tournament's standings are (re)published;
+    // deleted by stopSharingTournament/deleteTournamentShareData. Deliberately just display fields
+    // (name, shareCode, team count) rather than the full standings table — tapping a card opens
+    // FollowTournamentScreen by shareCode, which fetches /tournamentViews/{code} itself; duplicating
+    // that here would be one more place for the two to drift apart, for no reader who needs it.
+    //
+    // `list: true` — being listable is this collection's entire purpose, same as /liveMatches.
+    // ---------------------------------------------------------------------
+    match /liveTournaments/{tournamentId} {
+      allow get: if true;
+      allow list: if true;
+      allow write: if true;
+    }
+
+    // ---------------------------------------------------------------------
     // Availability polls — same open-by-code, bearer-capability trust model as /sharedMatches:
     // a teammate responding needs no account, only the link (see createAvailabilityPoll/
     // submitPollResponse in index.html). What's different from /sharedMatches is WHO can create

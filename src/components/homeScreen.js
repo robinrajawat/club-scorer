@@ -86,6 +86,8 @@ export function HomeScreen({
   onGetViewCode,
   liveMatches = [],
   onOpenLiveMatch,
+  liveTournaments = [],
+  onOpenLiveTournament,
   onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint
@@ -756,7 +758,83 @@ function renderMatchCard(m, i, {
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, matchScoreLine(m)))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }, matchScoreLine(m)))))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: COLORS.live,
+      boxShadow: "0 0 0 3px rgba(230,84,75,0.18)",
+      animation: "cs-pulse 1.6s ease infinite",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Live tournaments")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      overflowX: "auto",
+      paddingBottom: 2,
+      marginLeft: -20,
+      marginRight: -20,
+      paddingLeft: 20,
+      paddingRight: 20
+    }
+  }, liveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.tournamentId,
+    type: "button",
+    onClick: () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode),
+    className: "cs-btn",
+    style: {
+      flexShrink: 0,
+      width: 190,
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderRadius: 14,
+      padding: "12px 14px",
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, t.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginTop: 3
+    }
+  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
