@@ -509,6 +509,46 @@ workflow (all work happens on feature branches pushed straight to origin), the s
 fetch origin main && git reset --hard origin/main`, not `merge` — worth remembering before
 mistaking this for something actually wrong with the remote.
 
+**2026-09-04 (continued) — a Trophy badge on "Live now" for tournament matches, a corrected Terms
+of service icon, and tournament auto-publish (PRs #134, #135, and this one):**
+
+- **PR #134** — the About screen's new Terms of service section (PR #131) reused `BookOpen`, which
+  already means "Records" (career stats) on three other screens (`clubPanel.js`,
+  `federationsPanel.js`, `fixturesSection.js`'s "Record Book") — a real icon-meaning collision, not
+  a stylistic nit. Added a proper `FileText` glyph instead (registered in `scripts/generate.js`'s
+  `FUNCTIONS` list like every other spliced icon) and swapped it in.
+- **PR #135** — the Home screen's "Live now" match cards now show a small gold Trophy badge when
+  `match.tournamentId` is set, same icon already used next to a tournament's name in the saved-
+  matches list. Icon only, no name: `tournamentNameById` only knows the *viewer's own* tournaments,
+  but "Live now" spans every match app-wide.
+- **This change — closing the remaining friction gap between matches and tournaments.** Even after
+  the 2026-09-04 (earlier today) work made a shared tournament's standings refresh automatically,
+  a tournament itself only became discoverable (in `/liveTournaments`, the Home screen's "Live
+  tournaments" strip) after its owner explicitly tapped "Share" once — a real asymmetry with
+  matches, where a non-private match is live in "Live now" the instant it's saved, no extra step.
+  `maybeAutoPublishTournament` (`cricketScorer.js`) closes this: called after every successful
+  tournament save (creation and every edit, via `handleCreateTournament`/`handleUpdateTournament`)
+  except a series (`kind: "series"` — a series has never collected a Visibility choice at
+  creation, so defaulting it into auto-publish would silently make a "private by omission" series
+  discoverable; left alone deliberately). For a non-private tournament with no `shareCode` yet, it
+  mints one and publishes for the first time — the exact work `shareTournament` (the "Share"
+  button) always did, just triggered automatically instead of by a tap, computed against an empty
+  match list (correct for a just-created tournament; self-heals to the real standings via the next
+  `refreshTournamentStandingsLive` once any match completes). For one already shared, it just
+  triggers a fresh `refreshTournamentStandingsLive`. `handleToggleTournamentVisibility` was
+  simplified to rely on this rather than duplicating the "go public" logic itself — it now only
+  handles the one thing auto-publish has no reason to know about: going private calls
+  `removeTournamentFromLiveFeed` immediately, rather than waiting for its TTL.
+
+  Updated the in-app copy that described the old manual-share model as still current: the About
+  screen's "Data & privacy" section (a non-private tournament is now live "with nothing extra to
+  turn on"), and `TournamentShareModal`'s own text/button label (it no longer says "It's a
+  snapshot, not live: hit Refresh" — the button is now "Refresh now", for forcing an update on the
+  spot rather than creating one from nothing). README's "Data & privacy" section updated the same
+  way. `firebase/firestore.rules` is unchanged by this PR — `/liveTournaments`,
+  `/tournamentMatches/{id}`, and `/tournamentViews/{code}` were already open-write from the
+  2026-09-04 (earlier) work, so no new rules paste is needed for this one.
+
 **Open items handed off, unresolved as of 2026-09-02 (still true as of 2026-09-04 — untouched this session):**
 - **30-minute escalating time-penalty rule** — still open from the 2026-09-01 entry above; not
   touched in any session since. Distinct from the (already-shipped) plain "time cap per innings"

@@ -101,6 +101,13 @@ async function render(url) {
   globalThis.loadLiveMatches = () => () => {};
   // Same reasoning as loadLiveMatches just above, for the "Live tournaments" feed subscription.
   globalThis.loadLiveTournaments = () => () => {};
+  // Fire-and-forget auto-publish (maybeAutoPublishTournament) reaches these on every non-private
+  // tournament creation/edit now, not just an explicit "Share" tap -- stubbed here so a test that
+  // creates or edits a tournament doesn't hit an unstubbed bare global and produce an unhandled
+  // rejection completely unrelated to what that test is actually checking.
+  globalThis.shareTournament = () => Promise.resolve({ ok: true, code: "TESTCODE" });
+  globalThis.refreshTournamentStandingsLive = () => Promise.resolve();
+  globalThis.removeTournamentFromLiveFeed = () => Promise.resolve();
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
   globalThis.loadMyPlayerProfile = () => Promise.resolve(null);
@@ -317,6 +324,61 @@ test("CricketScorer: a venue set while creating a tournament is actually saved o
   assert.equal(created.venue, "Riverside Oval");
   assert.equal(created.venueLat, 12.34);
   assert.equal(created.venueLng, 56.78);
+});
+
+// A non-private match is discoverable in Live now the instant it's saved -- a tournament used to
+// stay invisible until its owner explicitly tapped "Share" once. maybeAutoPublishTournament closes
+// that gap: creating a non-private tournament auto-mints a share code and publishes it, the same
+// work "Share" always did, without waiting for that tap.
+test("CricketScorer: creating a non-private tournament auto-publishes it (mints a share code)", async () => {
+  let shared = null;
+  let saved = null;
+  const inst = await render();
+  // Set after render(), which stubs shareTournament to its own default -- this override wouldn't
+  // stick if set before, since render() re-stubs it on every call (see its own comment).
+  globalThis.saveTournaments = list => { saved = list; return Promise.resolve(); };
+  globalThis.shareTournament = (tournament, standings) => {
+    shared = { tournament, standings };
+    return Promise.resolve({ ok: true, code: "AUTOCODE" });
+  };
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTournaments(); });
+  const tournamentsScreen = inst.root.findByType(TournamentsScreen);
+  await act(async () => {
+    await tournamentsScreen.props.onCreateTournament(
+      "Summer Cup", ["Riverside CC", "Oakwood CC"], null, null, null, null, null, false
+    );
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(shared, "shareTournament should have been called automatically");
+  assert.equal(shared.tournament.name, "Summer Cup");
+  assert.equal(shared.standings.length, 2, "standings computed for both teams, even with zero matches yet");
+  const created = saved.find(t => t.name === "Summer Cup");
+  assert.equal(created.shareCode, "AUTOCODE", "the minted code is persisted back onto the tournament");
+});
+
+test("CricketScorer: creating a PRIVATE tournament does not auto-publish it", async () => {
+  let shared = null;
+  const inst = await render();
+  globalThis.saveTournaments = () => Promise.resolve();
+  globalThis.shareTournament = (tournament, standings) => {
+    shared = { tournament, standings };
+    return Promise.resolve({ ok: true, code: "AUTOCODE" });
+  };
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTournaments(); });
+  const tournamentsScreen = inst.root.findByType(TournamentsScreen);
+  await act(async () => {
+    await tournamentsScreen.props.onCreateTournament(
+      "Private Cup", ["Riverside CC", "Oakwood CC"], null, null, null, null, null, true
+    );
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(shared, null, "a private tournament is never auto-published");
 });
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {

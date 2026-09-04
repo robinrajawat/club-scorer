@@ -12731,7 +12731,7 @@ function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed and app-wide search \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 and stays findable there for a few days after it ends, not just while it's live. Mark a match (or a whole tournament, which its matches inherit by default) private in Setup to keep it out of both, live or after completion; a share or view code you generate yourself still works exactly the same either way. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed and app-wide search \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 and stays findable there for a few days after it ends, not just while it's live. A non-private tournament works the same way: its standings and fixtures show up in the Home screen's Live tournaments strip and refresh themselves automatically as results come in, with nothing extra to turn on \u2014 there's no separate \u201cshare\u201d step anymore. Mark a match (or a whole tournament, which its matches inherit by default) private in Setup to keep it out of these feeds, live or after completion; a share or view link you generate yourself still works exactly the same either way. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       fontFamily: "'Inter'",
@@ -31223,7 +31223,7 @@ function TournamentShareModal({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It's a snapshot, not live: hit Refresh after new results come in. A link nobody's refreshed in a long while may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It updates itself automatically as results come in, so there's usually nothing to do here beyond copying the link below \u2014 \"Refresh now\" is only for forcing an update on the spot. A link that's gone unused for a long stretch may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -31275,7 +31275,7 @@ function TournamentShareModal({
     style: {
       flex: 1
     }
-  }, busy ? "\u2026" : "Refresh snapshot"), /*#__PURE__*/React.createElement(Btn, {
+  }, busy ? "\u2026" : "Refresh now"), /*#__PURE__*/React.createElement(Btn, {
     variant: "danger",
     onClick: handleStop,
     disabled: busy,
@@ -40435,6 +40435,16 @@ function CricketScorer() {
           ...prev,
           [activeTournamentFederationId]: [...(prev[activeTournamentFederationId] || []), t]
         }));
+        // Explicit persist callback rather than routing through handleUpdateTournament -- this
+        // tournament may not be the one `viewingTournament*` state points at yet, so that path
+        // isn't safe to assume here. Re-persists to the SAME federation this branch just saved to.
+        maybeAutoPublishTournament(t, async t2 => {
+          const r = await saveFederationTournament(activeTournamentFederationId, t2);
+          if (r.ok) setFederationTournamentsById(prev => ({
+            ...prev,
+            [activeTournamentFederationId]: (prev[activeTournamentFederationId] || []).map(x => x.id === t2.id ? t2 : x)
+          }));
+        });
       }
       return {
         ...result,
@@ -40448,6 +40458,13 @@ function CricketScorer() {
           ...prev,
           [activeTournamentClubId]: [...(prev[activeTournamentClubId] || []), t]
         }));
+        maybeAutoPublishTournament(t, async t2 => {
+          const r = await saveClubTournament(activeTournamentClubId, t2);
+          if (r.ok) setClubTournamentsById(prev => ({
+            ...prev,
+            [activeTournamentClubId]: (prev[activeTournamentClubId] || []).map(x => x.id === t2.id ? t2 : x)
+          }));
+        });
       }
       return {
         ...result,
@@ -40457,6 +40474,11 @@ function CricketScorer() {
     const updated = [...tournaments, t];
     setTournaments(updated);
     await saveTournaments(updated);
+    maybeAutoPublishTournament(t, async t2 => {
+      const list = updated.map(x => x.id === t2.id ? t2 : x);
+      setTournaments(list);
+      await saveTournaments(list);
+    });
     return {
       ok: true,
       tournament: t
@@ -40551,7 +40573,37 @@ function CricketScorer() {
   // deleted, teams, name, ...) — single choke point so every fixture action doesn't need its own
   // save-plus-state-sync logic, and so it's automatically correct about which source (personal, a
   // specific club, or a specific federation) the tournament actually lives in.
-  async function handleUpdateTournament(updated) {
+  // Closes the friction gap between matches and tournaments: a non-private MATCH is discoverable
+  // in the Home screen's Live now feed the instant it's saved, no extra step -- a non-private
+  // TOURNAMENT used to stay invisible until its owner explicitly tapped "Share" once. Called after
+  // every successful tournament save (creation and every edit) except a series, which has never
+  // collected a Visibility choice at creation -- defaulting it into auto-publish here would
+  // silently make a "private by omission" series discoverable, so it's left alone. `persist` is
+  // however THIS caller already knows to save an update back to the right storage tier (club/
+  // federation/personal) -- kept as an explicit callback rather than reaching for ambient
+  // `viewingTournament*` state, which isn't guaranteed to already point at a just-created
+  // tournament by the time this (fire-and-forget, awaited-later) call resolves.
+  async function maybeAutoPublishTournament(tournament, persist) {
+    if (tournament.kind === "series" || tournament.private) return;
+    if (tournament.shareCode) {
+      refreshTournamentStandingsLive(tournament.id);
+      return;
+    }
+    // Never shared before -- mint a code and publish for the first time, the same work
+    // TournamentShareModal's "Share" button does, just triggered automatically instead of by a
+    // tap. Empty match list is correct here: a tournament this is reachable for has either just
+    // been created (genuinely zero matches) or is being auto-healed after an edit with no
+    // shareCode yet -- either way, the very next refreshTournamentStandingsLive (triggered by any
+    // match completing) recomputes the real standings from scratch once a shareCode exists.
+    const result = await shareTournament(tournament, computeStandings(tournament, []));
+    if (result.ok) {
+      persist({
+        ...tournament,
+        shareCode: result.code
+      });
+    }
+  }
+  async function handleUpdateTournament(updated, skipAutoPublish = false) {
     const clubId = viewingTournamentClubId;
     const federationId = viewingTournamentFederationId;
     if (federationId) {
@@ -40562,6 +40614,7 @@ function CricketScorer() {
           [federationId]: (prev[federationId] || []).map(t => t.id === updated.id ? updated : t)
         }));
         setViewingTournament(updated);
+        if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
       }
       return result;
     }
@@ -40573,6 +40626,7 @@ function CricketScorer() {
           [clubId]: (prev[clubId] || []).map(t => t.id === updated.id ? updated : t)
         }));
         setViewingTournament(updated);
+        if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
       }
       return result;
     }
@@ -40580,32 +40634,26 @@ function CricketScorer() {
     setTournaments(updatedList);
     await saveTournaments(updatedList);
     setViewingTournament(updated);
+    if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
     return {
       ok: true
     };
   }
   // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
-  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, then syncs
-  // the discoverability side effect handleUpdateTournament itself has no reason to know about:
-  // going private removes it from /liveTournaments immediately (removeTournamentFromLiveFeed),
-  // rather than waiting for its TTL to catch up; going public republishes it right away IF it's
-  // already shared (has a shareCode) -- refreshTournamentStandingsLive both recomputes standings
-  // and writes /liveTournaments in one call, self-healing even if this tournament's /tournamentViews
-  // snapshot had gone stale while it was private. A tournament that's public but never shared has
-  // no shareCode yet, so there's nothing to (re)publish -- sharing itself stays a separate,
-  // deliberate action (TournamentShareModal), never implied by a Visibility flip alone.
+  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, which on its
+  // own now handles the "going public" side (maybeAutoPublishTournament -- mints a share code and
+  // publishes for the first time if this tournament was never shared, or just republishes if it
+  // was). All this function needs to add is the one thing handleUpdateTournament has no reason to
+  // know about: going private removes it from /liveTournaments immediately
+  // (removeTournamentFromLiveFeed), rather than waiting for its TTL to catch up.
   async function handleToggleTournamentVisibility(tournament) {
     const updated = {
       ...tournament,
       private: !tournament.private
     };
     const result = await handleUpdateTournament(updated);
-    if (result.ok) {
-      if (updated.private) {
-        removeTournamentFromLiveFeed(updated.id);
-      } else if (updated.shareCode) {
-        refreshTournamentStandingsLive(updated.id);
-      }
+    if (result.ok && updated.private) {
+      removeTournamentFromLiveFeed(updated.id);
     }
     return result;
   }
