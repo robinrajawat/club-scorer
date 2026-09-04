@@ -235,16 +235,22 @@ export function CricketScorer() {
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
-  // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
-  // (a tap), search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch below.
-  // Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself treats them
-  // as equivalent.
+  // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
+  // the Live tab, search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch
+  // below. Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself
+  // treats them as equivalent.
   const [followMatchId, setFollowMatchId] = useState(initialFollowMatchId);
   // Set instead of relying on initialTournamentFollowCode alone when FollowTournamentScreen is
-  // reached from the Home screen's "Live tournaments" feed (a tap) rather than a "?tournament="
-  // link -- see openLiveTournament/exitFollowTournament below. Starts at the URL-driven value so a
-  // direct link still works exactly as before.
+  // reached from the Live tab (a tap) rather than a "?tournament=" link -- see
+  // openLiveTournament/exitFollowTournament below. Starts at the URL-driven value so a direct link
+  // still works exactly as before.
   const [tournamentFollowCode, setTournamentFollowCode] = useState(initialTournamentFollowCode);
+  // Which screen to return to on exiting FollowScreen/FollowTournamentScreen -- both Home (recent
+  // match row) and the Live tab can lead there, and "Back"/"Done" should land wherever the person
+  // actually came from rather than always dumping them on Home. Only ever "home" or "live"; a
+  // "?follow="/"?tournament=" link opens the screen directly with no prior screen to return to, so
+  // the "home" default is correct there too.
+  const [followReturnScreen, setFollowReturnScreen] = useState("home");
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -1377,20 +1383,22 @@ export function CricketScorer() {
     }
     setFollowCode(null);
     setFollowMatchId(null);
-    setScreen("home");
+    setScreen(followReturnScreen);
   }
-  // Tapping a card in the Home screen's "Live now" feed or an app-wide search result -- same
+  // Tapping a card in Home's recent-match row, the Live tab, or an app-wide search result -- same
   // destination screen as a "?follow=" or "?followMatch=" link (exitFollow above clears both
   // params, so every path leaves cleanly), just reached by matchId instead of a code, with no URL
   // param to set here since a tap (unlike a link) never touches the address bar to begin with.
   function openLiveMatch(id) {
+    setFollowReturnScreen(screen === "live" ? "live" : "home");
     setFollowMatchId(id);
     setScreen("follow");
   }
-  // Same reasoning as openLiveMatch just above, for the Home screen's "Live tournaments" feed --
-  // reached by shareCode rather than a matchId since that's what FollowTournamentScreen has always
-  // taken (the same code a "?tournament=" link carries), no separate matchId-shaped path needed.
+  // Same reasoning as openLiveMatch just above, for the Live tab's tournaments feed -- reached by
+  // shareCode rather than a matchId since that's what FollowTournamentScreen has always taken (the
+  // same code a "?tournament=" link carries), no separate matchId-shaped path needed.
   function openLiveTournament(code) {
+    setFollowReturnScreen(screen === "live" ? "live" : "home");
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
@@ -1403,7 +1411,7 @@ export function CricketScorer() {
       /* noop — worst case the param stays in the address bar */
     }
     setTournamentFollowCode(null);
-    setScreen("home");
+    setScreen(followReturnScreen);
   }
   function exitPoll() {
     try {

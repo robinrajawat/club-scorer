@@ -367,7 +367,7 @@ function renderMatchCard(m, i, {
   }))));
   }
   // A live/recent match found via app-wide search, opening straight into the same read-only
-  // FollowScreen a "Live now" card does (see onOpenLiveMatch) -- there's no owner-only affordance
+  // FollowScreen a Live tab card does (see onOpenLiveMatch) -- there's no owner-only affordance
   // here (no swipe-to-delete, no ShareMenu) since this is someone else's match, found by search,
   // not one of this account's own.
   function renderRecentMatchRow(m) {
