@@ -2,11 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { LoadingBallIllustration } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
-import { BallBadge } from "./matchDisplayAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
-import { Share, Check } from "./icons.js";
+import { Share, Check, Info } from "./icons.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
-import { matchResultText, matchScoreLine, buildFollowUrl, buildFollowMatchUrl } from "../core/shareAndFormat.js";
+import { matchResultText, matchScoreLine, buildFollowUrl, buildFollowMatchUrl, tossText, nonStandardRulesText, umpiresText } from "../core/shareAndFormat.js";
 import { lastBallCommentary } from "../core/scoringEngine.js";
 
 // Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
@@ -40,6 +39,11 @@ export function FollowScreen({
   // Brief "Copied!" confirmation after the Share button falls back to clipboard (no
   // navigator.share on this browser) -- see handleShare below.
   const [linkCopied, setLinkCopied] = useState(false);
+  // Toss/house-rules/umpires now live behind a header info icon instead of a "Match details"
+  // disclosure sitting in the page flow between the header and the scorecard -- see the Modal
+  // near the bottom of this render. MatchStatsPanel is told not to render its own copy of these
+  // (or the venue line, shown in the header here instead) when showOvers is true; see scorecard.js.
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
   // Wall-clock time a real snapshot last actually arrived (not just re-rendered) -- feeds the
   // "might be stale" hint below. `now` exists purely to force a re-render on a timer so that hint
   // can appear/disappear on its own even while no new snapshot ever arrives (a dropped connection
@@ -320,6 +324,13 @@ export function FollowScreen({
   const resultText = matchResultText(match);
   const inningsBreak = match.awaitingSecondInningsSetup && match.status !== "complete";
   const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
+  // Same three fields MatchInfoFold already surfaces on the scorer's own Scorecard overlay --
+  // reused directly here rather than through that component, since this needs an icon-triggered
+  // Modal instead of an inline collapsible.
+  const tossInfo = tossText(match.toss);
+  const houseRules = nonStandardRulesText(match.rules);
+  const umpires = umpiresText(match);
+  const hasMatchDetails = !!(tossInfo || houseRules || umpires);
   // Several minutes with no snapshot at all, on a match that isn't finished, is unusual enough to
   // be worth a gentle nudge -- normal gaps between overs/wickets/drinks breaks are nowhere near
   // this long. Never shown once the match is complete: no further update is expected anyway, so
@@ -453,7 +464,38 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, match.teamA, " vs ", match.teamB), (resultText || inningsBreakText) && /*#__PURE__*/React.createElement("div", {
+  }, match.teamA, " vs ", match.teamB), (match.venue || hasMatchDetails) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      maxWidth: 560,
+      margin: "3px auto 0"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85
+    }
+  }, match.venue && `📍 ${match.venue}`), hasMatchDetails && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowMatchDetails(true),
+    className: "cs-btn",
+    "aria-label": "Match details",
+    style: {
+      background: "none",
+      border: "none",
+      padding: 2,
+      display: "flex",
+      color: COLORS.creamFixed,
+      opacity: 0.85,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 15
+  }))), (resultText || inningsBreakText) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -462,97 +504,32 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 560,
-      margin: "14px auto 0",
-      padding: "16px 16px 0"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: "12px 16px",
-      textAlign: "center",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)",
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft
-    }
-  }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      // Same kind-color grouping MatchScreen's own commit()-driven commentary line uses -- this
-      // now sits on the same cream/surface background that one does (moved out of the sticky
-      // header below, which otherwise grew without bound every time this had something to say,
-      // permanently eating into the scorecard's own space since the header stays pinned while
-      // scrolling), so there's no more dark-background contrast reason to deviate from it.
-      color: {
-        four: COLORS.turf,
-        six: COLORS.gold,
-        wicket: COLORS.ball,
-        wide: "#7b3fa0",
-        noball: "#7b3fa0"
-      }[ballCommentary.kind] || COLORS.ink
-    }
-  }, ballCommentary.outcome))), overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
-    style: {
-      maxWidth: 560,
-      margin: "14px auto 0",
-      padding: "16px 16px 0"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: "14px 16px",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "baseline",
-      justifyContent: "space-between",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Over ", overSummary.overNumber, overSummary.bowlerName && ` · ${overSummary.bowlerName}`), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 13,
-      fontWeight: 700,
-      color: overSummary.wickets > 0 ? COLORS.ball : COLORS.turf
-    }
-  }, overSummary.runs, " run", overSummary.runs === 1 ? "" : "s", overSummary.wickets > 0 && `, ${overSummary.wickets} wkt${overSummary.wickets === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap"
-    }
-  }, overSummary.balls.map((b, i) => /*#__PURE__*/React.createElement(BallBadge, {
-    key: i,
-    ev: b
-  })))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      textAlign: "center",
-      marginTop: 8,
-      fontStyle: "italic"
-    }
-  }, "Next over starting…")), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,
-    showOvers: true
-  }));
+    showOvers: true,
+    ballCommentary: !inningsBreak ? ballCommentary : null,
+    overSummary: !inningsBreak ? overSummary : null
+  }), showMatchDetails && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowMatchDetails(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.ink,
+      marginBottom: 10
+    }
+  }, "Match details"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.7
+    }
+  }, tossInfo, tossInfo && (houseRules || umpires) && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "House rules: ", houseRules), houseRules && umpires && /*#__PURE__*/React.createElement("br", null), umpires)));
 }

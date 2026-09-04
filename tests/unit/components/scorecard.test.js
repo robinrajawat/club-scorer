@@ -85,6 +85,48 @@ test("MatchStatsPanel: showOvers=false always renders the scorecard and charts i
   assert.doesNotMatch(text, /CRR/); // no live-summary card outside showOvers mode
 });
 
+test("MatchStatsPanel: showOvers=true no longer renders venue or Match details -- FollowScreen shows those in its own header now", () => {
+  const match = matchWith([inning({ complete: false })], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } });
+  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Willow Park/);
+  assert.doesNotMatch(text, /Match details/);
+});
+
+test("MatchStatsPanel: showOvers=false still renders venue and Match details inline, unchanged", () => {
+  const match = matchWith([inning({ complete: true })], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } });
+  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: false }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Willow Park/);
+  assert.match(text, /Match details/);
+});
+
+test("MatchStatsPanel: showOvers=true folds ballCommentary into the score card, not a separate one", () => {
+  const match = matchWith([inning({ complete: false })]);
+  const inst = renderer.create(React.createElement(MatchStatsPanel, {
+    match, tab: 0, setTab: () => {}, showOvers: true,
+    ballCommentary: { lead: "Jasprit Bumrah to Virat Kohli: ", outcome: "FOUR!", kind: "four" }
+  }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Jasprit Bumrah to Virat Kohli/);
+  assert.match(text, /FOUR!/);
+  // The commentary text lands right after "CRR" in render order (same card, appended below the
+  // score block) rather than in some other unrelated part of the tree.
+  assert.ok(text.indexOf("CRR") < text.indexOf("Jasprit Bumrah to Virat Kohli"));
+});
+
+test("MatchStatsPanel: showOvers=true folds overSummary (bowler, ball badges, runs/wickets) into the score card", () => {
+  const match = matchWith([inning({ complete: false })]);
+  const inst = renderer.create(React.createElement(MatchStatsPanel, {
+    match, tab: 0, setTab: () => {}, showOvers: true,
+    overSummary: { overNumber: 4, bowlerName: "Jasprit Bumrah", balls: [{ kind: "run", runs: 1 }, { kind: "wicket" }], runs: 5, wickets: 1 }
+  }));
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"Over ","4"," · Jasprit Bumrah"/);
+  assert.match(text, /"5"," run","s",", 1 wkt"/);
+  assert.match(text, /Next over starting…/);
+});
+
 test("MatchStatsPanel: with two innings, shows a tab per innings and switches which one is scorecard'd", () => {
   const first = inning({ battingTeam: "Riverside CC", complete: true, battingOrder: ["Virat Kohli"] });
   const second = inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", complete: false, battingOrder: ["Jasprit Bumrah"], batsmen: { "Jasprit Bumrah": { runs: 10, balls: 8, fours: 1, sixes: 0, out: false } }, bowlers: {} });
