@@ -750,6 +750,9 @@ export function CricketScorer() {
   // Activity notifications never require an action the way an invite/request does -- they're
   // informational -- so "needs my attention" here just means unread.
   const unreadActivityCount = myActivity.filter(item => !item.read).length;
+  // Feeds both HomeScreen's own bell icon and TabBar's Home-tab badge (see selectTab/TabBar
+  // below) -- computed once here so the two can't drift apart from being computed twice.
+  const inboxBadgeCount = federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount;
   async function refreshPendingPollItems() {
     const items = await loadPendingPollItems(clubs, clubTeamsById);
     setPendingPollItems(items);
@@ -2576,7 +2579,7 @@ export function CricketScorer() {
     onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount,
+    inboxBadgeCount: inboxBadgeCount,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => {
@@ -2991,6 +2994,7 @@ export function CricketScorer() {
     }
   }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
-    onSelect: selectTab
+    onSelect: selectTab,
+    homeBadgeCount: inboxBadgeCount
   }));
 }

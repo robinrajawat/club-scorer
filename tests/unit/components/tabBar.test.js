@@ -43,3 +43,19 @@ test("TabBar: 'Clubs' tab maps to the \"teams\" screen key (TeamsScreen, not MyT
   act(() => { clubsButton.props.onClick(); });
   assert.equal(selected, "teams");
 });
+
+test("TabBar: no badge on the Home tab when homeBadgeCount is 0/omitted", () => {
+  const inst = render({ active: "live", onSelect: () => {} });
+  const homeButton = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Home");
+  assert.equal(homeButton.props["aria-label"], "Home");
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /pending/);
+});
+
+test("TabBar: shows a badge on the Home tab (and only Home) when homeBadgeCount is set, capped at '9+'", () => {
+  const inst = render({ active: "live", onSelect: () => {}, homeBadgeCount: 12 });
+  const homeButton = inst.root.findAllByType("button").find(b => b.props["aria-label"].startsWith("Home"));
+  assert.equal(homeButton.props["aria-label"], "Home, 12 pending");
+  const json = JSON.stringify(inst.toJSON());
+  // Exactly one "9+" in the whole tree -- confirms the badge only ever renders once, on Home.
+  assert.equal((json.match(/9\+/g) || []).length, 1);
+});
