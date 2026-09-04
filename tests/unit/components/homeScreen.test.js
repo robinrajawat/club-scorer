@@ -100,6 +100,37 @@ test("HomeScreen: 'Live now' cards show a Trophy badge only for matches that bel
   assert.equal(plainCard.findAllByType(Trophy).length, 0);
 });
 
+test("HomeScreen: 'Live now' Trophy badge shows the tournament's name, resolved from liveTournaments for a tournament this account doesn't own", () => {
+  const inst = render({
+    liveMatches: [liveMatch({ tournamentId: "t1" })],
+    liveTournaments: [{ tournamentId: "t1", name: "Someone Else's Cup", shareCode: "ABC123", teamsCount: 4 }]
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Someone Else's Cup/);
+});
+
+test("HomeScreen: 'Live now' Trophy badge prefers tournamentNameById (this account's own) over liveTournaments when both have an entry", () => {
+  const inst = render({
+    liveMatches: [liveMatch({ tournamentId: "t1" })],
+    tournamentNameById: { t1: "My Own Cup" },
+    // "Stale Public Name" also legitimately appears elsewhere on the page (the separate "Live
+    // tournaments" strip, fed by this same liveTournaments prop, always shows a tournament's own
+    // liveTournaments name regardless of tournamentNameById) -- so the assertion below is scoped
+    // to just the "Live now" card itself, not the whole page's JSON.
+    liveTournaments: [{ tournamentId: "t1", name: "Stale Public Name", shareCode: "ABC123", teamsCount: 4 }]
+  });
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  assert.equal(hasText(card.props.children, "My Own Cup"), true);
+  assert.equal(hasText(card.props.children, "Stale Public Name"), false);
+});
+
+test("HomeScreen: 'Live now' Trophy badge falls back to icon-only when the tournament's name can't be resolved", () => {
+  const inst = render({
+    liveMatches: [liveMatch({ tournamentId: "t1" })]
+  });
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  assert.equal(card.findAllByType(Trophy).length, 1);
+});
+
 test("HomeScreen: no 'Live tournaments' section when liveTournaments is empty", () => {
   const inst = render();
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Live tournaments/);
