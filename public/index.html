@@ -19307,16 +19307,24 @@ function renderMatchCard(m, i, {
     onClick: () => onOpen(m.id),
     className: "cs-btn",
     style: {
-      display: "block",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
       width: "100%",
       textAlign: "left",
       background: COLORS.surface,
       border: "none",
-      borderRadius: 16,
-      padding: "16px",
+      borderRadius: 14,
+      padding: "12px 14px",
       marginBottom: 8,
       cursor: "pointer",
-      boxShadow: "0 2px 10px rgba(42,36,32,0.08), 0 6px 20px rgba(42,36,32,0.06)"
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 0,
+      flex: 1
     }
   }, m.tournamentId && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19324,21 +19332,28 @@ function renderMatchCard(m, i, {
       alignItems: "center",
       gap: 4,
       fontFamily: "'Inter'",
-      fontSize: 10.5,
+      fontSize: 10,
       fontWeight: 700,
       letterSpacing: 0.5,
       textTransform: "uppercase",
       color: COLORS.gold,
-      marginBottom: 4
+      marginBottom: 3,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
-    size: 11
+    size: 10,
+    style: { flexShrink: 0 }
   }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
-      fontSize: 17,
-      color: COLORS.ink
+      fontSize: 14.5,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
   }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
     style: {
@@ -19348,30 +19363,15 @@ function renderMatchCard(m, i, {
   }, "vs"), " ", m.teamB), (m.innings ? matchScoreLine(m) : m.scoreLine) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 15,
+      fontSize: 12.5,
       fontWeight: 700,
       color: COLORS.turf,
-      marginTop: 4
+      marginTop: 2
     }
-  }, m.innings ? matchScoreLine(m) : m.scoreLine), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      width: "100%",
-      marginTop: 12,
-      padding: "10px",
-      background: COLORS.pitchFixed,
-      color: "#fff",
-      borderRadius: 12,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5
-    }
-  }, "Resume scoring", /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 15
-  })))))
+  }, m.innings ? matchScoreLine(m) : m.scoreLine)), /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 17,
+    style: { color: COLORS.inkSoft, opacity: 0.55, flexShrink: 0 }
+  }))))
   // The nearest scheduled-but-not-yet-started fixture, surfaced here right under the "Continue
   // scoring" hero rather than only inside the collapsed "Upcoming" fold further down -- most
   // sessions on this screen are resuming or starting an already-planned tournament match, not an

@@ -126,7 +126,7 @@ test("HomeScreen: no 'Continue scoring' hero when there's no in-progress match",
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Continue scoring/);
 });
 
-test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/score and tapping it (or 'Resume scoring') calls onOpen", () => {
+test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/score/tournament badge, and tapping the card calls onOpen", () => {
   let openedId = null;
   const inst = render({
     matches: [match({
@@ -145,8 +145,7 @@ test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/sco
   assert.match(json, /Riverside CC/);
   assert.match(json, /85-3/);
   assert.match(json, /Summer Cup/);
-  assert.match(json, /Resume scoring/);
-  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Resume scoring"));
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   act(() => { card.props.onClick(); });
   assert.equal(openedId, "m1");
 });
