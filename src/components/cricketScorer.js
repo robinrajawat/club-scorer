@@ -2617,7 +2617,6 @@ export function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
-    onBack: () => setScreen("home"),
     showTabBar: true
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
@@ -2657,7 +2656,6 @@ export function CricketScorer() {
     currentUid: user && user.uid,
     pinnedClubIds: pinnedClubIds,
     onTogglePinClub: handleTogglePinClub,
-    onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
       setPresetTeamSeed(null);
@@ -2679,7 +2677,6 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamsScreen, {
     onManageTeams: () => setScreen("my-teams"),
-    onBack: () => setScreen("home"),
     clubs: clubs,
     activeClubId: activeClubAdminId,
     currentUid: user && user.uid,
@@ -2764,7 +2761,6 @@ export function CricketScorer() {
       setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
     },
     onOpenRecords: handleOpenRecords,
-    onBack: () => setScreen("home"),
     currentUid: user && user.uid,
     clubsLoading: clubsLoading,
     federationsLoading: federationsLoading,
