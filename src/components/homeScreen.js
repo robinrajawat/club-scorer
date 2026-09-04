@@ -923,7 +923,40 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 3
     }
-  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))), hiddenLiveTournamentCount > 0 && liveSeeAllCard("live-tournaments-see-all", hiddenLiveTournamentCount, onOpenLive))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))), hiddenLiveTournamentCount > 0 && liveSeeAllCard("live-tournaments-see-all", hiddenLiveTournamentCount, onOpenLive)))
+  // The nearest scheduled-but-not-yet-started fixture, surfaced here so it's visible without
+  // scrolling past Live now/Live tournaments and expanding the "Upcoming" fold further down --
+  // most sessions on this screen are resuming or starting an already-planned tournament match, not
+  // an ad-hoc one, and that path used to require a scroll and a tap just to see what's next.
+  // sortedUpcomingFixtures[0] is the same nearest-first ordering the full Upcoming list already
+  // uses; this doesn't hide or dedupe it from that list below -- a short teaser plus the full,
+  // browsable list, same relationship as the Live strips have with their own "See all".
+  , sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      marginBottom: 10
+    }
+  }, "Next up"), /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
+    key: sortedUpcomingFixtures[0].fixture.id,
+    tournament: sortedUpcomingFixtures[0].tournament,
+    fixture: sortedUpcomingFixtures[0].fixture,
+    index: 0,
+    onOpenTournament: onOpenTournament,
+    onScheduleFixture: onScheduleFixture,
+    onStartFixture: onStartFixture,
+    onEditVenue: onEditVenue,
+    clubs: clubs,
+    clubTeamsById: clubTeamsById
+  })), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {

@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { afterEach } from "node:test";
+import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { HomeScreen } from "../../../src/components/homeScreen.js";
@@ -23,8 +23,19 @@ function hasText(node, str) {
   return false;
 }
 
+// UpcomingFixtureCard (rendered by the "Next up" section once `tournaments` carries an unstarted
+// fixture) fires mount-time useEffects that call these as bare globals -- same stubs as
+// upcomingFixtureCard.test.js itself. Harmless for every other test here, which passes no
+// tournaments/fixtures at all so UpcomingFixtureCard never mounts.
+beforeEach(() => {
+  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
+  globalThis.fetchFixtureWeather = () => Promise.resolve(null);
+});
+
 afterEach(() => {
   delete globalThis.Modal;
+  delete globalThis.loadFixturePollSummary;
+  delete globalThis.fetchFixtureWeather;
 });
 
 function match(overrides = {}) {
@@ -154,6 +165,51 @@ test("HomeScreen: 'Live tournaments' shows each tournament's name and team count
   const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Summer Cup"));
   act(() => { card.props.onClick(); });
   assert.equal(openedCode, "ABC123");
+});
+
+test("HomeScreen: no 'Next up' section when there are no unstarted fixtures", async () => {
+  let inst;
+  await act(async () => {
+    inst = render();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Next up/);
+});
+
+test("HomeScreen: 'Next up' shows the nearest unstarted fixture (by date) across every tournament, and calls onStartFixture from it", async () => {
+  const tournaments = [
+    {
+      id: "t1", name: "Summer Cup", venue: null,
+      fixtures: [
+        { id: "f-later", teamA: "Later CC", teamB: "Oakwood CC", date: "2026-09-20T10:00" },
+        { id: "f-soonest", teamA: "Soonest CC", teamB: "Oakwood CC", date: "2026-09-05T10:00" },
+        { id: "f-started", teamA: "Started CC", teamB: "Oakwood CC", date: "2026-09-01T10:00", matchId: "m-already" }
+      ]
+    }
+  ];
+  let startedFixtureId = null;
+  let inst;
+  await act(async () => {
+    inst = render({
+      // A filler in-progress match so the separate, further-down "Upcoming" section (which lists
+      // every unstarted fixture, not just the nearest one) stays collapsed by default rather than
+      // auto-expanding -- it only auto-expands when there's nothing else on the page, which would
+      // otherwise also render "Later CC" down there and make the doesNotMatch assertions below
+      // fail for a reason unrelated to what this test is actually checking.
+      matches: [match()],
+      tournaments,
+      onStartFixture: (t, f) => { startedFixtureId = f.id; }
+    });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Next up/);
+  assert.match(json, /Soonest CC/);
+  assert.doesNotMatch(json, /Later CC/);
+  assert.doesNotMatch(json, /Started CC/);
+  const startBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Start match"));
+  await act(async () => { startBtn.props.onClick(); });
+  assert.equal(startedFixtureId, "f-soonest");
 });
 
 test("HomeScreen: 'Live now' caps its preview to 3 cards and a 'See all' card opens the full Live screen", () => {
