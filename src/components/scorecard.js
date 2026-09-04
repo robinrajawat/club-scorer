@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Table2 } from "./icons.js";
 import { RoleBadge } from "./scoringUiAtoms.js";
-import { MatchInfoFold } from "./matchDisplayAtoms.js";
+import { MatchInfoFold, BallBadge } from "./matchDisplayAtoms.js";
 import { OversStrip } from "./scoreboardAtoms.js";
 import { RunRateChart, RunsPerOverChart } from "./matchInsightCards.js";
 import { ExportPdfButton } from "./exportButtons.js";
@@ -358,7 +358,13 @@ export function MatchStatsPanel({
   match,
   tab,
   setTab,
-  showOvers
+  showOvers,
+  // Follow-only: the last-ball/over-completion state FollowScreen tracks itself by diffing
+  // consecutive snapshots (see followScreen.js). Always null for ScorecardOverlay's own call
+  // (the scorer already knows what just happened -- they scored it), which is also what keeps
+  // that path's rendering byte-for-byte the same as before this component grew these props.
+  ballCommentary = null,
+  overSummary = null
 }) {
   const chasing = chasingInfo(match);
   // The quick-summary card (score + target/chase context + this over) is only worth surfacing
@@ -374,7 +380,241 @@ export function MatchStatsPanel({
   // Same reasoning as the scorecard fold -- charts are a deeper dive than a follower's first
   // glance needs, closed by default there and open by default in the scorer's own overlay.
   const [chartsOpen, setChartsOpen] = useState(!showOvers);
-  return /*#__PURE__*/React.createElement(React.Fragment, null, match.venue && /*#__PURE__*/React.createElement("div", {
+  const cardStyle = {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+  };
+  // Score + CRR, and target/need/RRR while chasing -- the one fact someone following along
+  // actually opened this screen to check, so it leads whichever card holds it either way.
+  function renderScoreBlock() {
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        flexWrap: "wrap",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 15,
+        fontWeight: 700,
+        color: COLORS.ink
+      }
+    }, liveInn.battingTeam, " ", liveInn.runs, "-", liveInn.wickets, " (", oversLabel(liveInn.legalBalls, liveInn.ballsPerOver), " ov)"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        color: COLORS.inkSoft
+      }
+    }, "CRR ", crr(liveInn.runs, liveInn.legalBalls, liveInn.ballsPerOver))), chasing && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6,
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 12,
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.turf
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "Target ", chasing.target), /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(chasing.runsNeeded, 0), " off ", Math.max(chasing.ballsLeft, 0), " ball", Math.max(chasing.ballsLeft, 0) === 1 ? "" : "s"), chasing.reqRate && /*#__PURE__*/React.createElement("span", null, "RRR ", chasing.reqRate)));
+  }
+  // The follow-only last-ball/over commentary -- deliberately subordinate to the score above it
+  // (smaller, behind its own divider, left-aligned rather than centered so a long wrapped
+  // dismissal description reads naturally instead of raggedly) rather than competing with it for
+  // attention, even when it's the over-summary's full ball-by-ball row. At most one of
+  // ballCommentary/overSummary is ever set at a time (see followScreen.js).
+  function renderCommentaryBlock() {
+    if (!ballCommentary && !overSummary) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: `1px solid ${COLORS.creamDark}`
+      }
+    }, overSummary ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase"
+      }
+    }, "Over ", overSummary.overNumber, overSummary.bowlerName && ` \u00B7 ${overSummary.bowlerName}`), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        fontWeight: 700,
+        color: overSummary.wickets > 0 ? COLORS.ball : COLORS.turf
+      }
+    }, overSummary.runs, " run", overSummary.runs === 1 ? "" : "s", overSummary.wickets > 0 && `, ${overSummary.wickets} wkt${overSummary.wickets === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        flexWrap: "wrap"
+      }
+    }, overSummary.balls.map((b, i) => /*#__PURE__*/React.createElement(BallBadge, {
+      key: i,
+      ev: b
+    }))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        color: COLORS.inkSoft,
+        marginTop: 6,
+        fontStyle: "italic"
+      }
+    }, "Next over starting\u2026")) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.inkSoft,
+        lineHeight: 1.5
+      }
+    }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        color: {
+          four: COLORS.turf,
+          six: COLORS.gold,
+          wicket: COLORS.ball,
+          wide: "#7b3fa0",
+          noball: "#7b3fa0"
+        }[ballCommentary.kind] || COLORS.ink
+      }
+    }, ballCommentary.outcome)));
+  }
+  // Striker/non-striker rows, partnership, and the current bowler's figures -- "who's out there
+  // right now."
+  function renderBattersBlock() {
+    return /*#__PURE__*/React.createElement(React.Fragment, null, liveInn.strikerName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: `1px solid ${COLORS.creamDark}`
+      }
+    }, [liveInn.strikerName, liveInn.nonStrikerName].filter(Boolean).map(name => {
+      const b = liveInn.batsmen[name] || {
+        runs: 0,
+        balls: 0
+      };
+      const isStriker = name === liveInn.strikerName;
+      return /*#__PURE__*/React.createElement("div", {
+        key: name,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "3px 0",
+          fontFamily: "'Inter'"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 13,
+          fontWeight: isStriker ? 700 : 500,
+          color: isStriker ? COLORS.ink : COLORS.inkSoft
+        }
+      }, isStriker && /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 5,
+          height: 5,
+          borderRadius: "50%",
+          background: COLORS.gold,
+          flexShrink: 0
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          marginLeft: isStriker ? 0 : 11
+        }
+      }, name)), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontSize: 12.5,
+          fontWeight: 600,
+          color: COLORS.inkSoft
+        }
+      }, b.runs, " ", /*#__PURE__*/React.createElement("span", {
+        style: {
+          opacity: 0.6,
+          fontWeight: 400
+        }
+      }, "(", b.balls, ")")));
+    }), liveInn.strikerName && liveInn.nonStrikerName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        textAlign: "right",
+        marginTop: 2
+      }
+    }, "Partnership: ", /*#__PURE__*/React.createElement("strong", {
+      style: {
+        color: COLORS.ink,
+        fontWeight: 600
+      }
+    }, liveInn.partnershipRuns || 0), " (", liveInn.partnershipBalls || 0, ")"), liveInn.bowlerName && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 8,
+        paddingTop: 8,
+        borderTop: `1px solid ${COLORS.creamDark}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        fontFamily: "'Inter'"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: COLORS.inkSoft,
+        fontWeight: 500
+      }
+    }, liveInn.bowlerName), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: COLORS.inkSoft
+      }
+    }, liveInn.bowlers[liveInn.bowlerName] ? `${oversLabel(liveInn.bowlers[liveInn.bowlerName].ballsBowled, liveInn.ballsPerOver)}-${liveInn.bowlers[liveInn.bowlerName].runs}-${liveInn.bowlers[liveInn.bowlerName].wickets}` : "-"))));
+  }
+  function renderOversBlock() {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        paddingTop: 10,
+        borderTop: `1px solid ${COLORS.creamDark}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        marginBottom: 8,
+        textTransform: "uppercase"
+      }
+    }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
+      overs: liveInn.overs,
+      ballsPerOver: liveInn.ballsPerOver
+    }));
+  }
+  return /*#__PURE__*/React.createElement(React.Fragment, null, !showOvers && match.venue && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 16px 0",
       maxWidth: 560,
@@ -383,9 +623,9 @@ export function MatchStatsPanel({
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, "\uD83D\uDCCD ", match.venue), /*#__PURE__*/React.createElement(MatchInfoFold, {
+  }, "\uD83D\uDCCD ", match.venue), !showOvers && /*#__PURE__*/React.createElement(MatchInfoFold, {
     match: match
-  }), showLiveSummary && /*#__PURE__*/React.createElement("div", {
+  }), showLiveSummary && (showOvers ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "14px 16px 0",
       maxWidth: 560,
@@ -393,154 +633,20 @@ export function MatchStatsPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 16,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+      ...cardStyle,
+      marginBottom: 14
+    }
+  }, renderScoreBlock(), renderCommentaryBlock()), /*#__PURE__*/React.createElement("div", {
+    style: cardStyle
+  }, renderBattersBlock(), renderOversBlock())) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 16px 0",
+      maxWidth: 560,
+      margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "baseline",
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 15,
-      fontWeight: 700,
-      color: COLORS.ink
-    }
-  }, liveInn.battingTeam, " ", liveInn.runs, "-", liveInn.wickets, " (", oversLabel(liveInn.legalBalls, liveInn.ballsPerOver), " ov)"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      color: COLORS.inkSoft
-    }
-  }, "CRR ", crr(liveInn.runs, liveInn.legalBalls, liveInn.ballsPerOver))), chasing && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 6,
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 12,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement("span", null, "Target ", chasing.target), /*#__PURE__*/React.createElement("span", null, "Need ", Math.max(chasing.runsNeeded, 0), " off ", Math.max(chasing.ballsLeft, 0), " ball", Math.max(chasing.ballsLeft, 0) === 1 ? "" : "s"), chasing.reqRate && /*#__PURE__*/React.createElement("span", null, "RRR ", chasing.reqRate)), liveInn.strikerName && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 12,
-      paddingTop: 10,
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, [liveInn.strikerName, liveInn.nonStrikerName].filter(Boolean).map(name => {
-    const b = liveInn.batsmen[name] || {
-      runs: 0,
-      balls: 0
-    };
-    const isStriker = name === liveInn.strikerName;
-    return /*#__PURE__*/React.createElement("div", {
-      key: name,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "3px 0",
-        fontFamily: "'Inter'"
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 13,
-        fontWeight: isStriker ? 700 : 500,
-        color: isStriker ? COLORS.ink : COLORS.inkSoft
-      }
-    }, isStriker && /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 5,
-        height: 5,
-        borderRadius: "50%",
-        background: COLORS.gold,
-        flexShrink: 0
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        marginLeft: isStriker ? 0 : 11
-      }
-    }, name)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 12.5,
-        fontWeight: 600,
-        color: COLORS.inkSoft
-      }
-    }, b.runs, " ", /*#__PURE__*/React.createElement("span", {
-      style: {
-        opacity: 0.6,
-        fontWeight: 400
-      }
-    }, "(", b.balls, ")")));
-  }), liveInn.strikerName && liveInn.nonStrikerName && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      textAlign: "right",
-      marginTop: 2
-    }
-  }, "Partnership: ", /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: COLORS.ink,
-      fontWeight: 600
-    }
-  }, liveInn.partnershipRuns || 0), " (", liveInn.partnershipBalls || 0, ")"), liveInn.bowlerName && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 8,
-      paddingTop: 8,
-      borderTop: `1px solid ${COLORS.creamDark}`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      fontFamily: "'Inter'"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontWeight: 500
-    }
-  }, liveInn.bowlerName), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft
-    }
-  }, liveInn.bowlers[liveInn.bowlerName] ? `${oversLabel(liveInn.bowlers[liveInn.bowlerName].ballsBowled, liveInn.ballsPerOver)}-${liveInn.bowlers[liveInn.bowlerName].runs}-${liveInn.bowlers[liveInn.bowlerName].wickets}` : "-"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 12,
-      paddingTop: 10,
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      marginBottom: 8,
-      textTransform: "uppercase"
-    }
-  }, "Overs"), /*#__PURE__*/React.createElement(OversStrip, {
-    overs: liveInn.overs,
-    ballsPerOver: liveInn.ballsPerOver
-  })))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+    style: cardStyle
+  }, renderScoreBlock(), renderBattersBlock(), renderOversBlock()))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,

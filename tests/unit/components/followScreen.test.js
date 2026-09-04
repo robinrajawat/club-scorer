@@ -29,6 +29,7 @@ function setNavigator(value) {
 afterEach(() => {
   delete globalThis.db;
   delete globalThis.navigator;
+  delete globalThis.Modal;
   while (renderedInstances.length > 0) {
     const inst = renderedInstances.pop();
     // One test unmounts its own instance already (to assert on the resulting unsubscribe) --
@@ -278,6 +279,40 @@ test("FollowScreen: no code shows not-found without ever calling db", () => {
   renderedInstances.push(inst);
   assert.equal(called, false);
   assert.match(JSON.stringify(inst.toJSON()), /Match not found/);
+});
+
+test("FollowScreen: shows the venue in the header, and a Match details info icon only when toss/rules/umpires exist", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()], { venue: "Willow Park" }) }); });
+  let text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Willow Park/);
+  assert.equal(inst.root.findAllByProps({ "aria-label": "Match details" }).length, 0);
+
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } }) }); });
+  assert.equal(inst.root.findAllByProps({ "aria-label": "Match details" }).length, 1);
+});
+
+test("FollowScreen: tapping the Match details icon opens a Modal with toss/house rules/umpires, closable", () => {
+  globalThis.Modal = ({ children, onClose }) => React.createElement("div", { "data-stub-modal": true, onClick: onClose }, children);
+  const captured = {};
+  const inst = renderScreen(captured);
+  act(() => {
+    captured.onNext({
+      exists: true,
+      data: () => matchWith([inning()], { toss: { wonBy: "Riverside CC", decision: "Bat" }, umpire1: "J. Rao" })
+    });
+  });
+  const infoBtn = inst.root.findByProps({ "aria-label": "Match details" });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /J\. Rao/);
+  act(() => { infoBtn.props.onClick(); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside CC/);
+  assert.match(text, /J\. Rao/);
+
+  const modal = inst.root.findByProps({ "data-stub-modal": true });
+  act(() => { modal.props.onClick(); });
+  assert.equal(inst.root.findAllByProps({ "data-stub-modal": true }).length, 0);
 });
 
 test("FollowScreen: Share prefers navigator.share, passing the follow-code URL, when available", () => {
