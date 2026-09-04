@@ -1,6 +1,6 @@
 // The full-list "See all" destination for the Home screen's Live now / Live tournaments preview
 // strips (src/components/liveScreen.js): the unbounded /liveMatches + /liveTournaments feeds, each
-// in its own section, plus the empty state and the back button.
+// in its own section, plus the loading and empty states.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -39,6 +39,20 @@ test("LiveScreen: shows an empty state and neither section when both feeds are e
   assert.match(json, /Nothing live right now/);
   assert.doesNotMatch(json, /Matches \(/);
   assert.doesNotMatch(json, /Tournaments \(/);
+});
+
+test("LiveScreen: shows a loading indicator instead of the empty state while loading and both feeds are still empty", () => {
+  const inst = render({ loading: true });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Loading/);
+  assert.doesNotMatch(json, /Nothing live right now/);
+});
+
+test("LiveScreen: shows real data instead of the loading indicator once at least one feed has something, even while still loading", () => {
+  const inst = render({ loading: true, liveMatches: [liveMatch()] });
+  const json = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(json, /Loading…/);
+  assert.match(json, /Riverside CC/);
 });
 
 test("LiveScreen: lists every live match (uncapped), with its score line and tournament badge, and opens it on tap", () => {
