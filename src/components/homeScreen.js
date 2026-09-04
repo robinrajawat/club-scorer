@@ -88,6 +88,7 @@ export function HomeScreen({
   onOpenLiveMatch,
   liveTournaments = [],
   onOpenLiveTournament,
+  onOpenLive,
   onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint
@@ -223,6 +224,16 @@ export function HomeScreen({
   const UPCOMING_HOME_LIMIT = 4;
   const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
   const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
+  // Both "Live now" and "Live tournaments" are previews, not the full feed -- capped to a couple of
+  // cards' worth so two live sections stacked on top of each other don't dominate the screen above
+  // the fold. A trailing "See all" card (matching each strip's own card size, so it reads as part
+  // of the same scroll rather than a different kind of thing) opens the full, uncapped list on its
+  // own screen (see onOpenLive / LiveScreen) whenever there's more than fits in the preview.
+  const LIVE_HOME_LIMIT = 3;
+  const visibleLiveMatches = liveMatches.slice(0, LIVE_HOME_LIMIT);
+  const hiddenLiveMatchCount = liveMatches.length - visibleLiveMatches.length;
+  const visibleLiveTournaments = liveTournaments.slice(0, LIVE_HOME_LIMIT);
+  const hiddenLiveTournamentCount = liveTournaments.length - visibleLiveTournaments.length;
   // Cups (tournaments + series), teams, clubs, federations, and Help/FAQ entries -- all already
   // sitting in memory (tournaments/teams/clubs are loaded right after sign-in for other reasons;
   // HELP_SECTIONS is static), so unlike Players these cost nothing to search and only ever show
@@ -513,6 +524,50 @@ function renderMatchCard(m, i, {
       }
     }, `See all ${count}`);
   }
+  // The trailing card at the end of the Live now / Live tournaments preview strips once there's
+  // more than LIVE_HOME_LIMIT worth to show -- same footprint as the strip's own cards so it reads
+  // as part of the same horizontal scroll, opens the full uncapped list on its own screen (see
+  // onOpenLive / LiveScreen) rather than expanding in place, since a strip that grows taller than
+  // its neighbors on every visit is the crowding this preview/full-list split exists to avoid.
+  function liveSeeAllCard(key, count, onClick) {
+    return /*#__PURE__*/React.createElement("button", {
+      key,
+      type: "button",
+      onClick: () => onClick && onClick(),
+      className: "cs-btn",
+      style: {
+        flexShrink: 0,
+        width: 110,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        textAlign: "center",
+        background: "none",
+        border: `1.5px dashed ${COLORS.cardDivider}`,
+        borderRadius: 14,
+        padding: "12px 10px",
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 15,
+      style: { color: COLORS.turf }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 12,
+        color: COLORS.turf
+      }
+    }, "See all"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        color: COLORS.inkSoft
+      }
+    }, "+", count));
+  }
   function categorySectionLabel(text) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -729,7 +784,7 @@ function renderMatchCard(m, i, {
       paddingLeft: 20,
       paddingRight: 20
     }
-  }, liveMatches.map(m => /*#__PURE__*/React.createElement("button", {
+  }, visibleLiveMatches.map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
     type: "button",
     onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
@@ -792,7 +847,7 @@ function renderMatchCard(m, i, {
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, matchScoreLine(m)))))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, matchScoreLine(m)))), hiddenLiveMatchCount > 0 && liveSeeAllCard("live-matches-see-all", hiddenLiveMatchCount, onOpenLive))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
     }
@@ -834,7 +889,7 @@ function renderMatchCard(m, i, {
       paddingLeft: 20,
       paddingRight: 20
     }
-  }, liveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
+  }, visibleLiveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
     key: t.tournamentId,
     type: "button",
     onClick: () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode),
@@ -868,7 +923,7 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 3
     }
-  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))), hiddenLiveTournamentCount > 0 && liveSeeAllCard("live-tournaments-see-all", hiddenLiveTournamentCount, onOpenLive))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {

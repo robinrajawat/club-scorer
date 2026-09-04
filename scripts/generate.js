@@ -280,6 +280,7 @@ const FUNCTIONS = [
   { name: "FederationsPanel", file: "src/components/federationsPanel.js" },
   { name: "TeamsScreen", file: "src/components/teamsScreen.js" },
   { name: "HomeScreen", file: "src/components/homeScreen.js" },
+  { name: "LiveScreen", file: "src/components/liveScreen.js" },
   { name: "SETUP_PAGE_LABELS", file: "src/components/setupScreen.js" },
   { name: "SetupScreen", file: "src/components/setupScreen.js" },
   { name: "TeamEditScreen", file: "src/components/teamEditScreen.js" },
