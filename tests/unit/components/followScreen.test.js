@@ -137,6 +137,33 @@ test("FollowScreen: skips the celebration on the very first snapshot, then celeb
   assert.equal(celebration.type, 6);
 });
 
+test("FollowScreen: shows no last-ball commentary on the first snapshot, then a persistent line for the next ball, cleared on a new innings", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  const first = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }]] })]);
+  act(() => { captured.onNext({ exists: true, data: () => first }); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /SIX!|FOUR!|OUT!/);
+
+  const withSix = matchWith([inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "run", runs: 6, battedRuns: 6 }]] })]);
+  act(() => { captured.onNext({ exists: true, data: () => withSix }); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Jasprit Bumrah to Virat Kohli/);
+  assert.match(text, /SIX!/);
+
+  // A second innings starting fresh (a new inningIdx, ballCount reset) clears the stale line from
+  // the innings that just ended rather than leaving a misleading "last ball" up.
+  const secondInnings = matchWith([
+    inning({ overs: [[{ kind: "run", runs: 1 }, { kind: "run", runs: 6, battedRuns: 6 }]] }),
+    inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", overs: [[]] })
+  ], { currentInningIndex: 1 });
+  act(() => { captured.onNext({ exists: true, data: () => secondInnings }); });
+  // Not "SIX!" alone -- the boundary-pop celebration banner from the earlier snapshot also renders
+  // that word and (deliberately, separately) only clears itself on its own timer, not on this
+  // reset. The lead text ("X to Y: ") only ever comes from ballCommentary, so it's the one string
+  // that actually proves the STALE COMMENTARY LINE specifically was cleared.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Jasprit Bumrah to Virat Kohli/);
+});
+
 // BUG FIX: this used to check lastBall.runs directly (the ball's raw total), so a 4-run bye/leg-bye
 // -- the bat never involved at all -- wrongly triggered a boundary celebration for viewers, while a
 // genuine six off a no-ball (stored total 7, including the 1-run penalty) never did. battedRuns

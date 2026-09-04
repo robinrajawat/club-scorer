@@ -4,7 +4,8 @@ import { LoadingBallIllustration } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
-import { matchResultText } from "../core/shareAndFormat.js";
+import { matchResultText, matchScoreLine } from "../core/shareAndFormat.js";
+import { lastBallCommentary } from "../core/scoringEngine.js";
 
 // Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
 // ShareMenu, which creates these; subscribes to db.collection("liveViews").doc(code)) or, now, by
@@ -57,6 +58,15 @@ export function FollowScreen({
   const [celebration, setCelebration] = useState(null);
   const [milestoneToast, setMilestoneToast] = useState(null);
   const [milestoneQueue, setMilestoneQueue] = useState([]);
+  // Persistent "Bumrah to Kohli: FOUR!" line below the scoreboard -- same lastBallCommentary
+  // MatchScreen's own commit() uses, fed here by diffing the previous snapshot's full inning
+  // state against the new one (prevFullInningRef) rather than off a direct before/after pair the
+  // way MatchScreen has one, since a follower only ever sees periodic snapshots. Deliberately not
+  // gated on the same "exactly one new ball" check the celebration effect below uses --
+  // lastBallCommentary already returns null on its own for a stale/completed-over comparison, so
+  // it stays safe across a multi-ball gap without needing that same guard duplicated here.
+  const [ballCommentary, setBallCommentary] = useState(null);
+  const prevFullInningRef = useRef(null);
   const prevBallCountRef = useRef(null);
   const prevMilestoneCountRef = useRef(null);
   const prevInningIdxRef = useRef(null);
@@ -127,9 +137,18 @@ export function FollowScreen({
       const newOnes = (inn.toastMilestones || []).slice(prevMilestoneCountRef.current);
       setMilestoneQueue(q => [...q, ...newOnes]);
     }
+    if (sameInning && prevFullInningRef.current) {
+      const commentary = lastBallCommentary(prevFullInningRef.current, inn);
+      if (commentary) setBallCommentary(commentary);
+    } else {
+      // First snapshot after mount, or a new innings just started -- nothing to diff against yet,
+      // and a stale commentary line from the innings that just ended would be actively misleading.
+      setBallCommentary(null);
+    }
     prevBallCountRef.current = ballCount;
     prevMilestoneCountRef.current = milestoneCount;
     prevInningIdxRef.current = inningIdx;
+    prevFullInningRef.current = inn;
   }, [match]);
   useEffect(() => {
     if (!code && !matchId) {
@@ -154,6 +173,26 @@ export function FollowScreen({
     });
     return unsub;
   }, [code, matchId]);
+  // Keeps the live score visible in the browser tab even when this isn't the focused tab -- lets
+  // someone check on a match without switching back to it. Guarded on `typeof document` (not just
+  // referenced directly) since these tests run under plain node:test, not jsdom -- same reasoning
+  // exportButtons.js already documents for its own document.title use, though that one only ever
+  // runs from a click handler; this needs to run passively as new snapshots arrive, so it can't
+  // rely on only ever being invoked from a real browser event the way that one does. Two separate
+  // effects rather than one: the empty-deps one captures whatever title was already showing at
+  // mount and restores exactly that on unmount (only), so restoration isn't at the mercy of
+  // whatever the second effect happened to overwrite it to most recently.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const original = document.title;
+    return () => {
+      document.title = original;
+    };
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined" || !match) return;
+    document.title = `${matchScoreLine(match) || `${match.teamA} vs ${match.teamB}`} · Club Scorer`;
+  }, [match]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -310,7 +349,29 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, resultText || inningsBreakText), ballCommentary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      opacity: 0.9,
+      maxWidth: 560,
+      margin: "6px auto 0",
+      textAlign: "center"
+    }
+  }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      // Only six/wicket get a distinct color here (gold / the header's own "live" red, both
+      // guaranteed to read against the dark green header background) -- MatchScreen's own
+      // four/wide/no-ball colors (turf green, purple) were tuned for its cream background and
+      // would have poor contrast on this one, so those stay plain cream-white bold instead of
+      // reusing that same palette verbatim.
+      color: {
+        six: COLORS.gold,
+        wicket: COLORS.live
+      }[ballCommentary.kind] || COLORS.creamFixed
+    }
+  }, ballCommentary.outcome))), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,
