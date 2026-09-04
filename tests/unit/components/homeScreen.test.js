@@ -13,7 +13,6 @@ import renderer, { act } from "react-test-renderer";
 import { HomeScreen } from "../../../src/components/homeScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { JoinCodeBar } from "../../../src/components/pickerAtoms.js";
-import { Trophy } from "../../../src/components/icons.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -48,8 +47,8 @@ function match(overrides = {}) {
 
 function baseProps(overrides = {}) {
   return {
-    matches: [], onNew: () => {}, onOpen: () => {}, onDelete: () => {}, onManageTeams: () => {},
-    onOpenClubs: () => {}, onOpenClub: () => {}, onOpenFederation: () => {}, user: null, profile: null,
+    matches: [], onNew: () => {}, onOpen: () => {}, onDelete: () => {},
+    onOpenClub: () => {}, onOpenFederation: () => {}, user: null, profile: null,
     onOpenAccount: () => {}, onOpenInbox: () => {}, onOpenSharedLinks: () => {}, onOpenHelp: () => {},
     onOpenFeedback: () => {}, onOpenAbout: () => {}, onSignOut: () => Promise.resolve({ ok: true }),
     themePref: "system", onSetTheme: () => {}, onJoinCode: () => {}, onOpenTournaments: () => {},
@@ -76,96 +75,6 @@ function liveMatch(overrides = {}) {
     ...overrides
   };
 }
-
-test("HomeScreen: no 'Live now' section when liveMatches is empty", () => {
-  const inst = render();
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Live now/);
-});
-
-test("HomeScreen: 'Live now' shows each live match's teams and score, and tapping one calls onOpenLiveMatch with its id", () => {
-  let openedId = null;
-  const inst = render({
-    liveMatches: [liveMatch()],
-    onOpenLiveMatch: id => { openedId = id; }
-  });
-  const json = JSON.stringify(inst.toJSON());
-  assert.match(json, /Live now/);
-  assert.match(json, /Riverside CC/);
-  assert.match(json, /85-3/);
-  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
-  act(() => { card.props.onClick(); });
-  assert.equal(openedId, "live1");
-});
-
-test("HomeScreen: 'Live now' cards show a Trophy badge only for matches that belong to a tournament", () => {
-  const inst = render({
-    liveMatches: [
-      liveMatch({ id: "live1", tournamentId: "t1" }),
-      liveMatch({ id: "live2", teamA: "Downtown CC", teamB: "Hillside CC" })
-    ]
-  });
-  const cards = inst.root.findAllByType("button").filter(b => b.props.style && b.props.style.width === 190);
-  const tournamentCard = cards.find(b => hasText(b.props.children, "Riverside CC"));
-  const plainCard = cards.find(b => hasText(b.props.children, "Downtown CC"));
-  assert.equal(tournamentCard.findAllByType(Trophy).length, 1);
-  assert.equal(plainCard.findAllByType(Trophy).length, 0);
-});
-
-test("HomeScreen: 'Live now' Trophy badge shows the tournament's name, resolved from liveTournaments for a tournament this account doesn't own", () => {
-  const inst = render({
-    liveMatches: [liveMatch({ tournamentId: "t1" })],
-    liveTournaments: [{ tournamentId: "t1", name: "Someone Else's Cup", shareCode: "ABC123", teamsCount: 4 }]
-  });
-  assert.match(JSON.stringify(inst.toJSON()), /Someone Else's Cup/);
-});
-
-test("HomeScreen: 'Live now' Trophy badge prefers tournamentNameById (this account's own) over liveTournaments when both have an entry", () => {
-  const inst = render({
-    liveMatches: [liveMatch({ tournamentId: "t1" })],
-    tournamentNameById: { t1: "My Own Cup" },
-    // "Stale Public Name" also legitimately appears elsewhere on the page (the separate "Live
-    // tournaments" strip, fed by this same liveTournaments prop, always shows a tournament's own
-    // liveTournaments name regardless of tournamentNameById) -- so the assertion below is scoped
-    // to just the "Live now" card itself, not the whole page's JSON.
-    liveTournaments: [{ tournamentId: "t1", name: "Stale Public Name", shareCode: "ABC123", teamsCount: 4 }]
-  });
-  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
-  assert.equal(hasText(card.props.children, "My Own Cup"), true);
-  assert.equal(hasText(card.props.children, "Stale Public Name"), false);
-});
-
-test("HomeScreen: 'Live now' Trophy badge falls back to icon-only when the tournament's name can't be resolved", () => {
-  const inst = render({
-    liveMatches: [liveMatch({ tournamentId: "t1" })]
-  });
-  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
-  assert.equal(card.findAllByType(Trophy).length, 1);
-});
-
-test("HomeScreen: no 'Live tournaments' section when liveTournaments is empty", () => {
-  const inst = render();
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Live tournaments/);
-});
-
-test("HomeScreen: 'Live tournaments' shows each tournament's name and team count, and tapping one calls onOpenLiveTournament with its shareCode", () => {
-  let openedCode = null;
-  const inst = render({
-    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "ABC123", teamsCount: 6 }],
-    onOpenLiveTournament: code => { openedCode = code; }
-  });
-  const json = JSON.stringify(inst.toJSON());
-  assert.match(json, /Live tournaments/);
-  assert.match(json, /Summer Cup/);
-  // t.teamsCount is a raw number in the createElement call, converted to text by React only at
-  // render time -- checked against the rendered JSON tree (where it's already a string), not
-  // card.props.children (the pre-render prop, where it's still the number 6 and hasText's
-  // string-only .includes check would never match it).
-  assert.match(json, /"6"/);
-  assert.match(json, /team/);
-  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Summer Cup"));
-  act(() => { card.props.onClick(); });
-  assert.equal(openedCode, "ABC123");
-});
 
 test("HomeScreen: no 'Next up' section when there are no unstarted fixtures", async () => {
   let inst;
@@ -212,47 +121,53 @@ test("HomeScreen: 'Next up' shows the nearest unstarted fixture (by date) across
   assert.equal(startedFixtureId, "f-soonest");
 });
 
-test("HomeScreen: 'Live now' caps its preview to 3 cards and a 'See all' card opens the full Live screen", () => {
-  const matches = [1, 2, 3, 4, 5].map(n => liveMatch({ id: `live${n}`, teamA: `Team ${n}`, teamB: "Oakwood CC" }));
-  let openedLive = false;
-  const inst = render({
-    liveMatches: matches,
-    onOpenLive: () => { openedLive = true; }
-  });
-  const json = JSON.stringify(inst.toJSON());
-  assert.match(json, /Team 1/);
-  assert.match(json, /Team 3/);
-  assert.doesNotMatch(json, /Team 4/);
-  assert.doesNotMatch(json, /Team 5/);
-  assert.match(json, /See all/);
-  assert.match(json, /"\+","2"/);
-  const seeAll = inst.root.findAllByType("button").find(b => hasText(b.props.children, "See all"));
-  act(() => { seeAll.props.onClick(); });
-  assert.equal(openedLive, true);
+test("HomeScreen: no 'Continue scoring' hero when there's no in-progress match", () => {
+  const inst = render({ matches: [match({ status: "complete" })] });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Continue scoring/);
 });
 
-test("HomeScreen: 'Live now' shows no 'See all' card when there are 3 or fewer live matches", () => {
-  const matches = [1, 2, 3].map(n => liveMatch({ id: `live${n}`, teamA: `Team ${n}`, teamB: "Oakwood CC" }));
-  const inst = render({ liveMatches: matches });
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /See all/);
-});
-
-test("HomeScreen: 'Live tournaments' caps its preview to 3 cards and a 'See all' card opens the full Live screen", () => {
-  const tournaments = [1, 2, 3, 4].map(n => ({ tournamentId: `t${n}`, name: `Cup ${n}`, shareCode: `CODE${n}`, teamsCount: 4 }));
-  let openedLive = false;
+test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/score and tapping it (or 'Resume scoring') calls onOpen", () => {
+  let openedId = null;
   const inst = render({
-    liveTournaments: tournaments,
-    onOpenLive: () => { openedLive = true; }
+    matches: [match({
+      id: "m1", status: "in-progress", tournamentId: "t1",
+      innings: [{
+        battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC",
+        runs: 85, wickets: 3, legalBalls: 72, ballsPerOver: 6,
+        battingOrder: ["Virat Kohli"], bowlingOrder: ["Jasprit Bumrah"]
+      }]
+    })],
+    tournamentNameById: { t1: "Summer Cup" },
+    onOpen: id => { openedId = id; }
   });
   const json = JSON.stringify(inst.toJSON());
-  assert.match(json, /Cup 1/);
-  assert.match(json, /Cup 3/);
-  assert.doesNotMatch(json, /Cup 4/);
-  assert.match(json, /See all/);
-  assert.match(json, /"\+","1"/);
-  const seeAll = inst.root.findAllByType("button").find(b => hasText(b.props.children, "See all"));
-  act(() => { seeAll.props.onClick(); });
-  assert.equal(openedLive, true);
+  assert.match(json, /Continue scoring/);
+  assert.match(json, /Riverside CC/);
+  assert.match(json, /85-3/);
+  assert.match(json, /Summer Cup/);
+  assert.match(json, /Resume scoring/);
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Resume scoring"));
+  act(() => { card.props.onClick(); });
+  assert.equal(openedId, "m1");
+});
+
+test("HomeScreen: 'Continue scoring' hero shows every in-progress match, not just one", () => {
+  const inst = render({
+    matches: [
+      match({ id: "m1", teamA: "Riverside CC", teamB: "Oakwood CC" }),
+      match({ id: "m2", teamA: "Hawks CC", teamB: "Eagles CC" })
+    ]
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Riverside CC/);
+  assert.match(json, /Hawks CC/);
+});
+
+test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTabBar is set", () => {
+  const withoutBar = render().toJSON();
+  const withBar = render({ showTabBar: true }).toJSON();
+  assert.equal(withoutBar.props.style.paddingBottom, 40);
+  assert.match(String(withBar.props.style.paddingBottom), /calc\(58px \+ 40px \+ env\(safe-area-inset-bottom\)\)/);
 });
 
 test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTabBar is set", () => {
@@ -281,24 +196,6 @@ test("HomeScreen: clicking a match card calls onOpen with its id", () => {
   const clickable = inst.root.findByProps({ role: "button" });
   clickable.props.onClick();
   assert.equal(opened, "m1");
-});
-
-test("HomeScreen: utility buttons call onManageTeams/onOpenTournaments/onOpenClubs", () => {
-  let managedTeams = false, openedTournaments = false, openedClubs = false;
-  const inst = render({
-    onManageTeams: () => { managedTeams = true; },
-    onOpenTournaments: () => { openedTournaments = true; },
-    onOpenClubs: () => { openedClubs = true; }
-  });
-  const teamsBtn = inst.root.findAllByProps({ label: "Teams" })[0];
-  teamsBtn.props.onClick();
-  const cupsBtn = inst.root.findAllByProps({ label: "Cups" })[0];
-  cupsBtn.props.onClick();
-  const clubsBtn = inst.root.findAllByProps({ label: "Clubs" })[0];
-  clubsBtn.props.onClick();
-  assert.equal(managedTeams, true);
-  assert.equal(openedTournaments, true);
-  assert.equal(openedClubs, true);
 });
 
 test("HomeScreen: JoinCodeBar's onJoin prop is wired to onJoinCode", () => {
@@ -357,7 +254,10 @@ test("HomeScreen: 'In Progress'/'Completed' sections both render and collapse in
 
 test("HomeScreen: searching narrows the matches shown", () => {
   const inst = render({
-    matches: [match({ id: "m1", teamA: "Riverside CC" }), match({ id: "m2", teamA: "Hawks CC", teamB: "Eagles CC" })]
+    // Both completed (not in-progress) so neither shows up a second time in the "Continue
+    // scoring" hero, which isn't filtered by the search query -- that would make "Hawks CC"
+    // legitimately present on the page for a reason unrelated to what this test checks.
+    matches: [match({ id: "m1", teamA: "Riverside CC", status: "complete" }), match({ id: "m2", teamA: "Hawks CC", teamB: "Eagles CC", status: "complete" })]
   });
   const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
   act(() => { search.props.onChange({ target: { value: "Riverside" } }); });

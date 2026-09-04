@@ -555,6 +555,21 @@ export function CricketScorer() {
       }
     }
   }
+  // TabBar's onSelect -- a plain setScreen would work for "home" and "live" (neither carries any
+  // extra context to reset), but "my-teams" and "tournaments" both do: the same reset each
+  // screen's other, non-tab entry points (onManageTeams and onOpenTournaments, both still used
+  // elsewhere) already apply before navigating, so tapping the tab from some other club/
+  // tournament's context doesn't silently carry that scoping over. "teams" (the Clubs tab) needs
+  // no reset -- its own former entry point (onOpenClubs) never reset activeClubAdminId either.
+  function selectTab(next) {
+    if (next === "my-teams") {
+      setActiveClubAdminId(null);
+    } else if (next === "tournaments") {
+      setActiveTournamentClubId(null);
+      setActiveTournamentFederationId(null);
+    }
+    setScreen(next);
+  }
   // Seeds the current history entry with the starting screen (so the very first swipe-back has
   // a real {screen} to fall back to instead of landing on whatever a later replaceState call
   // elsewhere leaves behind — see the auth-action/follow-code URL cleanups, which replace state
@@ -2522,11 +2537,6 @@ export function CricketScorer() {
     onNew: () => setScreen("setup"),
     onOpen: openMatch,
     onDelete: handleDelete,
-    onManageTeams: () => {
-      setActiveClubAdminId(null);
-      setScreen("my-teams");
-    },
-    onOpenClubs: () => setScreen("teams"),
     onOpenClub: clubId => {
       setActiveClubAdminId(clubId);
       setTeamsTab("clubs");
@@ -2589,11 +2599,7 @@ export function CricketScorer() {
     },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
-    liveMatches: liveMatches,
     onOpenLiveMatch: openLiveMatch,
-    liveTournaments: liveTournaments,
-    onOpenLiveTournament: openLiveTournament,
-    onOpenLive: () => setScreen("live"),
     showTabBar: true,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
@@ -2989,6 +2995,6 @@ export function CricketScorer() {
     }
   }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
-    onSelect: setScreen
+    onSelect: selectTab
   }));
 }
