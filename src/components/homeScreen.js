@@ -732,7 +732,13 @@ function renderMatchCard(m, i, {
       cursor: "pointer",
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, m.tournamentId && /*#__PURE__*/React.createElement(Trophy, {
+    size: 11,
+    style: {
+      color: COLORS.gold,
+      marginBottom: 3
+    }
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
