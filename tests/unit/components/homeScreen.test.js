@@ -13,6 +13,7 @@ import renderer, { act } from "react-test-renderer";
 import { HomeScreen } from "../../../src/components/homeScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { JoinCodeBar } from "../../../src/components/pickerAtoms.js";
+import { Trophy } from "../../../src/components/icons.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -83,6 +84,20 @@ test("HomeScreen: 'Live now' shows each live match's teams and score, and tappin
   const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   act(() => { card.props.onClick(); });
   assert.equal(openedId, "live1");
+});
+
+test("HomeScreen: 'Live now' cards show a Trophy badge only for matches that belong to a tournament", () => {
+  const inst = render({
+    liveMatches: [
+      liveMatch({ id: "live1", tournamentId: "t1" }),
+      liveMatch({ id: "live2", teamA: "Downtown CC", teamB: "Hillside CC" })
+    ]
+  });
+  const cards = inst.root.findAllByType("button").filter(b => b.props.style && b.props.style.width === 190);
+  const tournamentCard = cards.find(b => hasText(b.props.children, "Riverside CC"));
+  const plainCard = cards.find(b => hasText(b.props.children, "Downtown CC"));
+  assert.equal(tournamentCard.findAllByType(Trophy).length, 1);
+  assert.equal(plainCard.findAllByType(Trophy).length, 0);
 });
 
 test("HomeScreen: no 'Live tournaments' section when liveTournaments is empty", () => {
