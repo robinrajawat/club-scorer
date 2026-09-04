@@ -2217,6 +2217,31 @@ export function CricketScorer() {
       ok: true
     };
   }
+  // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
+  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, then syncs
+  // the discoverability side effect handleUpdateTournament itself has no reason to know about:
+  // going private removes it from /liveTournaments immediately (removeTournamentFromLiveFeed),
+  // rather than waiting for its TTL to catch up; going public republishes it right away IF it's
+  // already shared (has a shareCode) -- refreshTournamentStandingsLive both recomputes standings
+  // and writes /liveTournaments in one call, self-healing even if this tournament's /tournamentViews
+  // snapshot had gone stale while it was private. A tournament that's public but never shared has
+  // no shareCode yet, so there's nothing to (re)publish -- sharing itself stays a separate,
+  // deliberate action (TournamentShareModal), never implied by a Visibility flip alone.
+  async function handleToggleTournamentVisibility(tournament) {
+    const updated = {
+      ...tournament,
+      private: !tournament.private
+    };
+    const result = await handleUpdateTournament(updated);
+    if (result.ok) {
+      if (updated.private) {
+        removeTournamentFromLiveFeed(updated.id);
+      } else if (updated.shareCode) {
+        refreshTournamentStandingsLive(updated.id);
+      }
+    }
+    return result;
+  }
   // Saves an updated tournament doc back to whichever of the three storage locations it actually
   // lives in, addressed by the tournament's own _clubId/_federationId tag (allTournamentsFlat
   // attaches this to every entry) rather than assuming which one's "currently active" -- shared by
@@ -2699,6 +2724,7 @@ export function CricketScorer() {
     onStartMatch: handleStartMatchInTournament,
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateTournament: handleUpdateTournament,
+    onToggleVisibility: handleToggleTournamentVisibility,
     onOpenMatch: id => {
       openMatch(id);
     },
