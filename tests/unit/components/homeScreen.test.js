@@ -212,6 +212,49 @@ test("HomeScreen: 'Next up' shows the nearest unstarted fixture (by date) across
   assert.equal(startedFixtureId, "f-soonest");
 });
 
+test("HomeScreen: 'Live now' caps its preview to 3 cards and a 'See all' card opens the full Live screen", () => {
+  const matches = [1, 2, 3, 4, 5].map(n => liveMatch({ id: `live${n}`, teamA: `Team ${n}`, teamB: "Oakwood CC" }));
+  let openedLive = false;
+  const inst = render({
+    liveMatches: matches,
+    onOpenLive: () => { openedLive = true; }
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Team 1/);
+  assert.match(json, /Team 3/);
+  assert.doesNotMatch(json, /Team 4/);
+  assert.doesNotMatch(json, /Team 5/);
+  assert.match(json, /See all/);
+  assert.match(json, /"\+","2"/);
+  const seeAll = inst.root.findAllByType("button").find(b => hasText(b.props.children, "See all"));
+  act(() => { seeAll.props.onClick(); });
+  assert.equal(openedLive, true);
+});
+
+test("HomeScreen: 'Live now' shows no 'See all' card when there are 3 or fewer live matches", () => {
+  const matches = [1, 2, 3].map(n => liveMatch({ id: `live${n}`, teamA: `Team ${n}`, teamB: "Oakwood CC" }));
+  const inst = render({ liveMatches: matches });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /See all/);
+});
+
+test("HomeScreen: 'Live tournaments' caps its preview to 3 cards and a 'See all' card opens the full Live screen", () => {
+  const tournaments = [1, 2, 3, 4].map(n => ({ tournamentId: `t${n}`, name: `Cup ${n}`, shareCode: `CODE${n}`, teamsCount: 4 }));
+  let openedLive = false;
+  const inst = render({
+    liveTournaments: tournaments,
+    onOpenLive: () => { openedLive = true; }
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Cup 1/);
+  assert.match(json, /Cup 3/);
+  assert.doesNotMatch(json, /Cup 4/);
+  assert.match(json, /See all/);
+  assert.match(json, /"\+","1"/);
+  const seeAll = inst.root.findAllByType("button").find(b => hasText(b.props.children, "See all"));
+  act(() => { seeAll.props.onClick(); });
+  assert.equal(openedLive, true);
+});
+
 test("HomeScreen: shows an empty state with no matches", () => {
   const inst = render();
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);

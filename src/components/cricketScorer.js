@@ -5,6 +5,7 @@ import { LoadingBallIllustration } from "./illustrations.js";
 import { WelcomeScreen } from "./welcomeScreen.js";
 import { AuthActionScreen } from "./authActionScreen.js";
 import { HomeScreen } from "./homeScreen.js";
+import { LiveScreen } from "./liveScreen.js";
 import { FirstLaunchTour } from "./miscModals.js";
 import { SetupScreen } from "./setupScreen.js";
 import { MatchScreen } from "./matchScreen.js";
@@ -204,6 +205,7 @@ export const SCREEN_DEPTH = {
   "poll-respond": 1,
   tournaments: 1,
   players: 1,
+  live: 1,
   "team-edit": 2,
   "shared-links": 2,
   "inbox": 1,
@@ -222,7 +224,7 @@ export function CricketScorer() {
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
   // (a tap), search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch below.
@@ -2582,6 +2584,7 @@ export function CricketScorer() {
     onOpenLiveMatch: openLiveMatch,
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
+    onOpenLive: () => setScreen("live"),
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -2589,7 +2592,17 @@ export function CricketScorer() {
     }
   })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
-  }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
+  }), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "live",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(LiveScreen, {
+    liveMatches: liveMatches,
+    onOpenLiveMatch: openLiveMatch,
+    liveTournaments: liveTournaments,
+    onOpenLiveTournament: openLiveTournament,
+    tournamentNameById: tournamentNameById,
+    onBack: () => setScreen("home")
+  })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(SetupScreen, {
