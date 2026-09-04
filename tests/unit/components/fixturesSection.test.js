@@ -105,6 +105,24 @@ test("FixturesSection: 'Add a fixture' lets you pick two teams and calls onUpdat
   assert.equal(updatedWith.fixtures[1].teamB, "Oakwood CC");
 });
 
+test("FixturesSection: scoring an already-started fixture calls onOpenMatch with the full match object, not just its id", () => {
+  // BUG FIX: passing just f.matchId left openMatch with no way to find a co-owner's shared match
+  // that this device had never independently opened before -- see cricketScorer.js's openMatch
+  // comment. The already-resolved match object (matchById.get(f.matchId), which is how this
+  // section already renders the fixture's live score) carries the shareCode that fixes it.
+  const existing = { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC", date: "", matchId: "m1" };
+  const inProgressMatch = { id: "m1", tournamentId: "t1", status: "in-progress", teamA: "Riverside CC", teamB: "Oakwood CC", shareCode: "ABC123" };
+  let opened = null;
+  const inst = render({
+    tournament: tournament({ fixtures: [existing] }),
+    matches: [inProgressMatch],
+    onOpenMatch: m => { opened = m; }
+  });
+  inst.root.findByType(FixtureRow).props.onScore();
+  assert.equal(opened.id, "m1");
+  assert.equal(opened.shareCode, "ABC123");
+});
+
 test("FixturesSection: deleting a fixture opens a ConfirmModal, and confirming removes it via onUpdateTournament", async () => {
   let updatedWith = null;
   const existing = { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC", date: "", matchId: null };
