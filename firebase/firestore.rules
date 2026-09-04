@@ -112,13 +112,15 @@ service cloud.firestore {
     // ---------------------------------------------------------------------
     // Read-only tournament share snapshot. Same open-by-code, owner-writes/anyone-reads trust
     // model as /liveViews — a SEPARATE collection again so a tournament share code can never be
-    // confused with a match code or view code from a different feature. Deliberately a snapshot,
-    // not a live mirror: tournaments live under /clubs/{clubId}/tournaments/{id} or a personal
-    // meta doc, and their standings depend on match results that live elsewhere again (private
-    // per-user or per-club match data) — keeping that fully in sync on every relevant write would
-    // mean touching this collection from several other write paths in the app. The client
-    // (shareTournament in index.html) writes a fresh standings/fixtures snapshot here whenever the
-    // owner opens the share panel and hits refresh, not on every match update.
+    // confused with a match code or view code from a different feature. Historically a pure
+    // point-in-time snapshot (the owner's client wrote it once, only when they opened the share
+    // panel and hit refresh); it's now also kept live by refreshTournamentStandingsLive in
+    // index.html, which any client — owner or a guest scoring via a match's own share code —
+    // triggers after saving a completed match tagged with a tournamentId, using ONLY the public
+    // data below (/tournamentMatches/{tournamentId} + its /entries). The manual "refresh" flow
+    // (shareTournament) still exists too, both for minting the first share code and because it's
+    // the only path that can see a signed-in owner's own privately-scored matches (see the next
+    // block's comment) — so standings here are best-effort live, not guaranteed live.
     //
     // Same get-only reasoning as /sharedMatches above — `list` stays denied.
     // ---------------------------------------------------------------------
@@ -129,21 +131,51 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
+    // Public mirror of just enough of a tournament's config — teams, and fixtures reduced to
+    // {id, teamA, teamB, date, stage, matchId} — for computeStandings to run against it with no
+    // other read. Written/kept in sync by shareTournament (index.html) whenever the owner shares
+    // or refreshes; deleted when sharing stops or the tournament itself is deleted
+    // (stopSharingTournament / deleteTournamentShareData). This is what lets
+    // refreshTournamentStandingsLive recompute /tournamentViews/{code} from a client that has no
+    // access to the real tournament doc at all (a guest scoring one fixture via a match share
+    // code has never seen /clubs/{clubId}/tournaments/{id}, which is club-membership-gated).
+    // `shareCode` and `private` ride along so a live-refresh attempt can cheaply no-op for a
+    // tournament that was never shared or has since been marked private, without an extra read.
+    //
+    // Same get-only reasoning as /tournamentViews above — `list` stays denied (there is no
+    // legitimate reason to enumerate every tournament's config doc; a client always arrives here
+    // already knowing a specific tournamentId, from a match it just saved). Carries its own
+    // `expiresAt`, kept in lockstep with /tournamentViews/{code}'s (see shareTournament and
+    // refreshTournamentStandingsLive in index.html) so this doc can never outlive the share
+    // snapshot it exists to keep updated — see "Running your own copy" in README.md for the TTL
+    // policy this depends on. Only the config doc at this exact path carries a TTL; the /entries
+    // subcollection just below is a different collection and untouched by it.
+    // ---------------------------------------------------------------------
+    match /tournamentMatches/{tournamentId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if true;
+    }
+
+    // ---------------------------------------------------------------------
     // Pointer index for "find every shared match tagged with tournament X" (loadTournamentMatches
     // in index.html), so standings/stats computation never has to run an unscoped query against
     // /sharedMatches itself. Each entry is just {tournamentId, matchId, shareCode} — enough to
-    // resolve to a `get` on the real match doc, nothing else. Reading it still requires being
-    // signed in AND already knowing a specific tournamentId (a query here is inherently scoped to
-    // one tournament's subcollection — there is no way to query "every entry across every
-    // tournament" without a collection-group rule, which this file deliberately never grants), so
-    // this narrows the old exposure down to "you already have legitimate access to this one
-    // tournament" rather than "you can dump the whole app's match history in one query."
+    // resolve to a `get` on the real match doc, nothing else — never scores, names, or anything
+    // else. Reading it USED to require being signed in; opened to public get/list so
+    // refreshTournamentStandingsLive (see /tournamentViews above) can enumerate a tournament's
+    // matches from a guest client with no account at all, the same client that just wrote one of
+    // these entries via its own match's shareCode moments earlier. A query here is still
+    // inherently scoped to one tournament's subcollection — there is no way to query "every entry
+    // across every tournament" without a collection-group rule, which this file deliberately
+    // never grants — so this stays "you already know this one tournamentId" rather than "you can
+    // dump the whole app's match history in one query."
     // Writes are unauthenticated on purpose, same as /sharedMatches itself: a guest scoring a
     // match via a code with no account still needs to be able to register it here if that match
     // carries a tournamentId.
     // ---------------------------------------------------------------------
     match /tournamentMatches/{tournamentId}/entries/{entryId} {
-      allow get, list: if request.auth != null;
+      allow get, list: if true;
       allow create, update: if request.resource.data.tournamentId == tournamentId
         && request.resource.data.matchId is string
         && request.resource.data.shareCode is string;

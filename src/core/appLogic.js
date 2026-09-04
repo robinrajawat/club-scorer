@@ -121,6 +121,37 @@ export function computeStandings(tournament, allMatches) {
     nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
   })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
 }
+// Pure formatting step for the /tournamentViews/{code} snapshot doc — takes an already-computed
+// standings table (from computeStandings) rather than recomputing it, since callers differ in
+// how cheaply they can get one: the owner's manual "refresh" already has a full one from the
+// screen they're on, while the live auto-refresh path (index.html's refreshTournamentStandingsLive)
+// computes it fresh from public-only data. Kept separate from computeStandings itself so both
+// callers share one definition of what actually gets written, rather than each hand-rolling the
+// same field subset and silently drifting apart. `sharedAt`/`expiresAt` are left to the caller —
+// those are write-time IO concerns (Date.now(), a TTL constant), not something this pure function
+// should decide.
+export function formatTournamentViewSnapshot(tournament, standings) {
+  return {
+    name: tournament.name,
+    teams: tournament.teams,
+    fixtures: (tournament.fixtures || []).map(f => ({
+      id: f.id,
+      teamA: f.teamA,
+      teamB: f.teamB,
+      date: f.date || ""
+    })),
+    standings: standings.map(r => ({
+      team: r.team,
+      played: r.played,
+      won: r.won,
+      lost: r.lost,
+      tied: r.tied,
+      noResult: r.noResult,
+      points: r.points,
+      nrr: r.nrr
+    }))
+  };
+}
 // One standings table per group instead of one combined table — reuses computeStandings itself
 // rather than re-deriving the points/NRR math, by handing it a "tournament" scoped to just that
 // group's teams (same real tournament id, so match-tagging still resolves correctly). Any

@@ -1713,34 +1713,44 @@ function getAuthActionFromUrl() {
   }
 }
 // GENERATED-FN-END: getAuthActionFromUrl
-// Writes/refreshes the read-only snapshot at /tournamentViews/{code} — see firestore.rules for why
-// this is a point-in-time snapshot rather than a live mirror. Reuses the tournament's own code
-// once one exists (persisted onto the tournament doc via the caller's onUpdateTournament) rather
-// than minting a new one on every refresh, so a previously-shared link keeps working.
+// Writes/refreshes the read-only snapshot at /tournamentViews/{code}, using the shared
+// formatTournamentViewSnapshot (src/core/appLogic.js) so this and the live auto-refresh path
+// below (refreshTournamentStandingsLive) can never silently drift into writing different shapes.
+// Also (re)writes the public standings-recompute config at /tournamentMatches/{tournamentId} —
+// see firestore.rules for why that's needed at all — so refreshTournamentStandingsLive has
+// something to read the next time any client (owner or a guest via a match share code) completes
+// a match tagged with this tournament, without ever needing to see the real tournament doc.
+// Reuses the tournament's own code once one exists (persisted onto the tournament doc via the
+// caller's onUpdateTournament) rather than minting a new one on every refresh, so a previously-
+// shared link keeps working.
 async function shareTournament(tournament, standings) {
   try {
     const code = tournament.shareCode || genMatchCode();
     await db.collection("tournamentViews").doc(code).set({
+      ...formatTournamentViewSnapshot(tournament, standings),
+      sharedAt: Date.now(),
+      expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
+    });
+    await db.collection("tournamentMatches").doc(tournament.id).set({
+      shareCode: code,
       name: tournament.name,
       teams: tournament.teams,
       fixtures: (tournament.fixtures || []).map(f => ({
         id: f.id,
         teamA: f.teamA,
         teamB: f.teamB,
-        date: f.date || ""
+        date: f.date || "",
+        stage: f.stage || null,
+        matchId: f.matchId || null
       })),
-      standings: standings.map(r => ({
-        team: r.team,
-        played: r.played,
-        won: r.won,
-        lost: r.lost,
-        tied: r.tied,
-        points: r.points,
-        nrr: r.nrr
-      })),
-      sharedAt: Date.now(),
+      private: !!tournament.private,
+      updatedAt: Date.now(),
+      // Kept on the same TTL as /tournamentViews/{code} itself (see refreshTournamentStandingsLive,
+      // which bumps this forward too on every live recompute) so a config doc can never outlive the
+      // share snapshot it exists to keep updated — an expired tournamentViews doc must stay expired,
+      // not get silently resurrected by the next match completion finding this doc still alive.
       expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
-    });
+    }, { merge: true });
     return {
       ok: true,
       code
@@ -1752,9 +1762,14 @@ async function shareTournament(tournament, standings) {
     };
   }
 }
-async function stopSharingTournament(code) {
+// tournamentId is needed alongside the share code so the /tournamentMatches/{tournamentId}
+// config doc (see shareTournament above) can be cleared too — otherwise a stopped share would
+// keep passing refreshTournamentStandingsLive's shareCode check and silently resurrect
+// /tournamentViews/{code} the next time any match in this tournament completes.
+async function stopSharingTournament(tournamentId, code) {
   try {
     await db.collection("tournamentViews").doc(code).delete();
+    await db.collection("tournamentMatches").doc(tournamentId).delete();
     return {
       ok: true
     };
@@ -1763,6 +1778,54 @@ async function stopSharingTournament(code) {
       ok: false,
       error: e.message || "Couldn't stop sharing."
     };
+  }
+}
+// Best-effort, fire-and-forget auto-refresh of a shared tournament's /tournamentViews/{code}
+// snapshot — called from saveMatch whenever ANY client, owner or a guest scoring via a match's
+// own share code, saves a completed match tagged with a tournamentId. Unlike shareTournament (the
+// manual "hit refresh" path, still needed to mint the very first share code and still the only
+// path that can see a signed-in owner's own privately-scored matches under /users/{uid}/matches),
+// this reads ONLY public data — see firestore.rules for why both collections below are open:
+// the /tournamentMatches/{tournamentId} config doc (teams + fixtures, kept in sync by
+// shareTournament) and its /entries pointer index, resolved through /sharedMatches. That means it
+// can only ever "see" matches that went through a match share code — a tournament run entirely by
+// its owner scoring privately (never handing out a match code) stays only as live as the owner's
+// own device refreshing it manually or completing a match itself. A silent no-op, not an error, if
+// the tournament was never shared (no config doc, or no shareCode on it) or has since been marked
+// private — cheap to call unconditionally from saveMatch since that first read short-circuits.
+async function refreshTournamentStandingsLive(tournamentId) {
+  try {
+    const configDoc = await db.collection("tournamentMatches").doc(tournamentId).get();
+    if (!configDoc.exists) return;
+    const config = configDoc.data();
+    if (!config.shareCode || config.private) return;
+    const entriesSnap = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").get();
+    const shareCodes = [...new Set(entriesSnap.docs.map(d => d.data().shareCode).filter(Boolean))];
+    const matchDocs = await Promise.all(shareCodes.map(code => db.collection("sharedMatches").doc(code).get()));
+    const matches = matchDocs.filter(d => d.exists).map(d => unpackMatchFromFirestore(d.data()));
+    const tournamentShape = {
+      id: tournamentId,
+      name: config.name,
+      teams: config.teams || [],
+      fixtures: config.fixtures || []
+    };
+    const standings = computeStandings(tournamentShape, matches);
+    const expiresAt = ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS);
+    await db.collection("tournamentViews").doc(config.shareCode).set({
+      ...formatTournamentViewSnapshot(tournamentShape, standings),
+      sharedAt: Date.now(),
+      expiresAt
+    });
+    // Bumps this config doc's own expiresAt forward too (see shareTournament's comment on why) —
+    // otherwise a tournament kept alive purely by live auto-refreshes, with the owner never
+    // manually hitting refresh, would have this doc's TTL keep ticking down on its own and
+    // eventually delete itself out from under an actually-still-active share.
+    await db.collection("tournamentMatches").doc(tournamentId).set({ expiresAt }, { merge: true });
+  } catch (e) {
+    // Deliberately non-fatal, same reasoning as the other mirror writes in saveMatch — scoring
+    // keeps working either way. Worst case a shared tournament's standings lag until the owner's
+    // own device next refreshes it manually or another match completes.
+    console.error("[refreshTournamentStandingsLive] failed — tournamentId:", tournamentId, "code:", e.code, "message:", e.message);
   }
 }
 
@@ -2375,6 +2438,15 @@ async function saveMatch(match) {
       // screen's Live feed until the next save reconciles it.
       console.error("[saveMatch] live-match feed mirror write failed \u2014 id:", match.id, "code:", e.code, "message:", e.message);
     }
+  }
+  // Best-effort live standings refresh: any client that just saved a COMPLETED match tagged with
+  // a tournamentId (owner or a guest via that match's own shareCode) kicks off a recompute of the
+  // shared tournament's /tournamentViews/{code} snapshot. See refreshTournamentStandingsLive's own
+  // comment for what it can/can't see. Not awaited \u2014 this is a secondary mirror write, scoring
+  // must never wait on it \u2014 and gated on structuralError the same way the mirrors above are, since
+  // a match that failed its pre-flight check was never actually saved anywhere real yet.
+  if (!result.structuralError && match.tournamentId && match.status === "complete") {
+    refreshTournamentStandingsLive(match.tournamentId);
   }
   return result;
 }
@@ -5014,20 +5086,27 @@ async function saveClubTournament(clubId, tournament) {
     };
   }
 }
-// Cleans up the two pieces of share-related data a tournament can accumulate: its
+// Cleans up the three pieces of share-related data a tournament can accumulate: its
 // tournamentMatches/{id}/entries pointer index (populated as guest-scored matches register
-// themselves against this tournament -- see loadTournamentMatches) and its tournamentViews/{code}
-// live-share snapshot, if one was ever created (see shareTournament). Neither is cascade-deleted
-// by Firestore on its own -- they're separate top-level collections, not true subcollections of
-// the tournament doc, same reasoning as deleteClub's team/tournament/player cleanup. Deliberately
-// does NOT touch the underlying shared matches themselves: those are real match data a person
-// scored, independent of whether the tournament that once referenced them still exists.
+// themselves against this tournament -- see loadTournamentMatches), the tournamentMatches/{id}
+// config doc that lets refreshTournamentStandingsLive recompute standings without the real
+// tournament doc (see firestore.rules), and its tournamentViews/{code} share snapshot, if one was
+// ever created (see shareTournament). None of these is cascade-deleted by Firestore on its own --
+// they're separate top-level collections/docs, not true subcollections of the tournament doc, same
+// reasoning as deleteClub's team/tournament/player cleanup. Deliberately does NOT touch the
+// underlying shared matches themselves: those are real match data a person scored, independent of
+// whether the tournament that once referenced them still exists.
 async function deleteTournamentShareData(tournamentId, shareCode) {
   try {
     const entriesSnap = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").get();
     await Promise.all(entriesSnap.docs.map(d => d.ref.delete()));
   } catch (e) {
     console.error("tournament entries cleanup failed", e);
+  }
+  try {
+    await db.collection("tournamentMatches").doc(tournamentId).delete();
+  } catch (e) {
+    console.error("tournament standings config cleanup failed", e);
   }
   if (shareCode) {
     try {
@@ -5324,6 +5403,37 @@ function computeStandings(tournament, allMatches) {
     ...r,
     nrr: r.oversFor > 0 && r.oversAgainst > 0 ? r.runsFor / r.oversFor - r.runsAgainst / r.oversAgainst : 0
   })).sort((a, b) => b.points - a.points || b.nrr - a.nrr);
+}
+// Pure formatting step for the /tournamentViews/{code} snapshot doc — takes an already-computed
+// standings table (from computeStandings) rather than recomputing it, since callers differ in
+// how cheaply they can get one: the owner's manual "refresh" already has a full one from the
+// screen they're on, while the live auto-refresh path (index.html's refreshTournamentStandingsLive)
+// computes it fresh from public-only data. Kept separate from computeStandings itself so both
+// callers share one definition of what actually gets written, rather than each hand-rolling the
+// same field subset and silently drifting apart. `sharedAt`/`expiresAt` are left to the caller —
+// those are write-time IO concerns (Date.now(), a TTL constant), not something this pure function
+// should decide.
+function formatTournamentViewSnapshot(tournament, standings) {
+  return {
+    name: tournament.name,
+    teams: tournament.teams,
+    fixtures: (tournament.fixtures || []).map(f => ({
+      id: f.id,
+      teamA: f.teamA,
+      teamB: f.teamB,
+      date: f.date || ""
+    })),
+    standings: standings.map(r => ({
+      team: r.team,
+      played: r.played,
+      won: r.won,
+      lost: r.lost,
+      tied: r.tied,
+      noResult: r.noResult,
+      points: r.points,
+      nrr: r.nrr
+    }))
+  };
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself
 // rather than re-deriving the points/NRR math, by handing it a "tournament" scoped to just that
@@ -30803,7 +30913,7 @@ function TournamentShareModal({
     if (!code) return;
     setBusy(true);
     setError("");
-    const result = await stopSharingTournament(code);
+    const result = await stopSharingTournament(tournament.id, code);
     setBusy(false);
     if (result.ok) {
       onUpdateTournament({
