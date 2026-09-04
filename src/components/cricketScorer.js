@@ -1127,16 +1127,21 @@ export function CricketScorer() {
       linkFixtureToMatch(setup.tournamentId, setup.fixtureId, m.id, setup.rules, setup.venue, setup.oversLimit);
     }
   }
-  // knownMatch is the already-loaded match object, when the caller has one (e.g. a tournament's
-  // Matches tab/fixture list, populated via loadTournamentMatches) -- BUG FIX: without it, opening
-  // a co-owner's shared tournament match for the first time on this device silently did nothing.
-  // loadMatch(id) alone can only find a match by a local index pointer (lsGetIndex) or under this
-  // account's own uid; a teammate's match that this device has never independently opened has
-  // neither, so it fell through every branch and returned null. Seeding a local pointer from the
-  // known object's shareCode first (same fix loadMatch's own shareCode branch already relies on
-  // for handleJoinCode) lets the normal cross-account lookup find it; knownMatch itself is the
+  // Takes either a plain match id (Home's own matches -- always loadable straight from this
+  // account's own uid) or the full match object a screen already has in hand (a tournament/series
+  // screen's loadTournamentMatches data, or Home once one of those matches gets a local pointer --
+  // see below). BUG FIX: passing only an id left no way to open a co-owner's shared match the
+  // first time this device ever saw it -- loadMatch(id) alone can only resolve one via a local
+  // index pointer (lsGetIndex) or under this account's own uid, and a teammate's match that this
+  // device has never independently opened has neither, so it fell through every branch and
+  // returned null with no visible effect. Seeding a local pointer from the known object's
+  // shareCode first (same fix loadMatch's own shareCode branch already relies on for
+  // handleJoinCode) lets the normal cross-account lookup find it; the known object itself is the
   // last-resort fallback if that still comes back empty (e.g. offline).
-  async function openMatch(id, knownMatch) {
+  async function openMatch(matchOrId) {
+    const isObject = matchOrId && typeof matchOrId === "object";
+    const id = isObject ? matchOrId.id : matchOrId;
+    const knownMatch = isObject ? matchOrId : null;
     setMatchLoading(true);
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
@@ -2819,15 +2824,7 @@ export function CricketScorer() {
     backLabel: tournamentDetailReturnScreen === "home" ? "Home" : "Cups",
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateSeries: handleUpdateTournament,
-    // A match object (from the screen's own loadTournamentMatches data) when the caller already
-    // has one, an id otherwise -- see openMatch's own comment for why the object matters.
-    onOpenMatch: matchOrId => {
-      if (matchOrId && typeof matchOrId === "object") {
-        openMatch(matchOrId.id, matchOrId);
-      } else {
-        openMatch(matchOrId);
-      }
-    },
+    onOpenMatch: openMatch,
     onDeleteSeries: handleDeleteTournament,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid)
   })), screen === "tournament-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
@@ -2841,16 +2838,7 @@ export function CricketScorer() {
     onStartFixtureMatch: handleStartFixtureMatch,
     onUpdateTournament: handleUpdateTournament,
     onToggleVisibility: handleToggleTournamentVisibility,
-    // A match object (already loaded via this screen's own loadTournamentMatches, which is how a
-    // co-owner's shared-but-never-locally-opened match gets here in the first place) when the
-    // caller has one, an id otherwise -- see openMatch's own comment for why the object matters.
-    onOpenMatch: matchOrId => {
-      if (matchOrId && typeof matchOrId === "object") {
-        openMatch(matchOrId.id, matchOrId);
-      } else {
-        openMatch(matchOrId);
-      }
-    },
+    onOpenMatch: openMatch,
     onDeleteTournament: handleDeleteTournament,
     // Lets the champion banner (see FixturesSection) link straight to the club/federation's
     // Record Book the moment a title's actually decided — the same handleOpenRecords used by the
