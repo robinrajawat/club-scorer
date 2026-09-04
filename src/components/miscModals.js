@@ -185,7 +185,7 @@ export function TournamentShareModal({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It's a snapshot, not live: hit Refresh after new results come in. A link nobody's refreshed in a long while may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It updates itself automatically as results come in, so there's usually nothing to do here beyond copying the link below \u2014 \"Refresh now\" is only for forcing an update on the spot. A link that's gone unused for a long stretch may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -237,7 +237,7 @@ export function TournamentShareModal({
     style: {
       flex: 1
     }
-  }, busy ? "\u2026" : "Refresh snapshot"), /*#__PURE__*/React.createElement(Btn, {
+  }, busy ? "\u2026" : "Refresh now"), /*#__PURE__*/React.createElement(Btn, {
     variant: "danger",
     onClick: handleStop,
     disabled: busy,

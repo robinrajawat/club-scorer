@@ -31,7 +31,7 @@ import {
 } from "../core/miscHelpers.js";
 import {
   hasSeenTour, loadThemePref, loadPinnedIds, savePinnedIds, applyTheme, saveThemePref, isIOSSafari,
-  isStandalone, hasSeenInstallHint, markInstallHintSeen, DEFAULT_RULES
+  isStandalone, hasSeenInstallHint, markInstallHintSeen, DEFAULT_RULES, computeStandings
 } from "../core/appLogic.js";
 import { ensureBatsman, ensureBowler, newInning } from "../core/scoringEngine.js";
 import {
@@ -2068,6 +2068,16 @@ export function CricketScorer() {
           ...prev,
           [activeTournamentFederationId]: [...(prev[activeTournamentFederationId] || []), t]
         }));
+        // Explicit persist callback rather than routing through handleUpdateTournament -- this
+        // tournament may not be the one `viewingTournament*` state points at yet, so that path
+        // isn't safe to assume here. Re-persists to the SAME federation this branch just saved to.
+        maybeAutoPublishTournament(t, async t2 => {
+          const r = await saveFederationTournament(activeTournamentFederationId, t2);
+          if (r.ok) setFederationTournamentsById(prev => ({
+            ...prev,
+            [activeTournamentFederationId]: (prev[activeTournamentFederationId] || []).map(x => x.id === t2.id ? t2 : x)
+          }));
+        });
       }
       return {
         ...result,
@@ -2081,6 +2091,13 @@ export function CricketScorer() {
           ...prev,
           [activeTournamentClubId]: [...(prev[activeTournamentClubId] || []), t]
         }));
+        maybeAutoPublishTournament(t, async t2 => {
+          const r = await saveClubTournament(activeTournamentClubId, t2);
+          if (r.ok) setClubTournamentsById(prev => ({
+            ...prev,
+            [activeTournamentClubId]: (prev[activeTournamentClubId] || []).map(x => x.id === t2.id ? t2 : x)
+          }));
+        });
       }
       return {
         ...result,
@@ -2090,6 +2107,11 @@ export function CricketScorer() {
     const updated = [...tournaments, t];
     setTournaments(updated);
     await saveTournaments(updated);
+    maybeAutoPublishTournament(t, async t2 => {
+      const list = updated.map(x => x.id === t2.id ? t2 : x);
+      setTournaments(list);
+      await saveTournaments(list);
+    });
     return {
       ok: true,
       tournament: t
@@ -2184,7 +2206,37 @@ export function CricketScorer() {
   // deleted, teams, name, ...) — single choke point so every fixture action doesn't need its own
   // save-plus-state-sync logic, and so it's automatically correct about which source (personal, a
   // specific club, or a specific federation) the tournament actually lives in.
-  async function handleUpdateTournament(updated) {
+  // Closes the friction gap between matches and tournaments: a non-private MATCH is discoverable
+  // in the Home screen's Live now feed the instant it's saved, no extra step -- a non-private
+  // TOURNAMENT used to stay invisible until its owner explicitly tapped "Share" once. Called after
+  // every successful tournament save (creation and every edit) except a series, which has never
+  // collected a Visibility choice at creation -- defaulting it into auto-publish here would
+  // silently make a "private by omission" series discoverable, so it's left alone. `persist` is
+  // however THIS caller already knows to save an update back to the right storage tier (club/
+  // federation/personal) -- kept as an explicit callback rather than reaching for ambient
+  // `viewingTournament*` state, which isn't guaranteed to already point at a just-created
+  // tournament by the time this (fire-and-forget, awaited-later) call resolves.
+  async function maybeAutoPublishTournament(tournament, persist) {
+    if (tournament.kind === "series" || tournament.private) return;
+    if (tournament.shareCode) {
+      refreshTournamentStandingsLive(tournament.id);
+      return;
+    }
+    // Never shared before -- mint a code and publish for the first time, the same work
+    // TournamentShareModal's "Share" button does, just triggered automatically instead of by a
+    // tap. Empty match list is correct here: a tournament this is reachable for has either just
+    // been created (genuinely zero matches) or is being auto-healed after an edit with no
+    // shareCode yet -- either way, the very next refreshTournamentStandingsLive (triggered by any
+    // match completing) recomputes the real standings from scratch once a shareCode exists.
+    const result = await shareTournament(tournament, computeStandings(tournament, []));
+    if (result.ok) {
+      persist({
+        ...tournament,
+        shareCode: result.code
+      });
+    }
+  }
+  async function handleUpdateTournament(updated, skipAutoPublish = false) {
     const clubId = viewingTournamentClubId;
     const federationId = viewingTournamentFederationId;
     if (federationId) {
@@ -2195,6 +2247,7 @@ export function CricketScorer() {
           [federationId]: (prev[federationId] || []).map(t => t.id === updated.id ? updated : t)
         }));
         setViewingTournament(updated);
+        if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
       }
       return result;
     }
@@ -2206,6 +2259,7 @@ export function CricketScorer() {
           [clubId]: (prev[clubId] || []).map(t => t.id === updated.id ? updated : t)
         }));
         setViewingTournament(updated);
+        if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
       }
       return result;
     }
@@ -2213,32 +2267,26 @@ export function CricketScorer() {
     setTournaments(updatedList);
     await saveTournaments(updatedList);
     setViewingTournament(updated);
+    if (!skipAutoPublish) maybeAutoPublishTournament(updated, t => handleUpdateTournament(t, true));
     return {
       ok: true
     };
   }
   // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
-  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, then syncs
-  // the discoverability side effect handleUpdateTournament itself has no reason to know about:
-  // going private removes it from /liveTournaments immediately (removeTournamentFromLiveFeed),
-  // rather than waiting for its TTL to catch up; going public republishes it right away IF it's
-  // already shared (has a shareCode) -- refreshTournamentStandingsLive both recomputes standings
-  // and writes /liveTournaments in one call, self-healing even if this tournament's /tournamentViews
-  // snapshot had gone stale while it was private. A tournament that's public but never shared has
-  // no shareCode yet, so there's nothing to (re)publish -- sharing itself stays a separate,
-  // deliberate action (TournamentShareModal), never implied by a Visibility flip alone.
+  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, which on its
+  // own now handles the "going public" side (maybeAutoPublishTournament -- mints a share code and
+  // publishes for the first time if this tournament was never shared, or just republishes if it
+  // was). All this function needs to add is the one thing handleUpdateTournament has no reason to
+  // know about: going private removes it from /liveTournaments immediately
+  // (removeTournamentFromLiveFeed), rather than waiting for its TTL to catch up.
   async function handleToggleTournamentVisibility(tournament) {
     const updated = {
       ...tournament,
       private: !tournament.private
     };
     const result = await handleUpdateTournament(updated);
-    if (result.ok) {
-      if (updated.private) {
-        removeTournamentFromLiveFeed(updated.id);
-      } else if (updated.shareCode) {
-        refreshTournamentStandingsLive(updated.id);
-      }
+    if (result.ok && updated.private) {
+      removeTournamentFromLiveFeed(updated.id);
     }
     return result;
   }
