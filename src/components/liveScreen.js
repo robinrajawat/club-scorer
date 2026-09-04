@@ -3,6 +3,7 @@ import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight, Trophy } from "./icons.js";
 import { EmptyStateBallIllustration } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
+import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // The full-list destination behind each "See all" on the Home screen's Live now / Live
 // tournaments preview strips -- those strips only ever show a handful of cards (see
@@ -18,7 +19,8 @@ export function LiveScreen({
   liveTournaments = [],
   onOpenLiveTournament,
   tournamentNameById = {},
-  onBack
+  onBack,
+  showTabBar = false
 }) {
   // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
   // this account's own tournaments, liveTournaments (the public mirror) fills the gap for anyone
@@ -160,7 +162,12 @@ export function LiveScreen({
 
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "20px 16px 60px",
+      paddingTop: 20,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // See the matching comment in homeScreen.js's own root style -- reserves clearance under
+      // the fixed TabBar when it's showing.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
       margin: "0 auto"
     }

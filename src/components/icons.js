@@ -240,6 +240,12 @@ export const HelpCircle = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PU
   y2: "17"
 }));
 
+export const House = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+}));
+
 export const InboxIcon = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("polyline", {
   points: "22 12 16 12 14 15 10 15 8 12 2 12"
 }), /*#__PURE__*/React.createElement("path", {
@@ -372,6 +378,20 @@ export const Printer = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE_
   y: "14",
   width: "12",
   height: "8"
+}));
+
+export const Radio = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
+  d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"
+}), /*#__PURE__*/React.createElement("circle", {
+  cx: "12",
+  cy: "12",
+  r: "2"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M19.1 4.9C23 8.8 23 15.1 19.1 19"
 }));
 
 export const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {

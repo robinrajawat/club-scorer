@@ -15,6 +15,7 @@ import { HELP_SECTIONS } from "./infoScreens.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { relativeDayLabel, greetingPrefix } from "../core/miscHelpers.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
+import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // The app's landing screen once signed in (or skipped sign-in): saved matches (in-progress/
 // upcoming/completed, each collapsible), a unified search across matches/teams/players/tournaments/
@@ -91,7 +92,8 @@ export function HomeScreen({
   onOpenLive,
   onLoadRecentMatches,
   showInstallHint = false,
-  onDismissInstallHint
+  onDismissInstallHint,
+  showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
@@ -584,7 +586,14 @@ function renderMatchCard(m, i, {
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "28px 16px 40px",
+      paddingTop: 28,
+      paddingLeft: 16,
+      paddingRight: 16,
+      // Reserves clearance under the fixed TabBar (see cricketScorer.js) when it's showing, so the
+      // last bit of scrollable content here doesn't render partially hidden underneath it -- same
+      // fixed-bar-overlap bug class as MatchScreen's scoring pad (see docs/history.md's "This
+      // Over" writeup), just avoided from the start here since TabBar's height never changes.
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }

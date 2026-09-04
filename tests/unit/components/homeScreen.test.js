@@ -255,6 +255,13 @@ test("HomeScreen: 'Live tournaments' caps its preview to 3 cards and a 'See all'
   assert.equal(openedLive, true);
 });
 
+test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTabBar is set", () => {
+  const withoutBar = render().toJSON();
+  const withBar = render({ showTabBar: true }).toJSON();
+  assert.equal(withoutBar.props.style.paddingBottom, 40);
+  assert.match(String(withBar.props.style.paddingBottom), /calc\(58px \+ 40px \+ env\(safe-area-inset-bottom\)\)/);
+});
+
 test("HomeScreen: shows an empty state with no matches", () => {
   const inst = render();
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);

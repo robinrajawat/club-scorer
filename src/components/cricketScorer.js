@@ -6,6 +6,7 @@ import { WelcomeScreen } from "./welcomeScreen.js";
 import { AuthActionScreen } from "./authActionScreen.js";
 import { HomeScreen } from "./homeScreen.js";
 import { LiveScreen } from "./liveScreen.js";
+import { TabBar } from "./tabBar.js";
 import { FirstLaunchTour } from "./miscModals.js";
 import { SetupScreen } from "./setupScreen.js";
 import { MatchScreen } from "./matchScreen.js";
@@ -198,6 +199,7 @@ export const SCREEN_DEPTH = {
   "auth-action": 0,
   setup: 1,
   teams: 1,
+  "my-teams": 1,
   match: 1,
   account: 1,
   follow: 1,
@@ -212,6 +214,13 @@ export const SCREEN_DEPTH = {
   "tournament-detail": 2
 };
 
+// The five screens TabBar (see tabBar.js) offers direct navigation to -- the persistent bottom
+// bar only renders while `screen` is one of these, hidden everywhere else (mid-match scoring,
+// setup wizard, edit/detail screens reached by drilling in further) since it would just compete
+// with those screens' own fixed-position UI (MatchScreen's scoring pad chief among them) or with
+// their own single-purpose back button. "teams" here is TeamsScreen -- confusingly the Clubs
+// browser, not the roster screen (that's "my-teams") -- see tabBar.js's own TABS list.
+export const TAB_BAR_SCREENS = ["home", "live", "tournaments", "my-teams", "teams"];
 
 export function CricketScorer() {
   const initialAuthAction = useRef(getAuthActionFromUrl()).current;
@@ -2585,6 +2594,7 @@ export function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     onOpenLive: () => setScreen("live"),
+    showTabBar: true,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -2601,7 +2611,8 @@ export function CricketScorer() {
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("home"),
+    showTabBar: true
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -2655,7 +2666,8 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId)
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId),
+    showTabBar: true
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
@@ -2715,7 +2727,8 @@ export function CricketScorer() {
     onAddPoolPlayers: handleAddPoolPlayers,
     onUpdatePoolPlayer: handleUpdatePoolPlayer,
     onRemovePoolPlayer: handleRemovePoolPlayer,
-    onCreateTeamFromPool: handleCreateTeamFromPool
+    onCreateTeamFromPool: handleCreateTeamFromPool,
+    showTabBar: true
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -2752,7 +2765,8 @@ export function CricketScorer() {
     pinnedClubIds: pinnedClubIds,
     onTogglePinClub: handleTogglePinClub,
     pinnedFederationIds: pinnedFederationIds,
-    onTogglePinFederation: handleTogglePinFederation
+    onTogglePinFederation: handleTogglePinFederation,
+    showTabBar: true
   })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "records",
     direction: navDirection
@@ -2973,5 +2987,8 @@ export function CricketScorer() {
       color: COLORS.inkSoft,
       fontSize: 13
     }
-  }, "Opening match\u2026"))));
+  }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
+    active: screen,
+    onSelect: setScreen
+  }));
 }
