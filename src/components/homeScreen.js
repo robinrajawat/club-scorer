@@ -165,6 +165,19 @@ export function HomeScreen({
     };
   }, [query, searchScope, recentMatches, hasRecentMatchSearch]);
   const q = query.trim().toLowerCase();
+  // Resolves a tournament's name for the "Live now" strip below, which spans every match app-wide
+  // (not just this account's own) -- tournamentNameById alone can't cover that, since it's built
+  // from tournaments this account actually knows about (personal/club/federation). liveTournaments
+  // (the public /liveTournaments mirror, same data source as the "Live tournaments" strip) fills
+  // that gap for any non-private tournament, which is the only kind that can show up in "Live now"
+  // via someone else's match anyway. tournamentNameById still wins when both have an entry, since
+  // it's the more authoritative source for anything this account actually owns. A tournament with
+  // neither -- private, or not yet auto-published -- just falls back to the bare Trophy badge.
+  const liveTournamentNameById = {};
+  liveTournaments.forEach(t => {
+    liveTournamentNameById[t.tournamentId] = t.name;
+  });
+  const tournamentNameForBadge = id => tournamentNameById[id] || liveTournamentNameById[id] || null;
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
   // scroll hunting for a specific date. Venue isn't included: local-only/offline matches never
@@ -732,13 +745,28 @@ function renderMatchCard(m, i, {
       cursor: "pointer",
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }, m.tournamentId && /*#__PURE__*/React.createElement(Trophy, {
-    size: 11,
+  }, m.tournamentId && /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
       color: COLORS.gold,
-      marginBottom: 3
+      marginBottom: 3,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
     }
-  }), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 10,
+    style: {
+      flexShrink: 0
+    }
+  }), tournamentNameForBadge(m.tournamentId)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
