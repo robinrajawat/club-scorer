@@ -497,14 +497,17 @@ export function MatchStatsPanel({
     }, ballCommentary.outcome)));
   }
   // Striker/non-striker rows, partnership, and the current bowler's figures -- "who's out there
-  // right now."
-  function renderBattersBlock() {
+  // right now." `withDivider` draws the separator above it that made sense when this used to sit
+  // below the score block in one shared card -- still correct there (showOvers=false), but
+  // orphaned at the top of its own card with nothing above it to divide from once showOvers=true
+  // split this into a second card of its own.
+  function renderBattersBlock(withDivider) {
     return /*#__PURE__*/React.createElement(React.Fragment, null, liveInn.strikerName && /*#__PURE__*/React.createElement("div", {
-      style: {
+      style: withDivider ? {
         marginTop: 12,
         paddingTop: 10,
         borderTop: `1px solid ${COLORS.creamDark}`
-      }
+      } : {}
     }, [liveInn.strikerName, liveInn.nonStrikerName].filter(Boolean).map(name => {
       const b = liveInn.batsmen[name] || {
         runs: 0,
@@ -638,7 +641,7 @@ export function MatchStatsPanel({
     }
   }, renderScoreBlock(), renderCommentaryBlock()), /*#__PURE__*/React.createElement("div", {
     style: cardStyle
-  }, renderBattersBlock(), renderOversBlock())) : /*#__PURE__*/React.createElement("div", {
+  }, renderBattersBlock(false), renderOversBlock())) : /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "14px 16px 0",
       maxWidth: 560,
@@ -646,7 +649,7 @@ export function MatchStatsPanel({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: cardStyle
-  }, renderScoreBlock(), renderBattersBlock(), renderOversBlock()))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, renderScoreBlock(), renderBattersBlock(true), renderOversBlock()))), match.innings.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
