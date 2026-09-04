@@ -12565,6 +12565,8 @@ function AboutScreen({
   // Collapsed by default -- this is the least inviting section (four paragraphs of policy text)
   // and the one people open Settings to check, not to read start to finish every time.
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  // Same reasoning as privacyOpen just above.
+  const [termsOpen, setTermsOpen] = useState(false);
   const dividerStyle = {
     height: 1,
     background: COLORS.cardDivider,
@@ -12691,6 +12693,63 @@ function AboutScreen({
       marginBottom: idx < 4 ? 10 : 0
     }
   }, para)));
+  // Same collapsed-by-default pattern as privacyBlock just above, same reasoning -- policy text
+  // nobody reads start to finish, placed right next to Data & privacy since together they're
+  // "the legal stuff," ahead of Support (which deliberately stays the card's last, most inviting
+  // word -- see its own comment).
+  const termsBlock = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setTermsOpen(o => !o),
+    "aria-expanded": termsOpen,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      background: "none",
+      border: "none",
+      padding: 0,
+      marginBottom: termsOpen ? 10 : 0,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement(BookOpen, {
+    size: 14,
+    style: {
+      color: COLORS.inkSoft
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelTextStyle
+  }, "Terms of service")), /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 15,
+    style: {
+      color: COLORS.inkSoft,
+      transform: termsOpen ? "rotate(180deg)" : "none",
+      transition: "transform 0.15s ease"
+    }
+  })), !termsOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, "The short version of what using this app means — tap to read."), termsOpen && ["Club Scorer is free, provided as-is with no warranty of any kind. It's built and maintained by one person as a side project for club cricket — treat any score, standing, or DLS number it produces as a convenience, not an official record, and keep your own scorebook for anything that actually matters (a league table, a trophy, a dispute).", "You're responsible for what you enter — player names, photos, notes, club and federation details — and for having the right to share it, especially anything made visible to others (a published player, a live share link, a public club or federation directory entry). Don't use the app to harass, impersonate, or publish someone else's information without their OK.", "The service can change, have downtime, or be discontinued at any time, with or without notice — it runs on free-tier infrastructure (GitHub Pages, Firebase) on a best-effort basis, not a guaranteed uptime commitment. Nothing here is sold, and there's no paywall or subscription (see “Support” below) that creates any entitlement beyond what's written here.", "Because it's open source under the MIT License (see above), you're always free to copy the code and run your own instance if this one ever changes in a way you don't want to depend on — see “Running your own copy” in the README for exactly how.", "These terms may change as the app does; continuing to use it after an update means accepting the current version. See “Data & privacy” above for how your information is actually handled."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+    key: idx,
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.7,
+      marginBottom: idx < 4 ? 10 : 0
+    }
+  }, para)));
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -12799,6 +12858,8 @@ function AboutScreen({
   }, "View license")), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), privacyBlock, /*#__PURE__*/React.createElement("div", {
+    style: dividerStyle
+  }), termsBlock, /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), supportBlock)));
 }

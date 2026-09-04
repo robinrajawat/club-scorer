@@ -80,6 +80,20 @@ test("AboutScreen: Data & privacy starts collapsed behind a teaser, and expands 
   assert.match(JSON.stringify(inst.toJSON()), /Firestore/);
 });
 
+test("AboutScreen: Terms of service starts collapsed behind a teaser, and expands to the full text on tap", () => {
+  const inst = renderer.create(React.createElement(AboutScreen, { onBack: () => {} }));
+  const toggles = inst.root.findAllByType("button").filter(b => b.props["aria-expanded"] !== undefined);
+  assert.equal(toggles.length, 2, "Data & privacy and Terms of service each have their own collapse toggle");
+  const termsToggle = toggles[1];
+  assert.equal(termsToggle.props["aria-expanded"], false);
+  assert.match(JSON.stringify(inst.toJSON()), /tap to read/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /MIT License \(see above\)/);
+
+  act(() => { termsToggle.props.onClick(); });
+  assert.equal(termsToggle.props["aria-expanded"], true);
+  assert.match(JSON.stringify(inst.toJSON()), /provided as-is with no warranty/);
+});
+
 test("FeedbackScreen: sends via the (stubbed) submitFeedback and shows a thank-you", async () => {
   let sentWith = null;
   globalThis.submitFeedback = payload => { sentWith = payload; return Promise.resolve({ ok: true }); };
