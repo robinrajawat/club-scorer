@@ -1333,6 +1333,12 @@ const POLL_TTL_DAYS = 120;
 // one saying "Wd/Nb counts as ball" flatly and leaving the final-over flip undiscovered until Review.
 // GENERATED-FN-END: POLL_TTL_DAYS
 const LIVE_VIEW_TTL_DAYS = 180;
+// Much shorter than LIVE_VIEW_TTL_DAYS -- a viewCode is meant to keep working for months after a
+// match ends (someone might revisit an old share link), but /liveMatches only ever means "still
+// being scored right now". Normal cleanup deletes its doc the moment a match completes or is
+// deleted (see saveMatch/deleteMatch below); this TTL only catches the one case that misses:
+// scoring abandoned mid-game and never explicitly finished.
+const LIVE_MATCH_FEED_TTL_DAYS = 1;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
 // clubJoinCodes (club member/co-owner email invites) already had a 7-day expiry — just as a plain
 // millis number, checked only in app code, never actually turning into deletion. Kept at the same
@@ -2319,6 +2325,33 @@ async function saveMatch(match) {
       console.error("[saveMatch] live-view mirror write failed \u2014 code:", e.code, "message:", e.message);
     }
   }
+  // Separately again, mirrors into /liveMatches/{match.id} for the Home screen's "Live now" feed
+  // \u2014 unlike the /liveViews mirror above, this one runs for EVERY match currently in progress,
+  // whether or not its scorer ever generated a share/view code, so a match can be discovered
+  // without a link at all. Deliberately excludes a pure local-only match (no signed-in account,
+  // no shareCode) even though nothing technically stops it from reaching Firestore here too \u2014
+  // "Continue without an account" already promises matches stay on this device only, and this
+  // feature shouldn't quietly break that promise. Deletes the doc once the match completes, since
+  // /liveMatches only ever means "still being scored right now" (see LIVE_MATCH_FEED_TTL_DAYS).
+  if (!result.structuralError && (auth.currentUser || match.shareCode)) {
+    const ref = db.collection("liveMatches").doc(match.id);
+    try {
+      if (match.status === "complete") {
+        await ref.delete();
+      } else {
+        await ref.set(packMatchForFirestore({
+          ...match,
+          updatedAt: Date.now(),
+          expiresAt: ttlTimestamp(LIVE_MATCH_FEED_TTL_DAYS)
+        }));
+      }
+    } catch (e) {
+      // Deliberately non-fatal, same reasoning as the /liveViews mirror above \u2014 scoring keeps
+      // working either way. Worst case a match lingers in (or is briefly missing from) the Home
+      // screen's Live feed until the next save reconciles it.
+      console.error("[saveMatch] live-match feed mirror write failed \u2014 id:", match.id, "code:", e.code, "message:", e.message);
+    }
+  }
   return result;
 }
 // Plain (non-React-state-coupled) retry-once-on-conflict, for one-off administrative writes like
@@ -2471,6 +2504,14 @@ async function deleteMatch(id) {
       console.error("live-view delete failed", e);
     }
   }
+  // Same cleanup for the Home screen's Live-now mirror, regardless of whether this match ever had
+  // a viewCode — see the /liveMatches mirror in saveMatch for why. A stale doc here would otherwise
+  // keep a deleted match showing as "live" until its short TTL catches up.
+  try {
+    await db.collection("liveMatches").doc(id).delete();
+  } catch (e) {
+    console.error("live-match feed delete failed", e);
+  }
   try {
     localStorage.removeItem(`${LS_PREFIX}match:${id}`);
     lsSetIndex(lsGetIndex().filter(m => m.id !== id));
@@ -2483,6 +2524,20 @@ async function deleteMatch(id) {
   // worse, silently recreate the very doc that was just deleted.
   clearPendingWrite(id);
   clearUndoHistory(id);
+}
+// Realtime feed for the Home screen's "Live now" section — every currently-in-progress match
+// mirrored into /liveMatches by saveMatch, most recently updated first. Returns an unsubscribe
+// function, same shape as every other onSnapshot listener in this file (see FollowScreen). A
+// permission-denied here almost certainly means the rules paste for /liveMatches hasn't happened
+// yet on this project — surfaced as an empty list rather than a thrown error, since a missing
+// Live feed shouldn't block the rest of Home from rendering.
+function loadLiveMatches(callback) {
+  return db.collection("liveMatches").orderBy("updatedAt", "desc").limit(20).onSnapshot(snap => {
+    callback(snap.docs.map(d => unpackMatchFromFirestore(d.data())));
+  }, e => {
+    console.error("[loadLiveMatches] snapshot error — code:", e.code, "message:", e.message);
+    callback([]);
+  });
 }
 // ---------- Undo history (per-match, device-local) ----------
 // The undo stack (MatchScreen's `history`) is a list of full match snapshots taken before each
@@ -18315,6 +18370,8 @@ function HomeScreen({
   onOpenTeam,
   onGetShareCode,
   onGetViewCode,
+  liveMatches = [],
+  onOpenLiveMatch,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -18808,7 +18865,91 @@ function renderMatchCard(m, i, {
     icon: Shield,
     label: "Clubs",
     onClick: onOpenClubs
-  })), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  })), liveMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      width: 7,
+      height: 7,
+      borderRadius: "50%",
+      background: COLORS.live,
+      boxShadow: "0 0 0 3px rgba(230,84,75,0.18)",
+      animation: "cs-pulse 1.6s ease infinite",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Live now")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      overflowX: "auto",
+      paddingBottom: 2,
+      marginLeft: -20,
+      marginRight: -20,
+      paddingLeft: 20,
+      paddingRight: 20
+    }
+  }, liveMatches.map(m => /*#__PURE__*/React.createElement("button", {
+    key: m.id,
+    type: "button",
+    onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
+    className: "cs-btn",
+    style: {
+      flexShrink: 0,
+      width: 190,
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderRadius: 14,
+      padding: "12px 14px",
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontWeight: 500
+    }
+  }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginTop: 3,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, matchScoreLine(m)))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -32299,6 +32440,7 @@ function ScorecardOverlay({
 // GENERATED-FN-START: FollowScreen
 function FollowScreen({
   code,
+  matchId,
   onExit
 }) {
   const [match, setMatch] = useState(null);
@@ -32403,11 +32545,12 @@ function FollowScreen({
     prevInningIdxRef.current = inningIdx;
   }, [match]);
   useEffect(() => {
-    if (!code) {
+    if (!code && !matchId) {
       setStatus("not-found");
       return;
     }
-    const unsub = db.collection("liveViews").doc(code).onSnapshot(doc => {
+    const ref = code ? db.collection("liveViews").doc(code) : db.collection("liveMatches").doc(matchId);
+    const unsub = ref.onSnapshot(doc => {
       if (!doc.exists) {
         setStatus("not-found");
         return;
@@ -32423,7 +32566,7 @@ function FollowScreen({
       setStatus("error");
     });
     return unsub;
-  }, [code]);
+  }, [code, matchId]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -37438,6 +37581,10 @@ function CricketScorer() {
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
+  // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
+  // (a tap, not a "?live=CODE" link) -- see openLiveMatch/handleOpenLiveMatch below. Exactly one of
+  // followCode/followMatchId is ever set at a time; FollowScreen itself treats them as equivalent.
+  const [followMatchId, setFollowMatchId] = useState(null);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -37474,6 +37621,7 @@ function CricketScorer() {
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
+  const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -37613,6 +37761,15 @@ function CricketScorer() {
     setThemePrefState(pref);
     saveThemePref(pref);
   }
+  // The Home screen's "Live now" feed -- deliberately unconditional (not gated on `user`), same as
+  // the rest of /liveMatches: it's a public, read-only mirror of every currently in-progress match,
+  // so a signed-out visitor sees it too. Runs for the lifetime of the app, not just while screen ===
+  // "home", since there's no cheap way to pause/resume a Firestore listener across a screen change
+  // without re-subscribing every time Home is revisited -- one live subscription for as long as the
+  // tab is open is simpler and no more expensive than that would be.
+  useEffect(() => {
+    return loadLiveMatches(setLiveMatches);
+  }, []);
   useEffect(() => {
     if (!user || !pendingGoogleLink) return;
     if (pendingGoogleLink.email && user.email && pendingGoogleLink.email.toLowerCase() !== user.email.toLowerCase()) {
@@ -38517,7 +38674,15 @@ function CricketScorer() {
       /* noop — worst case the param stays in the address bar */
     }
     setFollowCode(null);
+    setFollowMatchId(null);
     setScreen("home");
+  }
+  // Tapping a card in the Home screen's "Live now" feed -- same destination screen as a "?live="
+  // link (exitFollow above clears both, so either path leaves cleanly), just reached by matchId
+  // instead of a code, with no URL param to set since this was never a link someone navigated to.
+  function openLiveMatch(id) {
+    setFollowMatchId(id);
+    setScreen("follow");
   }
   function exitFollowTournament() {
     try {
@@ -39663,6 +39828,8 @@ function CricketScorer() {
     },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
+    liveMatches: liveMatches,
+    onOpenLiveMatch: openLiveMatch,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -39980,6 +40147,7 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FollowScreen, {
     code: followCode,
+    matchId: followMatchId,
     onExit: exitFollow
   })), screen === "follow-tournament" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow-tournament",

@@ -52,6 +52,39 @@ function render(props) {
   return renderer.create(React.createElement(HomeScreen, baseProps(props)));
 }
 
+function liveMatch(overrides = {}) {
+  return {
+    id: "live1", teamA: "Riverside CC", teamB: "Oakwood CC", status: "in-progress",
+    oversLimit: 20, currentInningIndex: 0,
+    innings: [{
+      battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC",
+      runs: 85, wickets: 3, legalBalls: 72, ballsPerOver: 6,
+      battingOrder: ["Virat Kohli"], bowlingOrder: ["Jasprit Bumrah"]
+    }],
+    ...overrides
+  };
+}
+
+test("HomeScreen: no 'Live now' section when liveMatches is empty", () => {
+  const inst = render();
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Live now/);
+});
+
+test("HomeScreen: 'Live now' shows each live match's teams and score, and tapping one calls onOpenLiveMatch with its id", () => {
+  let openedId = null;
+  const inst = render({
+    liveMatches: [liveMatch()],
+    onOpenLiveMatch: id => { openedId = id; }
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Live now/);
+  assert.match(json, /Riverside CC/);
+  assert.match(json, /85-3/);
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { card.props.onClick(); });
+  assert.equal(openedId, "live1");
+});
+
 test("HomeScreen: shows an empty state with no matches", () => {
   const inst = render();
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);

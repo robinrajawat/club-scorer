@@ -6,14 +6,18 @@ import { MatchStatsPanel } from "./scorecard.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
 import { matchResultText } from "../core/shareAndFormat.js";
 
-// Public, no-auth *live* match-following page -- reached via a "?live=CODE" link (see ShareMenu,
-// which creates these). Distinct from FollowTournamentScreen (a one-time snapshot read of a
-// tournament's standings). Subscribes to the match in real time via
-// `db.collection("liveViews").doc(code).onSnapshot(...)` -- `db` (the raw Firestore SDK instance,
-// a bare global, not extracted) is stubbed the same way followTournamentScreen.test.js stubs it,
-// except the stub here is an onSnapshot subscription (returning an unsubscribe function and taking
-// a (doc) => void success callback plus an (err) => void error callback) rather than a one-shot
-// .get() promise -- tests drive updates by calling the captured success/error callback directly.
+// Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
+// ShareMenu, which creates these; subscribes to db.collection("liveViews").doc(code)) or, now, by
+// tapping a card in the Home screen's "Live now" feed (see loadLiveMatches in index.html), which
+// passes a matchId instead and subscribes to db.collection("liveMatches").doc(matchId) -- a
+// different collection but the exact same packMatchForFirestore document shape, so every render
+// path below is identical regardless of which one supplied the match. Exactly one of code/matchId
+// is expected to be set. Distinct from FollowTournamentScreen (a one-time snapshot read of a
+// tournament's standings). `db` (the raw Firestore SDK instance, a bare global, not extracted) is
+// stubbed the same way followTournamentScreen.test.js stubs it, except the stub here is an
+// onSnapshot subscription (returning an unsubscribe function and taking a (doc) => void success
+// callback plus an (err) => void error callback) rather than a one-shot .get() promise -- tests
+// drive updates by calling the captured success/error callback directly.
 //
 // Infers boundary/wicket celebrations and milestone toasts by diffing each new snapshot against
 // the previous one (see the comment on the celebration effect below for the exact rules) rather
@@ -23,6 +27,7 @@ import { matchResultText } from "../core/shareAndFormat.js";
 
 export function FollowScreen({
   code,
+  matchId,
   onExit
 }) {
   const [match, setMatch] = useState(null);
@@ -127,11 +132,12 @@ export function FollowScreen({
     prevInningIdxRef.current = inningIdx;
   }, [match]);
   useEffect(() => {
-    if (!code) {
+    if (!code && !matchId) {
       setStatus("not-found");
       return;
     }
-    const unsub = db.collection("liveViews").doc(code).onSnapshot(doc => {
+    const ref = code ? db.collection("liveViews").doc(code) : db.collection("liveMatches").doc(matchId);
+    const unsub = ref.onSnapshot(doc => {
       if (!doc.exists) {
         setStatus("not-found");
         return;
@@ -147,7 +153,7 @@ export function FollowScreen({
       setStatus("error");
     });
     return unsub;
-  }, [code]);
+  }, [code, matchId]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,

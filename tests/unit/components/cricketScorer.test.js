@@ -95,6 +95,10 @@ async function render(url) {
   globalThis.loadMyFederationRequests = () => Promise.resolve([]);
   globalThis.loadMyActivity = () => Promise.resolve([]);
   globalThis.loadMyProfileVisibility = () => Promise.resolve(false);
+  // Unconditional-on-mount, signed-in-or-not, same reason each of the stubs above exists -- see
+  // its own comment in cricketScorer.js. A listener, not a promise: returns an unsubscribe function
+  // rather than resolving, same shape followScreen.test.js's onSnapshot stub captures for real.
+  globalThis.loadLiveMatches = () => () => {};
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
   globalThis.loadMyPlayerProfile = () => Promise.resolve(null);
