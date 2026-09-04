@@ -1002,7 +1002,7 @@ export function TournamentDetailScreen({
     }
   }, "No matches scored in this tournament yet.") : tournamentMatches.map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
-    onClick: () => onOpenMatch(m.id),
+    onClick: () => onOpenMatch(m),
     className: "cs-btn",
     style: {
       display: "flex",

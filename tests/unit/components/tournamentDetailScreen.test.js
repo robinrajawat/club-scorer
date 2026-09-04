@@ -150,14 +150,17 @@ test("TournamentDetailScreen: switching to the Matches tab shows the completed m
   assert.match(text, /Riverside CC won by 50 runs/);
 });
 
-test("TournamentDetailScreen: clicking a match on the Matches tab calls onOpenMatch", async () => {
+test("TournamentDetailScreen: clicking a match on the Matches tab calls onOpenMatch with the full match object", async () => {
+  // The full object, not just its id -- opening a co-owner's shared-but-never-locally-opened
+  // match needs its shareCode, which only this already-loaded object has (see openMatch's own
+  // comment in cricketScorer.js for why a plain id alone isn't enough).
   let opened = null;
-  const inst = await renderScreen(tournamentFixture(), [completedMatch()], { onOpenMatch: id => { opened = id; } });
+  const inst = await renderScreen(tournamentFixture(), [completedMatch()], { onOpenMatch: m => { opened = m; } });
   const matchesTab = inst.root.findAllByType("button").find(b => b.props.children === "Matches");
   act(() => { matchesTab.props.onClick(); });
   const matchBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   matchBtn.props.onClick();
-  assert.equal(opened, "m1");
+  assert.equal(opened.id, "m1");
 });
 
 test("TournamentDetailScreen: editing Player of the Tournament saves via onUpdateTournament", async () => {
