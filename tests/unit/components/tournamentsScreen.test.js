@@ -238,6 +238,35 @@ test("TournamentsScreen: no venue set sends null, not an empty object, to onCrea
   assert.equal(createdWith, null);
 });
 
+test("TournamentsScreen: Visibility defaults to public, and the review-page toggle passes isPrivate through to onCreateTournament", async () => {
+  let isPrivateArg = "unset";
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) => {
+      isPrivateArg = isPrivate;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+
+  const visibilityBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make private");
+  assert.ok(visibilityBtn, "expected a public-by-default Visibility toggle on the review page");
+  act(() => { visibilityBtn.props.onClick(); });
+
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(isPrivateArg, true);
+});
+
 test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/free-hit/squad-size into onCreateTournament", async () => {
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({

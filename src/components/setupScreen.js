@@ -7,6 +7,7 @@ import { PlayingXIPicker } from "./playingXIPicker.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
+import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
 import { tossText, umpiresText, nonStandardRulesText, wideNoballLastOverExceptionLabel } from "../core/shareAndFormat.js";
 
@@ -59,6 +60,10 @@ export function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
+  // Defaults from the tournament's own private flag when starting a fixture from one -- see
+  // handleCreateTournament's own Visibility toggle -- but always overridable per match, same
+  // "tournament sets the default, this match can differ" relationship overs/venue already have.
+  const [isPrivate, setIsPrivate] = useState(!!(presetTournament && presetTournament.private));
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
   // own default venue (see TournamentsScreen's own venue picker) doesn't carry verified coordinates
@@ -1703,7 +1708,34 @@ export function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.04s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !isPrivate,
+    onChange: pub => setIsPrivate(!pub),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, isPrivate ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -1766,7 +1798,8 @@ export function SetupScreen({
           decision: tossDecision || null
         } : null,
         tournamentId: presetTournament ? presetTournament.id : null,
-        fixtureId: presetTournament ? presetTournament.fixtureId || null : null
+        fixtureId: presetTournament ? presetTournament.fixtureId || null : null,
+        private: isPrivate
       });
     }
   }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));

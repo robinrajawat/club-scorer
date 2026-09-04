@@ -6,6 +6,7 @@ import { Field } from "./screenAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
+import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
 import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
 import { nonStandardRulesText, buildMapsUrl } from "../core/shareAndFormat.js";
@@ -230,6 +231,10 @@ export function TournamentsScreen({
   const [tournamentRules, setTournamentRules] = useState({
     ...DEFAULT_RULES
   });
+  // Tournament-level default for the Live now feed / app-wide match search -- see SetupScreen,
+  // which seeds a fixture's own Visibility toggle from this. Public by default, same as a
+  // standalone match.
+  const [isPrivate, setIsPrivate] = useState(false);
   // Same paginated pattern as SetupScreen's own "New Match" flow -- one page at a time instead of
   // one long scroll past teams, groups, and (now that it covers every match rule, not just 5) a
   // much longer rules editor than when this form was first built.
@@ -305,6 +310,7 @@ export function TournamentsScreen({
     setTournamentRules({
       ...DEFAULT_RULES
     });
+    setIsPrivate(false);
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setCreating(true);
   }
@@ -337,7 +343,7 @@ export function TournamentsScreen({
     })).filter(g => g.teams.length > 0) : null;
     const oversNum = parseInt(defaultOvers || "0", 10);
     const rulesChanged = JSON.stringify(tournamentRules) !== JSON.stringify(DEFAULT_RULES);
-    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null, venue.trim() ? { venue: venue.trim(), venueLat, venueLng } : null);
+    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null, venue.trim() ? { venue: venue.trim(), venueLat, venueLng } : null, isPrivate);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't create the tournament.");
@@ -1342,7 +1348,37 @@ export function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), error && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !isPrivate,
+    onChange: pub => setIsPrivate(!pub),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started."), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

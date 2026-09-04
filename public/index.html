@@ -1334,11 +1334,16 @@ const POLL_TTL_DAYS = 120;
 // GENERATED-FN-END: POLL_TTL_DAYS
 const LIVE_VIEW_TTL_DAYS = 180;
 // Much shorter than LIVE_VIEW_TTL_DAYS -- a viewCode is meant to keep working for months after a
-// match ends (someone might revisit an old share link), but /liveMatches only ever means "still
-// being scored right now". Normal cleanup deletes its doc the moment a match completes or is
-// deleted (see saveMatch/deleteMatch below); this TTL only catches the one case that misses:
-// scoring abandoned mid-game and never explicitly finished.
+// match ends (someone might revisit an old share link), but this only ever needs to catch a match
+// that's simply abandoned mid-game and never explicitly finished (see saveMatch below, where an
+// in-progress write uses this TTL and a completed one switches to RECENT_MATCH_RETENTION_DAYS
+// instead).
 const LIVE_MATCH_FEED_TTL_DAYS = 1;
+// How long a completed match stays discoverable in /liveMatches (the Home screen's "Live now" feed
+// and the app-wide match search) after it finishes -- long enough that someone who watched it live
+// can still find it afterward, short enough that this never turns into a permanent public archive
+// of every match anyone's ever scored.
+const RECENT_MATCH_RETENTION_DAYS = 3;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
 // clubJoinCodes (club member/co-owner email invites) already had a 7-day expiry — just as a plain
 // millis number, checked only in app code, never actually turning into deletion. Kept at the same
@@ -2326,25 +2331,28 @@ async function saveMatch(match) {
     }
   }
   // Separately again, mirrors into /liveMatches/{match.id} for the Home screen's "Live now" feed
-  // \u2014 unlike the /liveViews mirror above, this one runs for EVERY match currently in progress,
-  // whether or not its scorer ever generated a share/view code, so a match can be discovered
-  // without a link at all. Deliberately excludes a pure local-only match (no signed-in account,
-  // no shareCode) even though nothing technically stops it from reaching Firestore here too \u2014
-  // "Continue without an account" already promises matches stay on this device only, and this
-  // feature shouldn't quietly break that promise. Deletes the doc once the match completes, since
-  // /liveMatches only ever means "still being scored right now" (see LIVE_MATCH_FEED_TTL_DAYS).
-  if (!result.structuralError && (auth.currentUser || match.shareCode)) {
+  // and the app-wide match search \u2014 unlike the /liveViews mirror above, this one runs for EVERY
+  // match currently in progress or recently completed, whether or not its scorer ever generated a
+  // share/view code, so a match can be discovered without a link at all. Deliberately excludes a
+  // pure local-only match (no signed-in account, no shareCode) even though nothing technically
+  // stops it from reaching Firestore here too \u2014 "Continue without an account" already promises
+  // matches stay on this device only, and this feature shouldn't quietly break that promise.
+  // Skipped entirely for a match marked private (see SetupScreen's Visibility toggle and a
+  // tournament's own private flag, which a fixture inherits by default) \u2014 that match simply never
+  // reaches this collection, live or after completion, the same "never written, not just hidden"
+  // approach /liveMatches itself already uses for local-only matches.
+  // A completed match keeps its doc rather than being deleted, so it stays findable for
+  // RECENT_MATCH_RETENTION_DAYS after the game ends \u2014 an in-progress match keeps the much shorter
+  // LIVE_MATCH_FEED_TTL_DAYS instead, as an abandoned-mid-game safety net rather than a real
+  // retention window.
+  if (!result.structuralError && !match.private && (auth.currentUser || match.shareCode)) {
     const ref = db.collection("liveMatches").doc(match.id);
     try {
-      if (match.status === "complete") {
-        await ref.delete();
-      } else {
-        await ref.set(packMatchForFirestore({
-          ...match,
-          updatedAt: Date.now(),
-          expiresAt: ttlTimestamp(LIVE_MATCH_FEED_TTL_DAYS)
-        }));
-      }
+      await ref.set(packMatchForFirestore({
+        ...match,
+        updatedAt: Date.now(),
+        expiresAt: ttlTimestamp(match.status === "complete" ? RECENT_MATCH_RETENTION_DAYS : LIVE_MATCH_FEED_TTL_DAYS)
+      }));
     } catch (e) {
       // Deliberately non-fatal, same reasoning as the /liveViews mirror above \u2014 scoring keeps
       // working either way. Worst case a match lingers in (or is briefly missing from) the Home
@@ -2531,13 +2539,31 @@ async function deleteMatch(id) {
 // permission-denied here almost certainly means the rules paste for /liveMatches hasn't happened
 // yet on this project — surfaced as an empty list rather than a thrown error, since a missing
 // Live feed shouldn't block the rest of Home from rendering.
+// /liveMatches now also holds recently-completed matches (see RECENT_MATCH_RETENTION_DAYS), which
+// this feed deliberately filters back out client-side rather than adding a `where("status", ...)`
+// clause — that would need a new composite index (status + orderBy(updatedAt)), on top of the
+// rules paste this collection already requires. The Home screen's "Live now" strip stays exactly
+// what its name says; fetchLiveAndRecentMatches below is where completed matches surface instead.
 function loadLiveMatches(callback) {
-  return db.collection("liveMatches").orderBy("updatedAt", "desc").limit(20).onSnapshot(snap => {
-    callback(snap.docs.map(d => unpackMatchFromFirestore(d.data())));
+  return db.collection("liveMatches").orderBy("updatedAt", "desc").limit(30).onSnapshot(snap => {
+    callback(snap.docs.map(d => unpackMatchFromFirestore(d.data())).filter(m => m.status !== "complete"));
   }, e => {
     console.error("[loadLiveMatches] snapshot error — code:", e.code, "message:", e.message);
     callback([]);
   });
+}
+// One-time (not realtime) fetch of live + recently-completed matches app-wide, for the Home
+// screen's "Matches" search to filter by team/tournament name client-side — same lazy-loaded,
+// fetched-once-then-filtered-in-memory pattern as loadPublicPlayers below, not a live listener,
+// since a search result set doesn't need to stay pinned open the way the Live now strip does.
+async function fetchLiveAndRecentMatches() {
+  try {
+    const snap = await db.collection("liveMatches").orderBy("updatedAt", "desc").limit(100).get();
+    return snap.docs.map(d => unpackMatchFromFirestore(d.data()));
+  } catch (e) {
+    console.error("[fetchLiveAndRecentMatches] fetch failed — code:", e.code, "message:", e.message);
+    return [];
+  }
 }
 // ---------- Undo history (per-match, device-local) ----------
 // The undo stack (MatchScreen's `history`) is a list of full match snapshots taken before each
@@ -12461,7 +12487,7 @@ function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 until it's marked complete or deleted. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed and app-wide search \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 and stays findable there for a few days after it ends, not just while it's live. Mark a match (or a whole tournament, which its matches inherit by default) private in Setup to keep it out of both, live or after completion; a share or view code you generate yourself still works exactly the same either way. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       fontFamily: "'Inter'",
@@ -18372,6 +18398,7 @@ function HomeScreen({
   onGetViewCode,
   liveMatches = [],
   onOpenLiveMatch,
+  onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -18406,6 +18433,15 @@ function HomeScreen({
   const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
   const [playersLoading, setPlayersLoading] = useState(false);
   const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
+  // Live + recently-completed matches across the whole app (not just this account's own), for the
+  // Matches search only -- same lazy-loaded, fetched-once-then-filtered-in-memory pattern as
+  // publicPlayers above, but keyed off any non-empty query rather than a chip pick, since Matches
+  // is the default scope. Deliberately never shown outside of an active search: the Home screen's
+  // own "Live now" strip above already covers browsing, this is only for finding one specific
+  // match someone remembers watching.
+  const [recentMatches, setRecentMatches] = useState(null); // null = not loaded yet
+  const [recentMatchesLoading, setRecentMatchesLoading] = useState(false);
+  const hasRecentMatchSearch = typeof onLoadRecentMatches === "function";
   // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
   // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
   // when there's genuinely no name to show, so the greeting line just doesn't render at all rather
@@ -18424,6 +18460,20 @@ function HomeScreen({
       cancelled = true;
     };
   }, [searchScope, publicPlayers, hasPlayerSearch]);
+  useEffect(() => {
+    if (!query.trim() || recentMatches !== null || !hasRecentMatchSearch) return;
+    if (searchScope !== "matches" && searchScope !== "all") return;
+    let cancelled = false;
+    setRecentMatchesLoading(true);
+    onLoadRecentMatches().then(list => {
+      if (cancelled) return;
+      setRecentMatches(list);
+      setRecentMatchesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, searchScope, recentMatches, hasRecentMatchSearch]);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -18432,6 +18482,10 @@ function HomeScreen({
   // filter that only sometimes searches a field would be more confusing than one that reliably
   // doesn't.
   const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
+  // Excludes anything already in `matches` -- a match this account owns (or has open) shows once,
+  // in Saved Matches, not a second time down here just because it's also currently live or recent.
+  const ownMatchIds = new Set(matches.map(m => m.id));
+  const filteredRecentMatches = q && recentMatches ? recentMatches.filter(m => !ownMatchIds.has(m.id) && (m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q))) : [];
   const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q)) : publicPlayers) : [];
   const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
@@ -18616,6 +18670,71 @@ function renderMatchCard(m, i, {
       marginLeft: 8
     }
   }))));
+  }
+  // A live/recent match found via app-wide search, opening straight into the same read-only
+  // FollowScreen a "Live now" card does (see onOpenLiveMatch) -- there's no owner-only affordance
+  // here (no swipe-to-delete, no ShareMenu) since this is someone else's match, found by search,
+  // not one of this account's own.
+  function renderRecentMatchRow(m) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: "recent-" + m.id,
+      type: "button",
+      onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        width: "100%",
+        textAlign: "left",
+        background: COLORS.surface,
+        border: "none",
+        borderRadius: 12,
+        padding: "12px 14px",
+        marginBottom: 6,
+        cursor: "pointer",
+        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 13.5,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.inkSoft,
+        fontWeight: 500
+      }
+    }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginTop: 2
+      }
+    }, matchScoreLine(m))), /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        flexShrink: 0,
+        background: m.status === "complete" ? COLORS.inkSoft : COLORS.live,
+        boxShadow: m.status === "complete" ? "none" : "0 0 0 3px rgba(230,84,75,0.18)",
+        animation: m.status === "complete" ? "none" : "cs-pulse 1.6s ease infinite"
+      }
+    }));
   }
   // Shared row style for the four new search categories below -- same look as the player search
   // results just above, so a mixed set of result kinds still reads as one consistent list style
@@ -19098,7 +19217,7 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && q ? /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && q ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "24px 0",
@@ -19137,7 +19256,24 @@ function renderMatchCard(m, i, {
       onEditVenue: onEditVenue,
       clubs: clubs,
       clubTeamsById: clubTeamsById
-    }))));
+    }))), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: filteredMatches.length > 0 || filteredUpcoming.length > 0 ? 18 : 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
+      }
+    }, "Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Searching live & recent matches…"
+    }) : filteredRecentMatches.map(renderRecentMatchRow)));
     const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
     // Same "don't fold the only thing on the page" rule as showCompleted above, mirrored: if
     // Upcoming is literally the only section with anything in it (no in-progress match to resume,
@@ -19419,7 +19555,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -19446,7 +19582,19 @@ function renderMatchCard(m, i, {
     onEditVenue: onEditVenue,
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Searching live & recent matches…"
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredRecentMatches.slice(0, ALL_SCOPE_CAP).map(renderRecentMatchRow)), filteredRecentMatches.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
@@ -20229,6 +20377,10 @@ function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
+  // Defaults from the tournament's own private flag when starting a fixture from one -- see
+  // handleCreateTournament's own Visibility toggle -- but always overridable per match, same
+  // "tournament sets the default, this match can differ" relationship overs/venue already have.
+  const [isPrivate, setIsPrivate] = useState(!!(presetTournament && presetTournament.private));
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
   // own default venue (see TournamentsScreen's own venue picker) doesn't carry verified coordinates
@@ -21873,7 +22025,34 @@ function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.04s backwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabel
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !isPrivate,
+    onChange: pub => setIsPrivate(!pub),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5
+    }
+  }, isPrivate ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -21936,7 +22115,8 @@ function SetupScreen({
           decision: tossDecision || null
         } : null,
         tournamentId: presetTournament ? presetTournament.id : null,
-        fixtureId: presetTournament ? presetTournament.fixtureId || null : null
+        fixtureId: presetTournament ? presetTournament.fixtureId || null : null,
+        private: isPrivate
       });
     }
   }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
@@ -22227,6 +22407,10 @@ function TournamentsScreen({
   const [tournamentRules, setTournamentRules] = useState({
     ...DEFAULT_RULES
   });
+  // Tournament-level default for the Live now feed / app-wide match search -- see SetupScreen,
+  // which seeds a fixture's own Visibility toggle from this. Public by default, same as a
+  // standalone match.
+  const [isPrivate, setIsPrivate] = useState(false);
   // Same paginated pattern as SetupScreen's own "New Match" flow -- one page at a time instead of
   // one long scroll past teams, groups, and (now that it covers every match rule, not just 5) a
   // much longer rules editor than when this form was first built.
@@ -22302,6 +22486,7 @@ function TournamentsScreen({
     setTournamentRules({
       ...DEFAULT_RULES
     });
+    setIsPrivate(false);
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setCreating(true);
   }
@@ -22334,7 +22519,7 @@ function TournamentsScreen({
     })).filter(g => g.teams.length > 0) : null;
     const oversNum = parseInt(defaultOvers || "0", 10);
     const rulesChanged = JSON.stringify(tournamentRules) !== JSON.stringify(DEFAULT_RULES);
-    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null, venue.trim() ? { venue: venue.trim(), venueLat, venueLng } : null);
+    const result = await onCreateTournament(name.trim(), selectedTeams, groups, useGroups ? advancePerGroup : null, oversNum > 0 ? oversNum : null, rulesChanged ? tournamentRules : null, venue.trim() ? { venue: venue.trim(), venueLat, venueLng } : null, isPrivate);
     setBusy(false);
     if (!result.ok) {
       setError(result.error || "Couldn't create the tournament.");
@@ -23339,7 +23524,37 @@ function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), error && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
+    isPublic: !isPrivate,
+    onChange: pub => setIsPrivate(!pub),
+    publicHint: "Public \u2014 discoverable",
+    privateHint: "Private \u2014 not discoverable"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started."), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -32470,6 +32685,23 @@ function FollowScreen({
   const [celebration, setCelebration] = useState(null);
   const [milestoneToast, setMilestoneToast] = useState(null);
   const [milestoneQueue, setMilestoneQueue] = useState([]);
+  // Persistent "Bumrah to Kohli: FOUR!" line below the scoreboard -- same lastBallCommentary
+  // MatchScreen's own commit() uses, fed here by diffing the previous snapshot's full inning
+  // state against the new one (prevFullInningRef) rather than off a direct before/after pair the
+  // way MatchScreen has one, since a follower only ever sees periodic snapshots. Deliberately not
+  // gated on the same "exactly one new ball" check the celebration effect below uses --
+  // lastBallCommentary already returns null on its own for a stale/completed-over comparison, so
+  // it stays safe across a multi-ball gap without needing that same guard duplicated here.
+  const [ballCommentary, setBallCommentary] = useState(null);
+  // "Over 12 (Jasprit Bumrah): 1 4 W 0 1 6 = 12 runs, 1 wkt" -- shown from the moment an over
+  // completes (the previous snapshot's inning gained a fresh trailing over, same signal
+  // lastBallCommentary's own overIdx math relies on elsewhere) until a real ball lands in the new
+  // one, not on a timer -- someone changing ends/fields between overs is exactly when this is
+  // worth reading, and it should stay up for however long that actually takes. Takes over
+  // ballCommentary's spot on screen while active rather than showing both -- the completed over's
+  // last ball is already part of this summary, so repeating it right above would be redundant.
+  const [overSummary, setOverSummary] = useState(null);
+  const prevFullInningRef = useRef(null);
   const prevBallCountRef = useRef(null);
   const prevMilestoneCountRef = useRef(null);
   const prevInningIdxRef = useRef(null);
@@ -32540,9 +32772,40 @@ function FollowScreen({
       const newOnes = (inn.toastMilestones || []).slice(prevMilestoneCountRef.current);
       setMilestoneQueue(q => [...q, ...newOnes]);
     }
+    if (sameInning && prevFullInningRef.current) {
+      const commentary = lastBallCommentary(prevFullInningRef.current, inn);
+      if (commentary) setBallCommentary(commentary);
+    } else {
+      // First snapshot after mount, or a new innings just started -- nothing to diff against yet,
+      // and a stale commentary line from the innings that just ended would be actively misleading.
+      setBallCommentary(null);
+    }
+    const overs = inn.overs || [];
+    const prevOvers = prevFullInningRef.current ? prevFullInningRef.current.overs || [] : null;
+    if (sameInning && prevOvers && overs.length > prevOvers.length) {
+      // applyBall appends a fresh empty trailing over the instant the previous one completes, in
+      // the same commit as that over's final ball -- so a grown overs.length here means the over
+      // at index overs.length - 2 (not - 1, which is the just-started empty one) is the one that
+      // just finished. Bowler comes from the PREVIOUS snapshot, not this one -- a new bowler for
+      // the upcoming over may already be set on `inn` by the time this snapshot arrived, which
+      // would misattribute the just-finished over to the wrong bowler.
+      const finishedOver = overs[overs.length - 2] || [];
+      setOverSummary({
+        overNumber: overs.length - 1,
+        bowlerName: prevFullInningRef.current.bowlerName,
+        balls: finishedOver,
+        runs: finishedOver.reduce((s, b) => s + (b.runs || 0), 0),
+        wickets: finishedOver.filter(b => b.kind === "wicket").length
+      });
+    } else if (!sameInning || ballCount > (prevBallCountRef.current || 0)) {
+      // A real ball landed in what's now the current over (or a new innings started) -- the
+      // waiting-for-the-next-over window this summary is meant to fill is over.
+      setOverSummary(null);
+    }
     prevBallCountRef.current = ballCount;
     prevMilestoneCountRef.current = milestoneCount;
     prevInningIdxRef.current = inningIdx;
+    prevFullInningRef.current = inn;
   }, [match]);
   useEffect(() => {
     if (!code && !matchId) {
@@ -32567,6 +32830,26 @@ function FollowScreen({
     });
     return unsub;
   }, [code, matchId]);
+  // Keeps the live score visible in the browser tab even when this isn't the focused tab -- lets
+  // someone check on a match without switching back to it. Guarded on `typeof document` (not just
+  // referenced directly) since these tests run under plain node:test, not jsdom -- same reasoning
+  // exportButtons.js already documents for its own document.title use, though that one only ever
+  // runs from a click handler; this needs to run passively as new snapshots arrive, so it can't
+  // rely on only ever being invoked from a real browser event the way that one does. Two separate
+  // effects rather than one: the empty-deps one captures whatever title was already showing at
+  // mount and restores exactly that on unmount (only), so restoration isn't at the mercy of
+  // whatever the second effect happened to overwrite it to most recently.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const original = document.title;
+    return () => {
+      document.title = original;
+    };
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined" || !match) return;
+    document.title = `${matchScoreLine(match) || `${match.teamA} vs ${match.teamB}`} · Club Scorer`;
+  }, [match]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -32723,7 +33006,83 @@ function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, resultText || inningsBreakText), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      opacity: 0.9,
+      maxWidth: 560,
+      margin: "6px auto 0",
+      textAlign: "center"
+    }
+  }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      // Only six/wicket get a distinct color here (gold / the header's own "live" red, both
+      // guaranteed to read against the dark green header background) -- MatchScreen's own
+      // four/wide/no-ball colors (turf green, purple) were tuned for its cream background and
+      // would have poor contrast on this one, so those stay plain cream-white bold instead of
+      // reusing that same palette verbatim.
+      color: {
+        six: COLORS.gold,
+        wicket: COLORS.live
+      }[ballCommentary.kind] || COLORS.creamFixed
+    }
+  }, ballCommentary.outcome))), overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 560,
+      margin: "14px auto 0",
+      padding: "16px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "14px 16px",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Over ", overSummary.overNumber, overSummary.bowlerName && ` · ${overSummary.bowlerName}`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13,
+      fontWeight: 700,
+      color: overSummary.wickets > 0 ? COLORS.ball : COLORS.turf
+    }
+  }, overSummary.runs, " run", overSummary.runs === 1 ? "" : "s", overSummary.wickets > 0 && `, ${overSummary.wickets} wkt${overSummary.wickets === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, overSummary.balls.map((b, i) => /*#__PURE__*/React.createElement(BallBadge, {
+    key: i,
+    ev: b
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginTop: 8,
+      fontStyle: "italic"
+    }
+  }, "Next over starting…")), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,
@@ -38370,6 +38729,11 @@ function CricketScorer() {
       umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
       status: "in-progress",
+      // Opt-out from the Home screen's Live now feed / app-wide search (see SetupScreen's
+      // Visibility toggle, defaulted from a tournament's own private flag when starting a
+      // fixture). Gates the /liveMatches mirror write in saveMatch -- a private match is never
+      // written there at all, live or after completion.
+      private: !!setup.private,
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,
@@ -39364,7 +39728,7 @@ function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) {
     const t = {
       id: uid(),
       name,
@@ -39373,6 +39737,11 @@ function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
+      // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
+      // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
+      // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
+      // already have, still overridable per match.
+      private: !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
       // this function only ever declared six parameters -- the venue was silently dropped on every
@@ -39803,6 +40172,7 @@ function CricketScorer() {
       setScreen("players");
     },
     onLoadPublicPlayers: loadPublicPlayers,
+    onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
     inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount,

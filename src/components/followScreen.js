@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { LoadingBallIllustration } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
+import { BallBadge } from "./matchDisplayAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
-import { matchResultText } from "../core/shareAndFormat.js";
+import { matchResultText, matchScoreLine } from "../core/shareAndFormat.js";
+import { lastBallCommentary } from "../core/scoringEngine.js";
 
 // Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
 // ShareMenu, which creates these; subscribes to db.collection("liveViews").doc(code)) or, now, by
@@ -57,6 +59,23 @@ export function FollowScreen({
   const [celebration, setCelebration] = useState(null);
   const [milestoneToast, setMilestoneToast] = useState(null);
   const [milestoneQueue, setMilestoneQueue] = useState([]);
+  // Persistent "Bumrah to Kohli: FOUR!" line below the scoreboard -- same lastBallCommentary
+  // MatchScreen's own commit() uses, fed here by diffing the previous snapshot's full inning
+  // state against the new one (prevFullInningRef) rather than off a direct before/after pair the
+  // way MatchScreen has one, since a follower only ever sees periodic snapshots. Deliberately not
+  // gated on the same "exactly one new ball" check the celebration effect below uses --
+  // lastBallCommentary already returns null on its own for a stale/completed-over comparison, so
+  // it stays safe across a multi-ball gap without needing that same guard duplicated here.
+  const [ballCommentary, setBallCommentary] = useState(null);
+  // "Over 12 (Jasprit Bumrah): 1 4 W 0 1 6 = 12 runs, 1 wkt" -- shown from the moment an over
+  // completes (the previous snapshot's inning gained a fresh trailing over, same signal
+  // lastBallCommentary's own overIdx math relies on elsewhere) until a real ball lands in the new
+  // one, not on a timer -- someone changing ends/fields between overs is exactly when this is
+  // worth reading, and it should stay up for however long that actually takes. Takes over
+  // ballCommentary's spot on screen while active rather than showing both -- the completed over's
+  // last ball is already part of this summary, so repeating it right above would be redundant.
+  const [overSummary, setOverSummary] = useState(null);
+  const prevFullInningRef = useRef(null);
   const prevBallCountRef = useRef(null);
   const prevMilestoneCountRef = useRef(null);
   const prevInningIdxRef = useRef(null);
@@ -127,9 +146,40 @@ export function FollowScreen({
       const newOnes = (inn.toastMilestones || []).slice(prevMilestoneCountRef.current);
       setMilestoneQueue(q => [...q, ...newOnes]);
     }
+    if (sameInning && prevFullInningRef.current) {
+      const commentary = lastBallCommentary(prevFullInningRef.current, inn);
+      if (commentary) setBallCommentary(commentary);
+    } else {
+      // First snapshot after mount, or a new innings just started -- nothing to diff against yet,
+      // and a stale commentary line from the innings that just ended would be actively misleading.
+      setBallCommentary(null);
+    }
+    const overs = inn.overs || [];
+    const prevOvers = prevFullInningRef.current ? prevFullInningRef.current.overs || [] : null;
+    if (sameInning && prevOvers && overs.length > prevOvers.length) {
+      // applyBall appends a fresh empty trailing over the instant the previous one completes, in
+      // the same commit as that over's final ball -- so a grown overs.length here means the over
+      // at index overs.length - 2 (not - 1, which is the just-started empty one) is the one that
+      // just finished. Bowler comes from the PREVIOUS snapshot, not this one -- a new bowler for
+      // the upcoming over may already be set on `inn` by the time this snapshot arrived, which
+      // would misattribute the just-finished over to the wrong bowler.
+      const finishedOver = overs[overs.length - 2] || [];
+      setOverSummary({
+        overNumber: overs.length - 1,
+        bowlerName: prevFullInningRef.current.bowlerName,
+        balls: finishedOver,
+        runs: finishedOver.reduce((s, b) => s + (b.runs || 0), 0),
+        wickets: finishedOver.filter(b => b.kind === "wicket").length
+      });
+    } else if (!sameInning || ballCount > (prevBallCountRef.current || 0)) {
+      // A real ball landed in what's now the current over (or a new innings started) -- the
+      // waiting-for-the-next-over window this summary is meant to fill is over.
+      setOverSummary(null);
+    }
     prevBallCountRef.current = ballCount;
     prevMilestoneCountRef.current = milestoneCount;
     prevInningIdxRef.current = inningIdx;
+    prevFullInningRef.current = inn;
   }, [match]);
   useEffect(() => {
     if (!code && !matchId) {
@@ -154,6 +204,26 @@ export function FollowScreen({
     });
     return unsub;
   }, [code, matchId]);
+  // Keeps the live score visible in the browser tab even when this isn't the focused tab -- lets
+  // someone check on a match without switching back to it. Guarded on `typeof document` (not just
+  // referenced directly) since these tests run under plain node:test, not jsdom -- same reasoning
+  // exportButtons.js already documents for its own document.title use, though that one only ever
+  // runs from a click handler; this needs to run passively as new snapshots arrive, so it can't
+  // rely on only ever being invoked from a real browser event the way that one does. Two separate
+  // effects rather than one: the empty-deps one captures whatever title was already showing at
+  // mount and restores exactly that on unmount (only), so restoration isn't at the mercy of
+  // whatever the second effect happened to overwrite it to most recently.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const original = document.title;
+    return () => {
+      document.title = original;
+    };
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined" || !match) return;
+    document.title = `${matchScoreLine(match) || `${match.teamA} vs ${match.teamB}`} · Club Scorer`;
+  }, [match]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,
@@ -310,7 +380,83 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, resultText || inningsBreakText), ballCommentary && !overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      opacity: 0.9,
+      maxWidth: 560,
+      margin: "6px auto 0",
+      textAlign: "center"
+    }
+  }, ballCommentary.lead, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      // Only six/wicket get a distinct color here (gold / the header's own "live" red, both
+      // guaranteed to read against the dark green header background) -- MatchScreen's own
+      // four/wide/no-ball colors (turf green, purple) were tuned for its cream background and
+      // would have poor contrast on this one, so those stay plain cream-white bold instead of
+      // reusing that same palette verbatim.
+      color: {
+        six: COLORS.gold,
+        wicket: COLORS.live
+      }[ballCommentary.kind] || COLORS.creamFixed
+    }
+  }, ballCommentary.outcome))), overSummary && !inningsBreak && /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 560,
+      margin: "14px auto 0",
+      padding: "16px 16px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: "14px 16px",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase"
+    }
+  }, "Over ", overSummary.overNumber, overSummary.bowlerName && ` · ${overSummary.bowlerName}`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 13,
+      fontWeight: 700,
+      color: overSummary.wickets > 0 ? COLORS.ball : COLORS.turf
+    }
+  }, overSummary.runs, " run", overSummary.runs === 1 ? "" : "s", overSummary.wickets > 0 && `, ${overSummary.wickets} wkt${overSummary.wickets === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, overSummary.balls.map((b, i) => /*#__PURE__*/React.createElement(BallBadge, {
+    key: i,
+    ev: b
+  })))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      textAlign: "center",
+      marginTop: 8,
+      fontStyle: "italic"
+    }
+  }, "Next over starting…")), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,

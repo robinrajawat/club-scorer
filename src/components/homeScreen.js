@@ -20,8 +20,13 @@ import { hasSeenSwipeHint } from "../core/appLogic.js";
 // upcoming/completed, each collapsible), a unified search across matches/teams/players/tournaments/
 // clubs/federations/help, the account bar, and entry points into every other top-level screen.
 // `onLoadPublicPlayers` runs lazily from a useEffect only once the Players search chip is picked,
-// not on mount -- a prop, not a bare global. `Modal` (bare global, same as everywhere else in this
-// suite) backs one dialog. Covered by tests/unit/components/homeScreen.test.js.
+// not on mount -- a prop, not a bare global. Matches search also reaches beyond this account's own
+// saved matches: `onLoadRecentMatches` lazily fetches every live/recently-completed match app-wide
+// (see fetchLiveAndRecentMatches in index.html) the first time someone actually types a query, and
+// results matching by team name surface under "Across Club Scorer" -- a supplement to the Live now
+// strip above, not a duplicate of it (that strip stays live-only and always visible; this only
+// exists inside an active search, live or recently finished). `Modal` (bare global, same as
+// everywhere else in this suite) backs one dialog. Covered by tests/unit/components/homeScreen.test.js.
 //
 // `renderMatchCard`, the per-match-card renderer, stays nested inside HomeScreen exactly as it was
 // in public/index.html, but its signature was refactored here (before this extraction) to take the
@@ -81,6 +86,7 @@ export function HomeScreen({
   onGetViewCode,
   liveMatches = [],
   onOpenLiveMatch,
+  onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint
 }) {
@@ -115,6 +121,15 @@ export function HomeScreen({
   const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
   const [playersLoading, setPlayersLoading] = useState(false);
   const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
+  // Live + recently-completed matches across the whole app (not just this account's own), for the
+  // Matches search only -- same lazy-loaded, fetched-once-then-filtered-in-memory pattern as
+  // publicPlayers above, but keyed off any non-empty query rather than a chip pick, since Matches
+  // is the default scope. Deliberately never shown outside of an active search: the Home screen's
+  // own "Live now" strip above already covers browsing, this is only for finding one specific
+  // match someone remembers watching.
+  const [recentMatches, setRecentMatches] = useState(null); // null = not loaded yet
+  const [recentMatchesLoading, setRecentMatchesLoading] = useState(false);
+  const hasRecentMatchSearch = typeof onLoadRecentMatches === "function";
   // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
   // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
   // when there's genuinely no name to show, so the greeting line just doesn't render at all rather
@@ -133,6 +148,20 @@ export function HomeScreen({
       cancelled = true;
     };
   }, [searchScope, publicPlayers, hasPlayerSearch]);
+  useEffect(() => {
+    if (!query.trim() || recentMatches !== null || !hasRecentMatchSearch) return;
+    if (searchScope !== "matches" && searchScope !== "all") return;
+    let cancelled = false;
+    setRecentMatchesLoading(true);
+    onLoadRecentMatches().then(list => {
+      if (cancelled) return;
+      setRecentMatches(list);
+      setRecentMatchesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, searchScope, recentMatches, hasRecentMatchSearch]);
   const q = query.trim().toLowerCase();
   // Matches against both team names and the tournament name (when it belongs to one) -- someone
   // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
@@ -141,6 +170,10 @@ export function HomeScreen({
   // filter that only sometimes searches a field would be more confusing than one that reliably
   // doesn't.
   const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
+  // Excludes anything already in `matches` -- a match this account owns (or has open) shows once,
+  // in Saved Matches, not a second time down here just because it's also currently live or recent.
+  const ownMatchIds = new Set(matches.map(m => m.id));
+  const filteredRecentMatches = q && recentMatches ? recentMatches.filter(m => !ownMatchIds.has(m.id) && (m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q))) : [];
   const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q)) : publicPlayers) : [];
   const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
@@ -325,6 +358,71 @@ function renderMatchCard(m, i, {
       marginLeft: 8
     }
   }))));
+  }
+  // A live/recent match found via app-wide search, opening straight into the same read-only
+  // FollowScreen a "Live now" card does (see onOpenLiveMatch) -- there's no owner-only affordance
+  // here (no swipe-to-delete, no ShareMenu) since this is someone else's match, found by search,
+  // not one of this account's own.
+  function renderRecentMatchRow(m) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: "recent-" + m.id,
+      type: "button",
+      onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        width: "100%",
+        textAlign: "left",
+        background: COLORS.surface,
+        border: "none",
+        borderRadius: 12,
+        padding: "12px 14px",
+        marginBottom: 6,
+        cursor: "pointer",
+        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 13.5,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: COLORS.inkSoft,
+        fontWeight: 500
+      }
+    }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginTop: 2
+      }
+    }, matchScoreLine(m))), /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        flexShrink: 0,
+        background: m.status === "complete" ? COLORS.inkSoft : COLORS.live,
+        boxShadow: m.status === "complete" ? "none" : "0 0 0 3px rgba(230,84,75,0.18)",
+        animation: m.status === "complete" ? "none" : "cs-pulse 1.6s ease infinite"
+      }
+    }));
   }
   // Shared row style for the four new search categories below -- same look as the player search
   // results just above, so a mixed set of result kinds still reads as one consistent list style
@@ -807,7 +905,7 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && q ? /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && q ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "24px 0",
@@ -846,7 +944,24 @@ function renderMatchCard(m, i, {
       onEditVenue: onEditVenue,
       clubs: clubs,
       clubTeamsById: clubTeamsById
-    }))));
+    }))), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: filteredMatches.length > 0 || filteredUpcoming.length > 0 ? 18 : 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        opacity: 0.75
+      }
+    }, "Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Searching live & recent matches…"
+    }) : filteredRecentMatches.map(renderRecentMatchRow)));
     const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
     // Same "don't fold the only thing on the page" rule as showCompleted above, mirrored: if
     // Upcoming is literally the only section with anything in it (no in-progress match to resume,
@@ -1128,7 +1243,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -1155,7 +1270,19 @@ function renderMatchCard(m, i, {
     onEditVenue: onEditVenue,
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+  }, categorySectionLabel("Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Searching live & recent matches…"
+  }) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, filteredRecentMatches.slice(0, ALL_SCOPE_CAP).map(renderRecentMatchRow)), filteredRecentMatches.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }

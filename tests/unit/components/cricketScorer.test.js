@@ -108,6 +108,10 @@ async function render(url) {
   // HomeScreen, not just when actually clicked -- needed even for tests that never sign out.
   globalThis.signOutUser = () => Promise.resolve({ ok: true });
   globalThis.loadPublicPlayers = () => Promise.resolve([]);
+  // Referenced unconditionally as a bare prop value (`onLoadRecentMatches: fetchLiveAndRecentMatches`)
+  // on every render of HomeScreen, same reason loadPublicPlayers above needs a stub -- never actually
+  // called unless a test types into the search box, but the bare reference itself throws otherwise.
+  globalThis.fetchLiveAndRecentMatches = () => Promise.resolve([]);
 
   let inst;
   await act(async () => {
@@ -151,6 +155,7 @@ afterEach(() => {
   delete globalThis.signInGoogle;
   delete globalThis.signOutUser;
   delete globalThis.loadPublicPlayers;
+  delete globalThis.fetchLiveAndRecentMatches;
   delete globalThis.fetchSharedMatch;
   delete globalThis.saveMatch;
   delete globalThis.saveRules;

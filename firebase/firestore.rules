@@ -87,17 +87,21 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Public "Live now" home-feed mirror — every non-complete match currently being scored gets
-    // mirrored here (see saveMatch in index.html), whether or not its scorer has ever generated a
-    // share/view code, so it can be found from the home screen without needing a link at all. Same
-    // packMatchForFirestore shape and same open get/write trust model as /liveViews just above —
-    // this is a pure display cache, structurally separate from /sharedMatches and
+    // Public "Live now" home-feed mirror, and the app-wide match search's data source — every
+    // match currently being scored, plus one still marked complete within the last
+    // RECENT_MATCH_RETENTION_DAYS, gets mirrored here (see saveMatch in index.html), whether or
+    // not its scorer has ever generated a share/view code, so it can be found without needing a
+    // link at all — and can still be found for a few days after it ends, not just while it's live.
+    // Same packMatchForFirestore shape and same open get/write trust model as /liveViews just
+    // above — this is a pure display cache, structurally separate from /sharedMatches and
     // /users/{uid}/matches, so nothing written or read here can ever grant or reveal write access
     // to the real match, only the same read-only score data /liveViews already exposes to anyone
     // holding a code. The one deliberate difference from /liveViews: `list: true` — being listable
-    // is this collection's entire purpose. Docs are deleted the moment a match completes and on
-    // match deletion (same file), and carry a short expiresAt TTL as a safety net for a match
-    // that's simply abandoned mid-game and never explicitly finished.
+    // is this collection's entire purpose. A match marked private (a per-match toggle, or
+    // inherited by default from a private tournament) is never written here at all, live or after
+    // completion — opted out, not merely hidden. Docs are deleted on match deletion (same file)
+    // and carry an expiresAt TTL — short while in progress (an abandoned-mid-game safety net),
+    // RECENT_MATCH_RETENTION_DAYS once complete (the real retention window).
     // ---------------------------------------------------------------------
     match /liveMatches/{matchId} {
       allow get: if true;

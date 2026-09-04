@@ -1008,6 +1008,11 @@ export function CricketScorer() {
       umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
       status: "in-progress",
+      // Opt-out from the Home screen's Live now feed / app-wide search (see SetupScreen's
+      // Visibility toggle, defaulted from a tournament's own private flag when starting a
+      // fixture). Gates the /liveMatches mirror write in saveMatch -- a private match is never
+      // written there at all, live or after completion.
+      private: !!setup.private,
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,
@@ -2002,7 +2007,7 @@ export function CricketScorer() {
     _federationId: fid
   })))];
   const activeTournaments = activeTournamentClubId ? clubTournamentsById[activeTournamentClubId] || [] : activeTournamentFederationId ? federationTournamentsById[activeTournamentFederationId] || [] : allTournamentsFlat;
-  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo) {
+  async function handleCreateTournament(name, teamNames, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) {
     const t = {
       id: uid(),
       name,
@@ -2011,6 +2016,11 @@ export function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
+      // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
+      // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
+      // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
+      // already have, still overridable per match.
+      private: !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
       // this function only ever declared six parameters -- the venue was silently dropped on every
@@ -2441,6 +2451,7 @@ export function CricketScorer() {
       setScreen("players");
     },
     onLoadPublicPlayers: loadPublicPlayers,
+    onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
     inboxBadgeCount: federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount,
