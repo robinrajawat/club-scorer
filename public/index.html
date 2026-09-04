@@ -18703,6 +18703,7 @@ function HomeScreen({
   onOpenLiveMatch,
   liveTournaments = [],
   onOpenLiveTournament,
+  onOpenLive,
   onLoadRecentMatches,
   showInstallHint = false,
   onDismissInstallHint
@@ -18838,6 +18839,16 @@ function HomeScreen({
   const UPCOMING_HOME_LIMIT = 4;
   const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
   const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
+  // Both "Live now" and "Live tournaments" are previews, not the full feed -- capped to a couple of
+  // cards' worth so two live sections stacked on top of each other don't dominate the screen above
+  // the fold. A trailing "See all" card (matching each strip's own card size, so it reads as part
+  // of the same scroll rather than a different kind of thing) opens the full, uncapped list on its
+  // own screen (see onOpenLive / LiveScreen) whenever there's more than fits in the preview.
+  const LIVE_HOME_LIMIT = 3;
+  const visibleLiveMatches = liveMatches.slice(0, LIVE_HOME_LIMIT);
+  const hiddenLiveMatchCount = liveMatches.length - visibleLiveMatches.length;
+  const visibleLiveTournaments = liveTournaments.slice(0, LIVE_HOME_LIMIT);
+  const hiddenLiveTournamentCount = liveTournaments.length - visibleLiveTournaments.length;
   // Cups (tournaments + series), teams, clubs, federations, and Help/FAQ entries -- all already
   // sitting in memory (tournaments/teams/clubs are loaded right after sign-in for other reasons;
   // HELP_SECTIONS is static), so unlike Players these cost nothing to search and only ever show
@@ -19128,6 +19139,50 @@ function renderMatchCard(m, i, {
       }
     }, `See all ${count}`);
   }
+  // The trailing card at the end of the Live now / Live tournaments preview strips once there's
+  // more than LIVE_HOME_LIMIT worth to show -- same footprint as the strip's own cards so it reads
+  // as part of the same horizontal scroll, opens the full uncapped list on its own screen (see
+  // onOpenLive / LiveScreen) rather than expanding in place, since a strip that grows taller than
+  // its neighbors on every visit is the crowding this preview/full-list split exists to avoid.
+  function liveSeeAllCard(key, count, onClick) {
+    return /*#__PURE__*/React.createElement("button", {
+      key,
+      type: "button",
+      onClick: () => onClick && onClick(),
+      className: "cs-btn",
+      style: {
+        flexShrink: 0,
+        width: 110,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        textAlign: "center",
+        background: "none",
+        border: `1.5px dashed ${COLORS.cardDivider}`,
+        borderRadius: 14,
+        padding: "12px 10px",
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 15,
+      style: { color: COLORS.turf }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 12,
+        color: COLORS.turf
+      }
+    }, "See all"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        color: COLORS.inkSoft
+      }
+    }, "+", count));
+  }
   function categorySectionLabel(text) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -19344,7 +19399,7 @@ function renderMatchCard(m, i, {
       paddingLeft: 20,
       paddingRight: 20
     }
-  }, liveMatches.map(m => /*#__PURE__*/React.createElement("button", {
+  }, visibleLiveMatches.map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
     type: "button",
     onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
@@ -19407,7 +19462,7 @@ function renderMatchCard(m, i, {
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, matchScoreLine(m)))))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, matchScoreLine(m)))), hiddenLiveMatchCount > 0 && liveSeeAllCard("live-matches-see-all", hiddenLiveMatchCount, onOpenLive))), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
     }
@@ -19449,7 +19504,7 @@ function renderMatchCard(m, i, {
       paddingLeft: 20,
       paddingRight: 20
     }
-  }, liveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
+  }, visibleLiveTournaments.map(t => /*#__PURE__*/React.createElement("button", {
     key: t.tournamentId,
     type: "button",
     onClick: () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode),
@@ -19483,7 +19538,7 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 3
     }
-  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))))), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s"))), hiddenLiveTournamentCount > 0 && liveSeeAllCard("live-tournaments-see-all", hiddenLiveTournamentCount, onOpenLive))), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20111,6 +20166,202 @@ function renderMatchCard(m, i, {
   }, "Delete"))));
 }
 // GENERATED-FN-END: HomeScreen
+// GENERATED-FN-START: LiveScreen
+function LiveScreen({
+  liveMatches = [],
+  onOpenLiveMatch,
+  liveTournaments = [],
+  onOpenLiveTournament,
+  tournamentNameById = {},
+  onBack
+}) {
+  // Same fallback chain as the Home screen's own "Live now" strip: tournamentNameById only knows
+  // this account's own tournaments, liveTournaments (the public mirror) fills the gap for anyone
+  // else's non-private one, and a match whose tournament is neither just gets no badge at all.
+  const liveTournamentNameById = {};
+  liveTournaments.forEach(t => {
+    liveTournamentNameById[t.tournamentId] = t.name;
+  });
+  const tournamentNameForBadge = id => tournamentNameById[id] || liveTournamentNameById[id] || null;
+
+  function sectionLabel(dotColor, text) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        background: dotColor,
+        boxShadow: `0 0 0 3px ${dotColor === COLORS.live ? "rgba(230,84,75,0.18)" : "rgba(184,146,74,0.18)"}`,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        fontWeight: 700,
+        letterSpacing: 1.2,
+        color: COLORS.inkSoft,
+        textTransform: "uppercase"
+      }
+    }, text));
+  }
+
+  function liveRow(key, onClick, content) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: key,
+      type: "button",
+      onClick: onClick,
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        width: "100%",
+        textAlign: "left",
+        background: COLORS.surface,
+        border: "none",
+        borderRadius: 14,
+        padding: "12px 14px",
+        marginBottom: 8,
+        cursor: "pointer",
+        boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { minWidth: 0, flex: 1 }
+    }, content), /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 17,
+      style: { color: COLORS.inkSoft, opacity: 0.55, flexShrink: 0 }
+    }));
+  }
+
+  function renderMatchRow(m) {
+    return liveRow(m.id, () => onOpenLiveMatch && onOpenLiveMatch(m.id), /*#__PURE__*/React.createElement(React.Fragment, null, m.tournamentId && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "'Inter'",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: COLORS.gold,
+        marginBottom: 3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement(Trophy, {
+      size: 10,
+      style: { flexShrink: 0 }
+    }), tournamentNameForBadge(m.tournamentId)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: { color: COLORS.inkSoft, fontWeight: 500 }
+    }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginTop: 3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, matchScoreLine(m))));
+  }
+
+  function renderTournamentRow(t) {
+    return liveRow(t.tournamentId, () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode), /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, t.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginTop: 3
+      }
+    }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s")));
+  }
+
+  const isEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "20px 16px 60px",
+      maxWidth: 560,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 24,
+      color: COLORS.pitch,
+      marginBottom: 20
+    }
+  }, "Live"), isEmpty && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px"
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginTop: 12
+    }
+  }, "Nothing live right now.")), liveMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 26 }
+  }, sectionLabel(COLORS.live, `Matches (${liveMatches.length})`), liveMatches.map(renderMatchRow)), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${liveTournaments.length})`), liveTournaments.map(renderTournamentRow)));
+}
+// GENERATED-FN-END: LiveScreen
 // GENERATED-FN-START: MyTeamsScreen
 function MyTeamsScreen({
   teams = [],
@@ -38605,6 +38856,7 @@ const SCREEN_DEPTH = {
   "poll-respond": 1,
   tournaments: 1,
   players: 1,
+  live: 1,
   "team-edit": 2,
   "shared-links": 2,
   "inbox": 1,
@@ -38623,7 +38875,7 @@ function CricketScorer() {
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
   // (a tap), search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch below.
@@ -40983,6 +41235,7 @@ function CricketScorer() {
     onOpenLiveMatch: openLiveMatch,
     liveTournaments: liveTournaments,
     onOpenLiveTournament: openLiveTournament,
+    onOpenLive: () => setScreen("live"),
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -40990,7 +41243,17 @@ function CricketScorer() {
     }
   })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
-  }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
+  }), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
+    navKey: "live",
+    direction: navDirection
+  }, /*#__PURE__*/React.createElement(LiveScreen, {
+    liveMatches: liveMatches,
+    onOpenLiveMatch: openLiveMatch,
+    liveTournaments: liveTournaments,
+    onOpenLiveTournament: openLiveTournament,
+    tournamentNameById: tournamentNameById,
+    onBack: () => setScreen("home")
+  })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(SetupScreen, {
