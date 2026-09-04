@@ -39,18 +39,21 @@ function matchWith(innings, overrides = {}) {
   };
 }
 
-function dbStub(captured) {
+function dbStub(captured, expectedCollection = "liveViews") {
   return {
     collection: name => {
-      assert.equal(name, "liveViews");
+      assert.equal(name, expectedCollection);
       return {
-        doc: code => ({
-          onSnapshot: (onNext, onError) => {
-            captured.onNext = onNext;
-            captured.onError = onError;
-            return () => { captured.unsubscribed = true; };
-          }
-        })
+        doc: idOrCode => {
+          captured.docId = idOrCode;
+          return {
+            onSnapshot: (onNext, onError) => {
+              captured.onNext = onNext;
+              captured.onError = onError;
+              return () => { captured.unsubscribed = true; };
+            }
+          };
+        }
       };
     }
   };
@@ -69,6 +72,18 @@ test("FollowScreen: shows a loading state until the first snapshot arrives", () 
   const captured = {};
   const inst = renderScreen(captured);
   assert.match(JSON.stringify(inst.toJSON()), /Loading live score/);
+});
+
+test("FollowScreen: a matchId prop (Home screen's Live now feed) subscribes to liveMatches/{matchId} instead of liveViews/{code}", () => {
+  const captured = {};
+  globalThis.db = dbStub(captured, "liveMatches");
+  let inst;
+  act(() => {
+    inst = renderer.create(React.createElement(FollowScreen, { matchId: "m42", onExit: () => {} }));
+  });
+  assert.equal(captured.docId, "m42");
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()]) }); });
+  assert.match(JSON.stringify(inst.toJSON()), /Riverside CC/);
 });
 
 test("FollowScreen: doc.exists === false shows 'Match not found'", () => {

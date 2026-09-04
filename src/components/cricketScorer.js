@@ -219,6 +219,10 @@ export function CricketScorer() {
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
+  // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
+  // (a tap, not a "?live=CODE" link) -- see openLiveMatch/handleOpenLiveMatch below. Exactly one of
+  // followCode/followMatchId is ever set at a time; FollowScreen itself treats them as equivalent.
+  const [followMatchId, setFollowMatchId] = useState(null);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -255,6 +259,7 @@ export function CricketScorer() {
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
+  const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -394,6 +399,15 @@ export function CricketScorer() {
     setThemePrefState(pref);
     saveThemePref(pref);
   }
+  // The Home screen's "Live now" feed -- deliberately unconditional (not gated on `user`), same as
+  // the rest of /liveMatches: it's a public, read-only mirror of every currently in-progress match,
+  // so a signed-out visitor sees it too. Runs for the lifetime of the app, not just while screen ===
+  // "home", since there's no cheap way to pause/resume a Firestore listener across a screen change
+  // without re-subscribing every time Home is revisited -- one live subscription for as long as the
+  // tab is open is simpler and no more expensive than that would be.
+  useEffect(() => {
+    return loadLiveMatches(setLiveMatches);
+  }, []);
   useEffect(() => {
     if (!user || !pendingGoogleLink) return;
     if (pendingGoogleLink.email && user.email && pendingGoogleLink.email.toLowerCase() !== user.email.toLowerCase()) {
@@ -1298,7 +1312,15 @@ export function CricketScorer() {
       /* noop — worst case the param stays in the address bar */
     }
     setFollowCode(null);
+    setFollowMatchId(null);
     setScreen("home");
+  }
+  // Tapping a card in the Home screen's "Live now" feed -- same destination screen as a "?live="
+  // link (exitFollow above clears both, so either path leaves cleanly), just reached by matchId
+  // instead of a code, with no URL param to set since this was never a link someone navigated to.
+  function openLiveMatch(id) {
+    setFollowMatchId(id);
+    setScreen("follow");
   }
   function exitFollowTournament() {
     try {
@@ -2444,6 +2466,8 @@ export function CricketScorer() {
     },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
+    liveMatches: liveMatches,
+    onOpenLiveMatch: openLiveMatch,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -2761,6 +2785,7 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FollowScreen, {
     code: followCode,
+    matchId: followMatchId,
     onExit: exitFollow
   })), screen === "follow-tournament" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow-tournament",
