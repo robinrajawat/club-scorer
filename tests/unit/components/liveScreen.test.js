@@ -1,6 +1,6 @@
 // The full-list "See all" destination for the Home screen's Live now / Live tournaments preview
 // strips (src/components/liveScreen.js): the unbounded /liveMatches + /liveTournaments feeds, each
-// in its own section, plus the empty state and the back button.
+// in its own section, plus the loading and empty states.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -30,7 +30,7 @@ function liveMatch(overrides = {}) {
 }
 
 function render(props) {
-  return renderer.create(React.createElement(LiveScreen, { onBack: () => {}, ...props }));
+  return renderer.create(React.createElement(LiveScreen, { ...props }));
 }
 
 test("LiveScreen: shows an empty state and neither section when both feeds are empty", () => {
@@ -53,14 +53,6 @@ test("LiveScreen: shows real data instead of the loading indicator once at least
   const json = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(json, /Loading…/);
   assert.match(json, /Riverside CC/);
-});
-
-test("LiveScreen: back button calls onBack", () => {
-  let backCalled = false;
-  const inst = render({ onBack: () => { backCalled = true; } });
-  const back = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Home"));
-  act(() => { back.props.onClick(); });
-  assert.equal(backCalled, true);
 });
 
 test("LiveScreen: lists every live match (uncapped), with its score line and tournament badge, and opens it on tap", () => {
