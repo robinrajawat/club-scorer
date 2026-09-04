@@ -450,7 +450,66 @@ the same screen read as if the substitution button itself should advance the inn
 "Start 2nd Innings" is the separate button below it. Matches the leading theory from the original
 2026-09-02 investigation exactly. No code change — nothing to fix here.
 
-**Open items handed off, unresolved as of 2026-09-02:**
+**2026-09-04 — tournament sharing goes live + discoverable, a Terms of service section, and
+Visibility becomes editable after creation (PRs #130–#132, all merged, firestore rules published):**
+
+- **PR #130** — `/tournamentViews/{code}` (a shared tournament's read-only standings snapshot) now
+  refreshes automatically: any client that saves a completed match tagged with a `tournamentId`
+  (the owner's or a guest scoring via that match's own share code) triggers a recompute and
+  republish, not just the owner hitting "refresh" in the share panel. Enabled by a new public
+  `/tournamentMatches/{tournamentId}` config doc (teams + fixtures only, never scores) so a client
+  with no access to the real, club-membership-gated tournament doc can still recompute standings
+  from public data alone — required opening `/tournamentMatches/{id}/entries` (the match pointer
+  index) from signed-in-only to public get/list, a deliberate trust-tier call confirmed with the
+  project owner first: it only ever held `{tournamentId, matchId, shareCode}`, never scores or
+  names. A tournament run entirely by its owner scoring privately, with no match codes ever handed
+  out, is unaffected — stays only as live as the owner's own device refreshing it manually. Also
+  fixed a real pre-existing bug found while touching this: the standings written to
+  `tournamentViews` never included `noResult`, so every previously-shared tournament's "NR" column
+  silently rendered blank — both write paths (manual refresh and the new live auto-refresh) now go
+  through one shared `formatTournamentViewSnapshot` (`src/core/appLogic.js`) so they can't drift
+  apart again. The same PR also added a "Live tournaments" Home-screen strip: a new public
+  `/liveTournaments/{tournamentId}` mirror (name, share code, team count — no standings), same
+  shape/trust model as the existing `/liveMatches`, so a non-private shared tournament is
+  discoverable without a link, matching what matches already had. `CricketScorer` gained a
+  `tournamentFollowCode` piece of state so tapping a card can open `FollowTournamentScreen`, which
+  previously only supported arriving via a `?tournament=` URL link.
+- **PR #131** — added a "Terms of service" section to the About screen, same collapsed-behind-a-
+  teaser pattern as the existing "Data & privacy" block, right next to it. Short and plain-English
+  (no warranty, you're responsible for what you publish, the service can change or go down, the
+  MIT license is the real fallback if it ever does) — sized to what this actually is, a free,
+  one-person side project, not a formal contract.
+- **PR #132** — a match's or tournament's Visibility (public/private) was previously a one-time
+  choice made in Setup at creation, with no way to change it afterward anywhere in the UI. Added
+  the same `VisibilitySwitch` already used at creation time to MatchScreen's "This match" menu and
+  TournamentDetailScreen (owner/co-owner only). Found and fixed a real gap while building this:
+  `saveMatch`'s `/liveMatches` mirror only ever *skipped* the write when `match.private` was true —
+  it never actively removed an already-live match's doc, so flipping visibility after the fact
+  would have left a stale, still-discoverable doc behind until its TTL caught up. Now it's actively
+  deleted the moment a match is saved private. Tournament side: going private removes it from
+  `/liveTournaments` immediately (`removeTournamentFromLiveFeed`); going public republishes it
+  right away if it's already shared (`refreshTournamentStandingsLive`), rather than waiting for the
+  next match to complete. Neither direction touches `/tournamentViews` or mints a share code on its
+  own — sharing stays a separate, deliberate action, same as before.
+
+All three merged clean, CI green, `firebase/firestore.rules`' new/changed blocks (the
+`tournamentMatches/entries` public-read change, plus the new `tournamentMatches/{id}` and
+`liveTournaments/{id}` rule blocks from PR #130) have been pasted into Firebase Console and
+published — confirmed by the project owner, not just merged into `main`.
+
+**Environment note for a future session:** this session's clone was shallow
+(`git rev-parse --is-shallow-repository` → true). After a squash-merge, `git checkout main && git
+fetch origin main && git merge --ff-only origin/main` failed with "refusing to merge unrelated
+histories" — not a rewritten or force-pushed history, just local `main` and a freshly-fetched
+`origin/main` each being truncated slices of the real history that don't overlap within the
+shallow window, so `merge-base` finds nothing in common even though they're genuinely related
+upstream (confirmed by checking `origin/main`'s tip commit directly — it matched the real
+squash-merge SHA every time). Since local `main` never carries independent commits in this
+workflow (all work happens on feature branches pushed straight to origin), the safe fix is `git
+fetch origin main && git reset --hard origin/main`, not `merge` — worth remembering before
+mistaking this for something actually wrong with the remote.
+
+**Open items handed off, unresolved as of 2026-09-02 (still true as of 2026-09-04 — untouched this session):**
 - **30-minute escalating time-penalty rule** — still open from the 2026-09-01 entry above; not
   touched in any session since. Distinct from the (already-shipped) plain "time cap per innings"
   flag. The only real *unstarted* work left as of this handoff.
