@@ -549,6 +549,60 @@ of service icon, and tournament auto-publish (PRs #134, #135, and this one):**
   `/tournamentMatches/{id}`, and `/tournamentViews/{code}` were already open-write from the
   2026-09-04 (earlier) work, so no new rules paste is needed for this one.
 
+**2026-09-04 (continued) — Home screen decluttered around a persistent bottom tab bar, PRs #138–#145,
+all merged:**
+
+Home had been accumulating stacked sections (Live now, Live tournaments, a Teams/Cups/Clubs row, Next
+up) with no way to reach Live/Cups/Teams/Clubs except from Home first — every one of those additions
+made the single most-visited screen taller. This batch restructured navigation instead of continuing
+to add to Home:
+
+- **PR #138** — capped the (then still Home-only) "Live now"/"Live tournaments" strips to 3 cards
+  each with a trailing "See all" card, and added a new `LiveScreen` (`src/components/liveScreen.js`)
+  as the uncapped destination behind it.
+- **PR #139** — added a "Next up" card to Home (the nearest scheduled-but-unstarted fixture across
+  every tournament), reusing `UpcomingFixtureCard`, so starting a planned match doesn't require
+  scrolling past Live now/Live tournaments and expanding the collapsed "Upcoming" fold.
+- **PR #140 — the actual structural fix.** Added a persistent bottom `TabBar`
+  (`src/components/tabBar.js`): **Home | Live | Cups | Teams | Clubs**, shown only on those five root
+  screens (`TAB_BAR_SCREENS` in `cricketScorer.js`) and hidden everywhere else (match scoring, setup,
+  any drilled-into edit/detail screen) so it never competes with a screen's own fixed-position UI.
+  "Teams" here is `MyTeamsScreen` (roster management) and "Clubs" is `TeamsScreen` (confusingly the
+  one literally named `TeamsScreen` — it's the Clubs/Federations browser, not the roster screen) —
+  worth remembering, since the source names and the tab labels don't match. Each of the five screens
+  reserves clearance under the bar via a `showTabBar` prop and the exported `TAB_BAR_HEIGHT` constant
+  rather than a measured height, since the bar's own content never changes shape.
+- **PR #141** — with Live/Cups/Teams/Clubs now one tap away via the tab bar, reordered Home around
+  actual priority: a new "Continue scoring" hero for any match this account has in progress (the
+  thing someone opening the app mid-match is almost certainly here for) at the very top, "Next up"
+  right below it, then New Match demoted from a full-width bespoke green CTA to a small secondary
+  button. The old Live now/Live tournaments strips and the Teams/Cups/Clubs row were removed from
+  Home entirely (redundant with the tab bar).
+- **PR #142 (same-session fix)** — the new "Continue scoring" hero cards shipped oversized (bigger
+  padding/fonts than every other match card, plus a bespoke full-width "Resume scoring" button); a
+  real device screenshot with two in-progress matches showed the hero section alone dominating the
+  screen, reintroducing the exact crowding problem this batch was fixing. Resized to match the
+  standard match-row card used elsewhere and replaced the button with a plain trailing chevron.
+- **PR #143** — Live/Cups/Teams/Clubs each still had a "‹ Home" back button left over from when they
+  were only reachable by drilling in from Home; now that the tab bar always renders alongside all
+  four, the button was redundant (and slightly misleading — implies Home is a parent screen, not a
+  sibling tab). Removed from all four plus their `onBack` wiring in `cricketScorer.js`.
+- **PR #144** — the pending-inbox badge (federation requests, co-owner invites, unread polls/
+  activity) only ever showed on the header bell icon inside `HomeScreen`, invisible from any other
+  tab. `TabBar`'s Home tab now shows the same numbered badge; `inboxBadgeCount` was extracted into
+  one derived value in `cricketScorer.js` so the header bell and the tab badge can't drift apart.
+- **PR #145** — `LiveScreen` showed its empty state ("Nothing live right now") immediately on every
+  visit, even during the brief window before `/liveMatches`/`/liveTournaments`'s first `onSnapshot`
+  callback had actually arrived. Added `liveMatchesLoaded`/`liveTournamentsLoaded` tracking in
+  `cricketScorer.js` and a `loading` prop so `LiveScreen` shows a spinner instead until at least one
+  feed has real data.
+
+Net effect: Home now shows only this account's own stuff (an in-progress match, if any; the next
+scheduled fixture; saved matches) plus a small New Match button — everyone else's live matches/
+tournaments and every other top-level destination moved to the tab bar. README's "Teams & clubs" and
+"Data & privacy" sections updated to describe the tab bar and the Live tab instead of the removed
+Home-screen strips.
+
 **Open items handed off, unresolved as of 2026-09-02 (still true as of 2026-09-04 — untouched this session):**
 - **30-minute escalating time-penalty rule** — still open from the 2026-09-01 entry above; not
   touched in any session since. Distinct from the (already-shipped) plain "time cap per innings"
