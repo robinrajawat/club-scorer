@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  computeStandings, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal,
+  computeStandings, formatTournamentViewSnapshot, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal,
   computeQualificationTarget, decimalOversToLabel
 } from "../../src/core/appLogic.js";
 
@@ -113,6 +113,36 @@ test("a staged knockout fixture (e.g. a Final) never counts toward the league ta
   const a = rows.find(r => r.team === "A");
   assert.equal(a.played, 0);
   assert.equal(a.points, 0);
+});
+
+test("formatTournamentViewSnapshot: carries noResult through to the written snapshot", () => {
+  // Regression guard: the original hand-written /tournamentViews writer in index.html dropped
+  // `noResult` from the standings rows it wrote, even though FollowTournamentScreen renders it as
+  // the "NR" column — every previously-shared tournament's NR column silently showed nothing.
+  const tournament = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [] };
+  const match = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20, noResult: true,
+    innings: [
+      { battingTeam: "A", bowlingTeam: "B", runs: 80, wickets: 3, legalBalls: 90, ballsPerOver: 6, maxWickets: 10 },
+      { battingTeam: "B", bowlingTeam: "A", runs: 10, wickets: 0, legalBalls: 12, ballsPerOver: 6, maxWickets: 10 }
+    ]
+  };
+  const standings = computeStandings(tournament, [match]);
+  const snapshot = formatTournamentViewSnapshot(tournament, standings);
+  assert.equal(snapshot.name, "Summer Cup");
+  assert.deepEqual(snapshot.teams, ["A", "B"]);
+  const a = snapshot.standings.find(r => r.team === "A");
+  assert.equal(a.noResult, 1);
+  assert.equal(a.points, 1);
+});
+
+test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fields", () => {
+  const tournament = {
+    id: "T1", name: "Summer Cup", teams: ["A", "B"],
+    fixtures: [{ id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", matchId: "M1", extraInternalField: "drop me" }]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, []);
+  assert.deepEqual(snapshot.fixtures, [{ id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00" }]);
 });
 
 test("DLS-revised overs credit the all-out chasing side with the revised limit, not the original", () => {

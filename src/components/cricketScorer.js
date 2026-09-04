@@ -229,6 +229,11 @@ export function CricketScorer() {
   // Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself treats them
   // as equivalent.
   const [followMatchId, setFollowMatchId] = useState(initialFollowMatchId);
+  // Set instead of relying on initialTournamentFollowCode alone when FollowTournamentScreen is
+  // reached from the Home screen's "Live tournaments" feed (a tap) rather than a "?tournament="
+  // link -- see openLiveTournament/exitFollowTournament below. Starts at the URL-driven value so a
+  // direct link still works exactly as before.
+  const [tournamentFollowCode, setTournamentFollowCode] = useState(initialTournamentFollowCode);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -266,6 +271,7 @@ export function CricketScorer() {
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
   const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
+  const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
   const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [federationTeamOptions, setFederationTeamOptions] = useState([]); // teams visible via activeTournamentClubId's federations, excluding its own
   const [tournaments, setTournaments] = useState([]);
@@ -413,6 +419,12 @@ export function CricketScorer() {
   // tab is open is simpler and no more expensive than that would be.
   useEffect(() => {
     return loadLiveMatches(setLiveMatches);
+  }, []);
+  // Same reasoning as the "Live now" subscription just above, for shared tournaments' standings
+  // (/liveTournaments -- see loadLiveTournaments in index.html and refreshTournamentStandingsLive/
+  // shareTournament for what writes it).
+  useEffect(() => {
+    return loadLiveTournaments(setLiveTournaments);
   }, []);
   useEffect(() => {
     if (!user || !pendingGoogleLink) return;
@@ -1335,6 +1347,13 @@ export function CricketScorer() {
     setFollowMatchId(id);
     setScreen("follow");
   }
+  // Same reasoning as openLiveMatch just above, for the Home screen's "Live tournaments" feed --
+  // reached by shareCode rather than a matchId since that's what FollowTournamentScreen has always
+  // taken (the same code a "?tournament=" link carries), no separate matchId-shaped path needed.
+  function openLiveTournament(code) {
+    setTournamentFollowCode(code);
+    setScreen("follow-tournament");
+  }
   function exitFollowTournament() {
     try {
       const url = new URL(window.location.href);
@@ -1343,6 +1362,7 @@ export function CricketScorer() {
     } catch (e) {
       /* noop — worst case the param stays in the address bar */
     }
+    setTournamentFollowCode(null);
     setScreen("home");
   }
   function exitPoll() {
@@ -2487,6 +2507,8 @@ export function CricketScorer() {
     onGetViewCode: handleGetViewCodeForMatch,
     liveMatches: liveMatches,
     onOpenLiveMatch: openLiveMatch,
+    liveTournaments: liveTournaments,
+    onOpenLiveTournament: openLiveTournament,
     showInstallHint: showInstallHint && !showTour,
     onDismissInstallHint: () => {
       setShowInstallHint(false);
@@ -2810,7 +2832,7 @@ export function CricketScorer() {
     navKey: "follow-tournament",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FollowTournamentScreen, {
-    code: initialTournamentFollowCode,
+    code: tournamentFollowCode,
     onExit: exitFollowTournament
   })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "poll-respond",

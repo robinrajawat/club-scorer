@@ -85,6 +85,31 @@ test("HomeScreen: 'Live now' shows each live match's teams and score, and tappin
   assert.equal(openedId, "live1");
 });
 
+test("HomeScreen: no 'Live tournaments' section when liveTournaments is empty", () => {
+  const inst = render();
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Live tournaments/);
+});
+
+test("HomeScreen: 'Live tournaments' shows each tournament's name and team count, and tapping one calls onOpenLiveTournament with its shareCode", () => {
+  let openedCode = null;
+  const inst = render({
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "ABC123", teamsCount: 6 }],
+    onOpenLiveTournament: code => { openedCode = code; }
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Live tournaments/);
+  assert.match(json, /Summer Cup/);
+  // t.teamsCount is a raw number in the createElement call, converted to text by React only at
+  // render time -- checked against the rendered JSON tree (where it's already a string), not
+  // card.props.children (the pre-render prop, where it's still the number 6 and hasText's
+  // string-only .includes check would never match it).
+  assert.match(json, /"6"/);
+  assert.match(json, /team/);
+  const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Summer Cup"));
+  act(() => { card.props.onClick(); });
+  assert.equal(openedCode, "ABC123");
+});
+
 test("HomeScreen: shows an empty state with no matches", () => {
   const inst = render();
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);

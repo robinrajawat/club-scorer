@@ -99,6 +99,8 @@ async function render(url) {
   // its own comment in cricketScorer.js. A listener, not a promise: returns an unsubscribe function
   // rather than resolving, same shape followScreen.test.js's onSnapshot stub captures for real.
   globalThis.loadLiveMatches = () => () => {};
+  // Same reasoning as loadLiveMatches just above, for the "Live tournaments" feed subscription.
+  globalThis.loadLiveTournaments = () => () => {};
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
   globalThis.loadMyPlayerProfile = () => Promise.resolve(null);

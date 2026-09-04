@@ -149,7 +149,7 @@ export function TournamentShareModal({
     if (!code) return;
     setBusy(true);
     setError("");
-    const result = await stopSharingTournament(code);
+    const result = await stopSharingTournament(tournament.id, code);
     setBusy(false);
     if (result.ok) {
       onUpdateTournament({
