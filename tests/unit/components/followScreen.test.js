@@ -12,8 +12,32 @@ import renderer, { act } from "react-test-renderer";
 import { FollowScreen } from "../../../src/components/followScreen.js";
 import { BallCelebration, MilestoneToast } from "../../../src/components/scoringUiAtoms.js";
 
+// FollowScreen now keeps a real setInterval alive for as long as it's mounted (the staleness
+// hint's clock -- see followScreen.js). None of these tests unmount their own instance (most
+// don't need to, for everything else they check), so left alone that timer would keep node:test's
+// process alive past every synchronous assertion finishing, since a live interval blocks a clean
+// exit the same way an open server handle would. Tracking every rendered instance here and
+// unmounting each in afterEach -- rather than adding an unmount call to every test -- fixes this
+// once, for all of them, regardless of which helper below created the instance.
+const renderedInstances = [];
+// Node has a built-in read-only `navigator` global (getter-only, no setter) since Node 21, so a
+// plain `globalThis.navigator = ...` assignment throws -- redefine the property instead, same
+// pattern shareMenus.test.js already uses for the same reason.
+function setNavigator(value) {
+  Object.defineProperty(globalThis, "navigator", { value, configurable: true, writable: true });
+}
 afterEach(() => {
   delete globalThis.db;
+  delete globalThis.navigator;
+  while (renderedInstances.length > 0) {
+    const inst = renderedInstances.pop();
+    // One test unmounts its own instance already (to assert on the resulting unsubscribe) --
+    // react-test-renderer's unmount is idempotent, but wrapped defensively anyway since a second
+    // call here is purely a cleanup nicety, not something worth a test failure over either way.
+    try {
+      act(() => { inst.unmount(); });
+    } catch (e) { /* already unmounted */ }
+  }
 });
 
 function inning(overrides = {}) {
@@ -65,6 +89,7 @@ function renderScreen(captured, extraProps = {}) {
   act(() => {
     inst = renderer.create(React.createElement(FollowScreen, { code: "ABC123", onExit: () => {}, ...extraProps }));
   });
+  renderedInstances.push(inst);
   return inst;
 }
 
@@ -81,6 +106,7 @@ test("FollowScreen: a matchId prop (Home screen's Live now feed) subscribes to l
   act(() => {
     inst = renderer.create(React.createElement(FollowScreen, { matchId: "m42", onExit: () => {} }));
   });
+  renderedInstances.push(inst);
   assert.equal(captured.docId, "m42");
   act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()]) }); });
   assert.match(JSON.stringify(inst.toJSON()), /Riverside CC/);
@@ -249,6 +275,67 @@ test("FollowScreen: no code shows not-found without ever calling db", () => {
   act(() => {
     inst = renderer.create(React.createElement(FollowScreen, { code: "", onExit: () => {} }));
   });
+  renderedInstances.push(inst);
   assert.equal(called, false);
   assert.match(JSON.stringify(inst.toJSON()), /Match not found/);
+});
+
+test("FollowScreen: Share prefers navigator.share, passing the follow-code URL, when available", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()]) }); });
+  let shared = null;
+  setNavigator({ share: opts => { shared = opts; return Promise.resolve(); } });
+  const shareBtn = inst.root.findByProps({ "aria-label": "Share this match" });
+  act(() => { shareBtn.props.onClick(); });
+  assert.ok(shared);
+  assert.match(shared.url, /follow=ABC123/);
+  assert.match(shared.title, /Riverside CC/);
+});
+
+test("FollowScreen: Share falls back to a clipboard copy (with the matchId-based URL) when there's no navigator.share, and flashes 'Copied!'", () => {
+  const captured = {};
+  globalThis.db = { collection: () => ({ doc: () => ({ onSnapshot: onNext => { captured.onNext = onNext; return () => {}; } }) }) };
+  let inst;
+  act(() => { inst = renderer.create(React.createElement(FollowScreen, { matchId: "m42", onExit: () => {} })); });
+  renderedInstances.push(inst);
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()]) }); });
+  let copied = null;
+  setNavigator({ clipboard: { writeText: url => { copied = url; return Promise.resolve(); } } });
+  const shareBtn = inst.root.findByProps({ "aria-label": "Share this match" });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Copied!/);
+  act(() => { shareBtn.props.onClick(); });
+  assert.match(copied, /followMatch=m42/);
+  assert.match(JSON.stringify(inst.toJSON()), /Copied!/);
+});
+
+test("FollowScreen: shows a 'no updates in a while' hint only once several minutes pass with no new snapshot on a still-live match", t => {
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const captured = {};
+  const inst = renderScreen(captured);
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning()]) }); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /No updates in a while/);
+
+  // Under 3 minutes: still ordinary -- a gap between overs, a wicket, a field change.
+  act(() => { t.mock.timers.tick(90 * 1000); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /No updates in a while/);
+
+  // Past 3 minutes with nothing new: worth a gentle nudge.
+  act(() => { t.mock.timers.tick(2 * 60 * 1000); });
+  assert.match(JSON.stringify(inst.toJSON()), /No updates in a while/);
+
+  // A fresh snapshot arriving resets the clock -- the hint clears immediately rather than
+  // lingering until the next tick.
+  act(() => { captured.onNext({ exists: true, data: () => matchWith([inning({ overs: [[{ kind: "run", runs: 1 }]] })]) }); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /No updates in a while/);
+});
+
+test("FollowScreen: never shows the staleness hint on a completed match", t => {
+  t.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const captured = {};
+  const inst = renderScreen(captured);
+  const complete = matchWith([inning({ complete: true })], { status: "complete" });
+  act(() => { captured.onNext({ exists: true, data: () => complete }); });
+  act(() => { t.mock.timers.tick(10 * 60 * 1000); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /No updates in a while/);
 });

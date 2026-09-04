@@ -351,6 +351,22 @@ export function buildFollowUrl(code) {
   }
 }
 
+// Same shape as buildFollowUrl, for a match reached via the Home screen's Live now feed / app-wide
+// search (a /liveMatches doc id) rather than an explicitly-generated view code -- lets a viewer who
+// found a match that way forward the exact thing they're watching, not just the scorer who
+// generated a code in the first place. See getFollowMatchIdFromUrl for the matching URL parser.
+export function buildFollowMatchUrl(matchId) {
+  try {
+    const {
+      origin,
+      pathname
+    } = window.location;
+    return `${origin}${pathname}?followMatch=${matchId}`;
+  } catch (e) {
+    return `?followMatch=${matchId}`;
+  }
+}
+
 export function buildLiveShareText(match, code) {
   const lines = [`\uD83C\uDFCF ${match.teamA} vs ${match.teamB}`];
   match.innings.forEach(inn => {

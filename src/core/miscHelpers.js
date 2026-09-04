@@ -405,6 +405,20 @@ export function getFollowCodeFromUrl() {
   }
 }
 
+// A liveMatches doc id, unlike a follow/tournament/poll code, is never shown to a person to type
+// in by hand (uid() output, lowercase base36) -- so this deliberately doesn't force-uppercase it
+// the way those do. Still stripped down to a safe charset rather than trusted as-is.
+export function getFollowMatchIdFromUrl() {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("followMatch");
+    if (!raw) return null;
+    const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, "");
+    return cleaned || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function getTournamentFollowCodeFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("tournament");

@@ -25,7 +25,7 @@ import { HelpScreen, AboutScreen, FeedbackScreen, SharedLinksScreen, BetaTesters
 import { FeedbackInboxScreen } from "./feedbackInboxScreen.js";
 import { PrintReport } from "./scorecard.js";
 import {
-  isFeedbackAdmin, getAuthActionFromUrl, getFollowCodeFromUrl, getTournamentFollowCodeFromUrl,
+  isFeedbackAdmin, getAuthActionFromUrl, getFollowCodeFromUrl, getFollowMatchIdFromUrl, getTournamentFollowCodeFromUrl,
   getPollCodeFromUrl, getShortcutActionFromUrl, accountExistsLinkInfo, genMatchCode, isClubOwner,
   isFederationOwner
 } from "../core/miscHelpers.js";
@@ -214,15 +214,21 @@ export const SCREEN_DEPTH = {
 export function CricketScorer() {
   const initialAuthAction = useRef(getAuthActionFromUrl()).current;
   const initialFollowCode = useRef(getFollowCodeFromUrl()).current;
+  // A "?followMatch=ID" link (see buildFollowMatchUrl) -- the Share button on FollowScreen itself
+  // builds one of these when it was reached via a matchId rather than a code (i.e. via the Home
+  // screen's Live now feed or app-wide search, neither of which involves a code at all), so a
+  // viewer who found a match that way can still forward the exact thing they're watching.
+  const initialFollowMatchId = useRef(getFollowMatchIdFromUrl()).current;
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | follow | follow-tournament | poll-respond | auth-action
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from the Home screen's "Live now" feed
-  // (a tap, not a "?live=CODE" link) -- see openLiveMatch/handleOpenLiveMatch below. Exactly one of
-  // followCode/followMatchId is ever set at a time; FollowScreen itself treats them as equivalent.
-  const [followMatchId, setFollowMatchId] = useState(null);
+  // (a tap), search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch below.
+  // Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself treats them
+  // as equivalent.
+  const [followMatchId, setFollowMatchId] = useState(initialFollowMatchId);
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -330,7 +336,7 @@ export function CricketScorer() {
   // tournament from My Tournaments (personal) should return there on Back, opening one from Cups
   // (a club/federation) should return to Cups, same as it always did.
   const [tournamentDetailReturnScreen, setTournamentDetailReturnScreen] = useState("tournaments");
-  const [loading, setLoading] = useState(!initialFollowCode && !initialTournamentFollowCode);
+  const [loading, setLoading] = useState(!initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   // isFeedbackAdmin(user) (hardcoded-email, instant) covers this account with zero delay/flicker.
@@ -1312,6 +1318,7 @@ export function CricketScorer() {
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("follow");
+      url.searchParams.delete("followMatch");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     } catch (e) {
       /* noop — worst case the param stays in the address bar */
@@ -1320,9 +1327,10 @@ export function CricketScorer() {
     setFollowMatchId(null);
     setScreen("home");
   }
-  // Tapping a card in the Home screen's "Live now" feed -- same destination screen as a "?live="
-  // link (exitFollow above clears both, so either path leaves cleanly), just reached by matchId
-  // instead of a code, with no URL param to set since this was never a link someone navigated to.
+  // Tapping a card in the Home screen's "Live now" feed or an app-wide search result -- same
+  // destination screen as a "?follow=" or "?followMatch=" link (exitFollow above clears both
+  // params, so every path leaves cleanly), just reached by matchId instead of a code, with no URL
+  // param to set here since a tap (unlike a link) never touches the address bar to begin with.
   function openLiveMatch(id) {
     setFollowMatchId(id);
     setScreen("follow");
@@ -2348,7 +2356,7 @@ export function CricketScorer() {
     WebkitTextSizeAdjust: "100%",
     touchAction: "manipulation"
   };
-  if (loading || !authChecked && !initialFollowCode && !initialTournamentFollowCode) {
+  if (loading || !authChecked && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         ...wrapStyle,
