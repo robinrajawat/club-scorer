@@ -68,6 +68,13 @@ export function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
         cursor: "pointer"
       }
     }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "inline-flex",
+        padding: "4px 15px",
+        borderRadius: 14,
+        background: isActive ? `color-mix(in srgb, ${COLORS.pitch} 15%, transparent)` : "transparent"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
       style: { position: "relative", display: "inline-flex" }
     }, /*#__PURE__*/React.createElement(Icon, {
       size: 21,
@@ -97,7 +104,7 @@ export function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
         lineHeight: 1,
         boxShadow: `0 0 0 1.5px ${COLORS.cream}`
       }
-    }, homeBadgeCount > 9 ? "9+" : homeBadgeCount)), /*#__PURE__*/React.createElement("span", {
+    }, homeBadgeCount > 9 ? "9+" : homeBadgeCount))), /*#__PURE__*/React.createElement("span", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 10.5,
