@@ -127,7 +127,10 @@ test("HomeScreen: no 'Continue scoring' hero when there's no in-progress match",
 });
 
 test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/score/tournament badge, and tapping the card calls onOpen", () => {
-  let openedId = null;
+  // Passes the full match object, not just its id -- opening a co-owner's shared-but-never-
+  // locally-opened match needs its shareCode, which only this already-loaded object has (see
+  // openMatch's own comment in cricketScorer.js for why a plain id alone isn't enough).
+  let opened = null;
   const inst = render({
     matches: [match({
       id: "m1", status: "in-progress", tournamentId: "t1",
@@ -138,7 +141,7 @@ test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/sco
       }]
     })],
     tournamentNameById: { t1: "Summer Cup" },
-    onOpen: id => { openedId = id; }
+    onOpen: m => { opened = m; }
   });
   const json = JSON.stringify(inst.toJSON());
   assert.match(json, /Continue scoring/);
@@ -147,7 +150,7 @@ test("HomeScreen: 'Continue scoring' hero shows an in-progress match's teams/sco
   assert.match(json, /Summer Cup/);
   const card = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   act(() => { card.props.onClick(); });
-  assert.equal(openedId, "m1");
+  assert.equal(opened.id, "m1");
 });
 
 test("HomeScreen: 'Continue scoring' hero shows every in-progress match, not just one", () => {
@@ -182,12 +185,12 @@ test("HomeScreen: 'New Match' calls onNew", () => {
   assert.equal(called, true);
 });
 
-test("HomeScreen: clicking a match card calls onOpen with its id", () => {
+test("HomeScreen: clicking a match card calls onOpen with the full match object, not just its id", () => {
   let opened = null;
-  const inst = render({ matches: [match()], onOpen: id => { opened = id; } });
+  const inst = render({ matches: [match()], onOpen: m => { opened = m; } });
   const clickable = inst.root.findByProps({ role: "button" });
   clickable.props.onClick();
-  assert.equal(opened, "m1");
+  assert.equal(opened.id, "m1");
 });
 
 test("HomeScreen: JoinCodeBar's onJoin prop is wired to onJoinCode", () => {

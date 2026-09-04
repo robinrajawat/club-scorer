@@ -270,11 +270,11 @@ function renderMatchCard(m, i, {
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    onClick: () => onOpen(m.id),
+    onClick: () => onOpen(m),
     onKeyDown: e => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        onOpen(m.id);
+        onOpen(m);
       }
     },
     role: "button",
@@ -669,7 +669,7 @@ function renderMatchCard(m, i, {
   }, "Continue scoring")), inProgressOwnMatches.map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
     type: "button",
-    onClick: () => onOpen(m.id),
+    onClick: () => onOpen(m),
     className: "cs-btn",
     style: {
       display: "flex",
