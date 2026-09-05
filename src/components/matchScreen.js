@@ -1324,11 +1324,22 @@ export function MatchScreen({
       letterSpacing: 0.3
     }
   }, inning.battingTeam.toUpperCase()), /*#__PURE__*/React.createElement("div", {
+    role: "status",
+    "aria-live": "polite",
+    "aria-atomic": "true",
+    // The visible score below is a digit-rolling animation (OdometerScore splits it into one span
+    // per character purely for that effect) plus a separately-styled overs span -- technically
+    // still readable in DOM order, but choppier than necessary for anyone using a screen reader to
+    // follow the score ball by ball. This aria-label gives them one clean sentence instead; the
+    // visual children are hidden from the accessibility tree so it isn't read twice.
+    "aria-label": `${inning.runs} for ${inning.wickets}, after ${oversLabel(inning.legalBalls, inning.ballsPerOver)} of ${effectiveOversLimit} overs`,
     style: {
       display: "flex",
       alignItems: "baseline",
       gap: 10
     }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement(OdometerScore, {
     text: `${inning.runs}-${inning.wickets}`,
     style: {
@@ -1338,7 +1349,8 @@ export function MatchScreen({
       letterSpacing: -1,
       textShadow: "0 2px 8px rgba(0,0,0,0.2)"
     }
-  }), /*#__PURE__*/React.createElement("span", {
+  })), /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
     style: {
       fontFamily: "'IBM Plex Mono', monospace",
       fontSize: 18,
@@ -2070,6 +2082,7 @@ export function MatchScreen({
     key: n,
     variant: n === 4 ? "primary" : n === 6 ? "gold" : "default",
     onClick: () => handleRun(n),
+    ariaLabel: `${n} run${n === 1 ? "" : "s"}`,
     style: {
       minHeight: 40,
       padding: "9px 8px",
@@ -2844,6 +2857,7 @@ export function MatchScreen({
     type: "button",
     onClick: () => setCustomShortRun(v => !v),
     className: "cs-btn",
+    "aria-pressed": customShortRun,
     style: {
       display: "flex",
       alignItems: "center",

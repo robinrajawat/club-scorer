@@ -14,6 +14,7 @@ import { HomeScreen } from "../../../src/components/homeScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { JoinCodeBar } from "../../../src/components/pickerAtoms.js";
 import { TAB_BAR_HEIGHT } from "../../../src/components/tabBar.js";
+import { EmptyStateBallIllustration } from "../../../src/components/illustrations.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -273,6 +274,19 @@ test("HomeScreen: searching narrows the matches shown", () => {
   const text = JSON.stringify(inst.toJSON());
   assert.match(text, /Riverside CC/);
   assert.doesNotMatch(text, /Hawks CC/);
+});
+
+// IMPROVEMENT: the "All" scope's no-results message was plain italic text, unlike every other
+// empty list in the app (Home's own "no matches yet", Live, and -- after this same round of
+// improvements -- Cups/My Teams/Players/Inbox), which all show the same illustrated ball graphic.
+// Matches that consistent treatment now instead of standing out as the one unfinished-looking case.
+test("HomeScreen: a search with no results anywhere shows the same illustrated empty state as everywhere else", () => {
+  const inst = render();
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "zzznonexistentzzz" } }); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /No results for/);
+  assert.ok(inst.root.findAllByType(EmptyStateBallIllustration).length > 0);
 });
 
 test("HomeScreen: typing a search query lazily fetches app-wide live/recent matches once and shows a matching one under 'Across Club Scorer'", async () => {

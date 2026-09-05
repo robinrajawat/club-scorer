@@ -135,6 +135,32 @@ test("MatchScreen: shows the live score header", () => {
   assert.match(text, /RIVERSIDE CC/);
 });
 
+// IMPROVEMENT: the live score is a digit-rolling animation split across several JSX children --
+// still readable in DOM order, but choppy for anyone using a screen reader, and nothing told
+// assistive tech the score had even changed after a ball was scored (a sighted user just sees it
+// update). The header row now carries role="status"/aria-live="polite" plus one clean aria-label
+// sentence, so it gets announced automatically ball by ball.
+test("MatchScreen: the score header is an aria-live region with a clean text summary", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const status = ctx.inst.root.findAllByProps({ role: "status" })[0];
+  assert.ok(status, "the score header should have role=status");
+  assert.equal(status.props["aria-live"], "polite");
+  assert.equal(status.props["aria-label"], "0 for 0, after 0.0 of 20 overs");
+});
+
+// The 0/1/2/3/4/6 run buttons' only visible content is the bare digit -- technically an accessible
+// name on its own, but ambiguous out of context (e.g. easy to confuse with an over count when
+// navigating a screen reader's button list). ariaLabel spells it out.
+test("MatchScreen: each run button has a clear aria-label, not just the bare digit", () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const oneBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 1);
+  const sixBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 6);
+  assert.equal(oneBtn.props.ariaLabel, "1 run");
+  assert.equal(sixBtn.props.ariaLabel, "6 runs");
+});
+
 test("MatchScreen: tapping a run button commits the ball and updates the score", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   const ctx = renderMatch(baseMatch());
@@ -358,8 +384,10 @@ test("MatchScreen: the 'Other' runs modal combines completed runs, an overthrow 
   act(() => { completedInput.props.onChange({ target: { value: "2" } }); });
   const overthrowInput = ctx.inst.root.findAllByType("input").find(i => i.props.placeholder === "Extra runs from the misfield");
   act(() => { overthrowInput.props.onChange({ target: { value: "1" } }); });
-  const shortRunToggle = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Short run"));
-  act(() => { shortRunToggle.props.onClick(); });
+  const findShortRunToggle = () => ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Short run"));
+  assert.equal(findShortRunToggle().props["aria-pressed"], false, "off by default");
+  act(() => { findShortRunToggle().props.onClick(); });
+  assert.equal(findShortRunToggle().props["aria-pressed"], true, "its checked state is only conveyed visually otherwise");
   // "Total: " and the computed number are separate JSX children (the number sits inside its own
   // nested <strong>), so this is checked after confirming instead of matching the raw JSON here.
 
