@@ -171,6 +171,8 @@ afterEach(() => {
   delete globalThis.saveTournaments;
   delete globalThis.db;
   delete globalThis.Modal;
+  delete globalThis.loadMatch;
+  delete globalThis.alert;
 });
 
 test("CricketScorer: signed out, mounts straight to WelcomeScreen once the initial load settles", async () => {
@@ -245,6 +247,35 @@ test("CricketScorer: joining a match by code opens it on the match screen", asyn
     await new Promise(r => setTimeout(r, 0));
   });
   assert.ok(inst.root.findByType(MatchScreen));
+});
+
+// BUG FIX: openMatch's own last-resort fallback (its "known match" argument, used when loadMatch
+// itself fails) assumed that object was always a full match -- but the exact same shape gets
+// handed back here from Home's own match list once a shared match has been opened even once
+// (upsertLocalPointer's index entry deliberately has no innings -- see loadIndex/
+// upsertLocalPointer in index.html). Falling back to that put a match with no innings into
+// `match` state, which MatchScreen/PrintReport both assumed had real innings data unconditionally
+// and crashed on. Reported live as a tournament match created by a club co-owner appearing on
+// Home's "Continue scoring" but still refusing to actually open.
+test("CricketScorer: opening a match whose only known copy has no innings data shows an error instead of crashing when loadMatch fails", async () => {
+  globalThis.loadMatch = () => Promise.resolve(null); // simulates a network blip / revoked share code
+  let alertMessage = null;
+  globalThis.alert = msg => { alertMessage = msg; };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  // The lightweight shape Home's own match list holds for a shared match once this device has
+  // ever seen it -- no innings, since the local index is deliberately never a full match cache.
+  const pointerOnlyMatch = {
+    id: "co1", teamA: "Riverside CC", teamB: "Oakwood CC", status: "in-progress", shareCode: "SHARE1"
+  };
+  await act(async () => {
+    home.props.onOpen(pointerOnlyMatch);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(inst.root.findAllByType(MatchScreen).length, 0, "must not navigate into MatchScreen with unusable match data");
+  assert.match(alertMessage || "", /couldn't open that match/i);
 });
 
 // BUG FIX: starting a match remembered its rules as this device's own default (handleSaveRules,

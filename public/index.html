@@ -6857,13 +6857,19 @@ function umpiresText(match) {
 // GENERATED-FN-END: umpiresText
 // GENERATED-FN-START: matchResultText
 function matchResultText(match, superOverMatch) {
-  const [i1, i2] = match.innings;
+  // BUG FIX: this used to destructure match.innings before ever checking match.status or whether
+  // innings even exists -- a lightweight match-index pointer (see upsertLocalPointer/loadIndex in
+  // index.html, which deliberately never stores innings) reaching this function at all threw a
+  // hard TypeError instead of the plain null every other incomplete-match shape below returns.
   if (match.status !== "complete") return null;
+  if (match.noResult) return "No result";
+  if (!match.innings || match.innings.length === 0) return null;
+  const [i1, i2] = match.innings;
   // Checked before the !i2 guard below deliberately -- "Abandon match" (declareNoResult) can be
   // used mid-way through the FIRST innings, before a second one has even been created, so a match
   // this happened to would otherwise hit `!i2` and return null, silently showing nothing at all
-  // rather than "No result".
-  if (match.noResult) return "No result";
+  // rather than "No result". noResult itself is already handled above now, but the ordering
+  // comment stays relevant to the reader working out why !i2 is checked at all.
   if (!i2) return null;
   // A revised target (declareRevisedTarget, mid-chase rain adjustment short of full DLS) changes
   // what "won"/"tied"/the runs margin actually mean -- i1.runs is still team 1's real, played
@@ -39701,13 +39707,24 @@ function CricketScorer() {
     const isObject = matchOrId && typeof matchOrId === "object";
     const id = isObject ? matchOrId.id : matchOrId;
     const knownMatch = isObject ? matchOrId : null;
+    // BUG FIX: "the known object" above is NOT always a full match -- once a shared match has
+    // been opened here even once, upsertLocalPointer's deliberately lightweight index entry for it
+    // (id/teamA/teamB/status/shareCode/scoreLine, no innings -- see loadIndex/upsertLocalPointer)
+    // is what loadIndex() hands back for it on every later load, including as the very object
+    // Home's own "Continue scoring" card passes back in here. Falling back to THAT when loadMatch
+    // failed (a network blip, a since-revoked code) put a match with no innings into `match` state
+    // -- MatchScreen and PrintReport both assume real innings data unconditionally, so the screen
+    // crashed outright instead of the harmless silent no-op this fallback was meant to be.
+    const knownMatchIsUsable = knownMatch && Array.isArray(knownMatch.innings) && knownMatch.innings.length > 0;
     setMatchLoading(true);
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
-      const m = await loadMatch(id) || knownMatch || null;
+      const m = await loadMatch(id) || (knownMatchIsUsable ? knownMatch : null);
       if (m) {
         setMatch(m);
         setScreen("match");
+      } else if (isObject) {
+        alert("Couldn't open that match — check your connection and try again.");
       }
     } finally {
       setMatchLoading(false);

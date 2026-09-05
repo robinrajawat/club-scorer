@@ -204,13 +204,19 @@ export function umpiresText(match) {
 // two teams' own regulation-time result genuinely was a tie, so that half of the sentence stays;
 // this only adds who actually won once there's a decisive Super Over to report.
 export function matchResultText(match, superOverMatch) {
-  const [i1, i2] = match.innings;
+  // BUG FIX: this used to destructure match.innings before ever checking match.status or whether
+  // innings even exists -- a lightweight match-index pointer (see upsertLocalPointer/loadIndex in
+  // index.html, which deliberately never stores innings) reaching this function at all threw a
+  // hard TypeError instead of the plain null every other incomplete-match shape below returns.
   if (match.status !== "complete") return null;
+  if (match.noResult) return "No result";
+  if (!match.innings || match.innings.length === 0) return null;
+  const [i1, i2] = match.innings;
   // Checked before the !i2 guard below deliberately -- "Abandon match" (declareNoResult) can be
   // used mid-way through the FIRST innings, before a second one has even been created, so a match
   // this happened to would otherwise hit `!i2` and return null, silently showing nothing at all
-  // rather than "No result".
-  if (match.noResult) return "No result";
+  // rather than "No result". noResult itself is already handled above now, but the ordering
+  // comment stays relevant to the reader working out why !i2 is checked at all.
   if (!i2) return null;
   // A revised target (declareRevisedTarget, mid-chase rain adjustment short of full DLS) changes
   // what "won"/"tied"/the runs margin actually mean -- i1.runs is still team 1's real, played
