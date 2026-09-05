@@ -1142,13 +1142,24 @@ export function CricketScorer() {
     const isObject = matchOrId && typeof matchOrId === "object";
     const id = isObject ? matchOrId.id : matchOrId;
     const knownMatch = isObject ? matchOrId : null;
+    // BUG FIX: "the known object" above is NOT always a full match -- once a shared match has
+    // been opened here even once, upsertLocalPointer's deliberately lightweight index entry for it
+    // (id/teamA/teamB/status/shareCode/scoreLine, no innings -- see loadIndex/upsertLocalPointer)
+    // is what loadIndex() hands back for it on every later load, including as the very object
+    // Home's own "Continue scoring" card passes back in here. Falling back to THAT when loadMatch
+    // failed (a network blip, a since-revoked code) put a match with no innings into `match` state
+    // -- MatchScreen and PrintReport both assume real innings data unconditionally, so the screen
+    // crashed outright instead of the harmless silent no-op this fallback was meant to be.
+    const knownMatchIsUsable = knownMatch && Array.isArray(knownMatch.innings) && knownMatch.innings.length > 0;
     setMatchLoading(true);
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
-      const m = await loadMatch(id) || knownMatch || null;
+      const m = await loadMatch(id) || (knownMatchIsUsable ? knownMatch : null);
       if (m) {
         setMatch(m);
         setScreen("match");
+      } else if (isObject) {
+        alert("Couldn't open that match — check your connection and try again.");
       }
     } finally {
       setMatchLoading(false);

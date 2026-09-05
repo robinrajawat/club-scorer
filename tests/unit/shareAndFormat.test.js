@@ -211,6 +211,17 @@ test("umpiresText: pluralizes correctly, null when neither umpire is set", () =>
   assert.equal(umpiresText({ umpire1: "U1", umpire2: "U2" }), "Umpires: U1, U2");
 });
 
+// BUG FIX: this used to destructure match.innings before checking status or whether innings even
+// existed -- a lightweight match-index pointer (upsertLocalPointer/loadIndex in index.html
+// deliberately never store innings) reaching this function threw a hard TypeError instead of the
+// plain null every other incomplete-match shape returns. Hit for real once a co-owner's shared
+// tournament match, opened once, later got passed back in as its own bare index pointer.
+test("matchResultText: a match with no innings data returns null instead of throwing", () => {
+  assert.equal(matchResultText({ status: "in-progress", teamA: "A", teamB: "B" }), null);
+  assert.equal(matchResultText({ status: "complete", teamA: "A", teamB: "B" }), null);
+  assert.equal(matchResultText({ status: "complete", innings: [] }), null);
+});
+
 test("matchResultText: No result takes priority even with only one innings, then win/tie by runs or wickets", () => {
   assert.equal(matchResultText({ status: "complete", noResult: true, innings: [{ runs: 10 }] }), "No result");
   assert.equal(matchResultText({ status: "live", innings: [{}, {}] }), null);
