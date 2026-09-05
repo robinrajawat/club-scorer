@@ -1993,6 +1993,15 @@ function upsertLocalPointer(match, extra) {
     // riding along with it -- so the score has to be baked in here, at save time, or the list item
     // would have nothing to show at all for those matches.
     scoreLine: matchScoreLine(match),
+    // Which signed-in account's own private /users/{uid}/matches collection this pointer mirrors,
+    // if any -- lets loadIndex tell a pointer left behind by a PREVIOUS account that signed into
+    // this same device (e.g. one phone passed around at the ground to score) apart from one that's
+    // still this account's own, so it isn't shown as a "Continue scoring" card to an account that
+    // has no actual access to it. Only ever set explicitly via `extra` by the account-owned save
+    // path (savePrimaryMatch's cloud:true branch, in index.html) -- a shared/guest pointer (cloud:
+    // false) has no single owning account by design, that's the whole point of a match code
+    // working across devices/accounts, so it stays null here and is never filtered by uid.
+    ownerUid: null,
     ...extra
   });
   lsSetIndex(idx);
@@ -2421,7 +2430,8 @@ async function savePrimaryMatch(match) {
         throw e;
       }
       upsertLocalPointer(match, {
-        cloud: true
+        cloud: true,
+        ownerUid: auth.currentUser.uid
       });
       notifyLiveMatchSynced(match.id, newSeq);
       return {
@@ -2616,7 +2626,17 @@ async function revokeViewCode(matchId) {
 }
 async function loadIndex() {
   const local = lsGetIndex();
-  if (!auth.currentUser) return local;
+  // BUG FIX: a device passed between two people to score matches at the ground (or just switching
+  // accounts while testing) left every PREVIOUS account's own unshared matches sitting in this raw,
+  // account-unscoped localStorage index -- upsertLocalPointer's cloud:true branch writes one for
+  // every account-owned save, not just shared/guest ones. Without the ownerUid check below, the
+  // NEXT account to sign in on this same device saw those as "Continue scoring" cards for matches
+  // they have no shareCode, membership, or any other real access to open -- reported live as an
+  // in-progress tournament match "created by a co-owner" that kept refusing to open. A pointer with
+  // no ownerUid at all (genuinely local/shared-via-code, cloud:false) is untouched by this check --
+  // that's the one case meant to keep showing up across accounts, by design (see upsertLocalPointer).
+  const ownedByMe = m => !m.ownerUid || (auth.currentUser && m.ownerUid === auth.currentUser.uid);
+  if (!auth.currentUser) return local.filter(ownedByMe);
   try {
     const snap = await db.collection("users").doc(auth.currentUser.uid).collection("matches").orderBy("updatedAt", "desc").limit(50).get();
     const cloud = snap.docs.map(d => ({
@@ -2624,11 +2644,11 @@ async function loadIndex() {
       cloud: true
     }));
     const cloudIds = new Set(cloud.map(m => m.id));
-    const localOnly = local.filter(m => !cloudIds.has(m.id)); // shared/guest matches this device knows about
+    const localOnly = local.filter(m => !cloudIds.has(m.id) && ownedByMe(m)); // shared/guest matches this device knows about, plus this account's own not-yet-synced ones
     return [...cloud, ...localOnly].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 50);
   } catch (e) {
     console.error("cloud index load failed, showing local only", e);
-    return local;
+    return local.filter(ownedByMe);
   }
 }
 async function loadMatch(id) {
@@ -16485,12 +16505,19 @@ function InboxScreen({
     style: {
       textAlign: "center",
       padding: "40px 20px",
-      color: COLORS.inkSoft,
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
-      lineHeight: 1.6
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
     }
-  }, "Nothing pending right now."), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Nothing pending right now.")), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
   }, "Availability polls"), pollItems.map((item, idx) => /*#__PURE__*/React.createElement("button", {
     key: item.code,
@@ -20570,14 +20597,18 @@ function MyTeamsScreen({
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "20px 10px 6px"
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 13.5,
       color: COLORS.inkSoft,
-      lineHeight: 1.6
+      lineHeight: 1.6,
+      marginTop: 14
     }
   }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -24323,13 +24354,20 @@ function TournamentsScreen({
   }))) : !creating && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 20px",
-      color: COLORS.inkSoft,
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
-      lineHeight: 1.6
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
     }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet.")));
 }
 // GENERATED-FN-END: TournamentsScreen
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
@@ -30954,13 +30992,20 @@ function PlayersScreen({
   }) : filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
-  }, players.length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
+    }
+  }, players.length === 0 ? "No public players yet." : "No players match that search.")) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",

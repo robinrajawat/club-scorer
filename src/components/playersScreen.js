@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronLeft } from "./icons.js";
 import { TextField, ConfirmModal, PlayerAvatar } from "./formUiAtoms.js";
-import { LoadingNote } from "./illustrations.js";
+import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { EditPlayerModal, TransferPlayerModal, PLAYER_ROLES, PLAYER_HANDS } from "./playerModals.js";
 import { isClubOwner } from "../core/miscHelpers.js";
 
@@ -339,13 +339,20 @@ export function PlayersScreen({
   }) : filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
-  }, players.length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
+    }
+  }, players.length === 0 ? "No public players yet." : "No players match that search.")) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
