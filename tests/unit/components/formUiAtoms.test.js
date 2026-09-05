@@ -80,6 +80,18 @@ test("Btn: applies the variant's styling and disabled state, renders children", 
   assert.equal(disabled.props.style.opacity, 0.45);
 });
 
+// A button whose visible content is just a bare number (MatchScreen's run buttons: 0/1/2/3/4/6)
+// still technically has an accessible name from that digit, but it reads far more clearly with an
+// explicit one -- ariaLabel is an optional passthrough to the underlying button's aria-label for
+// exactly that case.
+test("Btn: an optional ariaLabel is forwarded to the underlying button's aria-label", () => {
+  const withLabel = renderer.create(React.createElement(Btn, { ariaLabel: "4 runs" }, "4")).toJSON();
+  assert.equal(withLabel.props["aria-label"], "4 runs");
+
+  const withoutLabel = renderer.create(React.createElement(Btn, {}, "Save")).toJSON();
+  assert.equal(withoutLabel.props["aria-label"], undefined);
+});
+
 test("ConfirmModal: renders title/message and wires confirm/cancel through to the two buttons", () => {
   // Modal itself needs a real jsdom-backed DOM to test meaningfully (see modal.test.js) -- stub it
   // here to test ConfirmModal's own prop wiring without a DOM dependency or pretending to also

@@ -312,7 +312,8 @@ export function Btn({
   onClick,
   variant = "default",
   disabled,
-  style
+  style,
+  ariaLabel
 }) {
   const base = {
     fontFamily: "'Inter', sans-serif",
@@ -362,6 +363,7 @@ export function Btn({
     className: variant === "ghost" ? "cs-btn" : "cs-btn cs-shine",
     onClick: onClick,
     disabled: disabled,
+    "aria-label": ariaLabel,
     style: {
       ...base,
       ...variants[variant],
