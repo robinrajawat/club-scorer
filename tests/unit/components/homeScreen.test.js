@@ -172,6 +172,19 @@ test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTa
   assert.match(String(withBar.props.style.paddingBottom), /calc\(58px \+ 40px \+ env\(safe-area-inset-bottom\)\)/);
 });
 
+// BUG FIX: someone who chose "Continue without an account" (user: null) used to see no greeting
+// line at all -- it only ever rendered once a first name was available, which is never true
+// without a signed-in user. A guest is still someone actually using the app right now.
+test("HomeScreen: shows a time-of-day greeting even signed out, with no name", () => {
+  const inst = render({ user: null, profile: null });
+  assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)!/);
+});
+
+test("HomeScreen: shows a greeting with the signed-in user's first name once one's available", () => {
+  const inst = render({ user: { displayName: "Robin Singh" }, profile: null });
+  assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening), Robin/);
+});
+
 test("HomeScreen: shows an empty state with no matches", () => {
   const inst = render();
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);

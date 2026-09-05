@@ -11518,6 +11518,10 @@ const TOUR_SLIDES = [{
   title: "Score ball-by-ball, works offline",
   body: "Runs, wides, no-balls, every dismissal type \u2014 sign-in is optional, and it keeps working with no signal once it's loaded."
 }, {
+  icon: House,
+  title: "Home, Live, Cups, Teams, Clubs",
+  body: "Five tabs at the bottom get you everywhere: Home for your own matches, Live for everyone else's live scores and tournaments, Cups for tournaments and series, Teams for rosters, and Clubs for browsing clubs and federations."
+}, {
   icon: Share,
   title: "Share your score two ways",
   body: "A score code gives full scoring access \u2014 for a teammate co-scoring alongside you. A view code is read-only, for anyone just following along. They're never interchangeable."
@@ -18729,9 +18733,14 @@ function HomeScreen({
   const hasRecentMatchSearch = typeof onLoadRecentMatches === "function";
   // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
   // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
-  // when there's genuinely no name to show, so the greeting line just doesn't render at all rather
-  // than saying something empty or generic.
+  // when there's genuinely no name to show, so the line below falls back to the plain time-of-day
+  // greeting instead of saying something empty or generic.
   const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
+  // BUG FIX: someone who skipped sign-in ("Continue without an account") used to see no greeting
+  // at all -- this line only ever rendered once homeGreetingName was non-empty, which is never
+  // true without a signed-in user. A guest is still someone actually using the app right now;
+  // there's just no name to put after the time-of-day prefix.
+  const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
   useEffect(() => {
     if (searchScope !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
     let cancelled = false;
@@ -19214,14 +19223,14 @@ function renderMatchCard(m, i, {
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), homeGreetingName && /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 18,
       color: COLORS.pitch,
       marginBottom: 26
     }
-  }, `${greetingPrefix()}, ${homeGreetingName}`), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+  }, homeGreeting), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center",

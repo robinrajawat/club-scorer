@@ -132,9 +132,14 @@ export function HomeScreen({
   const hasRecentMatchSearch = typeof onLoadRecentMatches === "function";
   // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
   // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
-  // when there's genuinely no name to show, so the greeting line just doesn't render at all rather
-  // than saying something empty or generic.
+  // when there's genuinely no name to show, so the line below falls back to the plain time-of-day
+  // greeting instead of saying something empty or generic.
   const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
+  // BUG FIX: someone who skipped sign-in ("Continue without an account") used to see no greeting
+  // at all -- this line only ever rendered once homeGreetingName was non-empty, which is never
+  // true without a signed-in user. A guest is still someone actually using the app right now;
+  // there's just no name to put after the time-of-day prefix.
+  const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
   useEffect(() => {
     if (searchScope !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
     let cancelled = false;
@@ -617,14 +622,14 @@ function renderMatchCard(m, i, {
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), homeGreetingName && /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 18,
       color: COLORS.pitch,
       marginBottom: 26
     }
-  }, `${greetingPrefix()}, ${homeGreetingName}`), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+  }, homeGreeting), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center",

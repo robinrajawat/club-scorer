@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { Table2, Share, Users, Trophy } from "./icons.js";
+import { Table2, Share, Users, Trophy, House } from "./icons.js";
 import { Btn, TextField } from "./formUiAtoms.js";
 import { markTourSeen, computeQualificationTarget, decimalOversToLabel } from "../core/appLogic.js";
 
@@ -21,6 +21,10 @@ export const TOUR_SLIDES = [{
   icon: Table2,
   title: "Score ball-by-ball, works offline",
   body: "Runs, wides, no-balls, every dismissal type \u2014 sign-in is optional, and it keeps working with no signal once it's loaded."
+}, {
+  icon: House,
+  title: "Home, Live, Cups, Teams, Clubs",
+  body: "Five tabs at the bottom get you everywhere: Home for your own matches, Live for everyone else's live scores and tournaments, Cups for tournaments and series, Teams for rosters, and Clubs for browsing clubs and federations."
 }, {
   icon: Share,
   title: "Share your score two ways",
