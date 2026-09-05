@@ -492,6 +492,81 @@ test("MatchScreen: the next-bowler prompt appears at an over boundary, and confi
   assert.equal(ctx.inning.bowlerName, "Y");
 });
 
+// BUG FIX: a bowler who'd already used up their over limit was only ever excluded from the chip
+// picker's suggestions -- Confirm itself never checked, so a roster-less match's plain free-text
+// bowler field (no chips to hide anything from) could still commit them right back in as the
+// "new" bowler. This is the hard stop: Confirm now refuses whenever the typed/selected name is
+// still at its limit, whichever way the name got into the field (chip tap, typed text, or even a
+// stale suggestion).
+test("MatchScreen: the next-bowler prompt hard-stops on a maxed-out bowler even if their name gets into the field", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const overBoundaryInning = buildInning("Riverside CC", "Oakwood CC", {
+    legalBalls: 6, bowlerName: "", lastBowlerName: "X", maxOversPerBowler: 2,
+    bowlers: { Y: { ballsBowled: 12, runs: 0, wickets: 0, maidens: 0 } },
+    overs: [[{ kind: "run", runs: 1 }], []]
+  });
+  const ctx = renderMatch(baseMatch({ innings: [overBoundaryInning] }));
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  // Z is still free to bowl (X just finished, Y is maxed out) -- Confirm works normally.
+  act(() => { picker.props.onChange("Z"); });
+  assert.equal(btn(ctx, "Confirm").props.disabled, false);
+
+  // Y has already used up the 2-over limit -- Confirm refuses even though nothing stops the field
+  // itself from holding that name (this is exactly the case a roster-less match's plain text
+  // field can't rely on chip-hiding to prevent).
+  act(() => { picker.props.onChange("Y"); });
+  assert.equal(btn(ctx, "Confirm").props.disabled, true);
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.bowlerName, "", "still waiting on a legal bowler -- Y's pick must not have gone through");
+});
+
+test("MatchScreen: a roster-less match's free-text bowler field still hard-stops a maxed-out name", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const overBoundaryInning = buildInning("Riverside CC", "Oakwood CC", {
+    legalBalls: 6, bowlerName: "", lastBowlerName: "Priya", maxOversPerBowler: 2,
+    bowlers: { Priya: { ballsBowled: 12, runs: 0, wickets: 0, maidens: 0 } },
+    overs: [[{ kind: "run", runs: 1 }], []]
+  });
+  const ctx = renderMatch(baseMatch({ innings: [overBoundaryInning], teamBRoster: [] }));
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  assert.equal(picker.props.roster.length, 0, "no roster set up -- PlayerPicker falls back to free text");
+
+  act(() => { picker.props.onChange("Priya"); });
+  assert.equal(btn(ctx, "Confirm").props.disabled, true);
+
+  act(() => { picker.props.onChange("Raj"); });
+  assert.equal(btn(ctx, "Confirm").props.disabled, false);
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.bowlerName, "Raj");
+});
+
+test("MatchScreen: the max-overs limit is waived, not hard-stopped, once every eligible roster bowler is maxed out", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const overBoundaryInning = buildInning("Riverside CC", "Oakwood CC", {
+    legalBalls: 6, bowlerName: "", lastBowlerName: "Y", maxOversPerBowler: 2,
+    bowlers: { X: { ballsBowled: 12, runs: 0, wickets: 0, maidens: 0 } },
+    overs: [[{ kind: "run", runs: 1 }], []]
+  });
+  // Two-player bowling side (X, Y): Y just finished, and X -- the only other option -- is already
+  // maxed out. There's genuinely nobody left, so picking X anyway must still be allowed.
+  const ctx = renderMatch(baseMatch({ innings: [overBoundaryInning], teamBRoster: ["X", "Y"] }));
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /pick anyway/);
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("X"); });
+  assert.equal(btn(ctx, "Confirm").props.disabled, false);
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.bowlerName, "X");
+});
+
 // BUG FIX: this used to sum every ball's raw runs including byes/leg-byes, overstating the
 // bowler's own figures for that over compared to what's actually recorded against them (byes/
 // leg-byes are never charged to a bowler -- see applyBall's identical exclusion for maiden
