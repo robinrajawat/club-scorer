@@ -61,6 +61,15 @@ export function upsertLocalPointer(match, extra) {
     // riding along with it -- so the score has to be baked in here, at save time, or the list item
     // would have nothing to show at all for those matches.
     scoreLine: matchScoreLine(match),
+    // Which signed-in account's own private /users/{uid}/matches collection this pointer mirrors,
+    // if any -- lets loadIndex tell a pointer left behind by a PREVIOUS account that signed into
+    // this same device (e.g. one phone passed around at the ground to score) apart from one that's
+    // still this account's own, so it isn't shown as a "Continue scoring" card to an account that
+    // has no actual access to it. Only ever set explicitly via `extra` by the account-owned save
+    // path (savePrimaryMatch's cloud:true branch, in index.html) -- a shared/guest pointer (cloud:
+    // false) has no single owning account by design, that's the whole point of a match code
+    // working across devices/accounts, so it stays null here and is never filtered by uid.
+    ownerUid: null,
     ...extra
   });
   lsSetIndex(idx);

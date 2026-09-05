@@ -83,6 +83,20 @@ test("upsertLocalPointer: adds a new pointer to the front, replaces an existing 
   assert.equal(idx[0].status, "complete");
 });
 
+// BUG FIX: a pointer for an account-owned match (savePrimaryMatch's cloud:true branch) carried no
+// record of WHICH account it belonged to, so loadIndex's "localOnly" merge showed it as a
+// "Continue scoring" card to ANY account that later signed into the same device (e.g. one phone
+// passed around at the ground to score) — with no shareCode or membership actually granting them
+// access to open it. ownerUid, passed via `extra` only by that one save path, is what loadIndex
+// can now filter on.
+test("upsertLocalPointer: defaults ownerUid to null, but a caller-supplied ownerUid (via extra) sticks", () => {
+  upsertLocalPointer({ id: "m1", teamA: "A", teamB: "B", status: "live", innings: [] }, { cloud: false });
+  assert.equal(lsGetIndex()[0].ownerUid, null, "a shared/guest pointer has no single owning account");
+
+  upsertLocalPointer({ id: "m2", teamA: "C", teamB: "D", status: "live", innings: [] }, { cloud: true, ownerUid: "uid-1" });
+  assert.equal(lsGetIndex()[0].ownerUid, "uid-1");
+});
+
 test("pending write outbox: queue, count, clear", () => {
   assert.equal(pendingWriteCount(), 0);
   queuePendingWrite({ id: "m1", teamA: "A" });
