@@ -1183,10 +1183,31 @@ export function CricketScorer() {
     setMatchLoading(true);
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
-      const m = await loadMatch(id) || (knownMatchIsUsable ? knownMatch : null);
+      const loaded = await loadMatch(id);
+      const m = loaded || (knownMatchIsUsable ? knownMatch : null);
       if (m) {
         setMatch(m);
         setScreen("match");
+        // Self-heal for a match created before auto-share existed (see startNewMatch) -- an old
+        // tournament match never got a shareCode, so it's exactly as invisible to co-owners as
+        // auto-share was built to prevent for new ones, and nothing about scoring it ever
+        // revisits that decision afterward. `loaded` succeeding (not the "known match" fallback
+        // just above, which can be a stale snapshot handed in by the caller) is what makes this
+        // safe: it means THIS account's own /users/{uid}/matches copy resolved, i.e. this really
+        // is that match's own scorer opening it, on the one path that can legitimately decide to
+        // share it -- reusing the exact qualification startNewMatch already applies.
+        if (loaded && loaded.tournamentId && !loaded.shareCode) {
+          const owningTournament = allTournamentsFlat.find(t => t.id === loaded.tournamentId);
+          const club = owningTournament && owningTournament._clubId ? clubs.find(c => c.id === owningTournament._clubId) : null;
+          const federation = owningTournament && owningTournament._federationId ? federationsById[owningTournament._federationId] : null;
+          if (club && (club.memberUids || []).length > 1 || federation && (federation.coOwnerUids || []).length > 0) {
+            handleGetShareCodeForMatch(loaded).then(result => {
+              if (result.ok) setMatch(cur => cur && cur.id === loaded.id ? { ...cur,
+                shareCode: result.code
+              } : cur);
+            });
+          }
+        }
       } else if (isObject) {
         // BUG FIX: "check your connection" was misleading for the actual common case here -- a
         // teammate's or club co-owner's match that was never explicitly shared (tapped Share) by
@@ -2446,6 +2467,23 @@ export function CricketScorer() {
       ok: true
     };
   }
+  // Shared by both places a tournament gets opened into its detail screen (Home's own tournament
+  // cards and the Cups tab) so the self-heal below only has to be written once. Self-heal for a
+  // tournament created before auto-publish existed (see maybeAutoPublishTournament) -- its public
+  // tournamentMatches/{tournamentId} doc was never created, so no account outside this tournament's
+  // own club/federation can ever resolve its name (see foreignTournamentNames) even once one of its
+  // matches gets shared. maybeAutoPublishTournament already no-ops for anything private, already-
+  // published, or a series, so firing it on every open (not just an edit) is safe.
+  function openTournamentDetail(t, returnScreen, clubId, federationId) {
+    setViewingTournament(t);
+    setViewingTournamentClubId(clubId);
+    setViewingTournamentFederationId(federationId);
+    setTournamentDetailReturnScreen(returnScreen);
+    setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
+    maybeAutoPublishTournament(t, updated => saveTournamentFromHome(t, updated).then(result => {
+      if (result.ok) setViewingTournament(cur => cur && cur.id === updated.id ? updated : cur);
+    }));
+  }
   // Lets a fixture's date/time be set right from the Home screen's Upcoming section, without
   // first navigating into the tournament. Same underlying save as FixturesSection's updateDate
   // (mirrored below), just addressed by the fixture's own tournament -- via the _clubId/
@@ -2703,13 +2741,7 @@ export function CricketScorer() {
     inboxBadgeCount: inboxBadgeCount,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
-    onOpenTournament: t => {
-      setViewingTournament(t);
-      setViewingTournamentClubId(t._clubId || null);
-      setViewingTournamentFederationId(t._federationId || null);
-      setTournamentDetailReturnScreen("home");
-      setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
-    },
+    onOpenTournament: t => openTournamentDetail(t, "home", t._clubId || null, t._federationId || null),
     onScheduleFixture: handleScheduleFixtureFromHome,
     onStartFixture: handleStartFixtureMatch,
     onEditVenue: handleEditVenueFromHome,
@@ -2878,13 +2910,7 @@ export function CricketScorer() {
     federationTeamOptions: activeTournamentClubId || activeTournamentFederationId ? federationTeamOptions : [],
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
-    onOpenTournament: t => {
-      setViewingTournament(t);
-      setViewingTournamentClubId(activeTournamentClubId || t._clubId || null);
-      setViewingTournamentFederationId(activeTournamentFederationId || t._federationId || null);
-      setTournamentDetailReturnScreen("tournaments");
-      setScreen(t.kind === "series" ? "series-detail" : "tournament-detail");
-    },
+    onOpenTournament: t => openTournamentDetail(t, "tournaments", activeTournamentClubId || t._clubId || null, activeTournamentFederationId || t._federationId || null),
     onOpenRecords: handleOpenRecords,
     currentUid: user && user.uid,
     clubsLoading: clubsLoading,
