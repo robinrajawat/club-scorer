@@ -13,6 +13,7 @@ import renderer, { act } from "react-test-renderer";
 import { HomeScreen } from "../../../src/components/homeScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { JoinCodeBar } from "../../../src/components/pickerAtoms.js";
+import { TAB_BAR_HEIGHT } from "../../../src/components/tabBar.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -169,7 +170,7 @@ test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTa
   const withoutBar = render().toJSON();
   const withBar = render({ showTabBar: true }).toJSON();
   assert.equal(withoutBar.props.style.paddingBottom, 40);
-  assert.match(String(withBar.props.style.paddingBottom), /calc\(58px \+ 40px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(String(withBar.props.style.paddingBottom), new RegExp(`calc\\(${TAB_BAR_HEIGHT}px \\+ 40px \\+ env\\(safe-area-inset-bottom\\)\\)`));
 });
 
 // BUG FIX: someone who chose "Continue without an account" (user: null) used to see no greeting
