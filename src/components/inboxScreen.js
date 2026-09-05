@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight, Hand } from "./icons.js";
 import { Btn } from "./formUiAtoms.js";
+import { EmptyStateBallIllustration } from "./illustrations.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
 import { isClubOwner } from "../core/miscHelpers.js";
 
@@ -275,12 +276,19 @@ export function InboxScreen({
     style: {
       textAlign: "center",
       padding: "40px 20px",
-      color: COLORS.inkSoft,
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
-      lineHeight: 1.6
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
     }
-  }, "Nothing pending right now."), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Nothing pending right now.")), pollItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: sectionTitleStyle
   }, "Availability polls"), pollItems.map((item, idx) => /*#__PURE__*/React.createElement("button", {
     key: item.code,

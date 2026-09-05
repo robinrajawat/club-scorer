@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { CalendarClock, ChevronDown, Pencil, Plus, Users } from "./icons.js";
 import { ClubSourceSelector } from "./screenAtoms.js";
-import { LoadingNote } from "./illustrations.js";
+import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { MoveTeamMenu } from "./shareMenus.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
@@ -201,14 +201,18 @@ export function MyTeamsScreen({
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "20px 10px 6px"
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 13.5,
       color: COLORS.inkSoft,
-      lineHeight: 1.6
+      lineHeight: 1.6,
+      marginTop: 14
     }
   }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
     style: {

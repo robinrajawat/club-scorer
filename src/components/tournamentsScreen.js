@@ -3,7 +3,7 @@ import { COLORS } from "./theme.js";
 import { AlertTriangle, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
 import { Btn, TextField, PinnableChip, RuleChoice } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
-import { LoadingNote } from "./illustrations.js";
+import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
 import { VisibilitySwitch } from "./matchDisplayAtoms.js";
@@ -1470,11 +1470,18 @@ export function TournamentsScreen({
   }))) : !creating && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 20px",
-      color: COLORS.inkSoft,
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 13.5,
-      lineHeight: 1.6
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
     }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet."));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet.")));
 }
