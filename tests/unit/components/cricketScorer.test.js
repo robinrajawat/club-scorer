@@ -181,6 +181,7 @@ afterEach(() => {
   delete globalThis.loadClubTournaments;
   delete globalThis.loadTournamentMatches;
   delete globalThis.loadPendingPollItems;
+  delete globalThis.saveClubTournament;
 });
 
 test("CricketScorer: signed out, mounts straight to WelcomeScreen once the initial load settles", async () => {
@@ -421,6 +422,7 @@ test("CricketScorer: starting a match in a club tournament with other members au
   globalThis.loadClubTournaments = () => Promise.resolve([]);
   globalThis.loadTournamentMatches = () => Promise.resolve([]);
   globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  globalThis.saveClubTournament = () => Promise.resolve({ ok: true });
   await flush();
   await signIn(inst);
   await flush();
@@ -452,6 +454,7 @@ test("CricketScorer: starting a match in a solo club tournament (no other member
   globalThis.loadClubTournaments = () => Promise.resolve([]);
   globalThis.loadTournamentMatches = () => Promise.resolve([]);
   globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  globalThis.saveClubTournament = () => Promise.resolve({ ok: true });
   await flush();
   await signIn(inst);
   await flush();
@@ -554,6 +557,85 @@ test("CricketScorer: creating a PRIVATE tournament does not auto-publish it", as
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(shared, null, "a private tournament is never auto-published");
+});
+
+// IMPROVEMENT: maybeAutoPublishTournament only ever ran on creation and on every edit -- an
+// existing tournament created before that feature shipped, and never edited since, has no public
+// tournamentMatches/{tournamentId} doc, so its name can never resolve for anyone outside its own
+// club/federation (see foreignTournamentNames) even after one of its matches gets shared. Simply
+// OPENING it (openTournamentDetail) now self-heals this the same way an edit already did, since
+// maybeAutoPublishTournament itself already no-ops for anything private, already-published, or a
+// series -- see its own comment.
+test("CricketScorer: opening an existing tournament with no share code (predates auto-publish) publishes it", async () => {
+  let shared = null;
+  let saved = null;
+  const inst = await render();
+  globalThis.loadTournaments = () => Promise.resolve([
+    { id: "old1", name: "Legacy Cup", teams: ["Riverside CC", "Oakwood CC"], fixtures: [], private: false }
+  ]);
+  globalThis.saveTournaments = list => { saved = list; return Promise.resolve(); };
+  globalThis.shareTournament = (tournament, standings) => {
+    shared = { tournament, standings };
+    return Promise.resolve({ ok: true, code: "BACKFILLCODE" });
+  };
+  globalThis.loadTournamentMatches = () => Promise.resolve([]);
+  await flush();
+  await signIn(inst);
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  const tournament = home.props.tournaments.find(t => t.id === "old1");
+  await act(async () => {
+    home.props.onOpenTournament(tournament);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(shared, "shareTournament should have been called automatically on open, not just on create/edit");
+  assert.equal(shared.tournament.name, "Legacy Cup");
+  const republished = saved.find(t => t.id === "old1");
+  assert.equal(republished.shareCode, "BACKFILLCODE", "the minted code is persisted back onto the tournament");
+});
+
+// IMPROVEMENT: startNewMatch's auto-share only ever applied at creation -- an existing in-progress
+// tournament match created before that change, still missing a shareCode, stayed exactly as
+// invisible to co-owners as auto-share was built to prevent for new ones, since nothing about
+// scoring it ever revisited that decision afterward. openMatch now self-heals this the moment the
+// match's own real owner opens it (loadMatch succeeding via their own /users/{uid}/matches copy is
+// what makes this safe -- see its own comment).
+test("CricketScorer: opening an existing tournament match with no share code (predates auto-share) mints one, in a multi-member club", async () => {
+  const fullMatch = {
+    id: "co1", teamA: "Kolding 2", teamB: "Billund 1", oversLimit: 20, status: "in-progress",
+    tournamentId: "t1", teamARoster: [], teamBRoster: [], currentInningIndex: 0,
+    innings: [{
+      battingTeam: "Kolding 2", bowlingTeam: "Billund 1", runs: 0, wickets: 0, legalBalls: 0,
+      overs: [[]], batsmen: {}, bowlers: {}, extras: {}, strikerName: "A", nonStrikerName: "B",
+      bowlerName: "X", fallOfWickets: [], partnerships: [], complete: false, ballsPerOver: 6,
+      maxWickets: 10
+    }]
+  };
+  let savedMatch = null;
+  globalThis.loadMatch = () => Promise.resolve(fullMatch);
+  globalThis.saveMatch = m => { savedMatch = m; return Promise.resolve({ ok: true, writeSeq: 1 }); };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  const inst = await render();
+  globalThis.loadClubs = () => Promise.resolve([
+    { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1", "u2"] }
+  ]);
+  globalThis.loadClubTeams = () => Promise.resolve([]);
+  globalThis.loadClubTournaments = () => Promise.resolve([{ id: "t1", name: "Summer Cup", teams: [], fixtures: [] }]);
+  globalThis.loadTournamentMatches = () => Promise.resolve([]);
+  globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  await flush();
+  await signIn(inst);
+  await flush();
+  await flush();
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  await act(async () => {
+    home.props.onOpen("co1");
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(inst.root.findByType(MatchScreen), "should still open normally");
+  assert.ok(savedMatch, "saveMatch should have been called to mint the code");
+  assert.ok(savedMatch.shareCode, "an old match with no share code should be self-healed on open, in a multi-member club");
 });
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {
