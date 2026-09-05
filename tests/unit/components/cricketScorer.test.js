@@ -44,6 +44,7 @@ import { SetupScreen } from "../../../src/components/setupScreen.js";
 import { AccountScreen } from "../../../src/components/accountScreen.js";
 import { FollowScreen } from "../../../src/components/followScreen.js";
 import { MatchScreen } from "../../../src/components/matchScreen.js";
+import { AlertModal } from "../../../src/components/formUiAtoms.js";
 
 let dom;
 let authCallback;
@@ -261,8 +262,7 @@ test("CricketScorer: joining a match by code opens it on the match screen", asyn
 // Home's "Continue scoring" but still refusing to actually open.
 test("CricketScorer: opening a match whose only known copy has no innings data shows an error instead of crashing when loadMatch fails", async () => {
   globalThis.loadMatch = () => Promise.resolve(null); // simulates a network blip / revoked share code
-  let alertMessage = null;
-  globalThis.alert = msg => { alertMessage = msg; };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inst = await render();
   await flush();
   await signIn(inst);
@@ -277,7 +277,7 @@ test("CricketScorer: opening a match whose only known copy has no innings data s
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(inst.root.findAllByType(MatchScreen).length, 0, "must not navigate into MatchScreen with unusable match data");
-  assert.match(alertMessage || "", /couldn't open that match/i);
+  assert.match(inst.root.findByType(AlertModal).props.message, /couldn't open that match/i);
 });
 
 // BUG FIX: the generic "check your connection" message was actively misleading for the actual
@@ -289,8 +289,7 @@ test("CricketScorer: opening a match whose only known copy has no innings data s
 test("CricketScorer: opening a tournament match that was never shared explains that, not a generic connection error", async () => {
   globalThis.loadMatch = () => Promise.resolve(null);
   globalThis.checkTournamentMatchShareStatus = () => Promise.resolve("never-shared");
-  let alertMessage = null;
-  globalThis.alert = msg => { alertMessage = msg; };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inst = await render();
   await flush();
   await signIn(inst);
@@ -302,14 +301,13 @@ test("CricketScorer: opening a tournament match that was never shared explains t
     home.props.onOpen(pointerOnlyMatch);
     await new Promise(r => setTimeout(r, 0));
   });
-  assert.match(alertMessage || "", /hasn't been shared yet/i);
+  assert.match(inst.root.findByType(AlertModal).props.message, /hasn't been shared yet/i);
 });
 
 test("CricketScorer: opening a tournament match whose share link expired says so, not a generic connection error", async () => {
   globalThis.loadMatch = () => Promise.resolve(null);
   globalThis.checkTournamentMatchShareStatus = () => Promise.resolve("expired");
-  let alertMessage = null;
-  globalThis.alert = msg => { alertMessage = msg; };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inst = await render();
   await flush();
   await signIn(inst);
@@ -321,7 +319,7 @@ test("CricketScorer: opening a tournament match whose share link expired says so
     home.props.onOpen(pointerOnlyMatch);
     await new Promise(r => setTimeout(r, 0));
   });
-  assert.match(alertMessage || "", /share link has expired/i);
+  assert.match(inst.root.findByType(AlertModal).props.message, /share link has expired/i);
 });
 
 // BUG FIX: a match tagged with a tournament this account has no other way to see at all (a club

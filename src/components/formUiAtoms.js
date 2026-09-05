@@ -225,6 +225,41 @@ export function PinnableChip({
   }), label);
 }
 
+// A single-button counterpart to ConfirmModal, for the handful of "something went wrong, here's
+// why" messages that used to go through the browser's own window.alert() -- consistent with every
+// other dialog in the app instead of a plain OS-styled popup that looks like it belongs to a
+// different app entirely. `title` is optional; most callers just have a message.
+export function AlertModal({
+  title,
+  message,
+  buttonLabel = "Got it",
+  onClose
+}) {
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: onClose
+  }, title && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 18
+    }
+  }, message), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onClose,
+    style: {
+      width: "100%"
+    }
+  }, buttonLabel));
+}
 export function ConfirmModal({
   title,
   message,

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
 import {
-  PlayerAvatar, TextField, RuleChoice, TeamChips, PinnableChip, Btn, ConfirmModal
+  PlayerAvatar, TextField, RuleChoice, TeamChips, PinnableChip, Btn, ConfirmModal, AlertModal
 } from "../../../src/components/formUiAtoms.js";
 
 test("PlayerAvatar: shows the photo when one's set, otherwise colored initials", () => {
@@ -106,6 +106,41 @@ test("ConfirmModal: renders title/message and wires confirm/cancel through to th
     buttons[1].props.onClick();
     assert.equal(cancelled, true);
     assert.equal(confirmed, true);
+  } finally {
+    delete globalThis.Modal;
+  }
+});
+
+test("AlertModal: renders the message (and title, when given) and closes via its one button", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let closed = false;
+  try {
+    const inst = renderer.create(React.createElement(AlertModal, {
+      title: "Couldn't open that match",
+      message: "This match hasn't been shared yet.",
+      onClose: () => { closed = true; }
+    }));
+    const text = JSON.stringify(inst.toJSON());
+    assert.match(text, /Couldn't open that match/);
+    assert.match(text, /hasn't been shared yet/);
+    const button = inst.root.findByType(Btn);
+    button.props.onClick();
+    assert.equal(closed, true);
+  } finally {
+    delete globalThis.Modal;
+  }
+});
+
+test("AlertModal: title is optional -- renders just the message and default button label", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  try {
+    const inst = renderer.create(React.createElement(AlertModal, {
+      message: "Couldn't move the team.",
+      onClose: () => {}
+    }));
+    const text = JSON.stringify(inst.toJSON());
+    assert.match(text, /Couldn't move the team/);
+    assert.match(text, /Got it/);
   } finally {
     delete globalThis.Modal;
   }

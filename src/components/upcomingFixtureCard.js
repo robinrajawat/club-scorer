@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { CalendarClock, Hand, Pencil, Share, Trophy, Users } from "./icons.js";
-import { Btn } from "./formUiAtoms.js";
+import { Btn, AlertModal } from "./formUiAtoms.js";
 import { FixturePollSummary } from "./scoreboardAtoms.js";
 import { FixtureDateTimeModal, VenueEditModal } from "./venueAndDateModals.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
@@ -37,6 +37,9 @@ export function UpcomingFixtureCard({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // Replaces the two plain window.alert() calls below with something styled to match the rest of
+  // the app instead of an OS popup -- string | null.
+  const [alertMessage, setAlertMessage] = useState(null);
   // A fixture's own venue overrides the tournament's default -- matches can be held across
   // multiple grounds regardless of who's organizing it, so the tournament's venue is only a
   // starting point every fixture inherits until it's given one of its own.
@@ -372,7 +375,7 @@ export function UpcomingFixtureCard({
       // button was tappable. Surface that instead of closing the modal as if it worked.
       const result = await onScheduleFixture(t, f.id, iso);
       if (result && result.ok === false) {
-        alert(result.error || "Couldn't schedule this fixture.");
+        setAlertMessage(result.error || "Couldn't schedule this fixture.");
         return;
       }
       setPickerOpen(false);
@@ -380,7 +383,7 @@ export function UpcomingFixtureCard({
     onClear: f.date ? async () => {
       const result = await onScheduleFixture(t, f.id, "");
       if (result && result.ok === false) {
-        alert(result.error || "Couldn't update this fixture.");
+        setAlertMessage(result.error || "Couldn't update this fixture.");
         return;
       }
       setPickerOpen(false);
@@ -484,5 +487,8 @@ export function UpcomingFixtureCard({
       setPollModalOpen(false);
       loadFixturePollSummary(f.id, matchingPollTeams).then(setPollSummary);
     }
+  }), alertMessage && /*#__PURE__*/React.createElement(AlertModal, {
+    message: alertMessage,
+    onClose: () => setAlertMessage(null)
   }));
 }

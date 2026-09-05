@@ -13354,6 +13354,11 @@ function PinnableChip({
     fill: "currentColor"
   }), label);
 }
+
+// A single-button counterpart to ConfirmModal, for the handful of "something went wrong, here's
+// why" messages that used to go through the browser's own window.alert() -- consistent with every
+// other dialog in the app instead of a plain OS-styled popup that looks like it belongs to a
+// different app entirely. `title` is optional; most callers just have a message.
 // GENERATED-FN-END: PinnableChip
 // GENERATED-FN-START: ClubSourceSelector
 function ClubSourceSelector({
@@ -18251,6 +18256,9 @@ function UpcomingFixtureCard({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // Replaces the two plain window.alert() calls below with something styled to match the rest of
+  // the app instead of an OS popup -- string | null.
+  const [alertMessage, setAlertMessage] = useState(null);
   // A fixture's own venue overrides the tournament's default -- matches can be held across
   // multiple grounds regardless of who's organizing it, so the tournament's venue is only a
   // starting point every fixture inherits until it's given one of its own.
@@ -18586,7 +18594,7 @@ function UpcomingFixtureCard({
       // button was tappable. Surface that instead of closing the modal as if it worked.
       const result = await onScheduleFixture(t, f.id, iso);
       if (result && result.ok === false) {
-        alert(result.error || "Couldn't schedule this fixture.");
+        setAlertMessage(result.error || "Couldn't schedule this fixture.");
         return;
       }
       setPickerOpen(false);
@@ -18594,7 +18602,7 @@ function UpcomingFixtureCard({
     onClear: f.date ? async () => {
       const result = await onScheduleFixture(t, f.id, "");
       if (result && result.ok === false) {
-        alert(result.error || "Couldn't update this fixture.");
+        setAlertMessage(result.error || "Couldn't update this fixture.");
         return;
       }
       setPickerOpen(false);
@@ -18698,6 +18706,9 @@ function UpcomingFixtureCard({
       setPollModalOpen(false);
       loadFixturePollSummary(f.id, matchingPollTeams).then(setPollSummary);
     }
+  }), alertMessage && /*#__PURE__*/React.createElement(AlertModal, {
+    message: alertMessage,
+    onClose: () => setAlertMessage(null)
   }));
 }
 // GENERATED-FN-END: UpcomingFixtureCard
@@ -31127,6 +31138,39 @@ function Modal({
   }), children));
 }
 // GENERATED-FN-END: Modal
+// GENERATED-FN-START: AlertModal
+function AlertModal({
+  title,
+  message,
+  buttonLabel = "Got it",
+  onClose
+}) {
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose: onClose
+  }, title && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 10
+    }
+  }, title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 18
+    }
+  }, message), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: onClose,
+    style: {
+      width: "100%"
+    }
+  }, buttonLabel));
+}
+// GENERATED-FN-END: AlertModal
 // App-specific stand-in for window.confirm(): a bottom-sheet modal with a clear Cancel/Confirm
 // pair, styled to match the rest of the app instead of the OS chrome. Used for every destructive
 // or hard-to-undo action (removing a member, deleting a club, leaving a federation, etc.) so the
@@ -38897,6 +38941,11 @@ function CricketScorer() {
   // connection tapping a match previously just sat there with the list still showing and nothing
   // to indicate the tap registered. See the loading overlay near the end of this component's render.
   const [matchLoading, setMatchLoading] = useState(false);
+  // A single in-app AlertModal, replacing every plain window.alert() call in this file -- an OS
+  // popup looks like it belongs to a different app entirely next to the rest of this screen's own
+  // styling. { title?, message } | null; see the AlertModal render near the end of this
+  // component's own render for where it actually shows up.
+  const [alertModal, setAlertModal] = useState(null);
   const [teams, setTeams] = useState([]);
   // True only until the FIRST loadTeams() resolves, at mount -- not re-set to true on every
   // later reload (sign-in/out), since teams already falls back to local data immediately in that
@@ -39818,7 +39867,9 @@ function CricketScorer() {
             message = "This match's share link has expired — ask whoever's scoring it to share it again.";
           }
         }
-        alert(message);
+        setAlertModal({
+          message
+        });
       }
     } finally {
       setMatchLoading(false);
@@ -41143,7 +41194,9 @@ function CricketScorer() {
     if (toClubId) {
       const result = await saveClubTeam(toClubId, team);
       if (!result.ok) {
-        alert(result.error || "Couldn't move the team.");
+        setAlertModal({
+          message: result.error || "Couldn't move the team."
+        });
         return;
       }
       setClubTeamsById(prev => ({
@@ -41727,7 +41780,11 @@ function CricketScorer() {
       color: COLORS.inkSoft,
       fontSize: 13
     }
-  }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
+  }, "Opening match\u2026"))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
+    title: alertModal.title,
+    message: alertModal.message,
+    onClose: () => setAlertModal(null)
+  }), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
     onSelect: selectTab,
     homeBadgeCount: inboxBadgeCount

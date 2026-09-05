@@ -75,6 +75,27 @@ test("UpcomingFixtureCard: with onScheduleFixture, opening the date picker and s
   assert.ok(scheduledIso);
 });
 
+// BUG FIX: a failed schedule save (Firestore rules are the real enforcement, not any client-side
+// check, so a non-owner's save can still fail server-side) used to go through window.alert(), a
+// plain OS popup that looks like it belongs to a different app next to the rest of this card's own
+// styling. Now shows an in-app AlertModal instead.
+test("UpcomingFixtureCard: a failed schedule save shows an in-app AlertModal instead of window.alert()", async () => {
+  const inst = await renderCard(
+    { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC" },
+    { onScheduleFixture: () => Promise.resolve({ ok: false, error: "Only the club owner can edit fixtures." }) }
+  );
+  const pickerBtn = inst.root.findByProps({ "aria-label": "Fixture date and time" });
+  act(() => { pickerBtn.props.onClick(); });
+  const saveBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Save");
+  const dayButtons = inst.root.findAllByType("button").filter(b => typeof b.props.children === "number");
+  act(() => { dayButtons[0].props.onClick(); });
+  await act(async () => {
+    saveBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Only the club owner can edit fixtures/);
+});
+
 test("UpcomingFixtureCard: shows the venue as a Maps link, or an 'Add venue' button when onEditVenue is given and there's none", async () => {
   const withVenue = await renderCard({ id: "f1", teamA: "A", teamB: "B", venue: "Riverside Ground" });
   const link = withVenue.root.findAllByType("a").find(a => hasText(a.props.children, "Riverside Ground"));
