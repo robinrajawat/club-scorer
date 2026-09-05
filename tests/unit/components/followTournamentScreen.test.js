@@ -100,27 +100,38 @@ test("FollowTournamentScreen: with no code, shows not-found without ever calling
   assert.match(JSON.stringify(inst.toJSON()), /isn.t valid/);
 });
 
-// BUG FIX: the exit button always read "Go to Club Scorer", which made sense for someone who
-// landed here cold via a "?tournament=" link but looked like a mistake for someone who tapped
-// here from the Live tab's own tournaments feed -- they're already using the app right now.
-// reachedInApp (set from cricketScorer.js only when openLiveTournament, the Live tab's entry
-// point, was what got here) switches it to a plain "Back".
-test("FollowTournamentScreen: exit button reads 'Go to Club Scorer' from a cold link, 'Back' when reached in-app", async () => {
+// BUG FIX: the exit affordance always was a big standalone "Go to Club Scorer" CTA button, which
+// made sense for someone who landed here cold via a "?tournament=" link but both misread as a
+// mistake ("go to the app? I'm already in it") and looked like an oddly isolated floating button
+// for someone who tapped here from the Live tab's own tournaments feed. reachedInApp (set from
+// cricketScorer.js only when openLiveTournament, the Live tab's entry point, was what got here)
+// swaps that CTA for a small chevron "Back" link in the header, matching every other in-app
+// screen's back-navigation convention (see e.g. recordsScreen.js) instead of a lone floating pill.
+test("FollowTournamentScreen: shows a 'Go to Club Scorer' Btn from a cold link, and a header 'Back' link (no CTA button) when reached in-app", async () => {
   const data = snapshotData();
   const viaLink = await renderScreen("ABCD12", { exists: true, data: () => data });
   assert.match(JSON.stringify(viaLink.toJSON()), /Go to Club Scorer/);
+  assert.ok(viaLink.root.findByType(Btn));
 
-  const inApp = await renderScreen("ABCD12", { exists: true, data: () => data }, { reachedInApp: true });
+  let exited = false;
+  const inApp = await renderScreen("ABCD12", { exists: true, data: () => data }, { reachedInApp: true, onExit: () => { exited = true; } });
   const text = JSON.stringify(inApp.toJSON());
-  assert.match(text, /"Back"/);
+  assert.match(text, /Back/);
   assert.doesNotMatch(text, /Go to Club Scorer/);
+  assert.throws(() => inApp.root.findByType(Btn));
+  inApp.root.findByType("button").props.onClick();
+  assert.equal(exited, true);
 });
 
-test("FollowTournamentScreen: the invalid-link error state also reads 'Back' when reached in-app", async () => {
-  const inst = await renderScreen("MISSING", { exists: false }, { reachedInApp: true });
+test("FollowTournamentScreen: the invalid-link error state also shows a header 'Back' link (no CTA button) when reached in-app", async () => {
+  let exited = false;
+  const inst = await renderScreen("MISSING", { exists: false }, { reachedInApp: true, onExit: () => { exited = true; } });
   const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /"Back"/);
+  assert.match(text, /Back/);
   assert.doesNotMatch(text, /Go to Club Scorer/);
+  assert.throws(() => inst.root.findByType(Btn));
+  inst.root.findByType("button").props.onClick();
+  assert.equal(exited, true);
 });
 
 test("FollowTournamentScreen: shows scheduled fixtures when present", async () => {
