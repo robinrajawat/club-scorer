@@ -22,11 +22,12 @@ export const TABS = [
 // MatchScreen's ResizeObserver-measured approach (see docs/history.md's "This Over" rendering-bug
 // writeup for why that measuring exists at all).
 const PILL_HEIGHT = 58;
-// Gap the floating pill sits above the screen's bottom edge (safe-area inset aside) -- see the
-// `bottom` offset below. Kept small since it stacks on top of the safe-area inset itself (~34px
-// on a notched iPhone) -- a bigger gap here read as floating noticeably higher than the
-// WhatsApp/Instagram-style bars this shape is modeled on, which hug much closer to the edge.
-const BOTTOM_GAP = 8;
+// Gap the pill sits above the screen's bottom edge, on top of the safe-area inset (see the
+// `bottom` offset below). WhatsApp's own bottom bar sits flush against the safe area with no
+// extra gap at all -- user feedback confirmed any added gap here still reads as "floating too
+// high" by comparison, so this stays 0 and the pill shape alone (rounded corners, shadow) is what
+// visually distinguishes it from a plain flush bar.
+const BOTTOM_GAP = 0;
 // Total vertical footprint of the tab bar from the screen's bottom edge, safe-area aside --
 // exported so CricketScorer can reserve the same amount of bottom padding under each tab screen's
 // own scrollable content (bar height plus the gap it floats above the edge with), otherwise the
