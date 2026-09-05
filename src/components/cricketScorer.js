@@ -307,6 +307,12 @@ export function CricketScorer() {
   // "anyone with the id could theoretically read this."
   const [federationTournamentsById, setFederationTournamentsById] = useState({}); // federationId -> tournament[]
   const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
+  // Names for tournaments this account has no other way to see at all -- a co-owner's own
+  // personal or differently-scoped club tournament, discovered only through a match that's been
+  // shared. Keyed by tournamentId, `null` recorded (not omitted) once looked up and not found, so
+  // the effect below doesn't keep retrying the same miss on every render. See
+  // loadPublicTournamentName's own comment for where this data actually comes from.
+  const [foreignTournamentNames, setForeignTournamentNames] = useState({});
   const [viewingTournament, setViewingTournament] = useState(null);
   const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
   // Shared by the Record Book entry points on both TournamentsScreen (club/federation source
@@ -2516,6 +2522,34 @@ export function CricketScorer() {
   for (const list of Object.values(federationTournamentsById)) {
     for (const t of list) tournamentNameById[t.id] = t.name;
   }
+  for (const [id, name] of Object.entries(foreignTournamentNames)) {
+    if (name && !tournamentNameById[id]) tournamentNameById[id] = name;
+  }
+  // BUG FIX: a match tagged with a tournament this account can't otherwise see at all (a
+  // co-owner's own tournament, discovered only because the match itself got shared) always fell
+  // back to the bare "Tournament" placeholder every card/badge above already shows for an unknown
+  // id -- even though that tournament auto-published its name publicly the moment it was created
+  // (see loadPublicTournamentName). Looks up whichever tournamentIds show up in `matches` that
+  // aren't resolved by any of the three loops above, one bare Firestore doc read each.
+  const unresolvedTournamentIdsKey = [...new Set(matches.map(m => m.tournamentId).filter(id => id && !tournamentNameById[id] && !(id in foreignTournamentNames)))].sort().join(",");
+  useEffect(() => {
+    if (!unresolvedTournamentIdsKey) return;
+    const ids = unresolvedTournamentIdsKey.split(",");
+    let cancelled = false;
+    Promise.all(ids.map(id => loadPublicTournamentName(id))).then(names => {
+      if (cancelled) return;
+      setForeignTournamentNames(prev => {
+        const next = { ...prev };
+        ids.forEach((id, i) => {
+          next[id] = names[i];
+        });
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [unresolvedTournamentIdsKey]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,

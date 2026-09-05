@@ -2650,7 +2650,24 @@ async function loadMatch(id) {
     if (pointer && pointer.shareCode) {
       const doc = await db.collection("sharedMatches").doc(pointer.shareCode).get();
       if (doc.exists) return unpackMatchFromFirestore(doc.data());
-    } else if ((pointer && pointer.cloud || !pointer) && auth.currentUser) {
+    }
+    // BUG FIX: a local pointer's shareCode is a snapshot from whenever this device last saw the
+    // match (see upsertLocalPointer) -- if its real owner has since revoked and re-shared it (or
+    // this pointer was seeded from stale/incomplete data in the first place), that code 404s above
+    // forever, with no way back in even though the match is still very much alive. A tournament-
+    // tagged match always has a live pointer at tournamentMatches/{tournamentId}/entries/{id} too
+    // (rewritten on every save that touches it -- see saveMatch), world-readable by design so
+    // loadTournamentMatches can resolve matches it's never seen before either -- exactly the fresh
+    // source of truth for "what's this match's CURRENT shareCode" that this local pointer isn't.
+    if (pointer && pointer.tournamentId) {
+      const entryDoc = await db.collection("tournamentMatches").doc(pointer.tournamentId).collection("entries").doc(id).get();
+      const freshCode = entryDoc.exists ? entryDoc.data().shareCode : null;
+      if (freshCode && freshCode !== pointer.shareCode) {
+        const freshDoc = await db.collection("sharedMatches").doc(freshCode).get();
+        if (freshDoc.exists) return unpackMatchFromFirestore(freshDoc.data());
+      }
+    }
+    if ((pointer && pointer.cloud || !pointer) && auth.currentUser) {
       const doc = await db.collection("users").doc(auth.currentUser.uid).collection("matches").doc(id).get();
       if (doc.exists) return unpackMatchFromFirestore(doc.data());
     }
@@ -5347,6 +5364,24 @@ async function loadTournamentMatches(tournamentId) {
     });
   }
   return [...byId.values()];
+}
+// Best-effort tournament-name lookup for a match tagged with a tournament this account has no
+// other way to see at all -- a club/personal tournament belonging entirely to someone else, e.g.
+// a co-owner who scored their own fixture, so it's absent from `tournaments`/clubTournamentsById/
+// federationTournamentsById (each only ever populated from what this account itself can list).
+// tournamentMatches/{tournamentId} auto-publishes name/teams/fixtures for any non-private
+// tournament the moment it's created or edited (see maybeAutoPublishTournament) and is
+// world-readable by design (see loadTournamentMatches above) -- name is the one field worth
+// surfacing here just to label a shared match's tournament badge with something real instead of
+// a bare "Tournament" placeholder. Returns null (not "Tournament") on any failure/absence so the
+// caller's own fallback text stays the one place that decides on it.
+async function loadPublicTournamentName(tournamentId) {
+  try {
+    const doc = await db.collection("tournamentMatches").doc(tournamentId).get();
+    return doc.exists && doc.data().name || null;
+  } catch (e) {
+    return null;
+  }
 }
 // Standard single (or double) round-robin: every team plays every other team once, or twice with
 // fixture order reversed for the return leg. Dates/times are deliberately left blank — a club
@@ -38872,6 +38907,12 @@ function CricketScorer() {
   // "anyone with the id could theoretically read this."
   const [federationTournamentsById, setFederationTournamentsById] = useState({}); // federationId -> tournament[]
   const [activeTournamentFederationId, setActiveTournamentFederationId] = useState(null); // Tournaments screen's source selector, federation variant -- at most one of this and activeTournamentClubId is ever non-null
+  // Names for tournaments this account has no other way to see at all -- a co-owner's own
+  // personal or differently-scoped club tournament, discovered only through a match that's been
+  // shared. Keyed by tournamentId, `null` recorded (not omitted) once looked up and not found, so
+  // the effect below doesn't keep retrying the same miss on every render. See
+  // loadPublicTournamentName's own comment for where this data actually comes from.
+  const [foreignTournamentNames, setForeignTournamentNames] = useState({});
   const [viewingTournament, setViewingTournament] = useState(null);
   const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
   // Shared by the Record Book entry points on both TournamentsScreen (club/federation source
@@ -41081,6 +41122,34 @@ function CricketScorer() {
   for (const list of Object.values(federationTournamentsById)) {
     for (const t of list) tournamentNameById[t.id] = t.name;
   }
+  for (const [id, name] of Object.entries(foreignTournamentNames)) {
+    if (name && !tournamentNameById[id]) tournamentNameById[id] = name;
+  }
+  // BUG FIX: a match tagged with a tournament this account can't otherwise see at all (a
+  // co-owner's own tournament, discovered only because the match itself got shared) always fell
+  // back to the bare "Tournament" placeholder every card/badge above already shows for an unknown
+  // id -- even though that tournament auto-published its name publicly the moment it was created
+  // (see loadPublicTournamentName). Looks up whichever tournamentIds show up in `matches` that
+  // aren't resolved by any of the three loops above, one bare Firestore doc read each.
+  const unresolvedTournamentIdsKey = [...new Set(matches.map(m => m.tournamentId).filter(id => id && !tournamentNameById[id] && !(id in foreignTournamentNames)))].sort().join(",");
+  useEffect(() => {
+    if (!unresolvedTournamentIdsKey) return;
+    const ids = unresolvedTournamentIdsKey.split(",");
+    let cancelled = false;
+    Promise.all(ids.map(id => loadPublicTournamentName(id))).then(names => {
+      if (cancelled) return;
+      setForeignTournamentNames(prev => {
+        const next = { ...prev };
+        ids.forEach((id, i) => {
+          next[id] = names[i];
+        });
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [unresolvedTournamentIdsKey]);
   const wrapStyle = {
     minHeight: "100vh",
     background: COLORS.cream,

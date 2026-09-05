@@ -172,6 +172,7 @@ afterEach(() => {
   delete globalThis.db;
   delete globalThis.Modal;
   delete globalThis.loadMatch;
+  delete globalThis.loadPublicTournamentName;
   delete globalThis.alert;
 });
 
@@ -276,6 +277,27 @@ test("CricketScorer: opening a match whose only known copy has no innings data s
   });
   assert.equal(inst.root.findAllByType(MatchScreen).length, 0, "must not navigate into MatchScreen with unusable match data");
   assert.match(alertMessage || "", /couldn't open that match/i);
+});
+
+// BUG FIX: a match tagged with a tournament this account has no other way to see at all (a club
+// co-owner's own tournament, discovered only because the match itself got shared) always fell
+// back to the bare "Tournament" placeholder every card/badge already shows for an unresolved id --
+// even though that tournament auto-published its name publicly the moment it was created (see
+// maybeAutoPublishTournament/loadPublicTournamentName). Reported live as a co-owner's tournament
+// match showing plain "Tournament" instead of its real name on Home's "Continue scoring".
+test("CricketScorer: a match's tournament name resolves from the public config doc when this account can't otherwise see that tournament", async () => {
+  const inst = await render();
+  await flush();
+  globalThis.loadIndex = () => Promise.resolve([{
+    id: "co1", teamA: "Kolding 2", teamB: "Billund 1", status: "in-progress", oversLimit: 20,
+    tournamentId: "foreign-t1", shareCode: "SHARE1", scoreLine: "Kolding 2 1-0 (0.2 ov)"
+  }]);
+  globalThis.loadPublicTournamentName = id => Promise.resolve(id === "foreign-t1" ? "Kolding Summer Cup" : null);
+  await signIn(inst);
+  await flush();
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  assert.equal(home.props.tournamentNameById["foreign-t1"], "Kolding Summer Cup");
 });
 
 // BUG FIX: starting a match remembered its rules as this device's own default (handleSaveRules,
