@@ -23,8 +23,10 @@ export const TABS = [
 // writeup for why that measuring exists at all).
 const PILL_HEIGHT = 58;
 // Gap the floating pill sits above the screen's bottom edge (safe-area inset aside) -- see the
-// `bottom` offset below.
-const BOTTOM_GAP = 14;
+// `bottom` offset below. Kept small since it stacks on top of the safe-area inset itself (~34px
+// on a notched iPhone) -- a bigger gap here read as floating noticeably higher than the
+// WhatsApp/Instagram-style bars this shape is modeled on, which hug much closer to the edge.
+const BOTTOM_GAP = 8;
 // Total vertical footprint of the tab bar from the screen's bottom edge, safe-area aside --
 // exported so CricketScorer can reserve the same amount of bottom padding under each tab screen's
 // own scrollable content (bar height plus the gap it floats above the edge with), otherwise the
