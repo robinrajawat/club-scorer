@@ -100,6 +100,29 @@ test("FollowTournamentScreen: with no code, shows not-found without ever calling
   assert.match(JSON.stringify(inst.toJSON()), /isn.t valid/);
 });
 
+// BUG FIX: the exit button always read "Go to Club Scorer", which made sense for someone who
+// landed here cold via a "?tournament=" link but looked like a mistake for someone who tapped
+// here from the Live tab's own tournaments feed -- they're already using the app right now.
+// reachedInApp (set from cricketScorer.js only when openLiveTournament, the Live tab's entry
+// point, was what got here) switches it to a plain "Back".
+test("FollowTournamentScreen: exit button reads 'Go to Club Scorer' from a cold link, 'Back' when reached in-app", async () => {
+  const data = snapshotData();
+  const viaLink = await renderScreen("ABCD12", { exists: true, data: () => data });
+  assert.match(JSON.stringify(viaLink.toJSON()), /Go to Club Scorer/);
+
+  const inApp = await renderScreen("ABCD12", { exists: true, data: () => data }, { reachedInApp: true });
+  const text = JSON.stringify(inApp.toJSON());
+  assert.match(text, /"Back"/);
+  assert.doesNotMatch(text, /Go to Club Scorer/);
+});
+
+test("FollowTournamentScreen: the invalid-link error state also reads 'Back' when reached in-app", async () => {
+  const inst = await renderScreen("MISSING", { exists: false }, { reachedInApp: true });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"Back"/);
+  assert.doesNotMatch(text, /Go to Club Scorer/);
+});
+
 test("FollowTournamentScreen: shows scheduled fixtures when present", async () => {
   const data = snapshotData({
     fixtures: [{ id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI" }]

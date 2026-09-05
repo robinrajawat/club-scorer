@@ -3,9 +3,12 @@ import { COLORS } from "./theme.js";
 import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 
-// Read-only public view of a tournament's shared standings/fixtures snapshot, opened via a
-// "?tournament=CODE" link (see TournamentShareModal, which creates these). Covered by
-// tests/unit/components/followTournamentScreen.test.js.
+// Read-only public view of a tournament's shared standings/fixtures snapshot, opened either via a
+// "?tournament=CODE" link (see TournamentShareModal, which creates these) or by tapping a card in
+// the Live tab's own tournaments feed (see openLiveTournament in cricketScorer.js) -- reachedInApp
+// distinguishes the two, since "Go to Club Scorer" only makes sense for someone who landed here
+// cold from an outside link and might not even have the app open anywhere else; from inside the
+// app it just reads as a mistake. Covered by tests/unit/components/followTournamentScreen.test.js.
 //
 // Reads the snapshot directly via `db.collection("tournamentViews").doc(code).get()` from a
 // mount-time useEffect -- `db` (the raw Firestore SDK instance, a bare global, not extracted) is
@@ -13,8 +16,10 @@ import { LoadingNote } from "./illustrations.js";
 
 export function FollowTournamentScreen({
   code,
-  onExit
+  onExit,
+  reachedInApp = false
 }) {
+  const exitLabel = reachedInApp ? "Back" : "Go to Club Scorer";
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
@@ -84,7 +89,7 @@ export function FollowTournamentScreen({
       }
     }, error), /*#__PURE__*/React.createElement(Btn, {
       onClick: onExit
-    }, "Go to Club Scorer"));
+    }, exitLabel));
   }
   const standings = [...data.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr);
   const scheduledFixtures = (data.fixtures || []).filter(f => f.date);
@@ -245,5 +250,5 @@ export function FollowTournamentScreen({
     }
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onExit
-  }, "Go to Club Scorer"))));
+  }, exitLabel))));
 }

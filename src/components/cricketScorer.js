@@ -3015,7 +3015,13 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FollowTournamentScreen, {
     code: tournamentFollowCode,
-    onExit: exitFollowTournament
+    onExit: exitFollowTournament,
+    // "Go to Club Scorer" only makes sense for someone who landed here cold via a "?tournament="
+    // link and might not even have the app open anywhere else -- openLiveTournament (the Live
+    // tab's only entry point into this screen) is the one place that ever sets followReturnScreen
+    // to "live", so its presence here means this render is reached from inside the app, where that
+    // phrasing just reads as a mistake.
+    reachedInApp: followReturnScreen === "live"
   })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "poll-respond",
     direction: navDirection

@@ -34266,8 +34266,10 @@ function PollRespondScreen({
 // GENERATED-FN-START: FollowTournamentScreen
 function FollowTournamentScreen({
   code,
-  onExit
+  onExit,
+  reachedInApp = false
 }) {
+  const exitLabel = reachedInApp ? "Back" : "Go to Club Scorer";
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
@@ -34337,7 +34339,7 @@ function FollowTournamentScreen({
       }
     }, error), /*#__PURE__*/React.createElement(Btn, {
       onClick: onExit
-    }, "Go to Club Scorer"));
+    }, exitLabel));
   }
   const standings = [...data.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr);
   const scheduledFixtures = (data.fixtures || []).filter(f => f.date);
@@ -34498,7 +34500,7 @@ function FollowTournamentScreen({
     }
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onExit
-  }, "Go to Club Scorer"))));
+  }, exitLabel))));
 }
 // GENERATED-FN-END: FollowTournamentScreen
 // GENERATED-FN-START: MatchScreen
@@ -41624,7 +41626,13 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FollowTournamentScreen, {
     code: tournamentFollowCode,
-    onExit: exitFollowTournament
+    onExit: exitFollowTournament,
+    // "Go to Club Scorer" only makes sense for someone who landed here cold via a "?tournament="
+    // link and might not even have the app open anywhere else -- openLiveTournament (the Live
+    // tab's only entry point into this screen) is the one place that ever sets followReturnScreen
+    // to "live", so its presence here means this render is reached from inside the app, where that
+    // phrasing just reads as a mistake.
+    reachedInApp: followReturnScreen === "live"
   })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "poll-respond",
     direction: navDirection
