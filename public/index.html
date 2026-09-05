@@ -19975,13 +19975,20 @@ function renderMatchCard(m, i, {
   }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
+      padding: "40px 20px",
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
-  }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginTop: 14
+    }
+  }, "No results for \u201c", query.trim(), "\u201d.")) : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
