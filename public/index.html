@@ -20274,16 +20274,22 @@ const TABS = [
   { screen: "teams", label: "Clubs", Icon: Shield }
 ];
 
-// Fixed height (safe-area padding aside) -- unlike MatchScreen's scoring pad, this bar's content
-// never changes shape, so a plain constant is safe here rather than needing MatchScreen's
-// ResizeObserver-measured approach (see docs/history.md's "This Over" rendering-bug writeup for
-// why that measuring exists at all). Exported so CricketScorer can reserve the same amount of
-// bottom padding under each tab screen's own scrollable content -- otherwise the last bit of
-// content on any of the five tab screens renders partially hidden underneath this bar, the exact
-// bug class that history already hit once with the scoring pad.
+// Height of the pill itself (safe-area padding aside) -- unlike MatchScreen's scoring pad, this
+// bar's content never changes shape, so a plain constant is safe here rather than needing
+// MatchScreen's ResizeObserver-measured approach (see docs/history.md's "This Over" rendering-bug
+// writeup for why that measuring exists at all).
+const PILL_HEIGHT = 58;
+// Gap the floating pill sits above the screen's bottom edge (safe-area inset aside) -- see the
+// `bottom` offset below.
+const BOTTOM_GAP = 14;
+// Total vertical footprint of the tab bar from the screen's bottom edge, safe-area aside --
+// exported so CricketScorer can reserve the same amount of bottom padding under each tab screen's
+// own scrollable content (bar height plus the gap it floats above the edge with), otherwise the
+// last bit of content on any of the five tab screens renders partially hidden underneath it, the
+// exact bug class history already hit once with the scoring pad.
 // GENERATED-FN-END: TABS
 // GENERATED-FN-START: TAB_BAR_HEIGHT
-const TAB_BAR_HEIGHT = 58;
+const TAB_BAR_HEIGHT = PILL_HEIGHT + BOTTOM_GAP;
 // GENERATED-FN-END: TAB_BAR_HEIGHT
 // GENERATED-FN-START: TabBar
 function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
@@ -20291,21 +20297,21 @@ function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
     "aria-label": "Primary",
     style: {
       position: "fixed",
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: `calc(${BOTTOM_GAP}px + env(safe-area-inset-bottom))`,
+      left: 16,
+      right: 16,
+      maxWidth: 560,
+      margin: "0 auto",
       zIndex: 40,
-      background: COLORS.cream,
-      borderTop: `1px solid ${COLORS.cardDivider}`,
-      boxShadow: "0 -4px 16px rgba(42,36,32,0.08)",
-      paddingBottom: "env(safe-area-inset-bottom)"
+      background: COLORS.surface,
+      borderRadius: PILL_HEIGHT / 2,
+      boxShadow: "0 2px 8px rgba(42,36,32,0.10), 0 10px 28px rgba(42,36,32,0.16)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      maxWidth: 560,
-      margin: "0 auto",
-      height: TAB_BAR_HEIGHT
+      height: PILL_HEIGHT,
+      padding: "0 6px"
     }
   }, TABS.map(({ screen, label, Icon }) => {
     const isActive = active === screen;
@@ -20355,7 +20361,7 @@ function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
         fontSize: 9,
         fontWeight: 700,
         lineHeight: 1,
-        boxShadow: `0 0 0 1.5px ${COLORS.cream}`
+        boxShadow: `0 0 0 1.5px ${COLORS.surface}`
       }
     }, homeBadgeCount > 9 ? "9+" : homeBadgeCount)), /*#__PURE__*/React.createElement("span", {
       style: {
