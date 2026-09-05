@@ -26,6 +26,7 @@ import { PollRespondScreen } from "./pollRespondScreen.js";
 import { HelpScreen, AboutScreen, FeedbackScreen, SharedLinksScreen, BetaTestersScreen } from "./infoScreens.js";
 import { FeedbackInboxScreen } from "./feedbackInboxScreen.js";
 import { PrintReport } from "./scorecard.js";
+import { AlertModal } from "./formUiAtoms.js";
 import {
   isFeedbackAdmin, getAuthActionFromUrl, getFollowCodeFromUrl, getFollowMatchIdFromUrl, getTournamentFollowCodeFromUrl,
   getPollCodeFromUrl, getShortcutActionFromUrl, accountExistsLinkInfo, genMatchCode, isClubOwner,
@@ -259,6 +260,11 @@ export function CricketScorer() {
   // connection tapping a match previously just sat there with the list still showing and nothing
   // to indicate the tap registered. See the loading overlay near the end of this component's render.
   const [matchLoading, setMatchLoading] = useState(false);
+  // A single in-app AlertModal, replacing every plain window.alert() call in this file -- an OS
+  // popup looks like it belongs to a different app entirely next to the rest of this screen's own
+  // styling. { title?, message } | null; see the AlertModal render near the end of this
+  // component's own render for where it actually shows up.
+  const [alertModal, setAlertModal] = useState(null);
   const [teams, setTeams] = useState([]);
   // True only until the FIRST loadTeams() resolves, at mount -- not re-set to true on every
   // later reload (sign-in/out), since teams already falls back to local data immediately in that
@@ -1180,7 +1186,9 @@ export function CricketScorer() {
             message = "This match's share link has expired — ask whoever's scoring it to share it again.";
           }
         }
-        alert(message);
+        setAlertModal({
+          message
+        });
       }
     } finally {
       setMatchLoading(false);
@@ -2505,7 +2513,9 @@ export function CricketScorer() {
     if (toClubId) {
       const result = await saveClubTeam(toClubId, team);
       if (!result.ok) {
-        alert(result.error || "Couldn't move the team.");
+        setAlertModal({
+          message: result.error || "Couldn't move the team."
+        });
         return;
       }
       setClubTeamsById(prev => ({
@@ -3089,7 +3099,11 @@ export function CricketScorer() {
       color: COLORS.inkSoft,
       fontSize: 13
     }
-  }, "Opening match\u2026"))), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
+  }, "Opening match\u2026"))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
+    title: alertModal.title,
+    message: alertModal.message,
+    onClose: () => setAlertModal(null)
+  }), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
     onSelect: selectTab,
     homeBadgeCount: inboxBadgeCount

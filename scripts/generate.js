@@ -151,6 +151,7 @@ const FUNCTIONS = [
   { name: "RuleChoice", file: "src/components/formUiAtoms.js" },
   { name: "TeamChips", file: "src/components/formUiAtoms.js" },
   { name: "PinnableChip", file: "src/components/formUiAtoms.js" },
+  { name: "AlertModal", file: "src/components/formUiAtoms.js" },
   { name: "ConfirmModal", file: "src/components/formUiAtoms.js" },
   { name: "COLORS", file: "src/components/theme.js" },
   { name: "Icon", file: "src/components/icons.js" },
