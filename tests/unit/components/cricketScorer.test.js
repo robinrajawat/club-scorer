@@ -173,6 +173,7 @@ afterEach(() => {
   delete globalThis.Modal;
   delete globalThis.loadMatch;
   delete globalThis.loadPublicTournamentName;
+  delete globalThis.checkTournamentMatchShareStatus;
   delete globalThis.alert;
 });
 
@@ -277,6 +278,50 @@ test("CricketScorer: opening a match whose only known copy has no innings data s
   });
   assert.equal(inst.root.findAllByType(MatchScreen).length, 0, "must not navigate into MatchScreen with unusable match data");
   assert.match(alertMessage || "", /couldn't open that match/i);
+});
+
+// BUG FIX: the generic "check your connection" message was actively misleading for the actual
+// common case -- there is no automatic cross-account access to a match just from being a fellow
+// club owner/co-owner; whoever's scoring it has to have explicitly tapped Share at least once.
+// Reported live as "does it need an invite from the owner? if so why is it in Continue scoring?"
+// -- the answer is yes, in effect, so the message now says that instead of implying a network
+// problem the person has no way to actually fix.
+test("CricketScorer: opening a tournament match that was never shared explains that, not a generic connection error", async () => {
+  globalThis.loadMatch = () => Promise.resolve(null);
+  globalThis.checkTournamentMatchShareStatus = () => Promise.resolve("never-shared");
+  let alertMessage = null;
+  globalThis.alert = msg => { alertMessage = msg; };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  const pointerOnlyMatch = {
+    id: "co1", teamA: "Riverside CC", teamB: "Oakwood CC", status: "in-progress", tournamentId: "t1"
+  };
+  await act(async () => {
+    home.props.onOpen(pointerOnlyMatch);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(alertMessage || "", /hasn't been shared yet/i);
+});
+
+test("CricketScorer: opening a tournament match whose share link expired says so, not a generic connection error", async () => {
+  globalThis.loadMatch = () => Promise.resolve(null);
+  globalThis.checkTournamentMatchShareStatus = () => Promise.resolve("expired");
+  let alertMessage = null;
+  globalThis.alert = msg => { alertMessage = msg; };
+  const inst = await render();
+  await flush();
+  await signIn(inst);
+  const home = inst.root.findByType(HomeScreen);
+  const pointerOnlyMatch = {
+    id: "co1", teamA: "Riverside CC", teamB: "Oakwood CC", status: "in-progress", tournamentId: "t1", shareCode: "STALE1"
+  };
+  await act(async () => {
+    home.props.onOpen(pointerOnlyMatch);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(alertMessage || "", /share link has expired/i);
 });
 
 // BUG FIX: a match tagged with a tournament this account has no other way to see at all (a club

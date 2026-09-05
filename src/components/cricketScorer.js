@@ -1165,7 +1165,22 @@ export function CricketScorer() {
         setMatch(m);
         setScreen("match");
       } else if (isObject) {
-        alert("Couldn't open that match — check your connection and try again.");
+        // BUG FIX: "check your connection" was misleading for the actual common case here -- a
+        // teammate's or club co-owner's match that was never explicitly shared (tapped Share) by
+        // whoever's actually scoring it. There's no automatic cross-account access just from
+        // being in the same club; a matching shareCode has to exist at all. Diagnoses the real
+        // reason when this match is tournament-tagged (the only case with a public pointer to
+        // check at all) so the message says something true instead of guessing "network."
+        let message = "Couldn't open that match — check your connection and try again.";
+        if (knownMatch && knownMatch.tournamentId) {
+          const status = await checkTournamentMatchShareStatus(knownMatch.tournamentId, id);
+          if (status === "never-shared") {
+            message = "This match hasn't been shared yet — ask whoever's scoring it to open it and tap Share.";
+          } else if (status === "expired") {
+            message = "This match's share link has expired — ask whoever's scoring it to share it again.";
+          }
+        }
+        alert(message);
       }
     } finally {
       setMatchLoading(false);

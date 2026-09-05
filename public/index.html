@@ -5383,6 +5383,27 @@ async function loadPublicTournamentName(tournamentId) {
     return null;
   }
 }
+// Diagnoses exactly why a tournament-tagged match couldn't be opened, so openMatch can tell the
+// person tapping it something true instead of a generic "check your connection" guess -- there is
+// no automatic cross-account access to a match just from being a fellow club owner/co-owner; the
+// person actually scoring it has to explicitly tap Share at least once first (mints a shareCode --
+// see handleGetShareCodeForMatch/ShareMenu). Three real outcomes: "never-shared" (the tournament
+// pointer exists but carries no code at all -- the scorer hasn't shared it, full stop),
+// "expired" (a code was minted at some point but its /sharedMatches doc is gone -- revoked, or
+// past its TTL), "shared" (a live code exists, so whatever made loadMatch fail really was
+// transient -- network, a dropped connection). "unknown" covers this check itself failing (e.g.
+// genuinely offline), where the original connection-error message is still the honest one.
+async function checkTournamentMatchShareStatus(tournamentId, matchId) {
+  try {
+    const entryDoc = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").doc(matchId).get();
+    const shareCode = entryDoc.exists ? entryDoc.data().shareCode : null;
+    if (!shareCode) return "never-shared";
+    const sharedDoc = await db.collection("sharedMatches").doc(shareCode).get();
+    return sharedDoc.exists ? "shared" : "expired";
+  } catch (e) {
+    return "unknown";
+  }
+}
 // Standard single (or double) round-robin: every team plays every other team once, or twice with
 // fixture order reversed for the return leg. Dates/times are deliberately left blank — a club
 // tournament's actual scheduling (grounds, weekends, weather) rarely maps cleanly onto anything a
@@ -39776,7 +39797,22 @@ function CricketScorer() {
         setMatch(m);
         setScreen("match");
       } else if (isObject) {
-        alert("Couldn't open that match — check your connection and try again.");
+        // BUG FIX: "check your connection" was misleading for the actual common case here -- a
+        // teammate's or club co-owner's match that was never explicitly shared (tapped Share) by
+        // whoever's actually scoring it. There's no automatic cross-account access just from
+        // being in the same club; a matching shareCode has to exist at all. Diagnoses the real
+        // reason when this match is tournament-tagged (the only case with a public pointer to
+        // check at all) so the message says something true instead of guessing "network."
+        let message = "Couldn't open that match — check your connection and try again.";
+        if (knownMatch && knownMatch.tournamentId) {
+          const status = await checkTournamentMatchShareStatus(knownMatch.tournamentId, id);
+          if (status === "never-shared") {
+            message = "This match hasn't been shared yet — ask whoever's scoring it to open it and tap Share.";
+          } else if (status === "expired") {
+            message = "This match's share link has expired — ask whoever's scoring it to share it again.";
+          }
+        }
+        alert(message);
       }
     } finally {
       setMatchLoading(false);
