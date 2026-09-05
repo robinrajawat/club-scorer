@@ -236,6 +236,12 @@ export function MatchScreen({
   // if excluding maxed-out bowlers would leave nobody to pick, don't exclude them — show everyone
   // with a warning instead of a dead end
   const maxOversExcludeList = eligibleAfterMaxOvers.length > 0 ? atMaxOvers : [];
+  // The one genuine dead end the max-overs limit can hit: a real, fixed XI where every bowler
+  // other than whoever just finished has already used up their quota, so there's truly nobody
+  // left to legally bowl the next over. Only meaningful with an actual roster -- a roster-less
+  // match's bowler field takes any name at all, so a fresh one (0 overs bowled) is always a real
+  // alternative and the limit should just hold, full stop.
+  const maxOversWaived = bowlingRosterNames.length > 0 && eligibleAfterMaxOvers.length === 0;
   // Every write to a shared match is optimistic-concurrency checked server-side (see
   // transactionalMatchWrite): a save carries the writeSeq it EXPECTS to still be current, and the
   // server rejects it as a conflict if that's fallen behind. Scoring balls quickly fires several
@@ -1028,7 +1034,14 @@ export function MatchScreen({
     setDlsR1Override("");
   }
   function confirmNewBowler() {
-    if (!newBowlerName.trim()) return;
+    const name = newBowlerName.trim();
+    if (!name) return;
+    // Hard stop, not just the chip picker already hiding maxed-out names (see maxOversExcludeList
+    // above) -- a roster-less match/team falls back to a plain free-text bowler field with no
+    // chips to hide anything from, so this is the one place a limit set in Setup is actually
+    // enforced everywhere. maxOversWaived is the one legitimate exception: a real XI with no one
+    // left who hasn't used up their quota.
+    if (atMaxOvers.includes(name) && !maxOversWaived) return;
     // BUG FIX: this used to commit with no preceding pushHistory(), unlike every other committed
     // action in this file (see the "Timed Out isn't fixable with Undo" precedent above -- the
     // project's own standard is that a committed action must go through pushHistory()+commit() so
@@ -1039,7 +1052,7 @@ export function MatchScreen({
     pushHistory();
     const updated = {
       ...inning,
-      bowlerName: newBowlerName.trim()
+      bowlerName: name
     };
     ensureBowler(updated, updated.bowlerName);
     commit(updated);
@@ -2449,14 +2462,14 @@ export function MatchScreen({
     captain: captainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
-  }), inning.maxOversPerBowler && atMaxOvers.length > 0 && maxOversExcludeList.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), inning.maxOversPerBowler && atMaxOvers.length > 0 && !maxOversWaived && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
       marginTop: 8
     }
-  }, atMaxOvers.length === 1 ? `${atMaxOvers[0]} has reached the ${inning.maxOversPerBowler}-over limit.` : `${atMaxOvers.join(", ")} have reached the ${inning.maxOversPerBowler}-over limit.`), inning.maxOversPerBowler && atMaxOvers.length > 0 && maxOversExcludeList.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, atMaxOvers.length === 1 ? `${atMaxOvers[0]} has reached the ${inning.maxOversPerBowler}-over limit and can't bowl again.` : `${atMaxOvers.join(", ")} have reached the ${inning.maxOversPerBowler}-over limit and can't bowl again.`), inning.maxOversPerBowler && atMaxOvers.length > 0 && maxOversWaived && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -2472,7 +2485,7 @@ export function MatchScreen({
     }
   }, "Same bowler can't bowl two overs in a row."), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !newBowlerName.trim() || newBowlerName.trim() === inning.lastBowlerName,
+    disabled: !newBowlerName.trim() || newBowlerName.trim() === inning.lastBowlerName || atMaxOvers.includes(newBowlerName.trim()) && !maxOversWaived,
     onClick: confirmNewBowler,
     style: {
       width: "100%",
