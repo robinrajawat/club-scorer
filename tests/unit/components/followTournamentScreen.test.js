@@ -143,6 +143,20 @@ test("FollowTournamentScreen: shows scheduled fixtures when present", async () =
   assert.match(text, /Fixtures/);
 });
 
+// BUG FIX: an unscheduled fixture (no date set yet, e.g. early in a tournament or an informal one
+// that never sets dates at all) used to fall through both the Results filter (no result) AND the
+// Fixtures filter (no date), so it was present in the snapshot but never shown anywhere on screen.
+test("FollowTournamentScreen: a fixture with no result and no date still shows under Fixtures, just without a date/time", async () => {
+  const data = snapshotData({
+    fixtures: [{ id: "f1", date: "", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: null }]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Fixtures/);
+  assert.match(text, /Riverside 1st XI/);
+  assert.match(text, /Riverside 2nd XI/);
+});
+
 test("FollowTournamentScreen: shows venue and a format summary line when the snapshot carries them", async () => {
   const data = snapshotData({
     venue: "Green Park", venueLat: 26.45, venueLng: 80.33,

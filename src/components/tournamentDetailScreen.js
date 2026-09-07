@@ -123,7 +123,16 @@ export function TournamentDetailScreen({
   // Table Toppers: the standings leader, but only once someone's actually played — computeStandings
   // seeds every team at 0 points, so with nothing played yet "the leader" is just whichever team
   // happens to sort first and would be a meaningless callout.
-  const tableTopper = standings[0] && standings[0].played > 0 ? standings[0] : null;
+  //
+  // BUG FIX: this used `standings` (computeStandings' FLAT, whole-tournament table) unconditionally
+  // -- but once a tournament has groups, that flat table mixes teams from different groups that
+  // have never played each other into one ranking, so "the leader" is comparing incomparable
+  // records (different opponents, not necessarily even the same number of games played). Suppressed
+  // entirely once `tournament.groups` exists, same treatment Player of the Tournament already gets
+  // pre-completion above -- Group Standings (groupStandings, rendered in the Standings tab) already
+  // answers "who's leading" per group, which is the only version of that question that means
+  // anything here.
+  const tableTopper = !tournament.groups && standings[0] && standings[0].played > 0 ? standings[0] : null;
   const suggestedPOT = suggestPlayerOfTournament(completedTournamentMatches);
   const allPOTCandidates = Array.from(new Set(completedTournamentMatches.flatMap(m => allMatchPlayers(m)))).sort();
   const finalPOT = tournament.playerOfTournament || suggestedPOT;

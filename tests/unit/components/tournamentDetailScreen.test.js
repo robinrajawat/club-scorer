@@ -88,6 +88,30 @@ test("TournamentDetailScreen: shows the tournament name and Orange/Purple Cap on
   assert.match(text, /Jasprit Bumrah/);
 });
 
+test("TournamentDetailScreen: shows a Table Topper once a match has been played, for an ungrouped tournament", async () => {
+  const inst = await renderScreen(tournamentFixture(), [completedMatch()]);
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Table Toppers/);
+});
+
+// BUG FIX: tableTopper used the flat, whole-tournament standings unconditionally, even once a
+// tournament has groups -- comparing teams that have never played each other (different groups,
+// not necessarily even the same number of games) as if one flat leaderboard meant something.
+// Group Standings (its own tab) already answers "who's leading" per group correctly.
+test("TournamentDetailScreen: suppresses the Table Topper callout for a grouped tournament, even with a completed match", async () => {
+  const grouped = tournamentFixture({
+    groups: [
+      { label: "Group A", teams: ["Riverside CC"] },
+      { label: "Group B", teams: ["Oakwood CC"] }
+    ]
+  });
+  const inst = await renderScreen(grouped, [completedMatch()]);
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Table Toppers/);
+  // Sanity check -- Orange/Purple Cap (unaffected by this fix) still show normally.
+  assert.match(text, /Orange Cap/);
+});
+
 // fixtureRow.js already falls back to `fixture.venue || tournament.venue` for any fixture that
 // hasn't set its own venue -- but until now there was no UI to actually set `tournament.venue` at
 // all. Useful for a one-day/one-ground tournament where re-entering the venue per fixture is pure
