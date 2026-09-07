@@ -109,6 +109,11 @@ async function render(url) {
   // rejection completely unrelated to what that test is actually checking.
   globalThis.shareTournament = () => Promise.resolve({ ok: true, code: "TESTCODE" });
   globalThis.refreshTournamentStandingsLive = () => Promise.resolve();
+  globalThis.syncTournamentConfig = () => Promise.resolve();
+  // FixtureRow's own mount-time effect, reached whenever TournamentDetailScreen renders a fixture
+  // (see fixtureRow.test.js) -- stubbed here rather than per-test since any test that opens a
+  // tournament with fixtures reaches it regardless of what that specific test is checking.
+  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
   globalThis.removeTournamentFromLiveFeed = () => Promise.resolve();
   globalThis.flushPendingWrites = () => Promise.resolve();
   globalThis.linkPlayerIfMatch = () => Promise.resolve();
@@ -535,6 +540,49 @@ test("CricketScorer: creating a non-private tournament auto-publishes it (mints 
   assert.equal(shared.standings.length, 2, "standings computed for both teams, even with zero matches yet");
   const created = saved.find(t => t.name === "Summer Cup");
   assert.equal(created.shareCode, "AUTOCODE", "the minted code is persisted back onto the tournament");
+});
+
+// BUG FIX: editing an already-shared tournament (e.g. generating/adding fixtures, which normally
+// happens right after creation) used to call ONLY refreshTournamentStandingsLive, which recomputes
+// standings against whatever fixtures/venue/etc. already happen to be sitting in the public
+// /tournamentMatches/{tournamentId} config doc -- never refreshes that doc itself, since it's only
+// ever written by shareTournament. Every fixture added after the tournament's first auto-publish
+// silently never reached the public/Live tournament view until the owner happened to open the
+// Share panel and tap "Refresh now" by hand. maybeAutoPublishTournament now calls
+// syncTournamentConfig first to re-sync the config doc from the current (owner-side) tournament
+// object before refreshing standings.
+test("CricketScorer: editing an already-shared tournament re-syncs the public config doc (not just standings)", async () => {
+  let synced = null;
+  let refreshedId = null;
+  const inst = await render();
+  globalThis.loadTournaments = () => Promise.resolve([
+    { id: "t1", name: "Summer Cup", teams: ["Riverside CC", "Oakwood CC"], fixtures: [], private: false, shareCode: "EXISTING" }
+  ]);
+  globalThis.saveTournaments = () => Promise.resolve();
+  globalThis.loadTournamentMatches = () => Promise.resolve([]);
+  globalThis.syncTournamentConfig = tournament => { synced = tournament; return Promise.resolve(); };
+  globalThis.refreshTournamentStandingsLive = id => { refreshedId = id; return Promise.resolve(); };
+  await flush();
+  await signIn(inst);
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  const tournament = home.props.tournaments.find(t => t.id === "t1");
+  await act(async () => {
+    home.props.onOpenTournament(tournament);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  const detail = inst.root.findByType(TournamentDetailScreen);
+  const withFixture = {
+    ...tournament,
+    fixtures: [{ id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC", date: "" }]
+  };
+  await act(async () => {
+    await detail.props.onUpdateTournament(withFixture);
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(synced, "syncTournamentConfig should have been called to re-sync the public config doc");
+  assert.equal(synced.fixtures.length, 1, "the newly-added fixture should be part of what gets re-synced");
+  assert.equal(refreshedId, "t1", "standings should still be refreshed right after the config re-sync");
 });
 
 test("CricketScorer: creating a PRIVATE tournament does not auto-publish it", async () => {

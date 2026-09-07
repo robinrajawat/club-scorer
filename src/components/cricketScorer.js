@@ -2360,6 +2360,16 @@ export function CricketScorer() {
   async function maybeAutoPublishTournament(tournament, persist) {
     if (tournament.kind === "series" || tournament.private) return;
     if (tournament.shareCode) {
+      // BUG FIX: this used to call ONLY refreshTournamentStandingsLive, which recomputes standings
+      // against whatever fixtures/venue/groups/teams already happen to be sitting in the public
+      // /tournamentMatches/{tournamentId} config doc -- never refreshes that doc itself. Since the
+      // config doc is only ever written by shareTournament, and this is the owner's own client
+      // editing an already-published tournament (this branch never runs for a guest), every
+      // fixture generated/added/edited after the tournament's first auto-publish silently never
+      // reached the public snapshot until the owner happened to open the Share panel and tap
+      // "Refresh now" by hand. syncTournamentConfig re-syncs that config doc from the current
+      // tournament object first, so the standings refresh right after it runs against fresh data.
+      await syncTournamentConfig(tournament);
       refreshTournamentStandingsLive(tournament.id);
       return;
     }
