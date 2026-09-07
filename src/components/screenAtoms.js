@@ -1,9 +1,10 @@
 import React from "react";
 import { COLORS } from "./theme.js";
-import { Share } from "./icons.js";
+import { Plus, Share } from "./icons.js";
+import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // Small presentational components used across setup/list screens: a labeled form-field wrapper,
-// and the "add to home screen" install hint banner. Covered by
+// the "add to home screen" install hint banner, and a floating "+" action button. Covered by
 // tests/unit/components/screenAtoms.test.js using react-test-renderer.
 
 export function Field({
@@ -88,6 +89,57 @@ export function InstallHintBanner({
       flexShrink: 0
     }
   }, "\u00d7"));
+}
+
+// A single fixed "+" FAB, bottom-right, above the tab bar and within the same safe-area padding
+// -- replaces the top-of-screen primary "New X" button Home and Cups each used to have, which sat
+// well outside comfortable one-handed thumb reach on a tall phone. Deliberately icon-only (no
+// label): a "+" in the corner is an established mobile convention for "add/create new", and its
+// context (which screen it's floating on) already says what it creates.
+// Positioned via an invisible, non-interactive wrapper matching every other fixed-position
+// element's own left/right/maxWidth/margin (see TabBar) rather than anchoring straight to the
+// viewport edge -- keeps it aligned with the tab bar's own right edge on a wide (desktop-width)
+// viewport instead of drifting off to the raw screen edge past the centered 560px column.
+export function FabButton({
+  onClick,
+  label
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      left: 16,
+      right: 16,
+      maxWidth: 560,
+      margin: "0 auto",
+      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + env(safe-area-inset-bottom))`,
+      display: "flex",
+      justifyContent: "flex-end",
+      pointerEvents: "none",
+      zIndex: 39
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onClick,
+    "aria-label": label,
+    className: "cs-btn cs-shine",
+    style: {
+      pointerEvents: "auto",
+      width: 56,
+      height: 56,
+      borderRadius: "50%",
+      border: "none",
+      cursor: "pointer",
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 4px 14px rgba(45,80,22,0.4), 0 2px 8px rgba(0,0,0,0.2)"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 26,
+    strokeWidth: 2.5
+  })));
 }
 
 export function NavWrap({
