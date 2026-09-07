@@ -267,6 +267,27 @@ test("Free Hit + wideNoballCountsAsBall together: a legal wide doesn't consume a
   assert.equal(inn.freeHitActive, true, "the free hit is still pending the next real delivery");
 });
 
+// Extends the two BUG FIX tests above across an actual over boundary -- a legal wide/no-ball never
+// consumes a pending free hit ball-by-ball, but that was never previously checked all the way to
+// the point where one of those legal deliveries is also the ball that completes the over. Confirms
+// the free hit survives newOver's rollover (nothing in that path touches freeHitActive) and is
+// still there waiting on the very first ball bowled next over, not just later in the same over.
+test("Free Hit + wideNoballCountsAsBall together: a free hit still pending when the over completes survives into the next over", () => {
+  let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
+  inn = applyBall(inn, { kind: "noball", runs: 0 }); // ball 1 of 6, legal, grants the free hit
+  assert.equal(inn.freeHitActive, true);
+  // Balls 2-6: all legal wides -- none of them are a genuine fair delivery, so none of them can be
+  // "the free hit ball" that consumes it (see the test just above). The 6th one completes the over.
+  for (let i = 0; i < 5; i++) inn = applyBall(inn, { kind: "wide", runs: 0 });
+  assert.equal(inn.legalBalls, 6, "sanity check -- over 1 is complete");
+  assert.equal(inn.overs.length, 2, "sanity check -- rolled over into over 2");
+  assert.equal(inn.freeHitActive, true, "the free hit is still pending on the very first ball of over 2");
+  inn.bowlerName = "B2";
+  ensureBowler(inn, "B2");
+  inn = applyBall(inn, { kind: "run", runs: 0 }); // first ball of over 2, a genuine fair delivery
+  assert.equal(inn.freeHitActive, false, "the first fair delivery of the new over is the one that finally consumes it");
+});
+
 test("wideNoballCountsAsBall on, with lastOverRules off: a no-ball still counts as legal in what would be the final over -- there's no exception without opting in", () => {
   let inn = finalOverInning({ wideNoballCountsAsBall: true }, 2);
   for (let i = 0; i < 6; i++) inn = applyBall(inn, { kind: "run", runs: 0 });

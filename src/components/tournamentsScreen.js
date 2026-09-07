@@ -513,6 +513,9 @@ export function TournamentsScreen({
       }, {
         value: 2,
         label: "2"
+      }, {
+        value: 3,
+        label: "3"
       }]
     }), /*#__PURE__*/React.createElement(RuleChoice, {
       label: "Runs on a no-ball",
