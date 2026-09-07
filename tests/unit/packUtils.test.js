@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore } from "../../src/core/packUtils.js";
+import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore, planMatchSaveEffects, conflictMessageFor } from "../../src/core/packUtils.js";
 import { newInning, applyBall, ensureBatsman, ensureBowler } from "../../src/core/scoringEngine.js";
 
 test("findEmptyKeyPath finds an injected empty batsmen key, ignores empty string values", () => {
@@ -76,4 +76,73 @@ test("unpackMatchFromFirestore: normalizes a malformed non-array overs entry to 
   const malformed = { id: "test", innings: [{ overs: [{ notAnArray: true }, null, [{ kind: "run" }]] }] };
   const unpacked = unpackMatchFromFirestore(malformed);
   assert.deepEqual(unpacked.innings[0].overs, [[], [], [{ kind: "run" }]]);
+});
+
+// planMatchSaveEffects: saveMatch's own orchestration policy, extracted specifically because this
+// class of decision has a real incident history (the self-conflicting sync race was exactly a
+// mistake in "should this mirror write happen right now", not in how the write itself was made).
+// Each test below isolates ONE of its five decisions.
+
+test("planMatchSaveEffects: outbox tracks the save result -- clear on success, leave on conflict, queue on plain failure", () => {
+  const match = { id: "m1", teamA: "Riverside CC" };
+  assert.equal(planMatchSaveEffects(match, { ok: true }, { hasAccount: false }).outbox, "clear");
+  assert.equal(planMatchSaveEffects(match, { ok: false, conflict: true }, { hasAccount: false }).outbox, "leave");
+  assert.equal(planMatchSaveEffects(match, { ok: false }, { hasAccount: false }).outbox, "queue");
+});
+
+test("planMatchSaveEffects: only opportunistically flushes the rest of the outbox when THIS save actually succeeded", () => {
+  const match = { id: "m1" };
+  assert.equal(planMatchSaveEffects(match, { ok: true }, { hasAccount: false }).flushOthersOpportunistically, true);
+  assert.equal(planMatchSaveEffects(match, { ok: false }, { hasAccount: false }).flushOthersOpportunistically, false);
+  assert.equal(planMatchSaveEffects(match, { ok: false, conflict: true }, { hasAccount: false }).flushOthersOpportunistically, false);
+});
+
+test("planMatchSaveEffects: a structural error (empty-key pre-flight failure) skips every mirror and the standings refresh, regardless of what else is true", () => {
+  const match = { id: "m1", viewCode: "V1", tournamentId: "t1", status: "complete", shareCode: "S1" };
+  const plan = planMatchSaveEffects(match, { ok: false, structuralError: true }, { hasAccount: true });
+  assert.equal(plan.liveViewsMirror, "skip");
+  assert.equal(plan.liveMatchesMirror, "skip");
+  assert.equal(plan.refreshTournamentStandings, false);
+});
+
+test("planMatchSaveEffects: liveViewsMirror writes only when a view code exists and the save wasn't a structural error", () => {
+  const withCode = { id: "m1", viewCode: "V1" };
+  const noCode = { id: "m1" };
+  assert.equal(planMatchSaveEffects(withCode, { ok: true }, { hasAccount: false }).liveViewsMirror, "write");
+  assert.equal(planMatchSaveEffects(noCode, { ok: true }, { hasAccount: false }).liveViewsMirror, "skip");
+  assert.equal(planMatchSaveEffects(withCode, { ok: false, structuralError: true }, { hasAccount: false }).liveViewsMirror, "skip");
+});
+
+test("planMatchSaveEffects: a private match's liveMatchesMirror is actively deleted, even with an account or a shareCode", () => {
+  const match = { id: "m1", private: true, shareCode: "S1", status: "in-progress" };
+  assert.equal(planMatchSaveEffects(match, { ok: true }, { hasAccount: true }).liveMatchesMirror, "delete");
+});
+
+test("planMatchSaveEffects: a public match with an account or a shareCode writes the liveMatchesMirror, tiered by completion status", () => {
+  const inProgress = { id: "m1", status: "in-progress" };
+  const complete = { id: "m1", status: "complete" };
+  assert.equal(planMatchSaveEffects(inProgress, { ok: true }, { hasAccount: true }).liveMatchesMirror, "writeLiveFeed");
+  assert.equal(planMatchSaveEffects(complete, { ok: true }, { hasAccount: true }).liveMatchesMirror, "writeRecent");
+  // No account, but a shareCode alone is enough (a guest scoring a shared match).
+  assert.equal(planMatchSaveEffects({ id: "m1", status: "in-progress", shareCode: "S1" }, { ok: true }, { hasAccount: false }).liveMatchesMirror, "writeLiveFeed");
+});
+
+test("planMatchSaveEffects: a pure local-only match (no account, no shareCode) never reaches the liveMatchesMirror at all", () => {
+  const match = { id: "m1", status: "in-progress" };
+  assert.equal(planMatchSaveEffects(match, { ok: true }, { hasAccount: false }).liveMatchesMirror, "skip");
+});
+
+test("planMatchSaveEffects: standings refresh fires only for a COMPLETE match tagged with a tournamentId, and never on a structural error", () => {
+  const complete = { id: "m1", tournamentId: "t1", status: "complete" };
+  const inProgress = { id: "m1", tournamentId: "t1", status: "in-progress" };
+  const noTournament = { id: "m1", status: "complete" };
+  assert.equal(planMatchSaveEffects(complete, { ok: true }, { hasAccount: false }).refreshTournamentStandings, true);
+  assert.equal(planMatchSaveEffects(inProgress, { ok: true }, { hasAccount: false }).refreshTournamentStandings, false);
+  assert.equal(planMatchSaveEffects(noTournament, { ok: true }, { hasAccount: false }).refreshTournamentStandings, false);
+  assert.equal(planMatchSaveEffects(complete, { ok: false, structuralError: true }, { hasAccount: false }).refreshTournamentStandings, false);
+});
+
+test("conflictMessageFor: names the team, falling back to 'This match' when teamA isn't recorded yet", () => {
+  assert.equal(conflictMessageFor({ teamA: "Riverside CC" }), "Riverside CC has a newer version on another device — open it to resolve.");
+  assert.equal(conflictMessageFor({}), "This match has a newer version on another device — open it to resolve.");
 });
