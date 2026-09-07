@@ -54,6 +54,56 @@ export function findEmptyKeyPath(obj, path) {
   return null;
 }
 
+// saveMatch's own orchestration policy: given the outcome of the primary write (savePrimaryMatch)
+// and whether this device has a signed-in account, decides what happens next -- the offline outbox,
+// the /liveViews mirror, the /liveMatches mirror (and which TTL tier it gets), and whether to kick
+// off a tournament standings refresh. Kept pure and separate from saveMatch's actual Firestore/
+// localStorage calls specifically because this is where the real policy lives, not the IO -- and
+// this exact class of decision has a real incident history: the self-conflicting sync race (a
+// background flush touching a match with its own live scoring screen open) and the `bigHit:
+// undefined` write-rejection bug were both mistakes in "what should happen here", not in how a
+// write is physically made. A thin executor that just reads this plan and performs the matching IO
+// call is far harder to get subtly wrong than five interleaved conditionals living inline in an
+// async function full of `await db.collection(...)` calls. Returns symbolic tier names for the
+// /liveMatches mirror ("writeRecent"/"writeLiveFeed") rather than embedding actual TTL day counts,
+// since those are index.html-owned config (RECENT_MATCH_RETENTION_DAYS/LIVE_MATCH_FEED_TTL_DAYS),
+// not something this pure function should know the values of.
+export function planMatchSaveEffects(match, result, {
+  hasAccount
+}) {
+  const structuralError = !!result.structuralError;
+  let liveMatchesMirror;
+  if (structuralError) {
+    liveMatchesMirror = "skip";
+  } else if (match.private) {
+    // Actively removed, not just skipped -- flipping an already-live match to private (MatchScreen's
+    // Visibility toggle) must clear its stale, still-discoverable /liveMatches doc immediately
+    // rather than leaving it to age out on its own TTL.
+    liveMatchesMirror = "delete";
+  } else if (hasAccount || !!match.shareCode) {
+    liveMatchesMirror = match.status === "complete" ? "writeRecent" : "writeLiveFeed";
+  } else {
+    // A pure local-only match (no account, no shareCode) never reaches this collection at all --
+    // "Continue without an account" promises matches stay on this device only.
+    liveMatchesMirror = "skip";
+  }
+  return {
+    outbox: result.ok ? "clear" : result.conflict ? "leave" : "queue",
+    // Opportunistic: only worth attempting once we know the network just worked.
+    flushOthersOpportunistically: !!result.ok,
+    liveViewsMirror: !structuralError && !!match.viewCode ? "write" : "skip",
+    liveMatchesMirror,
+    refreshTournamentStandings: !structuralError && !!match.tournamentId && match.status === "complete"
+  };
+}
+// The message flushPendingWrites surfaces (via SyncStatusBanner) when a queued match's background
+// retry finds a newer version already on the server -- there's no human to ask "which version wins"
+// from a background timer, so it stays queued until whoever's actually scoring this match reopens
+// it. Extracted purely so the exact wording (and its "This match" fallback for a match with no
+// teamA recorded yet) is one tested string, not something to get subtly wrong re-typing inline.
+export function conflictMessageFor(match) {
+  return `${match.teamA || "This match"} has a newer version on another device — open it to resolve.`;
+}
 // The read-side counterpart to packMatchForFirestore above -- undoes its overs-wrapping and
 // defensively normalizes any overs entry that isn't already a plain array (a genuine production
 // crash: a malformed historical write left a non-array overs entry, which then crashed
