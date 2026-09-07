@@ -34866,7 +34866,11 @@ function MatchScreen({
   }, [match.id, setMatch]);
   // Same fix as checkInningEnd's allOut: was hardcoded to `< 10`, which is what actually let a
   // 9-a-side match keep prompting for an 11th/10th batsman that doesn't exist in the roster.
-  const needsNewBatsman = inning && !inning.strikerName && inning.wickets < maxWicketsFor(match, inning) && !inning.complete;
+  // `!inning.nonStrikerName` alongside the long-standing `!inning.strikerName` check -- every real
+  // dismissal still always vacates the striker's slot (unchanged), so that half is a no-op for
+  // them; it only starts mattering for retireBatsman's non-striker branch, which is the one path
+  // that can leave the NON-striker's slot empty instead (see its own comment).
+  const needsNewBatsman = inning && (!inning.strikerName || !inning.nonStrikerName) && inning.wickets < maxWicketsFor(match, inning) && !inning.complete;
   // Tracks the striker name a mandatory retirement-cap prompt was last dismissed for, so "Not now"
   // can actually close the modal instead of it reopening on the very next render (needsCapRetirement
   // below is otherwise a pure derived value, recomputed every render). Reset in commit() -- every
@@ -35453,13 +35457,17 @@ function MatchScreen({
       // PREVIOUS delivery instead. This branch only runs when there's no pendingWicket (the
       // pendingWicket branch above already pushes its own history, since that commit IS the wicket
       // delivery itself) -- this one is purely "assign a name to the open slot," same shape as
-      // confirmNewBowler.
+      // confirmNewBowler. The open slot is whichever end retireBatsman actually vacated -- almost
+      // always the striker's (every real dismissal, and most retirements), but a retireBatsman
+      // call for the non-striker (see its own comment) leaves nonStrikerName empty instead, and
+      // the new batsman needs to fill that same end, not bump the survivor off strike.
       pushHistory();
+      const openSlot = !inning.strikerName ? "strikerName" : "nonStrikerName";
       const updated = {
         ...inning,
-        strikerName: newBatsmanName.trim()
+        [openSlot]: newBatsmanName.trim()
       };
-      ensureBatsman(updated, updated.strikerName);
+      ensureBatsman(updated, updated[openSlot]);
       commit(updated);
     }
     setJustRetiredName(null);
@@ -35801,10 +35809,14 @@ function MatchScreen({
   }
   // Retiring isn't a delivery — no ball is bowled, no bowler is credited or debited, over/ball
   // counts don't move — so this bypasses the ball-event reducer entirely and mutates the inning
-  // directly, same pattern as swapStrike above. Scoped to the ON-STRIKE batsman only, matching
-  // this app's existing wicket model (every dismissal branch in the ball reducer already assumes
-  // it's always the striker's slot that empties, including run-outs — see dismissedName there);
-  // swap strike first if it's actually the non-striker who needs to leave.
+  // directly, same pattern as swapStrike above. `name` (defaulting to whoever's currently on
+  // strike, for the manual Retire popup's existing call sites) is looked up against BOTH ends —
+  // vacating whichever one actually matches, rather than always assuming the striker's slot the
+  // way every real dismissal in the ball reducer does (see dismissedName there). This is what lets
+  // the retirement-cap prompt (needsCapRetirement below) retire the non-striker directly instead
+  // of forcing a Swap Strike first: the survivor's own end is never touched either way, so there's
+  // nothing to "swap back" once the next batsman is in — see needsNewBatsman/confirmNewBatsman,
+  // which were generalized the same way to fill whichever end this leaves empty.
   // "Retired hurt" is genuinely not out — wickets doesn't increment, no fall-of-wickets entry —
   // and reuses the same needsNewBatsman prompt as a real dismissal to get the next batsman in,
   // since one player did just leave the crease either way. They can come back later in the same
@@ -35817,12 +35829,13 @@ function MatchScreen({
   // "Retired out" is treated exactly like any other dismissal (wickets increments, a
   // fall-of-wickets entry is recorded, "retired out" shows wherever a normal "how" would) except
   // no bowler is credited, since nobody dismissed them.
-  function retireBatsman(kind) {
-    if (!inning.strikerName) return;
+  function retireBatsman(kind, name = inning.strikerName) {
+    if (!name || (name !== inning.strikerName && name !== inning.nonStrikerName)) return;
     pushHistory();
-    const name = inning.strikerName;
     const isOut = kind === "out";
     if (!isOut) setJustRetiredName(name);
+    const wasStriker = name === inning.strikerName;
+    const survivor = wasStriker ? inning.nonStrikerName : inning.strikerName;
     const updatedBatsman = isOut ? {
       ...inning.batsmen[name],
       out: true,
@@ -35850,7 +35863,8 @@ function MatchScreen({
         over: oversLabel(inning.legalBalls, inning.ballsPerOver),
         batsman: name
       }] : inning.fallOfWickets,
-      strikerName: "",
+      strikerName: wasStriker ? "" : inning.strikerName,
+      nonStrikerName: wasStriker ? inning.nonStrikerName : "",
       // A retirement ends the current partnership exactly like a wicket does -- whoever comes in
       // next starts a brand new one with the survivor. Without this, applyBall's wicket branch is
       // the ONLY place partnershipRuns/partnershipBalls ever reset (retiring bypasses applyBall
@@ -35860,9 +35874,9 @@ function MatchScreen({
       // Same reasoning extends to the persisted partnerships list (see newInning) -- this stand
       // is over the moment either partner leaves, retired hurt or not, so it's recorded here too,
       // never as unbeaten (that's reserved for a pair still together when the INNINGS ends).
-      partnerships: inning.nonStrikerName ? [...(inning.partnerships || []), {
+      partnerships: survivor ? [...(inning.partnerships || []), {
         batter1: name,
-        batter2: inning.nonStrikerName,
+        batter2: survivor,
         runs: inning.partnershipRuns || 0,
         balls: inning.partnershipBalls || 0,
         wicket: inning.wickets + 1,
@@ -37012,39 +37026,8 @@ function MatchScreen({
       lineHeight: 1.5,
       marginBottom: 16
     }
-  }, `Reached ${inning.retirementRuns} runs — this tournament's rules require retiring at that point (not out, not a dismissal). They can return later once the rest of the batting order has had a turn.`), capRetireName !== inning.strikerName ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 12
-    }
-  }, capRetireName, " is currently at the non-striker's end — swap strike first so the retirement can be recorded against them."), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: swapStrike,
-    className: "cs-btn cs-shine",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "9px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: COLORS.surface,
-      color: COLORS.ink,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      width: "100%",
-      justifyContent: "center",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
-    size: 14
-  }), "Swap Strike")) : /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => retireBatsman("cap"),
+  }, `Reached ${inning.retirementRuns} runs — this tournament's rules require retiring at that point (not out, not a dismissal). They can return later once the rest of the batting order has had a turn.`), /*#__PURE__*/React.createElement(Btn, {
+    onClick: () => retireBatsman("cap", capRetireName),
     style: {
       width: "100%",
       marginBottom: 10

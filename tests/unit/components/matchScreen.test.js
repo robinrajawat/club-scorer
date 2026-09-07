@@ -822,7 +822,14 @@ test("MatchScreen: reaching the retirement run cap (while on strike) opens a man
   assert.equal(ctx.inning.strikerName, "");
 });
 
-test("MatchScreen: when the NON-striker is over the retirement cap, the prompt offers Swap Strike instead of a direct confirm", async () => {
+// BUG FIX: this used to force a manual "Swap Strike" tap before the non-striker could be retired
+// at all (retireBatsman was hardcoded to only ever retire whoever's on strike), and then always
+// handed the incoming replacement STRIKE regardless of which end actually opened up -- so the
+// survivor (A here, who never left) ended up bumped to non-strike and the brand-new batsman ended
+// up on strike, exactly backwards from reality. retireBatsman now takes the retiring player's name
+// directly and vacates whichever end they're actually at, so A's own strike is never touched and
+// the new batsman fills B's vacated non-striker's end -- no Swap Strike needed before OR after.
+test("MatchScreen: the NON-striker over the retirement cap retires directly, with no Swap Strike needed, and the survivor's strike is untouched", async () => {
   globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
   // B is at the non-striker's end already over the cap -- purely derived from initial state, no
   // ball needs to be scored to trigger this.
@@ -838,13 +845,9 @@ test("MatchScreen: when the NON-striker is over the retirement cap, the prompt o
   // capRetireName and " must retire" render as separate JSX children, not one concatenated
   // string -- same split-text gotcha as "Step 1 of 4" elsewhere in this suite.
   assert.match(modalText, /"B"," must retire"/);
-  assert.doesNotMatch(modalText, /Confirm retirement/);
-  const swapBtn = capRetireModal(ctx).findAllByType("button").find(b => hasText(b.props.children, "Swap Strike"));
-  act(() => { swapBtn.props.onClick(); });
-  assert.equal(ctx.inning.strikerName, "B");
-
-  // B is now actually on strike -- the same prompt (still open, B still over the cap) should have
-  // switched to the direct confirm button.
+  // Scoped to the modal itself -- the main scoring screen behind it has its own, unrelated "Swap
+  // Strike" button (see the test above this one), so checking the whole tree would false-positive.
+  assert.equal(capRetireModal(ctx).findAllByType("button").find(b => hasText(b.props.children, "Swap Strike")), undefined);
   const confirmBtn = capRetireModal(ctx).findAllByType(Btn).find(b => b.props.children === "Confirm retirement (not out)");
   await act(async () => {
     confirmBtn.props.onClick();
@@ -852,6 +855,19 @@ test("MatchScreen: when the NON-striker is over the retirement cap, the prompt o
   });
   assert.equal(ctx.inning.batsmen.B.out, false);
   assert.equal(ctx.inning.batsmen.B.retiredHurt, true);
+  assert.equal(ctx.inning.strikerName, "A", "A was always the striker and stays on strike");
+  assert.equal(ctx.inning.nonStrikerName, "", "B's end, not A's, is the one left open");
+
+  // The new batsman fills B's vacated non-striker's end -- A keeps strike throughout.
+  assert.match(JSON.stringify(ctx.inst.toJSON()), /Next batsman/);
+  const picker = ctx.inst.root.findByType(PlayerPicker);
+  act(() => { picker.props.onChange("C"); });
+  await act(async () => {
+    btn(ctx, "Confirm").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.strikerName, "A");
+  assert.equal(ctx.inning.nonStrikerName, "C");
 });
 
 test("MatchScreen: dismissing the retirement cap prompt with 'Not now' lets scoring continue, and it reopens on the next ball if still over the cap", async () => {
