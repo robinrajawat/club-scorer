@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Trophy } from "./icons.js";
+import { TextField } from "./formUiAtoms.js";
 import { EmptyStateBallIllustration, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
@@ -9,7 +10,11 @@ import { TAB_BAR_HEIGHT } from "./tabBar.js";
 // /liveTournaments), kept as separate sections rather than one interleaved list since they lead
 // to genuinely different destinations: a match card opens the live scoring/scorecard screen, a
 // tournament card opens FollowTournamentScreen's read-only standings snapshot -- a tournament
-// here is for watching a table, not scoring. Covered by tests/unit/components/liveScreen.test.js.
+// here is for watching a table, not scoring. A search box filters both feeds client-side (already
+// fully loaded in memory, same as everywhere else this pattern's used) by team name, tournament
+// name, or the tournament badge a match shows -- same persistent-inline-box placement as Home's
+// own search, not a toggled/FAB affordance, so the one "search" idiom in this app looks and
+// behaves the same everywhere it appears. Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
   liveMatches = [],
   onOpenLiveMatch,
@@ -19,6 +24,7 @@ export function LiveScreen({
   showTabBar = false,
   loading = false
 }) {
+  const [query, setQuery] = useState("");
   // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
   // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
   // neither just gets no badge at all.
@@ -27,6 +33,9 @@ export function LiveScreen({
     liveTournamentNameById[t.tournamentId] = t.name;
   });
   const tournamentNameForBadge = id => tournamentNameById[id] || liveTournamentNameById[id] || null;
+  const q = query.trim().toLowerCase();
+  const filteredMatches = q ? liveMatches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (tournamentNameForBadge(m.tournamentId) || "").toLowerCase().includes(q)) : liveMatches;
+  const filteredTournaments = q ? liveTournaments.filter(t => t.name.toLowerCase().includes(q)) : liveTournaments;
 
   function sectionLabel(dotColor, text) {
     return /*#__PURE__*/React.createElement("div", {
@@ -155,7 +164,8 @@ export function LiveScreen({
     }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s")));
   }
 
-  const isEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
+  const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
+  const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0;
 
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -175,7 +185,7 @@ export function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, "Live"), isEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, "Live"), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
@@ -184,7 +194,7 @@ export function LiveScreen({
     label: "Loading…",
     size: 22,
     style: { justifyContent: "center" }
-  })), isEmpty && !loading && /*#__PURE__*/React.createElement("div", {
+  })), rawEmpty && !loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px",
@@ -201,7 +211,57 @@ export function LiveScreen({
       color: COLORS.inkSoft,
       marginTop: 12
     }
-  }, "Nothing live right now.")), liveMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Nothing live right now.")), !rawEmpty && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: query,
+    onChange: setQuery,
+    placeholder: "Search live matches & tournaments…",
+    style: { paddingRight: 38 }
+  }), query ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setQuery(""),
+    "aria-label": "Clear search",
+    className: "cs-btn",
+    style: {
+      position: "absolute",
+      right: 8,
+      top: "50%",
+      transform: "translateY(-50%)",
+      width: 26,
+      height: 26,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: COLORS.inkSoft,
+      borderRadius: "50%",
+      fontSize: 20,
+      lineHeight: 1
+    }
+  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px",
+      minHeight: "40vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      marginTop: 12
+    }
+  }, "Nothing matches “", query, "”.")), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 26 }
-  }, sectionLabel(COLORS.live, `Matches (${liveMatches.length})`), liveMatches.map(renderMatchRow)), liveTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${liveTournaments.length})`), liveTournaments.map(renderTournamentRow)));
+  }, sectionLabel(COLORS.live, `Matches (${filteredMatches.length})`), filteredMatches.map(renderMatchRow)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${filteredTournaments.length})`), filteredTournaments.map(renderTournamentRow)));
 }
