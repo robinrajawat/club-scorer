@@ -13,6 +13,25 @@ function team(overrides = {}) {
   return { id: "t1", name: "Riverside 1st XI", players: [], ...overrides };
 }
 
+// Reached from a plain "My Teams" link on Home now, not its own bottom tab -- the tab used to
+// make "these are YOUR personal teams" obvious just by which tab you were on, so that has to be
+// said explicitly now instead. Only shown for the personal case, not when nested inside a club.
+test("MyTeamsScreen: personal teams are labeled 'My Teams' with an explanatory line; a club's own roster isn't", () => {
+  const personal = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onNewTeam: () => {}
+  })).toJSON();
+  const personalText = JSON.stringify(personal);
+  assert.match(personalText, /My Teams/);
+  assert.match(personalText, /not tied to any club/);
+
+  const clubs = [{ id: "c1", name: "Riverside CC" }];
+  const nested = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team({ _clubId: "c1" })], clubs, matches: [], activeClubId: "c1", onBack: () => {}, onNewTeam: () => {}
+  })).toJSON();
+  const nestedText = JSON.stringify(nested);
+  assert.doesNotMatch(nestedText, /not tied to any club/);
+});
+
 test("MyTeamsScreen: lists teams, wires onEditTeam/onDeleteTeam/onNewTeam", () => {
   let edited = null;
   const teams = [team()];
