@@ -46,6 +46,9 @@ import { AccountScreen } from "../../../src/components/accountScreen.js";
 import { FollowScreen } from "../../../src/components/followScreen.js";
 import { MatchScreen } from "../../../src/components/matchScreen.js";
 import { AlertModal } from "../../../src/components/formUiAtoms.js";
+import { TeamsScreen } from "../../../src/components/teamsScreen.js";
+import { MyTeamsScreen } from "../../../src/components/myTeamsScreen.js";
+import { TabBar } from "../../../src/components/tabBar.js";
 
 let dom;
 let authCallback;
@@ -684,6 +687,98 @@ test("CricketScorer: opening an existing tournament match with no share code (pr
   assert.ok(inst.root.findByType(MatchScreen), "should still open normally");
   assert.ok(savedMatch, "saveMatch should have been called to mint the code");
   assert.ok(savedMatch.shareCode, "an old match with no share code should be self-healed on open, in a multi-member club");
+});
+
+// Managing a club's team roster used to mean leaving the Clubs tab for the separate "Teams" tab
+// (screen "my-teams"), which had nothing to do with any specific club -- see manageClubTeamsOpen
+// in cricketScorer.js. This confirms the fix actually holds: the bottom tab never flips away from
+// Clubs, TeamsScreen's own "Manage teams" button swaps in MyTeamsScreen scoped to exactly that
+// club instead of navigating anywhere, and its Back button returns to TeamsScreen without losing
+// which club was selected.
+test("CricketScorer: 'Manage teams' inside a club opens its roster without leaving the Clubs tab", async () => {
+  const inst = await render();
+  globalThis.loadClubs = () => Promise.resolve([
+    { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1"] }
+  ]);
+  globalThis.loadClubTeams = () => Promise.resolve([{ id: "team1", name: "Riverside 1st XI", players: [] }]);
+  globalThis.loadClubTournaments = () => Promise.resolve([]);
+  globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  // Bare globals TeamsScreen references unconditionally (search/federation-directory props) --
+  // never stubbed by render() itself since no test reached the "teams" screen before this one.
+  globalThis.searchPublicFederations = () => Promise.resolve([]);
+  globalThis.searchPublicClubs = () => Promise.resolve([]);
+  globalThis.searchPublicUsers = () => Promise.resolve([]);
+  globalThis.loadFederationTeams = () => Promise.resolve([]);
+  globalThis.loadFederationMembers = () => Promise.resolve([]);
+  globalThis.refreshMyMemberName = () => Promise.resolve(null);
+  await flush();
+  await signIn(inst);
+  await flush();
+  await flush();
+
+  const tabBar = inst.root.findByType(TabBar);
+  act(() => { tabBar.props.onSelect("teams"); });
+  assert.equal(inst.root.findByType(TabBar).props.active, "teams", "Clubs tab should be active");
+  let teamsScreen = inst.root.findByType(TeamsScreen);
+  act(() => { teamsScreen.props.onSelectClubAdmin("club1"); });
+
+  teamsScreen = inst.root.findByType(TeamsScreen);
+  assert.equal(teamsScreen.props.activeClubId, "club1");
+  act(() => { teamsScreen.props.onManageTeams(); });
+
+  // Still on the Clubs tab throughout -- TeamsScreen is swapped out for MyTeamsScreen, not
+  // navigated away from.
+  assert.equal(inst.root.findByType(TabBar).props.active, "teams");
+  assert.throws(() => inst.root.findByType(TeamsScreen), "TeamsScreen should no longer be mounted");
+  const myTeams = inst.root.findByType(MyTeamsScreen);
+  assert.equal(myTeams.props.activeClubId, "club1");
+  assert.ok(myTeams.props.teams.some(t => t.name === "Riverside 1st XI"), "should show club1's own roster");
+
+  act(() => { myTeams.props.onBack(); });
+  assert.equal(inst.root.findByType(TabBar).props.active, "teams");
+  const backOnTeamsScreen = inst.root.findByType(TeamsScreen);
+  assert.equal(backOnTeamsScreen.props.activeClubId, "club1", "still viewing the same club after Back");
+  await flush();
+});
+
+// Home's own team tiles (a club team, tapped from Home rather than from inside the Clubs tab)
+// used to always land on the "Teams" tab regardless of source, pre-filtered to that club -- now
+// that a club's roster lives inside the Clubs tab instead, a club team should land there, while a
+// personal team (no _clubId) still opens the Teams tab, unchanged.
+test("CricketScorer: opening a club team from Home lands on the Clubs tab; a personal team opens the Teams tab", async () => {
+  const inst = await render();
+  globalThis.loadClubs = () => Promise.resolve([
+    { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1"] }
+  ]);
+  globalThis.loadClubTeams = () => Promise.resolve([{ id: "team1", name: "Riverside 1st XI", players: [] }]);
+  globalThis.loadClubTournaments = () => Promise.resolve([]);
+  globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  // Bare globals TeamsScreen references unconditionally (search/federation-directory props) --
+  // never stubbed by render() itself since no test reached the "teams" screen before this one.
+  globalThis.searchPublicFederations = () => Promise.resolve([]);
+  globalThis.searchPublicClubs = () => Promise.resolve([]);
+  globalThis.searchPublicUsers = () => Promise.resolve([]);
+  globalThis.loadFederationTeams = () => Promise.resolve([]);
+  globalThis.loadFederationMembers = () => Promise.resolve([]);
+  globalThis.refreshMyMemberName = () => Promise.resolve(null);
+  await flush();
+  await signIn(inst);
+  await flush();
+  await flush();
+
+  let home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTeam({ id: "team1", _clubId: "club1" }); });
+  assert.equal(inst.root.findByType(TabBar).props.active, "teams");
+  const myTeams = inst.root.findByType(MyTeamsScreen);
+  assert.equal(myTeams.props.activeClubId, "club1");
+
+  act(() => { myTeams.props.onBack(); });
+  act(() => { inst.root.findByType(TabBar).props.onSelect("home"); });
+  home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTeam({ id: "personal1", _clubId: null }); });
+  assert.equal(inst.root.findByType(TabBar).props.active, "my-teams");
+  assert.equal(inst.root.findByType(MyTeamsScreen).props.onBack, undefined, "the Teams tab's own MyTeamsScreen should have no onBack");
+  await flush();
 });
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, ChevronDown, Pencil, Plus, Users } from "./icons.js";
-import { ClubSourceSelector } from "./screenAtoms.js";
+import { CalendarClock, ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
 import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { MoveTeamMenu } from "./shareMenus.js";
@@ -10,10 +9,15 @@ import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { isClubOwner } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
-// "My Teams" screen: every team this person can score for, merged across their personal teams and
-// every club they belong to (with a source chip picker once there's more than one source), plus
-// per-team new/edit/delete/move/send-poll actions. Covered by
-// tests/unit/components/myTeamsScreen.test.js.
+// Two ways to reach this screen: as the "Teams" tab itself (always your personal teams, no
+// `activeClubId`/`onBack`), or nested inside the Clubs tab's own navigation when managing one
+// specific club's roster (`activeClubId` set to that club, `onBack` provided to return to the
+// club's admin screen without leaving the Clubs tab). It used to also offer a merged view across
+// every club at once via a source-chip picker, back when managing a club's teams meant leaving
+// the Clubs tab for this one -- now that a club's own screen hosts its roster directly, there's
+// no longer a case where this needs to show more than one source at a time, so that picker (and
+// the per-row source tag it existed to disambiguate) is gone. Per-team new/edit/delete/move/
+// send-poll actions remain. Covered by tests/unit/components/myTeamsScreen.test.js.
 //
 // Every write action is a prop (onDeleteTeam/onEditTeam/onMoveTeam/etc.), not a bare global, so
 // this needs no Firestore stubbing at all -- AvailabilityPollModal (used for the "send poll"
@@ -26,14 +30,12 @@ export function MyTeamsScreen({
   matches,
   clubs = [],
   activeClubId = null,
-  onSelectClub,
+  onBack,
   currentUid,
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
   onMoveTeam,
-  pinnedClubIds = [],
-  onTogglePinClub,
   showTabBar = false
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
@@ -44,9 +46,8 @@ export function MyTeamsScreen({
   // (see canManageTeam below and the modal's own team-scoping), matching how sending a poll has
   // always been club-only: there's nobody else to poll for a personal team.
   const [pollingTeam, setPollingTeam] = useState(null);
-  // Source label shown on each row when the list is the merged, all-sources view (no chip
-  // picked) -- lets "My Teams" sit alongside every club's roster without them being confused for
-  // one another, the same tagging Cups already does on its merged list.
+  // Only still needed for the poll modal's clubName below -- the per-row source tag this used to
+  // also drive was removed along with the merged multi-source view (see the file-level comment).
   function sourceLabel(t) {
     if (!t._clubId) return "Personal";
     const club = clubs.find(c => c.id === t._clubId);
@@ -77,7 +78,27 @@ export function MyTeamsScreen({
       maxWidth: 560,
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, onBack && /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    "aria-label": "Back",
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " ", (activeClub && activeClub.name) || "Back"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -101,13 +122,7 @@ export function MyTeamsScreen({
     style: {
       fontSize: 11.5
     }
-  })), clubs.length > 0 && /*#__PURE__*/React.createElement(ClubSourceSelector, {
-    clubs: clubs,
-    activeClubId: activeClubId,
-    onSelect: onSelectClub,
-    pinnedClubIds: pinnedClubIds,
-    onTogglePinClub: onTogglePinClub
-  }), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -136,7 +151,7 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, activeClubId ? (clubs.find(c => c.id === activeClubId) || {}).name || "Club Teams" : "All Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, activeClubId ? (clubs.find(c => c.id === activeClubId) || {}).name || "Club Teams" : "My Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -301,7 +316,7 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played", !activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, " \u00b7 ", sourceLabel(t)))), canManageTeam(t) && /*#__PURE__*/React.createElement(MoveTeamMenu, {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), canManageTeam(t) && /*#__PURE__*/React.createElement(MoveTeamMenu, {
     team: t,
     clubs: clubs,
     currentClubId: t._clubId || null,
