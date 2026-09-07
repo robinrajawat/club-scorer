@@ -1757,16 +1757,75 @@ function getAuthActionFromUrl() {
   }
 }
 // GENERATED-FN-END: getAuthActionFromUrl
+// The public standings-recompute config doc at /tournamentMatches/{tournamentId} — see
+// firestore.rules for why it exists at all: it's what lets refreshTournamentStandingsLive (which
+// only ever sees this public doc, never the real club-membership-gated tournament) rebuild enough
+// of a tournament shape to pass through formatTournamentViewSnapshot's venue/format/groups fields,
+// not just standings. Factored out of shareTournament so syncTournamentConfig (below) can write the
+// exact same shape without also touching /tournamentViews or /liveTournaments.
+function tournamentMatchesConfigDoc(tournament, code) {
+  return {
+    shareCode: code,
+    name: tournament.name,
+    teams: tournament.teams,
+    venue: tournament.venue || null,
+    venueLat: tournament.venueLat != null ? tournament.venueLat : null,
+    venueLng: tournament.venueLng != null ? tournament.venueLng : null,
+    groups: tournament.groups || null,
+    advancePerGroup: tournament.advancePerGroup || null,
+    defaultOvers: tournament.defaultOvers || null,
+    fixtures: (tournament.fixtures || []).map(f => ({
+      id: f.id,
+      teamA: f.teamA,
+      teamB: f.teamB,
+      date: f.date || "",
+      stage: f.stage || null,
+      matchId: f.matchId || null
+    })),
+    private: !!tournament.private,
+    updatedAt: Date.now(),
+    // Kept on the same TTL as /tournamentViews/{code} itself (see refreshTournamentStandingsLive,
+    // which bumps this forward too on every live recompute) so a config doc can never outlive the
+    // share snapshot it exists to keep updated — an expired tournamentViews doc must stay expired,
+    // not get silently resurrected by the next match completion finding this doc still alive.
+    expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
+  };
+}
+// BUG FIX: maybeAutoPublishTournament (cricketScorer.js) used to call ONLY
+// refreshTournamentStandingsLive for a tournament that was already shared — which recomputes
+// standings against whatever fixtures/venue/groups/teams happen to already be sitting in the
+// public /tournamentMatches/{tournamentId} config doc, but never refreshes that doc itself. Since
+// that doc is only ever written by shareTournament, and shareTournament was only ever called once
+// (the very first auto-publish, typically against a brand-new tournament with zero fixtures yet),
+// every fixture generated/added/edited afterward — the overwhelmingly common case, since fixtures
+// are normally created as a follow-up step right after a tournament is created — silently never
+// reached the public snapshot at all: FollowTournamentScreen kept showing an empty schedule no
+// matter how many fixtures the owner added, until they happened to open the Share panel and tap
+// "Refresh now" by hand. This is the owner's own client calling in (maybeAutoPublishTournament only
+// ever runs from handleUpdateTournament, an owner-only action) — it already has the full, current
+// tournament object, so it can just re-sync the config doc directly instead of waiting on a manual
+// refresh. Deliberately only writes the lightweight config doc, not the full /tournamentViews
+// snapshot itself — the caller still follows this with refreshTournamentStandingsLive to recompute
+// standings/results against the now-fresh fixtures, which is also what a guest's match completion
+// needs to trigger regardless.
+async function syncTournamentConfig(tournament) {
+  if (!tournament.shareCode) return;
+  try {
+    await db.collection("tournamentMatches").doc(tournament.id).set(
+      tournamentMatchesConfigDoc(tournament, tournament.shareCode),
+      { merge: true }
+    );
+  } catch (e) {
+    console.error("[syncTournamentConfig] failed — id:", tournament.id, "code:", e.code, "message:", e.message);
+  }
+}
 // Writes/refreshes the read-only snapshot at /tournamentViews/{code}, using the shared
 // formatTournamentViewSnapshot (src/core/appLogic.js) so this and the live auto-refresh path
 // below (refreshTournamentStandingsLive) can never silently drift into writing different shapes.
-// Also (re)writes the public standings-recompute config at /tournamentMatches/{tournamentId} —
-// see firestore.rules for why that's needed at all — so refreshTournamentStandingsLive has
-// something to read the next time any client (owner or a guest via a match share code) completes
-// a match tagged with this tournament, without ever needing to see the real tournament doc.
-// Reuses the tournament's own code once one exists (persisted onto the tournament doc via the
-// caller's onUpdateTournament) rather than minting a new one on every refresh, so a previously-
-// shared link keeps working.
+// Also (re)writes the public standings-recompute config at /tournamentMatches/{tournamentId} via
+// tournamentMatchesConfigDoc above. Reuses the tournament's own code once one exists (persisted
+// onto the tournament doc via the caller's onUpdateTournament) rather than minting a new one on
+// every refresh, so a previously-shared link keeps working.
 async function shareTournament(tournament, standings, matches = []) {
   try {
     const code = tournament.shareCode || genMatchCode();
@@ -1775,36 +1834,10 @@ async function shareTournament(tournament, standings, matches = []) {
       sharedAt: Date.now(),
       expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
     });
-    await db.collection("tournamentMatches").doc(tournament.id).set({
-      shareCode: code,
-      name: tournament.name,
-      teams: tournament.teams,
-      // Carried alongside teams/fixtures purely so refreshTournamentStandingsLive (which only ever
-      // sees this public config doc, never the real club-membership-gated tournament) can rebuild
-      // enough of a tournament shape to pass through formatTournamentViewSnapshot's venue/format/
-      // groups fields too, not just standings.
-      venue: tournament.venue || null,
-      venueLat: tournament.venueLat != null ? tournament.venueLat : null,
-      venueLng: tournament.venueLng != null ? tournament.venueLng : null,
-      groups: tournament.groups || null,
-      advancePerGroup: tournament.advancePerGroup || null,
-      defaultOvers: tournament.defaultOvers || null,
-      fixtures: (tournament.fixtures || []).map(f => ({
-        id: f.id,
-        teamA: f.teamA,
-        teamB: f.teamB,
-        date: f.date || "",
-        stage: f.stage || null,
-        matchId: f.matchId || null
-      })),
-      private: !!tournament.private,
-      updatedAt: Date.now(),
-      // Kept on the same TTL as /tournamentViews/{code} itself (see refreshTournamentStandingsLive,
-      // which bumps this forward too on every live recompute) so a config doc can never outlive the
-      // share snapshot it exists to keep updated — an expired tournamentViews doc must stay expired,
-      // not get silently resurrected by the next match completion finding this doc still alive.
-      expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
-    }, { merge: true });
+    await db.collection("tournamentMatches").doc(tournament.id).set(
+      tournamentMatchesConfigDoc(tournament, code),
+      { merge: true }
+    );
     // Mirrors into /liveTournaments/{tournamentId} for the Home screen's "Live tournaments" feed —
     // same shape/trust model as /liveMatches, gated the same way (never written for a tournament
     // marked private). Deliberately just the display fields a Home card needs, not the standings
@@ -41196,6 +41229,16 @@ function CricketScorer() {
   async function maybeAutoPublishTournament(tournament, persist) {
     if (tournament.kind === "series" || tournament.private) return;
     if (tournament.shareCode) {
+      // BUG FIX: this used to call ONLY refreshTournamentStandingsLive, which recomputes standings
+      // against whatever fixtures/venue/groups/teams already happen to be sitting in the public
+      // /tournamentMatches/{tournamentId} config doc -- never refreshes that doc itself. Since the
+      // config doc is only ever written by shareTournament, and this is the owner's own client
+      // editing an already-published tournament (this branch never runs for a guest), every
+      // fixture generated/added/edited after the tournament's first auto-publish silently never
+      // reached the public snapshot until the owner happened to open the Share panel and tap
+      // "Refresh now" by hand. syncTournamentConfig re-syncs that config doc from the current
+      // tournament object first, so the standings refresh right after it runs against fresh data.
+      await syncTournamentConfig(tournament);
       refreshTournamentStandingsLive(tournament.id);
       return;
     }
