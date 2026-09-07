@@ -200,7 +200,6 @@ const FUNCTIONS = [
   { name: "Btn", file: "src/components/formUiAtoms.js" },
   { name: "BallBadge", file: "src/components/matchDisplayAtoms.js" },
   { name: "VisibilitySwitch", file: "src/components/matchDisplayAtoms.js" },
-  { name: "MatchInfoFold", file: "src/components/matchDisplayAtoms.js" },
   { name: "Field", file: "src/components/screenAtoms.js" },
   { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
   { name: "ClubSourceSelector", file: "src/components/screenAtoms.js" },
