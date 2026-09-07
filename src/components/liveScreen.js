@@ -187,7 +187,12 @@ export function LiveScreen({
   })), isEmpty && !loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "40px 20px"
+      padding: "40px 20px",
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {

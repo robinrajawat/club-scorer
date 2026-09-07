@@ -73,6 +73,16 @@ test("FederationsPanel: creating a federation fills the name field and calls onC
   assert.equal(createdWith, "County League");
 });
 
+test("FederationsPanel: bumping createSignal (TeamsScreen's 'New Federation' FAB) opens the create form on its own, without a button tap", () => {
+  const inst = render({ createSignal: 0 });
+  assert.throws(() => inst.root.findByType("input"));
+
+  act(() => { inst.update(React.createElement(FederationsPanel, baseProps({ createSignal: 1 }))); });
+  assert.ok(inst.root.findByType("input"));
+  const createBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Create"));
+  assert.ok(createBtn);
+});
+
 test("FederationsPanel: 'Find a federation' searches and requests to join on behalf of the selected club", async () => {
   let requestedWith = null;
   const inst = render({

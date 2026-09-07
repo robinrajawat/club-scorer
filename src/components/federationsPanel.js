@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { BookOpen, Pencil, Plus } from "./icons.js";
 import { Btn, ConfirmModal, TextField } from "./formUiAtoms.js";
@@ -39,7 +39,8 @@ export function FederationsPanel({
   onDeleteFederation,
   federationRequests = [],
   onCancelFederationRequest,
-  onOpenRecords
+  onOpenRecords,
+  createSignal
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const [mode, setMode] = useState(null); // null | 'create' | 'find'
@@ -112,6 +113,16 @@ export function FederationsPanel({
     setText("");
     setError("");
   }
+  // TeamsScreen's own "New Federation" FAB (see its own comment) has no local access to this
+  // panel's `mode` state, so it opens the create form indirectly: bumping createSignal (any
+  // truthy, changing value) is the trigger, this effect is the receiver. Falsy on mount
+  // (0/undefined), so it never force-opens the form before the FAB is ever tapped.
+  useEffect(() => {
+    if (!createSignal) return;
+    setMode("create");
+    setText("");
+    setError("");
+  }, [createSignal]);
   async function submitCreate() {
     if (!text.trim() || busy) return;
     setBusy(true);

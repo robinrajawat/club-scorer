@@ -1,15 +1,31 @@
 // The "Clubs" screen (src/components/teamsScreen.js). Every write action is a prop -- no bare
 // globals, no mount effect. Renders ClubPanel/FederationsPanel as tabs (both already tested on
-// their own); these tests focus on TeamsScreen's own logic: the tab switch and the player pool.
+// their own); these tests focus on TeamsScreen's own logic: the tab switch, the player pool, and
+// the "New Club"/"New Federation" FAB. That FAB calls ReactDOM.createPortal(..., document.body)
+// internally (see FabButton's own comment) -- a bare global, same as everywhere else in this
+// suite -- but react-test-renderer has no real DOM to portal into, so it's stubbed to just render
+// the portal's children in place; FabButton's real portaling is covered on its own in
+// screenAtoms.test.js.
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TeamsScreen } from "../../../src/components/teamsScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { ClubPanel } from "../../../src/components/clubPanel.js";
 import { FederationsPanel } from "../../../src/components/federationsPanel.js";
+
+beforeEach(() => {
+  globalThis.ReactDOM = { createPortal: node => node };
+  globalThis.document = { body: null };
+});
+
+afterEach(() => {
+  delete globalThis.ReactDOM;
+  delete globalThis.document;
+});
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -70,6 +86,35 @@ test("TeamsScreen: tab='federations' renders FederationsPanel", () => {
   const inst = render({ tab: "federations" });
   assert.ok(inst.root.findByType(FederationsPanel));
   assert.throws(() => inst.root.findByType(ClubPanel));
+});
+
+test("TeamsScreen: shows a 'New Club' FAB on the clubs tab (hidden once a club is active), a 'New Federation' FAB on the federations tab", () => {
+  const clubsInst = render({ tab: "clubs" });
+  assert.ok(clubsInst.root.findByProps({ "aria-label": "New Club" }));
+  assert.throws(() => clubsInst.root.findByProps({ "aria-label": "New Federation" }));
+
+  // CricketScorer always feeds the same activeClubAdminId state into both of these props (see its
+  // own wiring) -- set together here to match.
+  const activeClubInst = render({ tab: "clubs", clubs: [club()], activeClubId: "c1", activeClubAdminId: "c1" });
+  assert.throws(() => activeClubInst.root.findByProps({ "aria-label": "New Club" }));
+
+  const fedInst = render({ tab: "federations" });
+  assert.ok(fedInst.root.findByProps({ "aria-label": "New Federation" }));
+  assert.throws(() => fedInst.root.findByProps({ "aria-label": "New Club" }));
+});
+
+test("TeamsScreen: tapping the 'New Club' FAB bumps ClubPanel's createSignal prop", () => {
+  const inst = render({ tab: "clubs" });
+  const before = inst.root.findByType(ClubPanel).props.createSignal;
+  act(() => { inst.root.findByProps({ "aria-label": "New Club" }).props.onClick(); });
+  assert.notEqual(inst.root.findByType(ClubPanel).props.createSignal, before);
+});
+
+test("TeamsScreen: tapping the 'New Federation' FAB bumps FederationsPanel's createSignal prop", () => {
+  const inst = render({ tab: "federations" });
+  const before = inst.root.findByType(FederationsPanel).props.createSignal;
+  act(() => { inst.root.findByProps({ "aria-label": "New Federation" }).props.onClick(); });
+  assert.notEqual(inst.root.findByType(FederationsPanel).props.createSignal, before);
 });
 
 test("TeamsScreen: switching tabs calls onTabChange", () => {

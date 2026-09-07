@@ -83,6 +83,14 @@ async function render(url) {
     getRedirectResult: () => Promise.resolve(),
     currentUser: null
   };
+  // HomeScreen/TournamentsScreen's FabButton calls ReactDOM.createPortal(..., document.body)
+  // internally -- a bare global, same as everything else stubbed in this function. Even though a
+  // real jsdom `document` is installed above, the tree here still mounts via react-test-renderer,
+  // whose reconciler doesn't understand a real DOM node as a portal container -- so this stub just
+  // renders the portal's children in place instead, same as homeScreen.test.js/
+  // tournamentsScreen.test.js. FabButton's real portaling is covered on its own in
+  // screenAtoms.test.js, which renders through actual react-dom.
+  globalThis.ReactDOM = { createPortal: node => node };
   globalThis.loadIndex = () => Promise.resolve([]);
   globalThis.loadTeams = () => Promise.resolve([]);
   globalThis.loadProfile = () => Promise.resolve(null);

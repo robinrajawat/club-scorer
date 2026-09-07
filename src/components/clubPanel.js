@@ -48,7 +48,8 @@ export function ClubPanel({
   onRemoveUmpire,
   currentUid,
   pinnedClubIds = [],
-  onTogglePinClub
+  onTogglePinClub,
+  createSignal
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
   const [text, setText] = useState("");
@@ -80,6 +81,16 @@ export function ClubPanel({
   const [addressBusy, setAddressBusy] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
+  // TeamsScreen's own "New Club" FAB (see its own comment) has no local access to this panel's
+  // `mode` state, so it opens the create form indirectly: bumping createSignal (any truthy,
+  // changing value) is the trigger, this effect is the receiver. Falsy on mount (0/undefined), so
+  // it never force-opens the form before the FAB is ever tapped.
+  useEffect(() => {
+    if (!createSignal) return;
+    setMode("create");
+    setText("");
+    setError("");
+  }, [createSignal]);
   // Debounced address search for the club-details form, identical in shape to VenueEditModal's own
   // (same Nominatim endpoint, same 400ms pause-before-searching, same policy reasoning) -- not
   // extracted into one shared component since the two forms differ in everything around the search
