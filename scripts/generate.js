@@ -202,6 +202,7 @@ const FUNCTIONS = [
   { name: "BallBadge", file: "src/components/matchDisplayAtoms.js" },
   { name: "VisibilitySwitch", file: "src/components/matchDisplayAtoms.js" },
   { name: "Field", file: "src/components/screenAtoms.js" },
+  { name: "FabButton", file: "src/components/screenAtoms.js" },
   { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
   { name: "StandingsTable", file: "src/components/tableAtoms.js" },
   { name: "RecordTable", file: "src/components/tableAtoms.js" },

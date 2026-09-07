@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { AlertTriangle, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
+import { AlertTriangle, ChevronRight, Info, Pencil, Trophy } from "./icons.js";
 import { Btn, TextField, RuleChoice } from "./formUiAtoms.js";
-import { Field } from "./screenAtoms.js";
+import { FabButton, Field } from "./screenAtoms.js";
 import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
@@ -811,20 +811,7 @@ export function TournamentsScreen({
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), !creating && /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    onClick: openCreate,
-    style: {
-      width: "100%",
-      padding: "14px",
-      fontSize: 15,
-      marginBottom: 16,
-      borderRadius: 14
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 18,
-    strokeWidth: 2.5
-  }), " New Tournament"), !creating && /*#__PURE__*/React.createElement("button", {
+  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), !creating && /*#__PURE__*/React.createElement("button", {
     onClick: openCreateSeries,
     className: "cs-btn",
     style: {
@@ -838,10 +825,13 @@ export function TournamentsScreen({
       fontWeight: 600,
       fontSize: 12.5,
       cursor: "pointer",
-      marginTop: -8,
       marginBottom: 16,
       textDecoration: "underline"
     }
+    // Tapping the floating "+" (see FabButton at the bottom of this component's return) starts a
+    // Tournament -- the more common of the two, and the one that used to be this screen's own
+    // full-width primary button. A head-to-head series is the secondary case, so it keeps a plain
+    // text link rather than getting a second FAB of its own.
   }, "or start a head-to-head series instead"), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
@@ -1485,5 +1475,8 @@ export function TournamentsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")), !creating && !creatingSeries && /*#__PURE__*/React.createElement(FabButton, {
+    onClick: openCreate,
+    label: "New Tournament"
+  }));
 }

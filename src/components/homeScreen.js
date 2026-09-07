@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Bell, ChevronRight, Info, Plus, Trophy, Users } from "./icons.js";
+import { Bell, ChevronRight, Info, Trophy, Users } from "./icons.js";
 import { Btn, PlayerAvatar, TextField } from "./formUiAtoms.js";
 import { AppMark, LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { SyncStatusBanner } from "./scoreboardAtoms.js";
-import { InstallHintBanner } from "./screenAtoms.js";
+import { FabButton, InstallHintBanner } from "./screenAtoms.js";
 import { JoinCodeBar } from "./pickerAtoms.js";
 import { ShareMenu } from "./shareMenus.js";
 import { AuthBar } from "./authBar.js";
@@ -775,21 +775,7 @@ function renderMatchCard(m, i, {
     onEditVenue: onEditVenue,
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "center",
-      marginBottom: 22
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: onNew,
-    style: {
-      paddingLeft: 22,
-      paddingRight: 22
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 17
-  }), "New Match")), onOpenMyTeams && /*#__PURE__*/React.createElement("div", {
+  })), onOpenMyTeams && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center",
@@ -1452,5 +1438,8 @@ function renderMatchCard(m, i, {
     style: {
       flex: 1
     }
-  }, "Delete"))));
+  }, "Delete"))), /*#__PURE__*/React.createElement(FabButton, {
+    onClick: onNew,
+    label: "New Match"
+  }));
 }

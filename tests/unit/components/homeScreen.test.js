@@ -192,10 +192,12 @@ test("HomeScreen: shows an empty state with no matches", () => {
   assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);
 });
 
-test("HomeScreen: 'New Match' calls onNew", () => {
+// "New Match" is a floating "+" (FabButton, bottom-right, thumb-reachable) rather than a top-of-
+// screen labeled button now -- icon-only, so it's found by its aria-label, not its text.
+test("HomeScreen: the floating 'New Match' button calls onNew", () => {
   let called = false;
   const inst = render({ onNew: () => { called = true; } });
-  const newBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "New Match"));
+  const newBtn = inst.root.findByProps({ "aria-label": "New Match" });
   newBtn.props.onClick();
   assert.equal(called, true);
 });
