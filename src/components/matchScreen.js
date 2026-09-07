@@ -1174,14 +1174,16 @@ export function MatchScreen({
   if (match.awaitingFirstInningsSetup) {
     return /*#__PURE__*/React.createElement(SuperOverOpenersSetup, {
       match: match,
-      setMatch: setMatch
+      setMatch: setMatch,
+      onExit: onExit
     });
   }
   // Second innings setup (openers + bowler)
   if (match.awaitingSecondInningsSetup) {
     return /*#__PURE__*/React.createElement(SecondInningsSetup, {
       match: match,
-      setMatch: setMatch
+      setMatch: setMatch,
+      onExit: onExit
     });
   }
   if (match.status === "complete") {
