@@ -17,6 +17,13 @@ afterEach(() => {
   delete globalThis.Modal;
 });
 
+function hasText(node, str) {
+  if (typeof node === "string") return node.includes(str);
+  if (Array.isArray(node)) return node.some(n => hasText(n, str));
+  if (node && typeof node === "object" && node.props) return hasText(node.props.children, str);
+  return false;
+}
+
 function inning(overrides = {}) {
   return {
     battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC",
@@ -67,6 +74,42 @@ test("SuperOverOpenersSetup: Start sets the openers on innings[0] and saves via 
   assert.equal(updated.innings[0].nonStrikerName, "Rohit Sharma");
   assert.equal(updated.innings[0].bowlerName, "Jasprit Bumrah");
   assert.equal(updated.awaitingFirstInningsSetup, false);
+});
+
+// BUG FIX: neither between-innings screen had any way back to Home -- a scorer stuck here (wrong
+// match opened, needed to check something else first) had no escape hatch until openers/a bowler
+// were picked. Both match states that route here (awaitingFirstInningsSetup/
+// awaitingSecondInningsSetup) are real, persisted match state, so leaving and reopening the same
+// match lands right back on this same screen -- there's nothing unsafe about offering a real way
+// out. `onExit` is optional (omitted entirely renders no back link, rather than a broken button)
+// since these are also reachable from any code path that doesn't have a real "go to Home" handler
+// on hand.
+test("SuperOverOpenersSetup: shows no back link when onExit is omitted, and calls it when provided", () => {
+  const match = matchWith([inning()], { isSuperOver: true });
+  const noExitInst = renderer.create(React.createElement(SuperOverOpenersSetup, { match, setMatch: () => {} }));
+  assert.equal(noExitInst.root.findAllByType("button").find(b => b.props["aria-label"] !== "Match menu" && hasText(b.props.children, "Matches")), undefined);
+
+  let exited = false;
+  const inst = renderer.create(React.createElement(SuperOverOpenersSetup, { match, setMatch: () => {}, onExit: () => { exited = true; } }));
+  const backBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Matches"));
+  act(() => { backBtn.props.onClick(); });
+  assert.equal(exited, true);
+});
+
+test("SecondInningsSetup: shows no back link when onExit is omitted, and calls it when provided, on both the Impact Player and lineups steps", () => {
+  const match = impactMatch(); // lands on the Impact Player step first -- see impactMatch below
+  const noExitInst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {} }));
+  assert.equal(noExitInst.root.findAllByType("button").find(b => hasText(b.props.children, "Matches")), undefined);
+
+  let exited = false;
+  const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: () => {}, onExit: () => { exited = true; } }));
+  const backOnImpactStep = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Matches"));
+  assert.ok(backOnImpactStep, "back link should show on the Impact Player step too");
+
+  act(() => { btn(inst, "Continue to lineups").props.onClick(); });
+  const backOnLineupsStep = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Matches"));
+  act(() => { backOnLineupsStep.props.onClick(); });
+  assert.equal(exited, true);
 });
 
 test("SecondInningsSetup: shows the target and starts the chase with the picked openers", () => {

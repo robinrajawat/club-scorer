@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { Table2, Undo2 } from "./icons.js";
+import { ChevronLeft, Table2, Undo2 } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
@@ -19,12 +19,38 @@ import { rosterFor, benchFor, impactSubsRemainingFor, captainFor, keeperFor, num
 
 export function SuperOverOpenersSetup({
   match,
-  setMatch
+  setMatch,
+  onExit
 }) {
   const [striker, setStriker] = useState("");
   const [nonStriker, setNonStriker] = useState("");
   const [bowler, setBowler] = useState("");
   const inn = match.innings[0];
+  // Match state (awaitingFirstInningsSetup) is what decides this screen shows at all -- leaving
+  // and reopening the same match lands right back here, so there's nothing unsafe about offering a
+  // real way out instead of being stuck until openers are picked. Same "‹ Matches" pattern
+  // MatchScreen's own header uses, so it reads as the same affordance rather than a new one.
+  const backLink = onExit && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onExit,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Matches");
   const canStart = striker.trim() && nonStriker.trim() && striker.trim() !== nonStriker.trim() && bowler.trim();
   function start() {
     const updated = {
@@ -51,7 +77,7 @@ export function SuperOverOpenersSetup({
       margin: "0 auto",
       animation: "cs-fadeIn 0.3s ease"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, backLink, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -350,7 +376,8 @@ export function ImpactPlayerCard({
 }
 export function SecondInningsSetup({
   match,
-  setMatch
+  setMatch,
+  onExit
 }) {
   const [striker, setStriker] = useState("");
   const [nonStriker, setNonStriker] = useState("");
@@ -412,6 +439,34 @@ export function SecondInningsSetup({
     setMatch(updatedMatch);
     saveTransition(updatedMatch, setMatch);
   }
+  // Match state (awaitingSecondInningsSetup) is what decides this screen shows at all -- leaving
+  // and reopening the same match lands right back here (same as MatchScreen's own "Continue
+  // scoring" resume), so there's nothing unsafe about offering a real way out instead of being
+  // stuck here until openers are picked. Kept as its own small link ABOVE the header, well away
+  // from "Confirm substitution"/"Start 2nd Innings" -- those two sitting close together already
+  // caused real confusion once (see the "stuck on Impact Player screen" report in docs/history.md),
+  // and a THIRD button in that same cluster would only add to it.
+  const backLink = onExit && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onExit,
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.pitch,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), " Matches");
   const header = /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -564,7 +619,7 @@ export function SecondInningsSetup({
         margin: "0 auto",
         animation: "cs-fadeIn 0.3s ease"
       }
-    }, header, firstInningsSummary, /*#__PURE__*/React.createElement("div", {
+    }, backLink, header, firstInningsSummary, /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 14,
@@ -595,7 +650,7 @@ export function SecondInningsSetup({
       margin: "0 auto",
       animation: "cs-fadeIn 0.3s ease"
     }
-  }, header, firstInningsSummary, impactAvailable && /*#__PURE__*/React.createElement("button", {
+  }, backLink, header, firstInningsSummary, impactAvailable && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setStep("impact"),
     className: "cs-btn cs-shine",
