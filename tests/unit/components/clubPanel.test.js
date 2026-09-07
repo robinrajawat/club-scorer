@@ -61,12 +61,14 @@ function openManage(inst) {
 test("ClubPanel: creating a club fills the name field and calls onCreate, then onSelect with the new club", async () => {
   let createdWith = null;
   let selected = null;
-  const inst = render({
-    onCreate: name => { createdWith = name; return Promise.resolve({ ok: true, club: { id: "newClub" } }); },
-    onSelect: id => { selected = id; }
+  let inst;
+  act(() => {
+    inst = render({
+      onCreate: name => { createdWith = name; return Promise.resolve({ ok: true, club: { id: "newClub" } }); },
+      onSelect: id => { selected = id; },
+      createSignal: 1
+    });
   });
-  const addBtn = inst.root.findByProps({ "aria-label": "Add or join a club" });
-  act(() => { addBtn.props.onClick(); });
 
   const nameField = inst.root.findByType("input");
   act(() => { nameField.props.onChange({ target: { value: "Oakwood CC" } }); });
@@ -92,9 +94,10 @@ test("ClubPanel: bumping createSignal (TeamsScreen's 'New Club' FAB) opens the c
 
 test("ClubPanel: joining with a code calls onJoin with the uppercased, sanitized code", async () => {
   let joinedWith = null;
-  const inst = render({ onJoin: code => { joinedWith = code; return Promise.resolve({ ok: true }); } });
-  const addBtn = inst.root.findByProps({ "aria-label": "Add or join a club" });
-  act(() => { addBtn.props.onClick(); });
+  let inst;
+  act(() => {
+    inst = render({ onJoin: code => { joinedWith = code; return Promise.resolve({ ok: true }); }, createSignal: 1 });
+  });
   const joinModeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Join with code");
   act(() => { joinModeBtn.props.onClick(); });
 

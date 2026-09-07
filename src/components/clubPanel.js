@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { BookOpen, ChevronDown, Pencil, Plus } from "./icons.js";
+import { BookOpen, ChevronDown, Pencil } from "./icons.js";
 import { Btn, ConfirmModal, PinnableChip, TextField } from "./formUiAtoms.js";
 import { SearchAndRequestPanel } from "./searchAndRequestPanel.js";
 import { uid } from "../core/statsAndFixtures.js";
@@ -371,18 +371,6 @@ export function ClubPanel({
     setRenaming(false);
     setDescEditing(false);
   }
-  const chipStyle = active => ({
-    padding: "7px 13px",
-    borderRadius: 20,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 12.5,
-    cursor: "pointer",
-    border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitchFixed : COLORS.surface,
-    color: active ? "#fff" : COLORS.inkSoft,
-    whiteSpace: "nowrap"
-  });
   const orderedClubs = withPinnedFirst(clubs, pinnedClubIds);
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -411,18 +399,7 @@ export function ClubPanel({
     pinned: pinnedClubIds.includes(c.id),
     onSelect: () => handleSelect(c.id),
     onTogglePin: () => onTogglePinClub(c.id)
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMode(mode ? null : "create"),
-    "aria-label": "Add or join a club",
-    style: { ...chipStyle(false),
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 13,
-    strokeWidth: 2.5
-  }), " Club")), mode && /*#__PURE__*/React.createElement("div", {
+  }))), mode && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,
