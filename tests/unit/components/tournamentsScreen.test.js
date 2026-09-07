@@ -27,14 +27,18 @@ function clickNav(inst, text) {
   act(() => { b.props.onClick(); });
 }
 
-// The FabButton this screen renders (its "New Tournament" FAB) calls ReactDOM.createPortal(...,
-// document.body) internally -- a bare global, same as Modal -- but react-test-renderer has no real
-// DOM to portal into, so this stub just renders the portal's children in place instead. Fine here:
-// these tests only check the button itself (by aria-label) exists and wires onClick, never its
-// real position in the document -- that's covered on its own in screenAtoms.test.js.
+// The FabButton this screen renders (its "New" FAB) calls ReactDOM.createPortal(..., document.body)
+// internally -- a bare global, same as Modal -- but react-test-renderer has no real DOM to portal
+// into, so this stub just renders the portal's children in place instead. Fine here: these tests
+// only check the button itself (by aria-label) exists and wires onClick, never its real position
+// in the document -- that's covered on its own in screenAtoms.test.js.
+// Modal (also a bare global) backs the FAB's own Tournament/series choice menu now, not just the
+// create-series dialog -- stubbed here for every test rather than per-test, since almost every
+// test in this file has to get past that choice menu to reach either create flow.
 beforeEach(() => {
   globalThis.ReactDOM = { createPortal: node => node };
   globalThis.document = { body: null }; // FabButton reads document.body as the portal target
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
 });
 
 afterEach(() => {
@@ -107,8 +111,8 @@ test("TournamentsScreen: creating a tournament selects teams and calls onCreateT
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
 
   const nameField = inst.root.findByType("input");
   act(() => { nameField.props.onChange({ target: { value: "Autumn Cup" } }); });
@@ -138,8 +142,8 @@ test("TournamentsScreen: with 4+ teams selected, turning on group split sends gr
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
 
   const nameField = inst.root.findByType("input");
   act(() => { nameField.props.onChange({ target: { value: "Group Cup" } }); });
@@ -174,8 +178,8 @@ test("TournamentsScreen: creating a tournament with no rules customization sends
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Autumn Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -203,8 +207,8 @@ test("TournamentsScreen: setting a venue on the details page passes it through t
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -234,8 +238,8 @@ test("TournamentsScreen: no venue set sends null, not an empty object, to onCrea
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -258,8 +262,8 @@ test("TournamentsScreen: Visibility defaults to public, and the review-page togg
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -285,8 +289,8 @@ test("TournamentsScreen: no Visibility toggle on the review page when the Organi
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
     clubs: [{ id: "c1", name: "Thunder CC", ownerUid: "owner1" }], activeClubId: "c1"
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Riverside Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -304,8 +308,8 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -339,8 +343,8 @@ test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/
 
 test("TournamentsScreen: 'Players per side' offers 10, not just 6/7/8/9/11", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -360,8 +364,8 @@ test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time ca
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -407,8 +411,8 @@ test("TournamentsScreen: Last over rules -- the overs picker and wide/no-ball su
       return Promise.resolve({ ok: true });
     }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -442,8 +446,8 @@ test("TournamentsScreen: Last over rules -- the overs picker and wide/no-ball su
 
 test("TournamentsScreen: a nullable rule can be seeded then cleared back to null", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -466,8 +470,8 @@ test("TournamentsScreen: a nullable rule can be seeded then cleared back to null
 // for instead of scanning the whole list top to bottom every time.
 test("TournamentsScreen: the rules editor is grouped into labeled sections, in order", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -487,8 +491,8 @@ test("TournamentsScreen: the rules editor is grouped into labeled sections, in o
 
 test("TournamentsScreen: create form is paginated -- starts on 'Teams & Format', Next is blocked until name/2 teams are set", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /"Step ","1"," of ","3"," · ","Teams & Format"/);
   const nextBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Next");
   assert.equal(nextBtn.props.disabled, true);
@@ -502,8 +506,8 @@ test("TournamentsScreen: create form is paginated -- starts on 'Teams & Format',
 
 test("TournamentsScreen: Back goes to the previous page; Back on the first page cancels", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   assert.equal(inst.root.findAllByType(Btn).find(b => b.props.children === "Back" || b.props.children === "Cancel").props.children, "Cancel");
 
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
@@ -524,8 +528,8 @@ test("TournamentsScreen: Back goes to the previous page; Back on the first page 
 
 test("TournamentsScreen: review page summarizes the tournament before creating", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
@@ -548,22 +552,37 @@ test("TournamentsScreen: review page summarizes the tournament before creating",
 // happened to be pre-selected -- there's no such pre-selection any more (see organizerKey's own
 // comment), so the button is always available; the Organizer picker inside the form is what
 // actually restricts which clubs/federations can be picked, to ones this account owns/co-owns.
-test("TournamentsScreen: 'New Tournament' is always shown, even for a plain club member with no owned clubs", () => {
+test("TournamentsScreen: the floating '+' (and 'New Tournament' behind it) is always available, even for a plain club member with no owned clubs", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
     clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "someoneElse" }], currentUid: "notTheOwner"
   })));
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /New Tournament/);
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  assert.ok(inst.root.findByProps({ "aria-label": "New Tournament" }));
 });
 
-// The floating "+" (FabButton) is a shortcut to openCreate -- floating it above the create form
-// itself once open would be confusing (a second, redundant "add" affordance on top of the very
-// form it opens), so it hides for as long as either create flow is in progress.
-test("TournamentsScreen: the floating 'New Tournament' button hides while either create form is open", () => {
+// The floating "+" (FabButton) opens a choice of Tournament/head-to-head series rather than
+// jumping straight into one -- floating it above the create form (or the choice menu) itself once
+// open would be confusing (a second, redundant "add" affordance on top of the very thing it
+// opens), so it hides for as long as the choice menu or either create flow is in progress.
+test("TournamentsScreen: the floating '+' hides once its choice menu opens, and stays hidden once a create form opens from it", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
-  assert.ok(inst.root.findByProps({ "aria-label": "New Tournament" }));
+  assert.ok(inst.root.findByProps({ "aria-label": "New" }));
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  assert.throws(() => inst.root.findByProps({ "aria-label": "New" }));
   act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
-  assert.throws(() => inst.root.findByProps({ "aria-label": "New Tournament" }));
+  assert.throws(() => inst.root.findByProps({ "aria-label": "New" }));
+});
+
+test("TournamentsScreen: the choice menu offers a head-to-head series too, and opens the series form", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  try {
+    const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+    act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+    act(() => { inst.root.findByProps({ "aria-label": "New head-to-head series" }).props.onClick(); });
+    assert.match(JSON.stringify(inst.toJSON()), /New series/);
+  } finally {
+    delete globalThis.Modal;
+  }
 });
 
 test("TournamentsScreen: the create form's Organizer picker only offers clubs/federations this account owns, not ones it's merely a member of", () => {
@@ -575,8 +594,8 @@ test("TournamentsScreen: the create form's Organizer picker only offers clubs/fe
     myFederations: [{ id: "f1", name: "DCF" }],
     currentUid: "owner1"
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
   const labels = organizerChoice.props.options.map(o => o.label);
   assert.ok(labels.includes("Riverside CC"), "an owned club is offered");
@@ -593,8 +612,8 @@ test("TournamentsScreen: creating a series opens a Modal and calls onCreateSerie
       return Promise.resolve({ ok: true });
     }
   })));
-  const seriesLink = inst.root.findAllByType("button").find(b => hasText(b.props.children, "head-to-head series"));
-  act(() => { seriesLink.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New head-to-head series" }).props.onClick(); });
 
   const selects = inst.root.findAllByType("select");
   act(() => { selects[0].props.onChange({ target: { value: "Riverside CC" } }); });
@@ -613,8 +632,8 @@ test("TournamentsScreen: picking a club as Organizer in the create form calls on
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
     clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }], onSelectSource: id => { selected = id; }
   })));
-  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
-  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
   const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
   act(() => { organizerChoice.props.onChange("club:c1"); });
   assert.equal(selected, "c1");
