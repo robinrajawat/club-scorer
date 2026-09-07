@@ -276,6 +276,8 @@ const FUNCTIONS = [
   { name: "ToggleRule", file: "src/components/tournamentsScreen.js" },
   { name: "NullableNumberRule", file: "src/components/tournamentsScreen.js" },
   { name: "RuleSectionHeader", file: "src/components/tournamentsScreen.js" },
+  { name: "RulesEditorFields", file: "src/components/rulesEditorFields.js" },
+  { name: "RulesEditModal", file: "src/components/rulesEditModal.js" },
   { name: "TournamentsScreen", file: "src/components/tournamentsScreen.js" },
   { name: "TournamentDetailScreen", file: "src/components/tournamentDetailScreen.js" },
   { name: "ClubPanel", file: "src/components/clubPanel.js" },

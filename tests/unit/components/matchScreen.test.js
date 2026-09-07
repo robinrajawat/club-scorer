@@ -14,7 +14,7 @@ import { afterEach, beforeEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { MatchScreen } from "../../../src/components/matchScreen.js";
-import { Btn } from "../../../src/components/formUiAtoms.js";
+import { Btn, ConfirmModal, RuleChoice } from "../../../src/components/formUiAtoms.js";
 import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { SyncConflictModal } from "../../../src/components/matchInsightCards.js";
 import { SyncStatusBanner } from "../../../src/components/scoreboardAtoms.js";
@@ -677,6 +677,51 @@ test("MatchScreen: toggling Visibility in the match menu flips match.private and
   });
   assert.equal(ctx.match.private, true);
   assert.equal(saved.private, true);
+});
+
+// IMPROVEMENT: a mistake made in SetupScreen (wrong overs count, a house rule left on/off by
+// accident) used to have no fix short of abandoning the match and starting over -- normal matches
+// have no separate "first innings setup" screen (unlike a Super Over/2nd innings) where this could
+// otherwise be caught. Only offered while innings[0] genuinely has zero balls bowled -- every rule
+// this touches is baked directly onto the inning at creation and governs every ball already scored.
+test("MatchScreen: 'Edit match rules' is offered before any ball is bowled, and saving it updates oversLimit/rules while preserving the picked openers", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch({ oversLimit: 20, rules: { ballsPerOver: 6, wideRuns: 1 } }));
+  const menuBtn = ctx.inst.root.findAllByProps({ "aria-label": "Match menu" })[0];
+  act(() => { menuBtn.props.onClick(); });
+  const editRulesBtn = ctx.inst.root.findAllByType("button").find(b => b.props.children === "Edit match rules");
+  assert.ok(editRulesBtn, "should be offered -- innings[0] has zero balls bowled");
+  act(() => { editRulesBtn.props.onClick(); });
+
+  const oversField = ctx.inst.root.findAllByType("input").find(i => i.props.value === "20");
+  act(() => { oversField.props.onChange({ target: { value: "15" } }); });
+  const wideRunsChoice = ctx.inst.root.findAllByType(RuleChoice).find(rc => rc.props.label === "Runs on a wide");
+  act(() => { wideRunsChoice.props.onChange(2); });
+
+  const saveBtn = ctx.inst.root.findAllByType(Btn).find(b => b.props.children === "Save rules");
+  act(() => { saveBtn.props.onClick(); });
+  const confirm = ctx.inst.root.findByType(ConfirmModal);
+  await act(async () => {
+    confirm.props.onConfirm();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.match.oversLimit, 15);
+  assert.equal(ctx.match.rules.wideRuns, 2);
+  assert.equal(ctx.inning.oversLimit, 15, "the rebuilt inning's own baked-in overs limit updates too");
+  assert.equal(ctx.inning.wideRuns, 2);
+  assert.equal(ctx.inning.strikerName, "A", "the already-picked openers/bowler must survive the rebuild");
+  assert.equal(ctx.inning.nonStrikerName, "B");
+  assert.equal(ctx.inning.bowlerName, "X");
+});
+
+test("MatchScreen: 'Edit match rules' is not offered once a ball has been bowled", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const i1 = buildInning("Riverside CC", "Oakwood CC", { overs: [[{ kind: "run", runs: 1 }]], legalBalls: 1 });
+  const ctx = renderMatch(baseMatch({ innings: [i1] }));
+  const menuBtn = ctx.inst.root.findAllByProps({ "aria-label": "Match menu" })[0];
+  act(() => { menuBtn.props.onClick(); });
+  const editRulesBtn = ctx.inst.root.findAllByType("button").find(b => b.props.children === "Edit match rules");
+  assert.equal(editRulesBtn, undefined);
 });
 
 test("MatchScreen: manually revising the target during a chase updates the match", async () => {

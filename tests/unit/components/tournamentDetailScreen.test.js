@@ -182,6 +182,46 @@ test("TournamentDetailScreen: editing Player of the Tournament saves via onUpdat
   assert.equal(updatedWith.playerOfTournament, "Virat Kohli");
 });
 
+// IMPROVEMENT: a mistake in the New Cup wizard's rules step (wrong overs count, a house rule left
+// on/off by accident) used to have no fix short of deleting and recreating the whole tournament.
+// Safe to allow unconditionally regardless of whether the tournament already has matches --
+// defaultRules/defaultOvers are only ever copied into a fixture's match at the moment THAT fixture
+// is started, so this can never retroactively change an already-created match. The warning text
+// is what communicates that scope instead of a hard block.
+test("TournamentDetailScreen: 'House rules' opens RulesEditModal, with a warning that adapts to whether the tournament already has matches", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
+  const instNoMatches = await renderScreen(tournamentFixture(), []);
+  const houseRulesBtn = instNoMatches.root.findAllByType("button").find(b => hasText(b.props.children, "House rules"));
+  act(() => { houseRulesBtn.props.onClick(); });
+  assert.match(JSON.stringify(instNoMatches.toJSON()), /Every fixture started from this tournament will use these rules\./);
+
+  const instWithMatches = await renderScreen(tournamentFixture(), [completedMatch()]);
+  const houseRulesBtn2 = instWithMatches.root.findAllByType("button").find(b => hasText(b.props.children, "House rules"));
+  act(() => { houseRulesBtn2.props.onClick(); });
+  assert.match(JSON.stringify(instWithMatches.toJSON()), /Fixtures already started or completed keep the rules they began with/);
+});
+
+test("TournamentDetailScreen: saving house rules calls onUpdateTournament with the new defaultOvers/defaultRules", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
+  let updatedWith = null;
+  const inst = await renderScreen(tournamentFixture({ defaultOvers: 20 }), [], {
+    onUpdateTournament: t => { updatedWith = t; return Promise.resolve(); }
+  });
+  const houseRulesBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "House rules"));
+  act(() => { houseRulesBtn.props.onClick(); });
+  const saveBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Save rules");
+  act(() => { saveBtn.props.onClick(); });
+  const confirm = inst.root.findByType(ConfirmModal);
+  await act(async () => {
+    confirm.props.onConfirm();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(updatedWith.defaultOvers, 20);
+  assert.ok(updatedWith.defaultRules);
+});
+
 test("TournamentDetailScreen: 'Delete' opens a ConfirmModal, and confirming calls onDeleteTournament", async () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   let deleted = null;
