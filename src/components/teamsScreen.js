@@ -192,7 +192,7 @@ export function TeamsScreen({
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, tab === "clubs" ? "Create or join a club to share rosters, tournaments, and records with its members \u2014 manage a club's teams from the Teams screen." : "Create or join a federation to link multiple clubs together for shared tournaments and records."), /*#__PURE__*/React.createElement("div", {
+  }, tab === "clubs" ? "Create or join a club to share rosters, tournaments, and records with its members." : "Create or join a federation to link multiple clubs together for shared tournaments and records."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -767,7 +767,7 @@ export function TeamsScreen({
     color: COLORS.inkSoft,
     lineHeight: 1.5
   }
-}, canManage ? `Add, edit, or delete ${activeClubName}'s teams from the Teams screen.` : `View ${activeClubName}'s teams from the Teams screen.`), onManageTeams && /*#__PURE__*/React.createElement(Btn, {
+}, canManage ? `Add, edit, or delete ${activeClubName}'s teams.` : `View ${activeClubName}'s teams.`), onManageTeams && /*#__PURE__*/React.createElement(Btn, {
   onClick: onManageTeams,
   style: {
     flexShrink: 0,

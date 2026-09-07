@@ -46,18 +46,23 @@ test("MyTeamsScreen: shows a loading state while teamsLoading is true, without c
   assert.doesNotThrow(() => inst.toJSON());
 });
 
-test("MyTeamsScreen: tags each team with its source once more than one club/personal source is present", () => {
+test("MyTeamsScreen: shows a back button with the active club's name when onBack and activeClubId are given, none otherwise", () => {
   const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const teams = [
-    team({ id: "t1", name: "Firsts" }),
-    team({ id: "t2", name: "Seconds", _clubId: "c1" })
-  ];
-  const inst = renderer.create(React.createElement(MyTeamsScreen, {
-    teams, clubs, matches: [], onBack: () => {}, onNewTeam: () => {}
+  const teams = [team({ id: "t2", name: "Seconds", _clubId: "c1" })];
+  let backCalled = false;
+  const nestedInst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams, clubs, matches: [], activeClubId: "c1", onBack: () => { backCalled = true; }, onNewTeam: () => {}
   }));
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Personal/);
+  const text = JSON.stringify(nestedInst.toJSON());
   assert.match(text, /Riverside CC/);
+  const backBtn = nestedInst.root.findByProps({ "aria-label": "Back" });
+  backBtn.props.onClick();
+  assert.equal(backCalled, true);
+
+  const standaloneInst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onNewTeam: () => {}
+  }));
+  assert.throws(() => standaloneInst.root.findByProps({ "aria-label": "Back" }));
 });
 
 test("MyTeamsScreen: a club team is only editable by that club's owner", () => {

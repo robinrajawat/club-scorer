@@ -219,8 +219,9 @@ export const SCREEN_DEPTH = {
 // bar only renders while `screen` is one of these, hidden everywhere else (mid-match scoring,
 // setup wizard, edit/detail screens reached by drilling in further) since it would just compete
 // with those screens' own fixed-position UI (MatchScreen's scoring pad chief among them) or with
-// their own single-purpose back button. "teams" here is TeamsScreen -- confusingly the Clubs
-// browser, not the roster screen (that's "my-teams") -- see tabBar.js's own TABS list.
+// their own single-purpose back button. "teams" here is the Clubs tab (TeamsScreen -- Clubs/
+// Federations browsing, plus a selected club's own roster once manageClubTeamsOpen is set); "my-
+// teams" is the separate Teams tab, personal teams only -- see tabBar.js's own TABS list.
 export const TAB_BAR_SCREENS = ["home", "live", "tournaments", "my-teams", "teams"];
 
 export function CricketScorer() {
@@ -283,6 +284,12 @@ export function CricketScorer() {
   // two collapsed into this single selector.
   const [activeClubAdminId, setActiveClubAdminId] = useState(null);
   const [teamsTab, setTeamsTab] = useState("clubs"); // clubs | federations
+  // Whether the Clubs tab is showing activeClubAdminId's own team-roster editor (MyTeamsScreen,
+  // the same component the "Teams" tab uses for personal teams) instead of the club admin panel
+  // itself -- entered via TeamsScreen's "Manage teams" button or by opening a club team from
+  // Home. Screen stays "teams" throughout (see TAB_BAR_SCREENS/TabBar below), so the bottom tab
+  // never flips away from Clubs to manage a club's own roster, unlike before this existed.
+  const [manageClubTeamsOpen, setManageClubTeamsOpen] = useState(false);
   // Seeds the Help screen's own search box when someone taps a Help result from Home's global
   // search -- so the same query carries over instead of landing on an unfiltered FAQ list they'd
   // have to re-type into.
@@ -586,13 +593,22 @@ export function CricketScorer() {
   }
   // TabBar's onSelect -- a plain setScreen would work for "home" and "live" (neither carries any
   // extra context to reset), but "my-teams" and "tournaments" both do: the same reset each
-  // screen's other, non-tab entry points (onManageTeams and onOpenTournaments, both still used
-  // elsewhere) already apply before navigating, so tapping the tab from some other club/
-  // tournament's context doesn't silently carry that scoping over. "teams" (the Clubs tab) needs
-  // no reset -- its own former entry point (onOpenClubs) never reset activeClubAdminId either.
+  // screen's other, non-tab entry points (onOpenTournaments, still used elsewhere) already apply
+  // before navigating, so tapping the tab from some other club/tournament's context doesn't
+  // silently carry that scoping over. "teams" (the Clubs tab) needs no reset -- its own former
+  // entry point (onOpenClubs) never reset activeClubAdminId either, and a club team opened from
+  // Home now deliberately lands here WITH activeClubAdminId/manageClubTeamsOpen already set, which
+  // this must not clobber.
+  //
+  // manageClubTeamsOpen resets alongside activeClubAdminId here even though it's really the Clubs
+  // tab's own state (not "my-teams"'s) -- without this, tapping Teams then Clubs again would leave
+  // a stale manageClubTeamsOpen from an earlier session showing MyTeamsScreen instead of the club
+  // panel the moment activeClubAdminId got reset to null, silently falling back to the merged
+  // personal+every-club team list that view existed specifically to retire.
   function selectTab(next) {
     if (next === "my-teams") {
       setActiveClubAdminId(null);
+      setManageClubTeamsOpen(false);
     } else if (next === "tournaments") {
       setActiveTournamentClubId(null);
       setActiveTournamentFederationId(null);
@@ -2555,14 +2571,19 @@ export function CricketScorer() {
     setScreen("setup");
   }
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
-  // Merged Teams view (mirrors allTournamentsFlat below): personal teams plus every club's,
-  // each tagged with its source, so the Teams screen can show one combined list by default with
-  // "My Teams"/per-club chips narrowing it down, the same pattern Cups already uses.
+  // Merged, source-tagged team list (mirrors allTournamentsFlat below): personal teams plus every
+  // club's. Only ever consumed by Home now (its own team search, and to tell onOpenTeam whether a
+  // tapped team is personal or a specific club's) -- the Teams tab itself used to show this same
+  // merged list with "My Teams"/per-club chips narrowing it down, back before a club's roster
+  // moved into managing that club directly (see manageClubTeamsOpen); Teams is personal-only now.
   const allTeamsFlat = [...teams.map(t => ({ ...t,
     _clubId: null
   })), ...Object.entries(clubTeamsById).flatMap(([cid, list]) => (list || []).map(t => ({ ...t,
     _clubId: cid
   })))].sort((a, b) => a.name.localeCompare(b.name));
+  // Feeds the Clubs tab's nested team-roster view (manageClubTeamsOpen) once a club is selected --
+  // activeClubAdminId is always set together with that flag (see onManageTeams/Home's onOpenTeam),
+  // so the allTeamsFlat fallback below is only ever a defensive default, never actually reached.
   const teamsForTeamsScreen = activeClubAdminId ? (clubTeamsById[activeClubAdminId] || []).map(t => ({ ...t,
     _clubId: activeClubAdminId
   })) : allTeamsFlat;
@@ -2760,8 +2781,14 @@ export function CricketScorer() {
     clubTeamsById: clubTeamsById,
     teams: allTeamsFlat,
     onOpenTeam: t => {
-      setActiveClubAdminId(t._clubId || null);
-      setScreen("my-teams");
+      if (t._clubId) {
+        setActiveClubAdminId(t._clubId);
+        setTeamsTab("clubs");
+        setManageClubTeamsOpen(true);
+        setScreen("teams");
+      } else {
+        setScreen("my-teams");
+      }
     },
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
@@ -2814,15 +2841,11 @@ export function CricketScorer() {
     navKey: "my-teams",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(MyTeamsScreen, {
-    teams: teamsForTeamsScreen,
+    teams: teams,
     teamsLoading: teamsLoading,
     matches: matches,
     clubs: clubs,
-    activeClubId: activeClubAdminId,
-    onSelectClub: setActiveClubAdminId,
     currentUid: user && user.uid,
-    pinnedClubIds: pinnedClubIds,
-    onTogglePinClub: handleTogglePinClub,
     onNewTeam: () => {
       setEditingTeam(null);
       setPresetTeamSeed(null);
@@ -2830,7 +2853,6 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onEditTeam: t => {
-      setActiveClubAdminId(t._clubId || null);
       setEditingTeam(t);
       setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
@@ -2842,8 +2864,32 @@ export function CricketScorer() {
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
-  }, /*#__PURE__*/React.createElement(TeamsScreen, {
-    onManageTeams: () => setScreen("my-teams"),
+  }, manageClubTeamsOpen ? /*#__PURE__*/React.createElement(MyTeamsScreen, {
+    teams: teamsForTeamsScreen,
+    teamsLoading: teamsLoading,
+    matches: matches,
+    clubs: clubs,
+    activeClubId: activeClubAdminId,
+    onBack: () => setManageClubTeamsOpen(false),
+    currentUid: user && user.uid,
+    onNewTeam: () => {
+      setEditingTeam(null);
+      setPresetTeamSeed(null);
+      setTeamEditReturnScreen("teams");
+      setScreen("team-edit");
+    },
+    onEditTeam: t => {
+      setActiveClubAdminId(t._clubId || null);
+      setEditingTeam(t);
+      setPresetTeamSeed(null);
+      setTeamEditReturnScreen("teams");
+      setScreen("team-edit");
+    },
+    onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
+    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId),
+    showTabBar: true
+  }) : /*#__PURE__*/React.createElement(TeamsScreen, {
+    onManageTeams: () => setManageClubTeamsOpen(true),
     clubs: clubs,
     activeClubId: activeClubAdminId,
     currentUid: user && user.uid,

@@ -4,8 +4,11 @@ import { House, Radio, Shield, Trophy, Users } from "./icons.js";
 
 // The five root destinations a person actually returns to over and over: Home (their own stuff),
 // Live (everyone else's live matches/tournaments -- the old app-wide feed, moved off Home), Cups
-// (tournaments/series), Teams (roster/team management -- the "my-teams" screen, confusingly not
-// the one literally named TeamsScreen) and Clubs (TeamsScreen itself: Clubs/Federations browsing).
+// (tournaments/series), Teams (the "my-teams" screen -- your own personal teams, nothing club-
+// owned) and Clubs (TeamsScreen: Clubs/Federations browsing, AND, once a club is selected, that
+// club's own team roster -- see manageClubTeamsOpen in cricketScorer.js. Managing a club's teams
+// used to mean leaving this tab for the one literally named "Teams", which had nothing to do with
+// any specific club; it's hosted right here now instead).
 // `screen` is CricketScorer's own app-level screen key, reused directly rather than inventing a
 // separate "tab" concept -- TAB_BAR_SCREENS (see cricketScorer.js) is the single source of truth
 // for which screens show this bar at all.

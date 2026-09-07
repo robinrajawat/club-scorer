@@ -202,7 +202,6 @@ const FUNCTIONS = [
   { name: "VisibilitySwitch", file: "src/components/matchDisplayAtoms.js" },
   { name: "Field", file: "src/components/screenAtoms.js" },
   { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
-  { name: "ClubSourceSelector", file: "src/components/screenAtoms.js" },
   { name: "StandingsTable", file: "src/components/tableAtoms.js" },
   { name: "RecordTable", file: "src/components/tableAtoms.js" },
   { name: "PlayerPicker", file: "src/components/pickerAtoms.js" },

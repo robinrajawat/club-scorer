@@ -1,13 +1,10 @@
 import React from "react";
 import { COLORS } from "./theme.js";
 import { Share } from "./icons.js";
-import { withPinnedFirst } from "../core/appLogic.js";
-import { PinnableChip } from "./formUiAtoms.js";
 
 // Small presentational components used across setup/list screens: a labeled form-field wrapper,
-// the "add to home screen" install hint banner, and the personal/club source chip row shared by
-// Teams/Tournaments. Covered by tests/unit/components/screenAtoms.test.js using
-// react-test-renderer.
+// and the "add to home screen" install hint banner. Covered by
+// tests/unit/components/screenAtoms.test.js using react-test-renderer.
 
 export function Field({
   label,
@@ -91,59 +88,6 @@ export function InstallHintBanner({
       flexShrink: 0
     }
   }, "\u00d7"));
-}
-
-export function ClubSourceSelector({
-  clubs,
-  activeClubId,
-  onSelect,
-  pinnedClubIds = [],
-  onTogglePinClub
-}) {
-  const orderedClubs = withPinnedFirst(clubs, pinnedClubIds);
-  const chipStyle = active => ({
-    padding: "7px 13px",
-    borderRadius: 20,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 12.5,
-    cursor: "pointer",
-    border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitchFixed : COLORS.surface,
-    color: active ? "#fff" : COLORS.inkSoft,
-    whiteSpace: "nowrap"
-  });
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, clubs.length > 2 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      fontStyle: "italic",
-      marginBottom: 6
-    }
-  }, "\u2192 swipe to see more \u00b7 press and hold to pin"), /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
-    style: {
-      display: "flex",
-      gap: 8,
-      overflowX: "auto",
-      paddingBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => onSelect(null),
-    style: chipStyle(!activeClubId)
-  }, "My Teams"), orderedClubs.map(c => /*#__PURE__*/React.createElement(PinnableChip, {
-    key: c.id,
-    label: c.name,
-    active: activeClubId === c.id,
-    pinned: pinnedClubIds.includes(c.id),
-    onSelect: () => onSelect(c.id),
-    onTogglePin: () => onTogglePinClub(c.id)
-  }))));
 }
 
 export function NavWrap({
