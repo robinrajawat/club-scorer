@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, ChevronDown, Info, Heart, Shield, FileText } from "./icons.js";
+import { ChevronLeft, ChevronDown, Info, Heart, Lock, FileText } from "./icons.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote, AppMark } from "./illustrations.js";
 import { POLL_TTL_DAYS } from "../core/shareAndFormat.js";
@@ -387,7 +387,7 @@ export function AboutScreen({
       alignItems: "center",
       gap: 6
     }
-  }, /*#__PURE__*/React.createElement(Shield, {
+  }, /*#__PURE__*/React.createElement(Lock, {
     size: 14,
     style: {
       color: COLORS.inkSoft

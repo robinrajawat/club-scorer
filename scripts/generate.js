@@ -176,6 +176,7 @@ const FUNCTIONS = [
   { name: "House", file: "src/components/icons.js" },
   { name: "InboxIcon", file: "src/components/icons.js" },
   { name: "Info", file: "src/components/icons.js" },
+  { name: "Lock", file: "src/components/icons.js" },
   { name: "LogIn", file: "src/components/icons.js" },
   { name: "LogOut", file: "src/components/icons.js" },
   { name: "MessageCircle", file: "src/components/icons.js" },

@@ -743,9 +743,11 @@ test("CricketScorer: 'Manage teams' inside a club opens its roster without leavi
 
 // Home's own team tiles (a club team, tapped from Home rather than from inside the Clubs tab)
 // used to always land on the "Teams" tab regardless of source, pre-filtered to that club -- now
-// that a club's roster lives inside the Clubs tab instead, a club team should land there, while a
-// personal team (no _clubId) still opens the Teams tab, unchanged.
-test("CricketScorer: opening a club team from Home lands on the Clubs tab; a personal team opens the Teams tab", async () => {
+// that a club's roster lives inside the Clubs tab instead, and Teams is no longer a tab at all
+// (personal teams/cups are a lightweight addon, not a peer of Clubs -- see tabBar.js), a club team
+// should land on the Clubs tab, while a personal team opens MyTeamsScreen with no tab bar at all,
+// same as any other drill-in screen reached from Home (onOpenMyTeams does the same).
+test("CricketScorer: opening a club team from Home lands on the Clubs tab; a personal team opens MyTeamsScreen with no tab bar", async () => {
   const inst = await render();
   globalThis.loadClubs = () => Promise.resolve([
     { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1"] }
@@ -776,8 +778,11 @@ test("CricketScorer: opening a club team from Home lands on the Clubs tab; a per
   act(() => { inst.root.findByType(TabBar).props.onSelect("home"); });
   home = inst.root.findByType(HomeScreen);
   act(() => { home.props.onOpenTeam({ id: "personal1", _clubId: null }); });
-  assert.equal(inst.root.findByType(TabBar).props.active, "my-teams");
-  assert.equal(inst.root.findByType(MyTeamsScreen).props.onBack, undefined, "the Teams tab's own MyTeamsScreen should have no onBack");
+  assert.throws(() => inst.root.findByType(TabBar), "no tab bar on the personal MyTeamsScreen -- it's not a tab any more");
+  const personalMyTeams = inst.root.findByType(MyTeamsScreen);
+  assert.equal(typeof personalMyTeams.props.onBack, "function", "reached from Home, so it needs its own way back");
+  act(() => { personalMyTeams.props.onBack(); });
+  assert.ok(inst.root.findByType(HomeScreen), "onBack returns to Home");
   await flush();
 });
 

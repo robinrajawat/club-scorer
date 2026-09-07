@@ -8,7 +8,7 @@ import { afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js";
-import { Btn, PinnableChip, RuleChoice } from "../../../src/components/formUiAtoms.js";
+import { Btn, RuleChoice } from "../../../src/components/formUiAtoms.js";
 import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
 
 function hasText(node, str) {
@@ -515,13 +515,34 @@ test("TournamentsScreen: review page summarizes the tournament before creating",
   assert.ok(inst.root.findAllByType(Btn).find(b => b.props.children === "Creating…" || b.props.children === "Create"));
 });
 
-test("TournamentsScreen: canManage=false hides 'New Tournament' and shows an owner-only note", () => {
+// "New Tournament" used to be hidden behind canManage, gated on whichever club/federation chip
+// happened to be pre-selected -- there's no such pre-selection any more (see organizerKey's own
+// comment), so the button is always available; the Organizer picker inside the form is what
+// actually restricts which clubs/federations can be picked, to ones this account owns/co-owns.
+test("TournamentsScreen: 'New Tournament' is always shown, even for a plain club member with no owned clubs", () => {
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
-    activeClubId: "c1", clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "someoneElse" }], currentUid: "notTheOwner"
+    clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "someoneElse" }], currentUid: "notTheOwner"
   })));
   const text = JSON.stringify(inst.toJSON());
-  assert.doesNotMatch(text, /New Tournament/);
-  assert.match(text, /Only the owner of/);
+  assert.match(text, /New Tournament/);
+});
+
+test("TournamentsScreen: the create form's Organizer picker only offers clubs/federations this account owns, not ones it's merely a member of", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    clubs: [
+      { id: "c1", name: "Riverside CC", ownerUid: "owner1" },
+      { id: "c2", name: "Oakwood CC", ownerUid: "someoneElse" }
+    ],
+    myFederations: [{ id: "f1", name: "DCF" }],
+    currentUid: "owner1"
+  })));
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
+  const labels = organizerChoice.props.options.map(o => o.label);
+  assert.ok(labels.includes("Riverside CC"), "an owned club is offered");
+  assert.ok(labels.includes("DCF"), "an owned federation is offered");
+  assert.ok(!labels.includes("Oakwood CC"), "a club this account is only a plain member of is not offered");
 });
 
 test("TournamentsScreen: creating a series opens a Modal and calls onCreateSeries", async () => {
@@ -548,12 +569,14 @@ test("TournamentsScreen: creating a series opens a Modal and calls onCreateSerie
   assert.deepEqual(createdWith, { label: "Riverside CC vs Oakwood CC", teamA: "Riverside CC", teamB: "Oakwood CC", count: 3 });
 });
 
-test("TournamentsScreen: clicking a club chip calls onSelectSource with that club's id", () => {
+test("TournamentsScreen: picking a club as Organizer in the create form calls onSelectSource with that club's id", () => {
   let selected = "not called";
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
-    clubs: [{ id: "c1", name: "Riverside CC" }], onSelectSource: id => { selected = id; }
+    clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }], onSelectSource: id => { selected = id; }
   })));
-  const chip = inst.root.findByType(PinnableChip);
-  chip.props.onSelect();
+  const newBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "New Tournament"));
+  act(() => { newBtn.props.onClick(); });
+  const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
+  act(() => { organizerChoice.props.onChange("club:c1"); });
   assert.equal(selected, "c1");
 });

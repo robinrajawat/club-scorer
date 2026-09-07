@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Bell, ChevronRight, Info, Plus, Trophy } from "./icons.js";
+import { Bell, ChevronRight, Info, Plus, Trophy, Users } from "./icons.js";
 import { Btn, PlayerAvatar, TextField } from "./formUiAtoms.js";
 import { AppMark, LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
@@ -82,6 +82,7 @@ export function HomeScreen({
   clubTeamsById = {},
   teams = [],
   onOpenTeam,
+  onOpenMyTeams,
   onGetShareCode,
   onGetViewCode,
   onOpenLiveMatch,
@@ -788,7 +789,38 @@ function renderMatchCard(m, i, {
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }), "New Match")), /*#__PURE__*/React.createElement(JoinCodeBar, {
+  }), "New Match")), onOpenMyTeams && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 18,
+      marginTop: -12
+    }
+    // A quick link to personal team-roster management -- used to be its own bottom tab; now that
+    // personal teams/cups are a lightweight addon rather than a peer of Clubs (see tabBar.js's own
+    // comment), this is the one entry point into MyTeamsScreen instead. Kept modest (a small text
+    // link under the primary "New Match" button, not a card of its own) since it's a low-frequency
+    // action compared to actually scoring a match.
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenMyTeams,
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "4px 6px"
+    }
+  }, /*#__PURE__*/React.createElement(Users, {
+    size: 13
+  }), "My Teams")), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
   }), /*#__PURE__*/React.createElement("div", {
     style: {
