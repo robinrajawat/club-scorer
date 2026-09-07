@@ -268,6 +268,17 @@ export const Info = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/
   y2: "8"
 }));
 
+export const Lock = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
+  x: "3",
+  y: "11",
+  width: "18",
+  height: "11",
+  rx: "2",
+  ry: "2"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M7 11V7a5 5 0 0 1 10 0v4"
+}));
+
 export const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("path", {
   d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
 }), /*#__PURE__*/React.createElement("polyline", {

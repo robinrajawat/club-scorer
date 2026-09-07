@@ -1,22 +1,27 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { AlertTriangle, ChevronRight, Info, Pencil, Plus, Trophy } from "./icons.js";
-import { Btn, TextField, PinnableChip, RuleChoice } from "./formUiAtoms.js";
+import { Btn, TextField, RuleChoice } from "./formUiAtoms.js";
 import { Field } from "./screenAtoms.js";
 import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
 import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
-import { knockoutStagesPreview, withPinnedFirst, DEFAULT_RULES } from "../core/appLogic.js";
+import { knockoutStagesPreview, DEFAULT_RULES } from "../core/appLogic.js";
 import { nonStandardRulesText, buildMapsUrl } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
-// The "Cups" list: club/federation source chips, create-tournament (with optional group-stage
-// split) and create-series forms, a status/search filter over the list, and each tournament as a
-// tappable row. Every write action is a prop (onCreateTournament/onCreateSeries) -- no bare
-// globals, no mount effect. `Modal` (bare global, same as everywhere else in this suite) backs the
-// create-series dialog only -- create-tournament is an inline card, not a modal. Covered by
+// The "Cups" list: one merged list of every tournament/series this account has access to --
+// personal, plus every club/federation you belong to -- each row tagged with its organizer, no
+// separate club/federation source chips to switch between (used to have those; picking a chip just
+// to see whether a specific club had any upcoming tournaments never earned the extra tap once
+// there was an obvious alternative -- see organizerKey's own comment). Create-tournament (with
+// optional group-stage split) and create-series forms, a status/search filter over the list, and
+// each tournament as a tappable row. Every write action is a prop (onCreateTournament/
+// onCreateSeries) -- no bare globals, no mount effect. `Modal` (bare global, same as everywhere
+// else in this suite) backs the create-series dialog only -- create-tournament is an inline card,
+// not a modal. Covered by
 // tests/unit/components/tournamentsScreen.test.js.
 
 // A boolean rule shown as a labeled On/Off pill button -- same visual as SetupScreen's own
@@ -184,6 +189,12 @@ export function RuleSectionHeader({
 export function TournamentsScreen({
   tournaments,
   clubs,
+  // activeClubId/onSelectSource (and their federation counterparts just below) used to be a
+  // page-level filter driven by a row of source chips -- see organizerKey's own comment for why
+  // that's gone. They're kept as props rather than folded into local state because
+  // teamOptions/federationTeamOptions (what the create form's team picker offers) are computed
+  // one level up, in cricketScorer.js, and need to react to whichever organizer this screen's own
+  // create form currently has selected.
   activeClubId,
   onSelectSource,
   myFederations = [],
@@ -198,10 +209,6 @@ export function TournamentsScreen({
   currentUid,
   clubsLoading,
   federationsLoading,
-  pinnedClubIds = [],
-  onTogglePinClub,
-  pinnedFederationIds = [],
-  onTogglePinFederation,
   showTabBar = false
 }) {
   const [creating, setCreating] = useState(false);
@@ -282,15 +289,46 @@ export function TournamentsScreen({
   const [seriesError, setSeriesError] = useState("");
   const [seriesBusy, setSeriesBusy] = useState(false);
   const visibleTournaments = tournaments.filter(t => (statusFilter === "all" || tournamentStatus(t) === statusFilter) && (!searchTerm.trim() || t.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // activeClubId/activeFederationId (props) are no longer a page-level filter -- the list below
+  // always shows every tournament (personal + every club/federation you belong to, see the
+  // "Organizer" tag on each row). They're now purely the create-tournament/create-series form's
+  // own "who's this being created for" selection (see organizerKey below), which is why they're
+  // reset back to null/null the moment either form opens or closes.
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   // myFederations is already scoped to federations this user owns/co-owns (see myOwnedFederationIds
-  // upstream), so finding activeFederationId in it is really just a defensive existence check —
-  // the chip row below can only ever select an id that's already in that list.
+  // upstream), so finding activeFederationId in it is really just a defensive existence check.
   const activeFederation = activeFederationId ? myFederations.find(f => f.id === activeFederationId) || null : null;
   const activeFederationName = activeFederation && activeFederation.name;
-  const canManage = activeFederationId ? !!activeFederation : !activeClubId || isClubOwner(activeClub, currentUid);
   const totalTeamOptions = teamOptions.length + federationTeamOptions.length;
+  // Only clubs this account actually owns/co-owns are valid "Organizer" choices (matches
+  // handleCreateTournament's own write path, which needs isClubOwner server-side regardless) --
+  // unlike the old chip row, which showed every club you're a MEMBER of (view access, not create).
+  const ownableClubs = clubs.filter(c => isClubOwner(c, currentUid));
+  // "personal" | `club:${id}` | `federation:${id}` -- a single composite key so RuleChoice (a
+  // flat options list) can drive both onSelectSource and onSelectFederationSource from one picker,
+  // reset to "personal" by openCreate/openCreateSeries below.
+  const organizerKey = activeFederationId ? `federation:${activeFederationId}` : activeClubId ? `club:${activeClubId}` : "personal";
+  function setOrganizerKey(key) {
+    if (key === "personal") {
+      onSelectSource(null);
+      onSelectFederationSource(null);
+    } else if (key.startsWith("club:")) {
+      onSelectSource(key.slice(5));
+    } else {
+      onSelectFederationSource(key.slice("federation:".length));
+    }
+  }
+  const organizerOptions = [{
+    value: "personal",
+    label: "Personal"
+  }, ...ownableClubs.map(c => ({
+    value: `club:${c.id}`,
+    label: c.name
+  })), ...myFederations.map(f => ({
+    value: `federation:${f.id}`,
+    label: f.name
+  }))];
   // federationTeamOptions holds {clubName, teamName, teamId, clubId} objects (needed as objects
   // for the chip picker below, which shows each team alongside its club name). The series-create
   // Team A/B <select> dropdowns only need the name string, same as teamOptions -- mixing the raw
@@ -313,6 +351,7 @@ export function TournamentsScreen({
     });
     setIsPrivate(false);
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
+    setOrganizerKey("personal");
     setCreating(true);
   }
   const currentPageIndex = CREATE_TOURNAMENT_PAGE_ORDER.indexOf(currentPage);
@@ -330,6 +369,12 @@ export function TournamentsScreen({
   function goBackPage() {
     if (currentPageIndex === 0) {
       setCreating(false);
+      // Cancelling without submitting must not leave the Organizer picker's choice lingering in
+      // activeClubId/activeFederationId -- those ride all the way up to cricketScorer.js, and a
+      // stale non-null value there would otherwise be sitting around (harmlessly today, since
+      // onOpenTournament no longer falls back to it, but a landmine for the next thing that reads
+      // it) until the next "New Tournament" open resets it anyway.
+      setOrganizerKey("personal");
       return;
     }
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[currentPageIndex - 1]);
@@ -351,6 +396,7 @@ export function TournamentsScreen({
       return;
     }
     setCreating(false);
+    setOrganizerKey("personal");
   }
   function openCreateSeries() {
     setSeriesName("");
@@ -358,6 +404,7 @@ export function TournamentsScreen({
     setSeriesTeamB("");
     setSeriesMatchCount("3");
     setSeriesError("");
+    setOrganizerKey("personal");
     setCreatingSeries(true);
   }
   async function submitCreateSeries() {
@@ -381,6 +428,7 @@ export function TournamentsScreen({
       return;
     }
     setCreatingSeries(false);
+    setOrganizerKey("personal");
   }
   // Collapsed by default, same reasoning as SetupScreen's own match-rules editor: standard rules
   // are right most of the time, so this shouldn't force a scroll past several settings on every
@@ -760,60 +808,9 @@ export function TournamentsScreen({
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), !creating && (clubs.length > 0 || myFederations.length > 0) && /*#__PURE__*/React.createElement(React.Fragment, null, (clubs.length + myFederations.length > 2) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      fontStyle: "italic",
-      marginBottom: 6
-    }
-  }, "\u2192 swipe to see more \u00b7 press and hold to pin"), /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
-    style: {
-      display: "flex",
-      gap: 8,
-      overflowX: "auto",
-      paddingBottom: 4,
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      onSelectSource(null);
-      onSelectFederationSource(null);
-    },
-    style: {
-      padding: "7px 13px",
-      borderRadius: 20,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      cursor: "pointer",
-      border: !activeClubId && !activeFederationId ? "none" : `1px solid ${COLORS.willow}`,
-      background: !activeClubId && !activeFederationId ? COLORS.pitchFixed : COLORS.surface,
-      color: !activeClubId && !activeFederationId ? "#fff" : COLORS.inkSoft,
-      whiteSpace: "nowrap",
-      flexShrink: 0
-    }
-  }, "All"), withPinnedFirst(clubs, pinnedClubIds).map(c => /*#__PURE__*/React.createElement(PinnableChip, {
-    key: c.id,
-    label: c.name,
-    active: activeClubId === c.id,
-    pinned: pinnedClubIds.includes(c.id),
-    onSelect: () => onSelectSource(c.id),
-    onTogglePin: () => onTogglePinClub(c.id)
-  })), withPinnedFirst(myFederations, pinnedFederationIds).map(f => /*#__PURE__*/React.createElement(PinnableChip, {
-    key: f.id,
-    label: f.name,
-    active: activeFederationId === f.id,
-    pinned: pinnedFederationIds.includes(f.id),
-    onSelect: () => onSelectFederationSource(f.id),
-    onTogglePin: () => onTogglePinFederation(f.id),
-    dashed: true
-  })))), !creating && canManage && /*#__PURE__*/React.createElement(Btn, {
+  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), !creating && /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: openCreate,
-    disabled: totalTeamOptions < 2,
     style: {
       width: "100%",
       padding: "14px",
@@ -824,7 +821,7 @@ export function TournamentsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 18,
     strokeWidth: 2.5
-  }), activeFederationName ? ` New Tournament in ${activeFederationName}` : activeClubName ? ` New Tournament in ${activeClubName}` : " New Tournament"), !creating && canManage && totalTeamOptions >= 2 && /*#__PURE__*/React.createElement("button", {
+  }), " New Tournament"), !creating && /*#__PURE__*/React.createElement("button", {
     onClick: openCreateSeries,
     className: "cs-btn",
     style: {
@@ -875,7 +872,10 @@ export function TournamentsScreen({
       whiteSpace: "nowrap"
     }
   }, label)))), creatingSeries && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setCreatingSeries(false)
+    onClose: () => {
+      setCreatingSeries(false);
+      setOrganizerKey("personal");
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
@@ -891,7 +891,12 @@ export function TournamentsScreen({
       marginBottom: 14,
       lineHeight: 1.5
     }
-  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), /*#__PURE__*/React.createElement(Field, {
+  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), organizerOptions.length > 1 && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Organizer",
+    value: organizerKey,
+    onChange: setOrganizerKey,
+    options: organizerOptions
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Series name (optional)"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: seriesName,
@@ -957,25 +962,7 @@ export function TournamentsScreen({
     style: {
       width: "100%"
     }
-  }, seriesBusy ? "Creating\u2026" : "Create series")), !canManage && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      textAlign: "center",
-      marginTop: -8,
-      marginBottom: 16
-    }
-  }, `Only the owner of "${activeClubName}" can add tournaments.`), totalTeamOptions < 2 && !creating && canManage && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      textAlign: "center",
-      marginTop: -8,
-      marginBottom: 16
-    }
-  }, activeFederationName ? `${activeFederationName}'s member clubs need at least 2 teams between them first.` : activeClubName ? `${activeClubName} needs at least 2 saved (or federation-visible) teams first.` : "Save at least 2 teams first (Teams screen)."), creating && /*#__PURE__*/React.createElement("div", {
+  }, seriesBusy ? "Creating\u2026" : "Create series")), creating && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -993,7 +980,19 @@ export function TournamentsScreen({
       textTransform: "uppercase",
       marginBottom: 14
     }
-  }, "Step ", currentPageIndex + 1, " of ", CREATE_TOURNAMENT_PAGE_ORDER.length, " · ", CREATE_TOURNAMENT_PAGE_LABELS[currentPage]), currentPage === "details" && /*#__PURE__*/React.createElement(Field, {
+  }, "Step ", currentPageIndex + 1, " of ", CREATE_TOURNAMENT_PAGE_ORDER.length, " · ", CREATE_TOURNAMENT_PAGE_LABELS[currentPage]), currentPage === "details" && organizerOptions.length > 1 && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Organizer",
+    value: organizerKey,
+    onChange: setOrganizerKey,
+    options: organizerOptions
+  }), currentPage === "details" && totalTeamOptions < 2 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 14
+    }
+  }, activeFederationName ? `${activeFederationName}'s member clubs need at least 2 teams between them first.` : activeClubName ? `${activeClubName} needs at least 2 saved (or federation-visible) teams first.` : "Save at least 2 personal teams first (or pick a club/federation above with enough teams)."), currentPage === "details" && /*#__PURE__*/React.createElement(Field, {
     label: "Tournament name"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: name,
@@ -1461,7 +1460,7 @@ export function TournamentsScreen({
       fontSize: 12,
       color: COLORS.inkSoft
     }
-  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${t.teams.length} teams`, tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`, !activeClubId && t._clubId && ` · ${(clubs.find(c => c.id === t._clubId) || {}).name || "a club"}`, !activeFederationId && t._federationId && ` · ${(myFederations.find(f => f.id === t._federationId) || {}).name || "a federation"}`)), /*#__PURE__*/React.createElement(ChevronRight, {
+  }, t.kind === "series" ? `${(t.fixtures || []).length} match${(t.fixtures || []).length === 1 ? "" : "es"}` : `${t.teams.length} teams`, tournamentDateRangeLabel(t) && ` · ${tournamentDateRangeLabel(t)}`, t._clubId && ` · ${(clubs.find(c => c.id === t._clubId) || {}).name || "a club"}`, t._federationId && ` · ${(myFederations.find(f => f.id === t._federationId) || {}).name || "a federation"}`)), /*#__PURE__*/React.createElement(ChevronRight, {
     size: 18,
     style: {
       color: COLORS.inkSoft,
@@ -1483,5 +1482,5 @@ export function TournamentsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : activeClubName ? `No tournaments in ${activeClubName} yet.` : "No tournaments yet.")));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")));
 }

@@ -56,7 +56,7 @@ function baseProps(overrides = {}) {
     themePref: "system", onSetTheme: () => {}, onJoinCode: () => {}, onOpenTournaments: () => {},
     onOpenPlayer: () => {}, pendingCount: 0, onPendingSynced: () => {}, onOpenTournament: () => {},
     onScheduleFixture: () => {}, onStartFixture: () => {}, onEditVenue: () => {},
-    teams: [], onOpenTeam: () => {}, onGetShareCode: () => {}, onGetViewCode: () => {},
+    teams: [], onOpenTeam: () => {}, onOpenMyTeams: () => {}, onGetShareCode: () => {}, onGetViewCode: () => {},
     ...overrides
   };
 }
@@ -353,6 +353,16 @@ test("HomeScreen: the 'Teams' search chip lists matching teams and opens one via
   const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside 1st XI"));
   resultRow.props.onClick();
   assert.equal(opened.id, "t1");
+});
+
+// The "My Teams" link is personal team management's only entry point now that Teams isn't its own
+// bottom tab any more (see tabBar.js) -- it has to actually be reachable from somewhere.
+test("HomeScreen: the 'My Teams' link calls onOpenMyTeams", () => {
+  let called = false;
+  const inst = render({ onOpenMyTeams: () => { called = true; } });
+  const link = inst.root.findAllByType("button").find(b => hasText(b.props.children, "My Teams"));
+  act(() => { link.props.onClick(); });
+  assert.equal(called, true);
 });
 
 test("HomeScreen: the 'Cups' search chip lists matching tournaments and opens one via onOpenTournament", () => {
