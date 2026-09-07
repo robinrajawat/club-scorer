@@ -3,6 +3,8 @@ import { COLORS } from "./theme.js";
 import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { ChevronLeft } from "./icons.js";
+import { StandingsTable } from "./tableAtoms.js";
+import { buildMapsUrl } from "../core/shareAndFormat.js";
 
 // Read-only public view of a tournament's shared standings/fixtures snapshot, opened either via a
 // "?tournament=CODE" link (see TournamentShareModal, which creates these) or by tapping a card in
@@ -14,12 +16,48 @@ import { ChevronLeft } from "./icons.js";
 // Reads the snapshot directly via `db.collection("tournamentViews").doc(code).get()` from a
 // mount-time useEffect -- `db` (the raw Firestore SDK instance, a bare global, not extracted) is
 // stubbed on globalThis, same pattern as `auth` in authActionScreen.test.js.
+//
+// The snapshot (formatTournamentViewSnapshot, src/core/appLogic.js) carries more than just the
+// points table: venue, a short format summary, a per-group breakdown when the tournament has
+// groups, and a `result` line on any fixture whose match has completed. All of those are optional
+// (older cached snapshots, or a tournament with no groups/venue, simply omit them), so every
+// section below only renders when the data for it is actually present.
 
 export function FollowTournamentScreen({
   code,
   onExit,
   reachedInApp = false
 }) {
+  // Plain-language "20 overs · 2 groups, top 1 advance · Semifinal, Final" summary of the
+  // snapshot's `format` block -- mirrors the wording tournamentsScreen.js's own New Cup wizard
+  // preview uses, so a spectator sees the same shape of description an organizer does. Returns
+  // null when there's nothing worth a line for (no overs limit, no groups, no knockout stage -- a
+  // bare round robin with an unset overs limit, which formatTournamentViewSnapshot can still
+  // produce for an older tournament created before overs limits were mandatory).
+  function formatSummaryText(format) {
+    if (!format) return null;
+    const parts = [];
+    if (format.oversLimit) parts.push(`${format.oversLimit} overs`);
+    if (format.groupsCount) parts.push(`${format.groupsCount} groups, top ${format.advancePerGroup} advance`);
+    if (format.knockoutStages && format.knockoutStages.length) parts.push(format.knockoutStages.join(", "));
+    return parts.length ? parts.join(" · ") : null;
+  }
+  const sectionCardStyle = {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  };
+  const sectionLabelStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    color: COLORS.inkSoft,
+    marginBottom: 8
+  };
   // Someone reaching this screen from inside the app already has a back button's worth of context
   // (they tapped a Live-tab card) -- render the same small chevron-link every other in-app screen
   // uses for that (see e.g. recordsScreen.js / matchScreen.js), not the big standalone CTA button
@@ -124,7 +162,14 @@ export function FollowTournamentScreen({
     }, "Go to Club Scorer"));
   }
   const standings = [...data.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr);
-  const scheduledFixtures = (data.fixtures || []).filter(f => f.date);
+  const groups = data.groups ? data.groups.map(g => ({
+    label: g.label,
+    standings: [...g.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr)
+  })) : null;
+  const fixtures = data.fixtures || [];
+  const completedFixtures = fixtures.filter(f => f.result);
+  const scheduledFixtures = fixtures.filter(f => !f.result && f.date);
+  const formatSummary = formatSummaryText(data.format);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       ...wrapStyle,
@@ -148,113 +193,81 @@ export function FollowTournamentScreen({
       opacity: 0.85,
       marginTop: 2
     }
-  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString())), /*#__PURE__*/React.createElement("div", {
+  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString()), formatSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 2
+    }
+  }, formatSummary), data.venue && /*#__PURE__*/React.createElement("a", {
+    href: buildMapsUrl(data.venue, data.venueLat, data.venueLng),
+    target: "_blank",
+    rel: "noopener noreferrer",
+    className: "cs-btn",
+    "aria-label": `Open ${data.venue} in Maps`,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 6,
+      textDecoration: "none",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      color: COLORS.creamFixed,
+      opacity: 0.9
+    }
+  }, "📍 ", data.venue)), /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 560,
       margin: "0 auto",
       padding: 16
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: "14px 4px",
-      marginBottom: 20,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    className: "cs-no-scrollbar",
-    style: {
-      width: "100%",
-      borderCollapse: "collapse",
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      minWidth: 380
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
-    style: {
-      color: COLORS.inkSoft,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5
-    }
-  }, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: {
-      textAlign: h === "Team" ? "left" : "center",
-      padding: "0 8px 8px",
-      whiteSpace: "nowrap"
-    }
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map(r => /*#__PURE__*/React.createElement("tr", {
-    key: r.team,
-    style: {
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.ink,
-      whiteSpace: "nowrap"
-    }
-  }, r.team), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.played), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.won), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.lost), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.tied), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.noResult), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.turf
-    }
-  }, r.points), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontFamily: "'IBM Plex Mono', monospace",
-      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
-    }
-  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 16,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
+  }, groups ? groups.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: g.label
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      color: COLORS.inkSoft,
+      color: COLORS.pitch,
       marginBottom: 8
     }
+  }, g.label), /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: g.standings
+  }))) : /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: standings
+  }), completedFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
+  }, "Results"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink
+    }
+  }, completedFixtures.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id,
+    style: {
+      padding: "8px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600
+    }
+  }, f.teamA, " vs ", f.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 2
+    }
+  }, f.result))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
   }, "Fixtures"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",

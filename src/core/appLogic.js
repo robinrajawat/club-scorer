@@ -10,6 +10,7 @@
 // in this file is plain logic and needs nothing from react.
 
 import { useRef } from "react";
+import { matchResultText } from "./shareAndFormat.js";
 
 export function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
@@ -130,26 +131,56 @@ export function computeStandings(tournament, allMatches) {
 // same field subset and silently drifting apart. `sharedAt`/`expiresAt` are left to the caller —
 // those are write-time IO concerns (Date.now(), a TTL constant), not something this pure function
 // should decide.
-export function formatTournamentViewSnapshot(tournament, standings) {
+//
+// `matches` (optional, defaults to none) is what turns this from "just the points table" into the
+// tournament's full public picture: a completed fixture's `result` line (via matchResultText,
+// unavailable without the match itself) and, when the tournament has groups, a per-group standings
+// breakdown (via computeGroupStandings) instead of one flat table. Both callers already have a
+// `matches` array on hand for computeStandings itself, so this costs neither one an extra read.
+function pickStandingsRow(r) {
+  return {
+    team: r.team,
+    played: r.played,
+    won: r.won,
+    lost: r.lost,
+    tied: r.tied,
+    noResult: r.noResult,
+    points: r.points,
+    nrr: r.nrr
+  };
+}
+export function formatTournamentViewSnapshot(tournament, standings, matches = []) {
+  const matchById = new Map(matches.map(m => [m.id, m]));
+  const groupStandings = computeGroupStandings(tournament, matches);
+  // Mirrors the "how many teams advance out of the groups" math FixturesSection already uses to
+  // decide which knockout stages apply (Quarterfinal/Semifinal/Final) — a single-pool tournament's
+  // own team count stands in for it when there are no groups at all.
+  const advancingTeamCount = tournament.groups && tournament.groups.length ? tournament.groups.length * (tournament.advancePerGroup || 2) : tournament.teams.length;
+  const knockoutStages = applicableKnockoutStages(advancingTeamCount).map(s => s.label);
   return {
     name: tournament.name,
     teams: tournament.teams,
+    venue: tournament.venue || null,
+    venueLat: tournament.venueLat != null ? tournament.venueLat : null,
+    venueLng: tournament.venueLng != null ? tournament.venueLng : null,
+    format: {
+      oversLimit: tournament.defaultOvers || null,
+      groupsCount: tournament.groups ? tournament.groups.length : null,
+      advancePerGroup: tournament.groups ? tournament.advancePerGroup || 2 : null,
+      knockoutStages: knockoutStages.length ? knockoutStages : null
+    },
     fixtures: (tournament.fixtures || []).map(f => ({
       id: f.id,
       teamA: f.teamA,
       teamB: f.teamB,
-      date: f.date || ""
+      date: f.date || "",
+      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null
     })),
-    standings: standings.map(r => ({
-      team: r.team,
-      played: r.played,
-      won: r.won,
-      lost: r.lost,
-      tied: r.tied,
-      noResult: r.noResult,
-      points: r.points,
-      nrr: r.nrr
-    }))
+    groups: groupStandings ? groupStandings.map(g => ({
+      label: g.label,
+      standings: g.standings.map(pickStandingsRow)
+    })) : null,
+    standings: standings.map(pickStandingsRow)
   };
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself

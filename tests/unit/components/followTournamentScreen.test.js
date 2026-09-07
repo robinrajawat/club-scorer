@@ -142,3 +142,41 @@ test("FollowTournamentScreen: shows scheduled fixtures when present", async () =
   const text = JSON.stringify(inst.toJSON());
   assert.match(text, /Fixtures/);
 });
+
+test("FollowTournamentScreen: shows venue and a format summary line when the snapshot carries them", async () => {
+  const data = snapshotData({
+    venue: "Green Park", venueLat: 26.45, venueLng: 80.33,
+    format: { oversLimit: 20, groupsCount: null, advancePerGroup: null, knockoutStages: null }
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Green Park/);
+  assert.match(text, /20 overs/);
+});
+
+test("FollowTournamentScreen: a completed fixture's result shows under a Results section, separate from upcoming Fixtures", async () => {
+  const data = snapshotData({
+    fixtures: [
+      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs" },
+      { id: "f2", date: "2026-05-08T18:00", teamA: "Riverside 2nd XI", teamB: "Riverside 1st XI", result: null }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Results/);
+  assert.match(text, /won by 20 runs/);
+  assert.match(text, /Fixtures/);
+});
+
+test("FollowTournamentScreen: a grouped tournament shows one standings table per group instead of one flat table", async () => {
+  const data = snapshotData({
+    groups: [
+      { label: "Group A", standings: [{ team: "Riverside 1st XI", played: 2, won: 2, lost: 0, tied: 0, noResult: 0, points: 4, nrr: 1.1 }] },
+      { label: "Group B", standings: [{ team: "Riverside 2nd XI", played: 2, won: 1, lost: 1, tied: 0, noResult: 0, points: 2, nrr: 0.2 }] }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Group A/);
+  assert.match(text, /Group B/);
+});

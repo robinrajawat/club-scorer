@@ -127,6 +127,7 @@ export function FirstLaunchTour({
 export function TournamentShareModal({
   tournament,
   standings,
+  matches = [],
   onClose,
   onUpdateTournament
 }) {
@@ -138,7 +139,7 @@ export function TournamentShareModal({
   async function handleShare() {
     setBusy(true);
     setError("");
-    const result = await shareTournament(tournament, standings);
+    const result = await shareTournament(tournament, standings, matches);
     setBusy(false);
     if (result.ok) {
       if (!tournament.shareCode) onUpdateTournament({
