@@ -124,6 +124,8 @@ This is a static site with a Firebase backend for the optional sync/sharing feat
 
 No build step and no `npm install` needed to **run** the app — it's plain React and Firebase loaded from CDN `<script>` tags. `npm install` is only needed for **development**: running the test suite (`npm test`) or regenerating `public/index.html` from `src/` after an edit (`npm run generate`) — see `tests/README.md`.
 
+Bulk data cleanup across users (e.g. clearing out test matches/tournaments) is a project-owner-only maintenance task, not an in-app feature — see [`scripts/admin-data-cleanup.js`](scripts/admin-data-cleanup.js)'s own header for usage. It runs locally against the Firebase Admin SDK with a service-account key, dry-running by default so nothing is ever deleted without first showing exactly what would be.
+
 ## Contributing
 
 Start with [`docs/handoff-prompt.md`](docs/handoff-prompt.md) — the
