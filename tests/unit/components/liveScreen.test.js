@@ -98,3 +98,51 @@ test("LiveScreen: lists every live tournament (uncapped), with its team count, a
   act(() => { card.props.onClick(); });
   assert.equal(openedCode, "CODE4");
 });
+
+test("LiveScreen: no search box when there's genuinely nothing live, even once loading finishes", () => {
+  const inst = render();
+  assert.throws(() => inst.root.findByType("input"));
+});
+
+test("LiveScreen: search filters matches by team name and tournaments by name, case-insensitively", () => {
+  const matches = [liveMatch({ id: "live1", teamA: "Riverside CC", teamB: "Oakwood CC" }), liveMatch({ id: "live2", teamA: "Thunder XI", teamB: "Lions CC" })];
+  const tournaments = [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 4 }, { tournamentId: "t2", name: "Winter League", shareCode: "CODE2", teamsCount: 6 }];
+  const inst = render({ liveMatches: matches, liveTournaments: tournaments });
+  const search = inst.root.findByType("input");
+  act(() => { search.props.onChange({ target: { value: "riverside" } }); });
+  let json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Matches \(1\)/);
+  assert.doesNotMatch(json, /Thunder XI/);
+  assert.doesNotMatch(json, /Tournaments \(/);
+
+  act(() => { search.props.onChange({ target: { value: "winter" } }); });
+  json = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(json, /Matches \(/);
+  assert.match(json, /Tournaments \(1\)/);
+  assert.match(json, /Winter League/);
+});
+
+test("LiveScreen: a match also matches by its tournament badge name", () => {
+  const inst = render({
+    liveMatches: [liveMatch({ tournamentId: "t1" })],
+    tournamentNameById: { t1: "Summer Cup" }
+  });
+  const search = inst.root.findByType("input");
+  act(() => { search.props.onChange({ target: { value: "summer" } }); });
+  assert.match(JSON.stringify(inst.toJSON()), /Matches \(1\)/);
+});
+
+test("LiveScreen: shows a 'nothing matches' state (distinct from 'Nothing live right now') when a search has no results, and Clear resets it", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
+  const search = inst.root.findByType("input");
+  act(() => { search.props.onChange({ target: { value: "nonexistent team" } }); });
+  let json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Nothing matches/);
+  assert.doesNotMatch(json, /Nothing live right now/);
+
+  const clearBtn = inst.root.findByProps({ "aria-label": "Clear search" });
+  act(() => { clearBtn.props.onClick(); });
+  json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Riverside CC/);
+  assert.doesNotMatch(json, /Nothing matches/);
+});
