@@ -4,8 +4,11 @@ import { Plus, Share } from "./icons.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // Small presentational components used across setup/list screens: a labeled form-field wrapper,
-// the "add to home screen" install hint banner, and a floating "+" action button. Covered by
-// tests/unit/components/screenAtoms.test.js using react-test-renderer.
+// the "add to home screen" install hint banner, and a floating "+" action button. Field and
+// InstallHintBanner are covered by tests/unit/components/screenAtoms.test.js using
+// react-test-renderer; FabButton portals to document.body (see its own comment), so its test
+// renders through real react-dom (createRoot) into a jsdom container instead, same technique as
+// authBar.test.js/shareMenus.test.js.
 
 export function Field({
   label,
@@ -100,11 +103,18 @@ export function InstallHintBanner({
 // element's own left/right/maxWidth/margin (see TabBar) rather than anchoring straight to the
 // viewport edge -- keeps it aligned with the tab bar's own right edge on a wide (desktop-width)
 // viewport instead of drifting off to the raw screen edge past the centered 560px column.
+// Rendered via ReactDOM.createPortal(..., document.body) (a bare global, same as Modal/ShareMenu
+// elsewhere in this suite) rather than in place -- every screen it lives on on is wrapped in
+// NavWrap's own 0.32s entrance transform (see NavWrap's comment on transforms breaking
+// position:fixed on descendants), and unlike a Modal, this button is visible from the very first
+// frame a screen mounts, squarely inside that animation window. Without the portal it would slide
+// in sideways with the rest of the screen instead of staying rock-solid like TabBar, which is
+// rendered as CricketScorer's own sibling, never inside a NavWrap at all.
 export function FabButton({
   onClick,
   label
 }) {
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       left: 16,
@@ -139,7 +149,7 @@ export function FabButton({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 26,
     strokeWidth: 2.5
-  })));
+  }))), document.body);
 }
 
 export function NavWrap({

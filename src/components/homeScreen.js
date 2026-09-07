@@ -1153,7 +1153,12 @@ function renderMatchCard(m, i, {
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1299,7 +1304,12 @@ function renderMatchCard(m, i, {
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "30vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {

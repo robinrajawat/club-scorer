@@ -6,6 +6,7 @@ import { LoadingNote } from "./illustrations.js";
 import { EditPlayerModal, PLAYER_ROLES } from "./playerModals.js";
 import { ClubPanel } from "./clubPanel.js";
 import { FederationsPanel } from "./federationsPanel.js";
+import { FabButton } from "./screenAtoms.js";
 import { isClubOwner, parseBulkPlayers } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
@@ -79,6 +80,11 @@ export function TeamsScreen({
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   const [showInfo, setShowInfo] = useState(false);
+  // Bumped to trigger ClubPanel's/FederationsPanel's own create form open from the FAB below --
+  // see createSignal's own comment on each panel for why this indirection (a changing prop, not a
+  // direct call) is needed: `mode` is local state inside each panel, out of this component's reach.
+  const [clubCreateSignal, setClubCreateSignal] = useState(0);
+  const [fedCreateSignal, setFedCreateSignal] = useState(0);
   // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). Lives
   // here rather than in club settings since building teams is exactly where it's used. One
   // quick-add row for a single name, plus a bulk-paste/upload box for dropping in a whole
@@ -261,7 +267,8 @@ export function TeamsScreen({
     onRemoveUmpire: onRemoveUmpire,
     currentUid: currentUid,
     pinnedClubIds: pinnedClubIds,
-    onTogglePinClub: onTogglePinClub
+    onTogglePinClub: onTogglePinClub,
+    createSignal: clubCreateSignal
   })), tab === "clubs" && activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, activeClub && canManage && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
@@ -803,6 +810,13 @@ export function TeamsScreen({
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
-    onOpenRecords: onOpenRecords
+    onOpenRecords: onOpenRecords,
+    createSignal: fedCreateSignal
+  })), !activeClubId && (tab === "clubs" ? /*#__PURE__*/React.createElement(FabButton, {
+    onClick: () => setClubCreateSignal(s => s + 1),
+    label: "New Club"
+  }) : /*#__PURE__*/React.createElement(FabButton, {
+    onClick: () => setFedCreateSignal(s => s + 1),
+    label: "New Federation"
   })));
 }

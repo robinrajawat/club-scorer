@@ -4,7 +4,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { afterEach } from "node:test";
+import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js";
@@ -27,8 +27,20 @@ function clickNav(inst, text) {
   act(() => { b.props.onClick(); });
 }
 
+// The FabButton this screen renders (its "New Tournament" FAB) calls ReactDOM.createPortal(...,
+// document.body) internally -- a bare global, same as Modal -- but react-test-renderer has no real
+// DOM to portal into, so this stub just renders the portal's children in place instead. Fine here:
+// these tests only check the button itself (by aria-label) exists and wires onClick, never its
+// real position in the document -- that's covered on its own in screenAtoms.test.js.
+beforeEach(() => {
+  globalThis.ReactDOM = { createPortal: node => node };
+  globalThis.document = { body: null }; // FabButton reads document.body as the portal target
+});
+
 afterEach(() => {
   delete globalThis.Modal;
+  delete globalThis.ReactDOM;
+  delete globalThis.document;
 });
 
 // Finds the wrapping <div style={{marginTop:14}}> a ToggleRule/NullableNumberRule renders itself

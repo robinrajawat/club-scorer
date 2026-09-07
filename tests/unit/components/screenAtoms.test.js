@@ -1,8 +1,16 @@
 // Small presentational components used across setup/list screens (src/components/screenAtoms.js).
+// FabButton calls ReactDOM.createPortal(..., document.body) directly (a bare global, same as
+// AuthBar's menu/ShareMenu), so its test renders through real react-dom (createRoot) into a jsdom
+// container instead of react-test-renderer -- same setup as authBar.test.js/shareMenus.test.js,
+// for the same reason (react-test-renderer can't host a portal targeting a real DOM node).
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import React from "react";
+import { beforeEach, afterEach } from "node:test";
+import { JSDOM } from "jsdom";
+import React, { act } from "react";
+import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import renderer from "react-test-renderer";
 import { FabButton, Field, InstallHintBanner, NavWrap } from "../../../src/components/screenAtoms.js";
 
@@ -19,14 +27,6 @@ test("InstallHintBanner: calls onDismiss when the close button is clicked", () =
   assert.equal(dismissed, true);
 });
 
-test("FabButton: renders a button labeled/found by its aria-label, and calls onClick", () => {
-  let clicked = false;
-  const inst = renderer.create(React.createElement(FabButton, { onClick: () => { clicked = true; }, label: "New Match" }));
-  const btn = inst.root.findByProps({ "aria-label": "New Match" });
-  btn.props.onClick();
-  assert.equal(clicked, true);
-});
-
 test("NavWrap: renders its children, keyed by navKey, using the 'back' animation only when direction is 'back'", () => {
   const forward = renderer.create(React.createElement(NavWrap, { navKey: "a", direction: "forward" }, "content")).toJSON();
   assert.equal(forward.children[0], "content");
@@ -34,4 +34,36 @@ test("NavWrap: renders its children, keyed by navKey, using the 'back' animation
 
   const back = renderer.create(React.createElement(NavWrap, { navKey: "b", direction: "back" }, "content")).toJSON();
   assert.match(back.props.style.animation, /cs-navInLeft/);
+});
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let dom, container, root;
+
+beforeEach(() => {
+  dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://example.test/" });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.ReactDOM = ReactDOM;
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => { root.unmount(); });
+  delete globalThis.window;
+  delete globalThis.document;
+  delete globalThis.ReactDOM;
+});
+
+test("FabButton: portals a button labeled/found by its aria-label straight onto document.body, and calls onClick", () => {
+  let clicked = false;
+  act(() => { root.render(React.createElement(FabButton, { onClick: () => { clicked = true; }, label: "New Match" })); });
+  // Not inside the local container -- it portaled past it, straight onto document.body.
+  assert.doesNotMatch(container.innerHTML, /New Match/);
+  const btn = document.body.querySelector("[aria-label='New Match']");
+  assert.ok(btn);
+  act(() => { btn.dispatchEvent(new window.MouseEvent("click", { bubbles: true })); });
+  assert.equal(clicked, true);
 });

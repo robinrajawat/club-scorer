@@ -80,6 +80,16 @@ test("ClubPanel: creating a club fills the name field and calls onCreate, then o
   assert.equal(selected, "newClub");
 });
 
+test("ClubPanel: bumping createSignal (TeamsScreen's 'New Club' FAB) opens the create form on its own, without a chip tap", () => {
+  const inst = render({ createSignal: 0 });
+  assert.throws(() => inst.root.findByType("input"));
+
+  act(() => { inst.update(React.createElement(ClubPanel, baseProps({ createSignal: 1 }))); });
+  assert.ok(inst.root.findByType("input"));
+  const createBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Create"));
+  assert.ok(createBtn);
+});
+
 test("ClubPanel: joining with a code calls onJoin with the uppercased, sanitized code", async () => {
   let joinedWith = null;
   const inst = render({ onJoin: code => { joinedWith = code; return Promise.resolve({ ok: true }); } });

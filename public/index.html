@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 <title>Club Scorer</title>
 <meta name="description" content="Ball-by-ball cricket scoring for friendly club games." />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
@@ -11805,6 +11805,13 @@ function InstallHintBanner({
 // element's own left/right/maxWidth/margin (see TabBar) rather than anchoring straight to the
 // viewport edge -- keeps it aligned with the tab bar's own right edge on a wide (desktop-width)
 // viewport instead of drifting off to the raw screen edge past the centered 560px column.
+// Rendered via ReactDOM.createPortal(..., document.body) (a bare global, same as Modal/ShareMenu
+// elsewhere in this suite) rather than in place -- every screen it lives on on is wrapped in
+// NavWrap's own 0.32s entrance transform (see NavWrap's comment on transforms breaking
+// position:fixed on descendants), and unlike a Modal, this button is visible from the very first
+// frame a screen mounts, squarely inside that animation window. Without the portal it would slide
+// in sideways with the rest of the screen instead of staying rock-solid like TabBar, which is
+// rendered as CricketScorer's own sibling, never inside a NavWrap at all.
 // GENERATED-FN-END: InstallHintBanner
 // GENERATED-FN-START: FirstLaunchTour
 function FirstLaunchTour({
@@ -13537,7 +13544,8 @@ function ClubPanel({
   onRemoveUmpire,
   currentUid,
   pinnedClubIds = [],
-  onTogglePinClub
+  onTogglePinClub,
+  createSignal
 }) {
   const [mode, setMode] = useState(null); // null | 'create' | 'join'
   const [text, setText] = useState("");
@@ -13569,6 +13577,16 @@ function ClubPanel({
   const [addressBusy, setAddressBusy] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState("");
+  // TeamsScreen's own "New Club" FAB (see its own comment) has no local access to this panel's
+  // `mode` state, so it opens the create form indirectly: bumping createSignal (any truthy,
+  // changing value) is the trigger, this effect is the receiver. Falsy on mount (0/undefined), so
+  // it never force-opens the form before the FAB is ever tapped.
+  useEffect(() => {
+    if (!createSignal) return;
+    setMode("create");
+    setText("");
+    setError("");
+  }, [createSignal]);
   // Debounced address search for the club-details form, identical in shape to VenueEditModal's own
   // (same Nominatim endpoint, same 400ms pause-before-searching, same policy reasoning) -- not
   // extracted into one shared component since the two forms differ in everything around the search
@@ -15154,7 +15172,8 @@ function FederationsPanel({
   onDeleteFederation,
   federationRequests = [],
   onCancelFederationRequest,
-  onOpenRecords
+  onOpenRecords,
+  createSignal
 }) {
   const federations = Object.values(federationsById).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const [mode, setMode] = useState(null); // null | 'create' | 'find'
@@ -15227,6 +15246,16 @@ function FederationsPanel({
     setText("");
     setError("");
   }
+  // TeamsScreen's own "New Federation" FAB (see its own comment) has no local access to this
+  // panel's `mode` state, so it opens the create form indirectly: bumping createSignal (any
+  // truthy, changing value) is the trigger, this effect is the receiver. Falsy on mount
+  // (0/undefined), so it never force-opens the form before the FAB is ever tapped.
+  useEffect(() => {
+    if (!createSignal) return;
+    setMode("create");
+    setText("");
+    setError("");
+  }, [createSignal]);
   async function submitCreate() {
     if (!text.trim() || busy) return;
     setBusy(true);
@@ -16577,7 +16606,12 @@ function InboxScreen({
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19918,7 +19952,12 @@ function renderMatchCard(m, i, {
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20064,7 +20103,12 @@ function renderMatchCard(m, i, {
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "30vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20387,7 +20431,12 @@ function LiveScreen({
   })), isEmpty && !loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      padding: "40px 20px"
+      padding: "40px 20px",
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -20720,7 +20769,12 @@ function MyTeamsScreen({
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -22982,7 +23036,7 @@ function FabButton({
   onClick,
   label
 }) {
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       left: 16,
@@ -23017,7 +23071,7 @@ function FabButton({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 26,
     strokeWidth: 2.5
-  })));
+  }))), document.body);
 }
 // GENERATED-FN-END: FabButton
 // Source-scoped list of tournaments (personal or a specific club's), mirroring TeamsScreen's
@@ -24835,7 +24889,12 @@ function TournamentsScreen({
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -28869,6 +28928,11 @@ function TeamsScreen({
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
   const [showInfo, setShowInfo] = useState(false);
+  // Bumped to trigger ClubPanel's/FederationsPanel's own create form open from the FAB below --
+  // see createSignal's own comment on each panel for why this indirection (a changing prop, not a
+  // direct call) is needed: `mode` is local state inside each panel, out of this component's reach.
+  const [clubCreateSignal, setClubCreateSignal] = useState(0);
+  const [fedCreateSignal, setFedCreateSignal] = useState(0);
   // Club player pool -- a club-wide roster to draw team lineups from (see addPoolPlayers). Lives
   // here rather than in club settings since building teams is exactly where it's used. One
   // quick-add row for a single name, plus a bulk-paste/upload box for dropping in a whole
@@ -29051,7 +29115,8 @@ function TeamsScreen({
     onRemoveUmpire: onRemoveUmpire,
     currentUid: currentUid,
     pinnedClubIds: pinnedClubIds,
-    onTogglePinClub: onTogglePinClub
+    onTogglePinClub: onTogglePinClub,
+    createSignal: clubCreateSignal
   })), tab === "clubs" && activeClubId && /*#__PURE__*/React.createElement(React.Fragment, null, activeClub && canManage && /*#__PURE__*/React.createElement("div", {
   style: {
     background: COLORS.surface,
@@ -29593,7 +29658,14 @@ function TeamsScreen({
     onRemoveFederationCoOwner: onRemoveFederationCoOwner,
     onKickClubFromFederation: onKickClubFromFederation,
     onDeleteFederation: onDeleteFederation,
-    onOpenRecords: onOpenRecords
+    onOpenRecords: onOpenRecords,
+    createSignal: fedCreateSignal
+  })), !activeClubId && (tab === "clubs" ? /*#__PURE__*/React.createElement(FabButton, {
+    onClick: () => setClubCreateSignal(s => s + 1),
+    label: "New Club"
+  }) : /*#__PURE__*/React.createElement(FabButton, {
+    onClick: () => setFedCreateSignal(s => s + 1),
+    label: "New Federation"
   })));
 }
 // GENERATED-FN-END: TeamsScreen
@@ -31531,7 +31603,12 @@ function PlayersScreen({
       padding: "40px 20px",
       borderRadius: 16,
       border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
+      minHeight: "50vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {

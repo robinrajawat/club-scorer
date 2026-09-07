@@ -28,15 +28,24 @@ function hasText(node, str) {
 // fixture) fires mount-time useEffects that call these as bare globals -- same stubs as
 // upcomingFixtureCard.test.js itself. Harmless for every other test here, which passes no
 // tournaments/fixtures at all so UpcomingFixtureCard never mounts.
+// The FabButton HomeScreen renders (its "New Match" FAB) calls ReactDOM.createPortal(...,
+// document.body) internally -- a bare global, same as Modal -- but react-test-renderer has no real
+// DOM to portal into, so this stub just renders the portal's children in place instead. Fine here:
+// these tests only check the button itself (by aria-label) exists and wires onClick, never its
+// real position in the document -- that's covered on its own in screenAtoms.test.js.
 beforeEach(() => {
   globalThis.loadFixturePollSummary = () => Promise.resolve([]);
   globalThis.fetchFixtureWeather = () => Promise.resolve(null);
+  globalThis.ReactDOM = { createPortal: node => node };
+  globalThis.document = { body: null }; // FabButton reads document.body as the portal target
 });
 
 afterEach(() => {
   delete globalThis.Modal;
   delete globalThis.loadFixturePollSummary;
   delete globalThis.fetchFixtureWeather;
+  delete globalThis.ReactDOM;
+  delete globalThis.document;
 });
 
 function match(overrides = {}) {
