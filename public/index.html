@@ -23695,6 +23695,8 @@ function TournamentsScreen({
       [team]: (teamGroupIndex(team) + 1) % numGroups
     }));
   }
+  // Which of the two "New …" flows the floating "+" opens -- see its own comment lower down.
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [creatingSeries, setCreatingSeries] = useState(false);
   const [seriesName, setSeriesName] = useState("");
   const [seriesTeamA, setSeriesTeamA] = useState("");
@@ -24225,28 +24227,7 @@ function TournamentsScreen({
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), !creating && /*#__PURE__*/React.createElement("button", {
-    onClick: openCreateSeries,
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "center",
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      cursor: "pointer",
-      marginBottom: 16,
-      textDecoration: "underline"
-    }
-    // Tapping the floating "+" (see FabButton at the bottom of this component's return) starts a
-    // Tournament -- the more common of the two, and the one that used to be this screen's own
-    // full-width primary button. A head-to-head series is the secondary case, so it keeps a plain
-    // text link rather than getting a second FAB of its own.
-  }, "or start a head-to-head series instead"), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Tournaments & series \u2014 group matches together for a running points table, or track a run of head-to-head games instead. Tag a match with a tournament from its setup screen."), tournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -24894,10 +24875,85 @@ function TournamentsScreen({
       lineHeight: 1.6,
       marginTop: 14
     }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")), !creating && !creatingSeries && /*#__PURE__*/React.createElement(FabButton, {
-    onClick: openCreate,
-    label: "New Tournament"
-  }));
+  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")), !creating && !creatingSeries && !showCreateMenu && /*#__PURE__*/React.createElement(FabButton, {
+    // Opens a choice of the two create flows below rather than jumping straight into Tournament --
+    // a head-to-head series used to be a plain text link under the info banner ("or start a
+    // head-to-head series instead"), easy to miss and inconsistent with the FAB being the one
+    // place every other screen starts a create flow from. Folding it in here means one obvious
+    // entry point for both, at the cost of one extra tap for the (more common) Tournament case.
+    onClick: () => setShowCreateMenu(true),
+    label: "New"
+  }), showCreateMenu && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowCreateMenu(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 14
+    }
+  }, "New…"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowCreateMenu(false);
+      openCreate();
+    },
+    className: "cs-btn",
+    "aria-label": "New Tournament",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderRadius: 14,
+      padding: "14px 16px",
+      marginBottom: 10,
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 20,
+    style: { color: COLORS.gold, flexShrink: 0 }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: { minWidth: 0 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { fontFamily: "'Inter'", fontWeight: 700, fontSize: 14, color: COLORS.ink }
+  }, "Tournament"), /*#__PURE__*/React.createElement("div", {
+    style: { fontFamily: "'Inter'", fontSize: 12, color: COLORS.inkSoft, marginTop: 2 }
+  }, "A group of teams, a running points table."))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowCreateMenu(false);
+      openCreateSeries();
+    },
+    className: "cs-btn",
+    "aria-label": "New head-to-head series",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderRadius: 14,
+      padding: "14px 16px",
+      cursor: "pointer",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
+    size: 20,
+    style: { color: COLORS.gold, flexShrink: 0 }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: { minWidth: 0 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { fontFamily: "'Inter'", fontWeight: 700, fontSize: 14, color: COLORS.ink }
+  }, "Head-to-head series"), /*#__PURE__*/React.createElement("div", {
+    style: { fontFamily: "'Inter'", fontSize: 12, color: COLORS.inkSoft, marginTop: 2 }
+  }, "A running score between two teams across several matches.")))));
 }
 // GENERATED-FN-END: TournamentsScreen
 // Standings + match list for one tournament. Fetches full match docs itself (loadTournamentMatches)
