@@ -873,12 +873,17 @@ service cloud.firestore {
 
     // ---------------------------------------------------------------------
     // Public directories — a lightweight denormalized entry so a club or federation can be found
-    // by search WITHOUT exposing the real document (roster, pending invites, description). A
-    // club/federation owner publishes exactly one of these the moment they flip visibility to
-    // "public" (see setClubVisibility/setFederationVisibility in index.html), and it's deleted the
-    // instant they go private again. Same "found by design" trust level as the /players directory
-    // above — read is open to any signed-in user so the search UI can just list the whole (small)
-    // collection and filter client-side.
+    // by search WITHOUT exposing the real document (roster, pending invites, description). Every
+    // club/federation is public/directory-listed by default now (createClub/createFederation in
+    // index.html write visibility:"public" and this mirror in the same breath a club/federation is
+    // created) — club/federation membership and every change to it are already owner/co-owner
+    // governed, so a separate opt-in gate on top of that never actually protected anything; there
+    // is no client UI to go private any more. setClubVisibility/setFederationVisibility(true) still
+    // exist purely to self-heal a club/federation created before this simplification whose
+    // visibility field predates it or was still "private" (see ClubPanel's/FederationsPanel's own
+    // comment) — nothing in the app calls them with `false` any more. Same "found by design" trust
+    // level as the /players directory above — read is open to any signed-in user so the search UI
+    // can just list the whole (small) collection and filter client-side.
     //
     // /clubDirectory also carries ownerUid/coOwnerUids (not just name/ownerName) — not for search,
     // but so a federation owner proposing a "federation_to_club" request (see /federationRequests
@@ -886,10 +891,10 @@ service cloud.firestore {
     // onto the request as toOwnerUids, without needing club membership: reading the real /clubs
     // doc requires being a member (see clubs/{clubId} read rule), which a federation owner
     // proposing to a club they don't belong to never is. This mirror can go stale if the club's
-    // ownership changes after it last republished (only setClubVisibility(true) refreshes it, same
-    // pre-existing staleness as name/ownerName) — accepted for the same reason those already are:
-    // a spoofed or stale value here can't itself grant anything, since federationRequests' create
-    // rule validates toOwnerUids against the REAL /clubs doc, not this mirror.
+    // ownership changes after it last republished (only a create/update of this doc refreshes it,
+    // same pre-existing staleness as name/ownerName) — accepted for the same reason those already
+    // are: a spoofed or stale value here can't itself grant anything, since federationRequests'
+    // create rule validates toOwnerUids against the REAL /clubs doc, not this mirror.
     // ---------------------------------------------------------------------
     match /clubDirectory/{clubId} {
       allow get, list: if request.auth != null;
@@ -912,12 +917,17 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Public user directory — lets a signed-in person opt their OWN account into being findable by
-    // name (see setMyProfileVisibility in index.html), so a club/federation owner inviting a
-    // co-owner or member isn't limited to "already know their exact email" the way every invite
-    // flow otherwise is. Private by default: a doc here only exists if that person deliberately
-    // published one, deleted the instant they opt back out (same publish/unpublish shape as
-    // clubDirectory/federationDirectory above) — nobody is discoverable without asking to be.
+    // Public user directory — lets a signed-in person be findable by name (see
+    // setMyProfileVisibility in index.html), so a club/federation owner inviting a co-owner or
+    // member isn't limited to "already know their exact email" the way every invite flow otherwise
+    // is. Published automatically once per sign-in now (see cricketScorer.js's own mount effect,
+    // and AccountScreen no longer carries a toggle for it) — this is a name-lookup convenience for
+    // an invite the sender could otherwise send by typing the exact email address anyway, not a
+    // data-access gate, so there's nothing this doc's mere existence unlocks: everything below
+    // still pins every field to the caller's own verified identity, exactly as it did when
+    // publishing was opt-in. A doc here is deleted only via an account being deleted outright (see
+    // deleteUserAccount in index.html) — there is no client path back to unpublished for an
+    // otherwise-active account any more.
     //
     // Unlike a club or federation, an account has no separate "owner" who could vouch for it, so
     // the create/update rule instead pins every field to the caller's own verified identity: name

@@ -54,7 +54,6 @@ export function HomeScreen({
   onOpenFederation,
   user,
   profile,
-  isProfilePublic,
   onOpenAccount,
   onOpenInbox,
   onOpenSharedLinks,
@@ -614,7 +613,6 @@ function renderMatchCard(m, i, {
   }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
-    isProfilePublic: isProfilePublic,
     onOpenAccount: onOpenAccount,
     onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,

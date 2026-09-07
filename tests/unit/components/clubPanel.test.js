@@ -248,18 +248,40 @@ test("ClubPanel: 'Delete club' opens a ConfirmModal, and confirming calls onDele
   assert.equal(deleted, "c1");
 });
 
-test("ClubPanel: toggling visibility calls onSetVisibility with the new state", async () => {
+test("ClubPanel: clubs are always public now -- no manual visibility toggle, for owner or member", () => {
+  const asOwner = render({ clubs: [club({ visibility: "public" })], activeClubId: "c1", currentUid: "owner1" });
+  assert.throws(() => asOwner.root.findByProps({ "aria-label": "Make public" }));
+  assert.throws(() => asOwner.root.findByProps({ "aria-label": "Make private" }));
+  assert.doesNotMatch(JSON.stringify(asOwner.toJSON()), /Private/);
+
+  const asMember = render({ clubs: [club({ visibility: "public" })], activeClubId: "c1", currentUid: "someoneElse" });
+  assert.doesNotMatch(JSON.stringify(asMember.toJSON()), /· Public|· Private/);
+});
+
+test("ClubPanel: a club still marked private from before this simplification self-heals to public the moment its owner opens it", () => {
   let setTo = null;
-  const inst = render({
-    clubs: [club({ visibility: "private" })], activeClubId: "c1", currentUid: "owner1",
-    onSetVisibility: (id, isPublic) => { setTo = { id, isPublic }; return Promise.resolve({ ok: true }); }
-  });
-  const publicBtn = inst.root.findByProps({ "aria-label": "Make public" });
-  await act(async () => {
-    publicBtn.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
+  act(() => {
+    render({
+      clubs: [club({ visibility: "private" })], activeClubId: "c1", currentUid: "owner1",
+      onSetVisibility: (id, isPublic) => { setTo = { id, isPublic }; return Promise.resolve({ ok: true }); }
+    });
   });
   assert.deepEqual(setTo, { id: "c1", isPublic: true });
+});
+
+test("ClubPanel: does not call onSetVisibility for a club that's already public, or for a non-owner", () => {
+  let called = false;
+  render({
+    clubs: [club({ visibility: "public" })], activeClubId: "c1", currentUid: "owner1",
+    onSetVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
+
+  render({
+    clubs: [club({ visibility: "private" })], activeClubId: "c1", currentUid: "someoneElse",
+    onSetVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
 });
 
 test("ClubPanel: requesting affiliation with a found federation calls onRequestFederationAffiliation", async () => {

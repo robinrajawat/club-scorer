@@ -3245,9 +3245,23 @@ async function createClub(name) {
       },
       umpires: [],
       playerPool: [],
+      // Clubs are always public/directory-listed now (see ClubPanel's own comment) -- mint the
+      // clubDirectory entry in the same breath as the club itself, same fields
+      // setClubVisibility(true) would write, so a club never sits invisible to federations even
+      // for the moment before its owner happens to open ClubPanel (whose own self-heal effect only
+      // covers a pre-existing club created before this simplification).
+      visibility: "public",
       createdAt: Date.now()
     };
     await ref.set(club);
+    await db.collection("clubDirectory").doc(ref.id).set({
+      clubId: ref.id,
+      name: club.name,
+      ownerName: club.memberNames[auth.currentUser.uid] || "",
+      ownerUid: club.ownerUid,
+      coOwnerUids: club.coOwnerUids,
+      updatedAt: Date.now()
+    });
     return {
       ok: true,
       club: {
@@ -4450,9 +4464,19 @@ async function createFederation(name) {
       coOwnerUids: [],
       kickedClubIds: [],
       affiliatedClubIds: [],
+      // Federations are always public/directory-listed now (see ClubPanel's own comment on
+      // clubs) -- mint the federationDirectory entry in the same breath as the federation itself,
+      // same fields setFederationVisibility(true) would write.
+      visibility: "public",
       createdAt: Date.now()
     };
     await ref.set(federation);
+    await db.collection("federationDirectory").doc(ref.id).set({
+      federationId: ref.id,
+      name: federation.name,
+      ownerName: federation.ownerName,
+      updatedAt: Date.now()
+    });
     return {
       ok: true,
       federation: {
@@ -9779,7 +9803,6 @@ const LogIn = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.
 function AuthBar({
   user,
   profile,
-  isProfilePublic,
   onOpenAccount,
   onOpenSharedLinks,
   onOpenHelp,
@@ -9924,24 +9947,7 @@ function AuthBar({
     style: {
       flex: 1
     }
-  }, user ? "Manage account" : "Sign in"), user && /*#__PURE__*/React.createElement("span", {
-    // Same public==gold/private==willow color pairing as VisibilitySwitch (the toggle this badge
-    // is just a preview of, on AccountScreen's "Discoverable for invites") -- a static echo of it
-    // here so whether you're findable by name is visible from the menu itself, not only once
-    // you've already opened Account to check.
-    style: {
-      flexShrink: 0,
-      border: `1px solid ${isProfilePublic ? COLORS.gold : COLORS.willow}`,
-      borderRadius: 20,
-      padding: "2px 7px",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 9.5,
-      color: isProfilePublic ? COLORS.gold : COLORS.inkSoft,
-      textTransform: "uppercase",
-      letterSpacing: 0.4
-    }
-  }, isProfilePublic ? "Public" : "Private")), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
+  }, user ? "Manage account" : "Sign in")), user && onOpenSharedLinks && /*#__PURE__*/React.createElement("button", {
     type: "button",
     role: "menuitem",
     className: "cs-btn",
@@ -10264,14 +10270,11 @@ function AccountScreen({
   onBack,
   redirectError,
   linkStatus,
-  onClearLinkStatus,
-  isProfilePublic = false,
-  onSetProfileVisibility
+  onClearLinkStatus
 }) {
   const [nameDraft, setNameDraft] = useState(profile && profile.displayName || user && user.displayName || "");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [profileVisBusy, setProfileVisBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -10510,14 +10513,6 @@ function AccountScreen({
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
-  async function handleSetProfileVisibility(isPublic) {
-    if (profileVisBusy || !onSetProfileVisibility) return;
-    setProfileVisBusy(true);
-    setActionError("");
-    const result = await onSetProfileVisibility(isPublic);
-    setProfileVisBusy(false);
-    if (result && result.ok === false) setActionError(result.error || "Couldn't update your visibility.");
-  }
   async function handleGenerateDummy() {
     setDummyBusy(true);
     setDummyStatus("");
@@ -10720,43 +10715,6 @@ function AccountScreen({
       marginTop: 6
     }
   }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Discoverable for invites"), onSetProfileVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: isProfilePublic,
-    busy: profileVisBusy,
-    onChange: handleSetProfileVisibility,
-    publicHint: "Public — findable by name",
-    privateHint: "Private — not findable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, isProfilePublic ? "A club or federation owner can find you by name (with your email and photo) when inviting a co-owner or member — same as typing your exact email, just easier to find." : "Off by default. A club or federation owner can only invite you by typing your exact email address until you turn this on."), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.cardDivider,
@@ -13551,7 +13509,6 @@ function ClubPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [visBusy, setVisBusy] = useState(false);
   const [findFedOpen, setFindFedOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -13647,6 +13604,16 @@ function ClubPanel({
   const [manageOpen, setManageOpen] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
+  // Clubs are always public/directory-listed now -- club membership and every change to it are
+  // already owner/co-owner governed, so a separate visibility gate on top of that added a step
+  // without actually protecting anything. No user-facing toggle for it any more; a club created
+  // before this simplification, still marked private, self-heals the moment its owner opens it
+  // here, via the same onSetVisibility plumbing the old toggle used to call by hand.
+  useEffect(() => {
+    if (activeClub && activeIsOwner && activeClub.visibility !== "public" && onSetVisibility) {
+      onSetVisibility(activeClub.id, true);
+    }
+  }, [activeClub && activeClub.id, activeClub && activeClub.visibility, activeIsOwner]);
   const pendingCoOwnerInvites = activeClub ? coOwnerInvites.filter(inv => inv.scope === "club" && inv.entityId === activeClub.id && inv.status === "pending") : [];
   // Same " · Owner" / " · Co-owner" / "" convention as FederationsPanel's roleLabel(f) just below
   // in this same screen — matching it exactly rather than inventing a parallel one, including
@@ -13669,13 +13636,6 @@ function ClubPanel({
     setFindFedOpen(false);
     setManageOpen(false);
   }, [activeClubId]);
-  async function handleSetVisibility(isPublic) {
-    if (!activeClub || !onSetVisibility) return;
-    setVisBusy(true);
-    const result = await onSetVisibility(activeClub.id, isPublic);
-    setVisBusy(false);
-    if (!result.ok) setError(result.error || "Couldn't update visibility.");
-  }
   function requestRemoveCoOwner(uid, name) {
     setConfirmRemoveMember({
       uid,
@@ -14110,13 +14070,7 @@ function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
-  }), "Records"), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: activeClub.visibility === "public",
-    busy: visBusy,
-    onChange: handleSetVisibility,
-    publicHint: "Public \u2014 federations can find and invite this club",
-    privateHint: "Private \u2014 not discoverable"
-  }), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }), "Records"), activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
@@ -14148,16 +14102,7 @@ function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", ".", !activeIsOwner && activeClub.visibility && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: activeClub.visibility === "public" ? COLORS.gold : COLORS.inkSoft
-    }
-  }, activeClub.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => onLeave(activeClub.id),
     style: {
       padding: "6px 10px",
@@ -15180,7 +15125,6 @@ function FederationsPanel({
   const [text, setText] = useState("");
   const [joinClubId, setJoinClubId] = useState(clubs[0] ? clubs[0].id : "");
   const [busy, setBusy] = useState(false);
-  const [visBusyId, setVisBusyId] = useState(null);
   const [findClubOpen, setFindClubOpen] = useState(false);
   const [error, setError] = useState("");
   const [manageOpenId, setManageOpenId] = useState(null);
@@ -15222,6 +15166,18 @@ function FederationsPanel({
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
+  // Federations are always public/directory-listed now -- see ClubPanel's identical comment on
+  // clubs for why (membership and every change to it are already owner/co-owner governed). No
+  // user-facing toggle for it any more; any federation created before this simplification, still
+  // marked private, self-heals here on mount via the same onSetFederationVisibility plumbing the
+  // old toggle used to call by hand.
+  useEffect(() => {
+    federations.forEach(f => {
+      if (isOwner(f) && f.visibility !== "public" && onSetFederationVisibility) {
+        onSetFederationVisibility(f.id, true);
+      }
+    });
+  }, [federationsById, currentUid]);
   // Outgoing federation_to_club invites sent by search (as opposed to the co-owner invites shown
   // lower down) -- these live in federationRequests, not on the federation doc itself, so without
   // this they were invisible in the manage panel: a club could
@@ -15274,12 +15230,6 @@ function FederationsPanel({
       error: "Pick which of your clubs is requesting this."
     };
     return onRequestFederationAffiliation("club_to_federation", joinClubId, federation.federationId);
-  }
-  async function handleSetVisibility(federationId, isPublic) {
-    setVisBusyId(federationId);
-    const result = await onSetFederationVisibility(federationId, isPublic);
-    setVisBusyId(null);
-    if (!result.ok) setError(result.error || "Couldn't update visibility.");
   }
   function openManage(f) {
     setManageOpenId(f.id);
@@ -15581,11 +15531,7 @@ function FederationsPanel({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
-  }), "Records"), isOwner(f) && /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: f.visibility === "public",
-    busy: visBusyId === f.id,
-    onChange: isPublic => handleSetVisibility(f.id, isPublic)
-  }), isOwner(f) && /*#__PURE__*/React.createElement("button", {
+  }), "Records"), isOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -15613,16 +15559,7 @@ function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated", !isOwner(f) && f.visibility && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: f.visibility === "public" ? COLORS.gold : COLORS.inkSoft
-    }
-  }, f.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), /*#__PURE__*/React.createElement("div", {
+  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -18853,7 +18790,6 @@ function HomeScreen({
   onOpenFederation,
   user,
   profile,
-  isProfilePublic,
   onOpenAccount,
   onOpenInbox,
   onOpenSharedLinks,
@@ -19413,7 +19349,6 @@ function renderMatchCard(m, i, {
   }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
-    isProfilePublic: isProfilePublic,
     onOpenAccount: onOpenAccount,
     onOpenSharedLinks: onOpenSharedLinks,
     onOpenHelp: onOpenHelp,
@@ -24751,7 +24686,7 @@ function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), organizerKey === "personal" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -24781,7 +24716,7 @@ function TournamentsScreen({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started."), error && /*#__PURE__*/React.createElement("div", {
+  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started.")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -26323,6 +26258,7 @@ function TournamentDetailScreen({
   onDeleteTournament,
   onOpenRecords,
   canManage = true,
+  isPersonal = true,
   clubs = [],
   clubTeamsById = {}
 }) {
@@ -26342,6 +26278,16 @@ function TournamentDetailScreen({
   // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
   // set, still wins -- this only fills in the default.
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // A club/federation tournament is always public now -- same reasoning as ClubPanel's/
+  // FederationsPanel's own identical comment (membership there is already owner/co-owner
+  // governed), so there's no toggle for one any more (see the Visibility section below, gated on
+  // isPersonal). One created before this simplification, still marked private, self-heals the
+  // moment its owner opens it here.
+  useEffect(() => {
+    if (!isPersonal && canManage && tournament.private && onToggleVisibility) {
+      onToggleVisibility(tournament);
+    }
+  }, [tournament.id, tournament.private, isPersonal, canManage]);
   function editTournamentVenue(venue, lat, lng) {
     if (!canManage) return;
     onUpdateTournament({
@@ -26623,7 +26569,7 @@ function TournamentDetailScreen({
       marginBottom: 18,
       marginTop: -8
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, isPersonal && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -26654,7 +26600,7 @@ function TournamentDetailScreen({
     }
     // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
     // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu."), matches !== null && /*#__PURE__*/React.createElement("button", {
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), matches !== null && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setRulesModalOpen(true),
     className: "cs-btn",
@@ -39821,7 +39767,6 @@ function CricketScorer() {
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
-  const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
   const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
   // Whether each feed's first snapshot has arrived yet -- lets LiveScreen tell "still loading" apart
@@ -40281,22 +40226,19 @@ function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.filter(item => !ids.includes(item.id)));
   }
-  // Loads whether I've already published myself to /userDirectory -- feeds AccountScreen's toggle
-  // state on mount, same "queries by my own uid" shape as the coOwnerInvites/activity effects
-  // above.
+  // My own profile is always discoverable by name now, same reasoning as ClubPanel's/
+  // FederationsPanel's own identical comment -- this is a name-lookup convenience for inviting
+  // someone to a club/federation, not a data-access gate (firestore.rules keeps write access
+  // pinned to the caller's own identity regardless of this). No user-facing toggle for it any
+  // more; publishes to /userDirectory once per sign-in if not already there, self-healing anyone
+  // who opted out (or never opted in) before this simplification.
   useEffect(() => {
-    if (!user) {
-      setIsProfilePublic(false);
-      return;
-    }
-    loadMyProfileVisibility().then(setIsProfilePublic);
+    if (!user) return;
+    loadMyProfileVisibility().then(isPublic => {
+      if (!isPublic) setMyProfileVisibility(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-  async function handleSetProfileVisibility(isPublic) {
-    const result = await setMyProfileVisibility(isPublic);
-    if (result.ok) setIsProfilePublic(isPublic);
-    return result;
-  }
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -41724,8 +41666,11 @@ function CricketScorer() {
       // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
       // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
       // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
-      // already have, still overridable per match.
-      private: !!isPrivate,
+      // already have, still overridable per match. Club/federation tournaments are never private
+      // (TournamentsScreen's own create form hides the toggle once an organizer other than
+      // Personal is picked -- membership there is already owner/co-owner governed) -- enforced
+      // here too, not just in the UI, since isPrivate is whatever this function was called with.
+      private: activeTournamentClubId || activeTournamentFederationId ? false : !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
       // this function only ever declared six parameters -- the venue was silently dropped on every
@@ -42262,7 +42207,6 @@ function CricketScorer() {
     },
     user: user,
     profile: profile,
-    isProfilePublic: isProfilePublic,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
@@ -42538,6 +42482,7 @@ function CricketScorer() {
     // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
     onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid),
+    isPersonal: !viewingTournamentClubId && !viewingTournamentFederationId,
     clubs: clubs,
     clubTeamsById: clubTeamsById
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -42569,9 +42514,7 @@ function CricketScorer() {
     onBack: () => setScreen("home"),
     redirectError: authError,
     linkStatus: linkStatus,
-    onClearLinkStatus: () => setLinkStatus(""),
-    isProfilePublic: isProfilePublic,
-    onSetProfileVisibility: handleSetProfileVisibility
+    onClearLinkStatus: () => setLinkStatus("")
   })), screen === "help" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "help",
     direction: navDirection

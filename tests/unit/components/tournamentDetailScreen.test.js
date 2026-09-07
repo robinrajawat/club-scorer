@@ -151,6 +151,34 @@ test("TournamentDetailScreen: no Visibility toggle when canManage is false", asy
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
 });
 
+test("TournamentDetailScreen: a club/federation tournament (isPersonal false) has no Visibility toggle either -- it's always public", async () => {
+  const inst = await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
+    isPersonal: false, onToggleVisibility: () => Promise.resolve({ ok: true })
+  });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
+});
+
+test("TournamentDetailScreen: a club/federation tournament still marked private from before this simplification self-heals to public on open", async () => {
+  let toggledWith = null;
+  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], {
+    isPersonal: false, onToggleVisibility: t => { toggledWith = t; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(toggledWith.id, "t1");
+});
+
+test("TournamentDetailScreen: does not self-heal a personal tournament, or one that's already public", async () => {
+  let called = false;
+  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], {
+    isPersonal: true, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
+
+  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
+    isPersonal: false, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
+});
+
 test("TournamentDetailScreen: shows the venue as a Maps link with an edit affordance once set", async () => {
   const inst = await renderScreen(tournamentFixture({ venue: "Riverside Oval", venueLat: 12.34, venueLng: 56.78 }), [completedMatch()]);
   const text = JSON.stringify(inst.toJSON());

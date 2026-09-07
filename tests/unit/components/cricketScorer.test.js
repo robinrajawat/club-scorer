@@ -98,6 +98,12 @@ async function render(url) {
   globalThis.loadTournaments = () => Promise.resolve([]);
   globalThis.loadBetaStatus = () => Promise.resolve(false);
   globalThis.loadClubs = () => Promise.resolve([]);
+  // ClubPanel's/FederationsPanel's own self-heal effect (see their own comments) calls these for
+  // any owned club/federation not already visibility:"public" -- most fixtures in this file don't
+  // set that field, so without a stub this throws (bare global, not defined) the moment such a
+  // club/federation actually renders.
+  globalThis.setClubVisibility = () => Promise.resolve({ ok: true });
+  globalThis.setFederationVisibility = () => Promise.resolve({ ok: true });
   // All four run on every signed-in mount regardless of what the user owns -- co-owner invites
   // cover ones addressed to my own email, federationRequests cover ones I sent (fromUid) or that
   // were addressed to something I owned as of send time (toOwnerUids), activity covers
@@ -108,6 +114,7 @@ async function render(url) {
   globalThis.loadMyFederationRequests = () => Promise.resolve([]);
   globalThis.loadMyActivity = () => Promise.resolve([]);
   globalThis.loadMyProfileVisibility = () => Promise.resolve(false);
+  globalThis.setMyProfileVisibility = () => Promise.resolve({ ok: true });
   // Unconditional-on-mount, signed-in-or-not, same reason each of the stubs above exists -- see
   // its own comment in cricketScorer.js. A listener, not a promise: returns an unsubscribe function
   // rather than resolving, same shape followScreen.test.js's onSnapshot stub captures for real.

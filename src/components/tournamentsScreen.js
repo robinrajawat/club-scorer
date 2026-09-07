@@ -1327,7 +1327,7 @@ export function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), organizerKey === "personal" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -1357,7 +1357,7 @@ export function TournamentsScreen({
       lineHeight: 1.5,
       marginBottom: 14
     }
-  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started."), error && /*#__PURE__*/React.createElement("div", {
+  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started.")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,

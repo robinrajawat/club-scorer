@@ -36,6 +36,7 @@ export function TournamentDetailScreen({
   onDeleteTournament,
   onOpenRecords,
   canManage = true,
+  isPersonal = true,
   clubs = [],
   clubTeamsById = {}
 }) {
@@ -55,6 +56,16 @@ export function TournamentDetailScreen({
   // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
   // set, still wins -- this only fills in the default.
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // A club/federation tournament is always public now -- same reasoning as ClubPanel's/
+  // FederationsPanel's own identical comment (membership there is already owner/co-owner
+  // governed), so there's no toggle for one any more (see the Visibility section below, gated on
+  // isPersonal). One created before this simplification, still marked private, self-heals the
+  // moment its owner opens it here.
+  useEffect(() => {
+    if (!isPersonal && canManage && tournament.private && onToggleVisibility) {
+      onToggleVisibility(tournament);
+    }
+  }, [tournament.id, tournament.private, isPersonal, canManage]);
   function editTournamentVenue(venue, lat, lng) {
     if (!canManage) return;
     onUpdateTournament({
@@ -336,7 +347,7 @@ export function TournamentDetailScreen({
       marginBottom: 18,
       marginTop: -8
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, isPersonal && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -367,7 +378,7 @@ export function TournamentDetailScreen({
     }
     // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
     // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu."), matches !== null && /*#__PURE__*/React.createElement("button", {
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), matches !== null && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setRulesModalOpen(true),
     className: "cs-btn",

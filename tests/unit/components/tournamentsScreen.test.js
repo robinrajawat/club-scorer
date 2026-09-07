@@ -279,6 +279,23 @@ test("TournamentsScreen: Visibility defaults to public, and the review-page togg
   assert.equal(isPrivateArg, true);
 });
 
+test("TournamentsScreen: no Visibility toggle on the review page when the Organizer is a club or federation -- those are always public", () => {
+  // Deliberately a different name than either team option, so its own Organizer-picker button
+  // (also labeled with the club's name) can't be confused with a team-selection chip below it.
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    clubs: [{ id: "c1", name: "Thunder CC", ownerUid: "owner1" }], activeClubId: "c1"
+  })));
+  const newBtn = inst.root.findByProps({ "aria-label": "New Tournament" });
+  act(() => { newBtn.props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Riverside Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
+});
+
 test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/free-hit/squad-size into onCreateTournament", async () => {
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({

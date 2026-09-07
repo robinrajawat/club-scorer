@@ -303,7 +303,6 @@ export function CricketScorer() {
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
-  const [isProfilePublic, setIsProfilePublic] = useState(false); // whether I've published myself to /userDirectory -- see AccountScreen's "Discoverable for invites" toggle
   const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
   // Whether each feed's first snapshot has arrived yet -- lets LiveScreen tell "still loading" apart
@@ -763,22 +762,19 @@ export function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.filter(item => !ids.includes(item.id)));
   }
-  // Loads whether I've already published myself to /userDirectory -- feeds AccountScreen's toggle
-  // state on mount, same "queries by my own uid" shape as the coOwnerInvites/activity effects
-  // above.
+  // My own profile is always discoverable by name now, same reasoning as ClubPanel's/
+  // FederationsPanel's own identical comment -- this is a name-lookup convenience for inviting
+  // someone to a club/federation, not a data-access gate (firestore.rules keeps write access
+  // pinned to the caller's own identity regardless of this). No user-facing toggle for it any
+  // more; publishes to /userDirectory once per sign-in if not already there, self-healing anyone
+  // who opted out (or never opted in) before this simplification.
   useEffect(() => {
-    if (!user) {
-      setIsProfilePublic(false);
-      return;
-    }
-    loadMyProfileVisibility().then(setIsProfilePublic);
+    if (!user) return;
+    loadMyProfileVisibility().then(isPublic => {
+      if (!isPublic) setMyProfileVisibility(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-  async function handleSetProfileVisibility(isPublic) {
-    const result = await setMyProfileVisibility(isPublic);
-    if (result.ok) setIsProfilePublic(isPublic);
-    return result;
-  }
   // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
   // accepted club_to_federation request and I'm the requesting club's owner (I still need to
   // finish the join — see completeAcceptedFederationRequest).
@@ -2206,8 +2202,11 @@ export function CricketScorer() {
       // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
       // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
       // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
-      // already have, still overridable per match.
-      private: !!isPrivate,
+      // already have, still overridable per match. Club/federation tournaments are never private
+      // (TournamentsScreen's own create form hides the toggle once an organizer other than
+      // Personal is picked -- membership there is already owner/co-owner governed) -- enforced
+      // here too, not just in the UI, since isPrivate is whatever this function was called with.
+      private: activeTournamentClubId || activeTournamentFederationId ? false : !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
       // this function only ever declared six parameters -- the venue was silently dropped on every
@@ -2744,7 +2743,6 @@ export function CricketScorer() {
     },
     user: user,
     profile: profile,
-    isProfilePublic: isProfilePublic,
     onOpenAccount: () => setScreen("account"),
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
@@ -3020,6 +3018,7 @@ export function CricketScorer() {
     // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
     onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid),
+    isPersonal: !viewingTournamentClubId && !viewingTournamentFederationId,
     clubs: clubs,
     clubTeamsById: clubTeamsById
   })), screen === "account" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -3051,9 +3050,7 @@ export function CricketScorer() {
     onBack: () => setScreen("home"),
     redirectError: authError,
     linkStatus: linkStatus,
-    onClearLinkStatus: () => setLinkStatus(""),
-    isProfilePublic: isProfilePublic,
-    onSetProfileVisibility: handleSetProfileVisibility
+    onClearLinkStatus: () => setLinkStatus("")
   })), screen === "help" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "help",
     direction: navDirection
