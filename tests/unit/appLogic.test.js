@@ -136,13 +136,73 @@ test("formatTournamentViewSnapshot: carries noResult through to the written snap
   assert.equal(a.points, 1);
 });
 
-test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fields", () => {
+test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fields, plus a result for a completed one", () => {
   const tournament = {
     id: "T1", name: "Summer Cup", teams: ["A", "B"],
-    fixtures: [{ id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", matchId: "M1", extraInternalField: "drop me" }]
+    fixtures: [
+      { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", matchId: "M1", extraInternalField: "drop me" },
+      { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00" }
+    ]
+  };
+  const match = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+    innings: [
+      { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
+      { battingTeam: "B", bowlingTeam: "A", runs: 100, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
+    ]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, [], [match]);
+  assert.deepEqual(snapshot.fixtures, [
+    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", result: "A won by 50 runs" },
+    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", result: null }
+  ]);
+});
+
+test("formatTournamentViewSnapshot: carries venue and a format summary through", () => {
+  const tournament = {
+    id: "T1", name: "Summer Cup", teams: ["A", "B", "C", "D"],
+    venue: "Green Park", venueLat: 26.45, venueLng: 80.33, defaultOvers: 20,
+    groups: [{ label: "Group A", teams: ["A", "B"] }, { label: "Group B", teams: ["C", "D"] }],
+    advancePerGroup: 1, fixtures: []
   };
   const snapshot = formatTournamentViewSnapshot(tournament, []);
-  assert.deepEqual(snapshot.fixtures, [{ id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00" }]);
+  assert.equal(snapshot.venue, "Green Park");
+  assert.equal(snapshot.venueLat, 26.45);
+  assert.equal(snapshot.venueLng, 80.33);
+  assert.deepEqual(snapshot.format, {
+    oversLimit: 20,
+    groupsCount: 2,
+    advancePerGroup: 1,
+    knockoutStages: ["Final"]
+  });
+});
+
+test("formatTournamentViewSnapshot: a grouped tournament gets a per-group standings breakdown", () => {
+  const tournament = {
+    id: "T1", name: "Summer Cup", teams: ["A", "B", "C", "D"],
+    groups: [{ label: "Group A", teams: ["A", "B"] }, { label: "Group B", teams: ["C", "D"] }],
+    advancePerGroup: 1, fixtures: []
+  };
+  const match = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+    innings: [
+      { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
+      { battingTeam: "B", bowlingTeam: "A", runs: 100, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
+    ]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, computeStandings(tournament, [match]), [match]);
+  assert.equal(snapshot.groups.length, 2);
+  const groupA = snapshot.groups.find(g => g.label === "Group A");
+  assert.equal(groupA.standings.find(r => r.team === "A").points, 2);
+  const groupB = snapshot.groups.find(g => g.label === "Group B");
+  assert.equal(groupB.standings.find(r => r.team === "C").played, 0);
+});
+
+test("formatTournamentViewSnapshot: no groups means no per-group breakdown", () => {
+  const tournament = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [] };
+  const snapshot = formatTournamentViewSnapshot(tournament, []);
+  assert.equal(snapshot.groups, null);
+  assert.equal(snapshot.format.groupsCount, null);
 });
 
 test("DLS-revised overs credit the all-out chasing side with the revised limit, not the original", () => {

@@ -619,6 +619,34 @@ Home-screen strips.
   entry above; PR #87's own fix (pad-overlap clipping) is confirmed correct for what it targeted,
   it just wasn't the only cause of this family of glitch.
 
+**2026-09-07 — the shared/Live tournament view grew from "just the points table" into the
+tournament's full public picture.** User report: opening a tournament from the Live tab (or a
+`?tournament=CODE` link) only ever showed the points table plus a bare list of upcoming fixtures —
+no venue, no format info, no per-group breakdown, and no way to see who won a completed fixture.
+Root cause: `formatTournamentViewSnapshot` (`src/core/appLogic.js`), the one shared function both
+write paths (`shareTournament`'s manual refresh and `refreshTournamentStandingsLive`'s live
+auto-refresh, both in `public/index.html`) use to build the public `/tournamentViews/{code}`
+snapshot, only ever wrote `name`/`teams`/`fixtures` (id/teamA/teamB/date only)/`standings`. Extended
+it to also carry `venue`/`venueLat`/`venueLng`, a `format` summary (overs limit, groups count,
+advance-per-group, applicable knockout stages — same math `FixturesSection` already uses), a
+per-group `groups` standings breakdown (via the existing `computeGroupStandings`) when the
+tournament has groups, and a `result` line (via `matchResultText`) on any fixture whose match has
+completed — takes a new optional `matches` argument to make the last two possible. Both write paths
+already had a `matches` array on hand for `computeStandings` itself, so this cost neither one an
+extra read; `refreshTournamentStandingsLive`'s public-only `tournamentShape` needed venue/groups/
+overs added to what it reads back from the `/tournamentMatches/{tournamentId}` config doc, so
+`shareTournament` now also writes those onto that doc. No `firebase/firestore.rules` change needed —
+both collections already write with `allow write: if true` and no field allowlist. `FollowTournamentScreen`
+now renders a venue link and format-summary line under the header, a "Results" section (separate
+from the existing "Fixtures" section, which now only lists fixtures with no result yet) for
+completed matches, and one `StandingsTable` per group instead of one flat table when groups are
+present — reusing `StandingsTable` from `tableAtoms.js` instead of the screen's own hand-rolled
+`<table>` markup. Sandboxed session had no outbound network access to the CDN scripts
+`public/index.html` loads at runtime (same known limitation as earlier sessions), so this wasn't
+click-through-tested in a real browser — validated instead via `npm test` (10 new/updated
+`followTournamentScreen.test.js` cases plus 4 new `appLogic.test.js` cases for the snapshot shape,
+652 total passing), `npm run generate:verify`, and `scripts/validate_html_structure.py`.
+
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the
 tournament-rules work in detail — see `docs/history.md`. It's reference

@@ -1767,11 +1767,11 @@ function getAuthActionFromUrl() {
 // Reuses the tournament's own code once one exists (persisted onto the tournament doc via the
 // caller's onUpdateTournament) rather than minting a new one on every refresh, so a previously-
 // shared link keeps working.
-async function shareTournament(tournament, standings) {
+async function shareTournament(tournament, standings, matches = []) {
   try {
     const code = tournament.shareCode || genMatchCode();
     await db.collection("tournamentViews").doc(code).set({
-      ...formatTournamentViewSnapshot(tournament, standings),
+      ...formatTournamentViewSnapshot(tournament, standings, matches),
       sharedAt: Date.now(),
       expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
     });
@@ -1779,6 +1779,16 @@ async function shareTournament(tournament, standings) {
       shareCode: code,
       name: tournament.name,
       teams: tournament.teams,
+      // Carried alongside teams/fixtures purely so refreshTournamentStandingsLive (which only ever
+      // sees this public config doc, never the real club-membership-gated tournament) can rebuild
+      // enough of a tournament shape to pass through formatTournamentViewSnapshot's venue/format/
+      // groups fields too, not just standings.
+      venue: tournament.venue || null,
+      venueLat: tournament.venueLat != null ? tournament.venueLat : null,
+      venueLng: tournament.venueLng != null ? tournament.venueLng : null,
+      groups: tournament.groups || null,
+      advancePerGroup: tournament.advancePerGroup || null,
+      defaultOvers: tournament.defaultOvers || null,
       fixtures: (tournament.fixtures || []).map(f => ({
         id: f.id,
         teamA: f.teamA,
@@ -1871,12 +1881,18 @@ async function refreshTournamentStandingsLive(tournamentId) {
       id: tournamentId,
       name: config.name,
       teams: config.teams || [],
-      fixtures: config.fixtures || []
+      fixtures: config.fixtures || [],
+      venue: config.venue || null,
+      venueLat: config.venueLat != null ? config.venueLat : null,
+      venueLng: config.venueLng != null ? config.venueLng : null,
+      groups: config.groups || null,
+      advancePerGroup: config.advancePerGroup || null,
+      defaultOvers: config.defaultOvers || null
     };
     const standings = computeStandings(tournamentShape, matches);
     const expiresAt = ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS);
     await db.collection("tournamentViews").doc(config.shareCode).set({
-      ...formatTournamentViewSnapshot(tournamentShape, standings),
+      ...formatTournamentViewSnapshot(tournamentShape, standings, matches),
       sharedAt: Date.now(),
       expiresAt
     });
@@ -5609,26 +5625,56 @@ function computeStandings(tournament, allMatches) {
 // same field subset and silently drifting apart. `sharedAt`/`expiresAt` are left to the caller —
 // those are write-time IO concerns (Date.now(), a TTL constant), not something this pure function
 // should decide.
-function formatTournamentViewSnapshot(tournament, standings) {
+//
+// `matches` (optional, defaults to none) is what turns this from "just the points table" into the
+// tournament's full public picture: a completed fixture's `result` line (via matchResultText,
+// unavailable without the match itself) and, when the tournament has groups, a per-group standings
+// breakdown (via computeGroupStandings) instead of one flat table. Both callers already have a
+// `matches` array on hand for computeStandings itself, so this costs neither one an extra read.
+function pickStandingsRow(r) {
+  return {
+    team: r.team,
+    played: r.played,
+    won: r.won,
+    lost: r.lost,
+    tied: r.tied,
+    noResult: r.noResult,
+    points: r.points,
+    nrr: r.nrr
+  };
+}
+function formatTournamentViewSnapshot(tournament, standings, matches = []) {
+  const matchById = new Map(matches.map(m => [m.id, m]));
+  const groupStandings = computeGroupStandings(tournament, matches);
+  // Mirrors the "how many teams advance out of the groups" math FixturesSection already uses to
+  // decide which knockout stages apply (Quarterfinal/Semifinal/Final) — a single-pool tournament's
+  // own team count stands in for it when there are no groups at all.
+  const advancingTeamCount = tournament.groups && tournament.groups.length ? tournament.groups.length * (tournament.advancePerGroup || 2) : tournament.teams.length;
+  const knockoutStages = applicableKnockoutStages(advancingTeamCount).map(s => s.label);
   return {
     name: tournament.name,
     teams: tournament.teams,
+    venue: tournament.venue || null,
+    venueLat: tournament.venueLat != null ? tournament.venueLat : null,
+    venueLng: tournament.venueLng != null ? tournament.venueLng : null,
+    format: {
+      oversLimit: tournament.defaultOvers || null,
+      groupsCount: tournament.groups ? tournament.groups.length : null,
+      advancePerGroup: tournament.groups ? tournament.advancePerGroup || 2 : null,
+      knockoutStages: knockoutStages.length ? knockoutStages : null
+    },
     fixtures: (tournament.fixtures || []).map(f => ({
       id: f.id,
       teamA: f.teamA,
       teamB: f.teamB,
-      date: f.date || ""
+      date: f.date || "",
+      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null
     })),
-    standings: standings.map(r => ({
-      team: r.team,
-      played: r.played,
-      won: r.won,
-      lost: r.lost,
-      tied: r.tied,
-      noResult: r.noResult,
-      points: r.points,
-      nrr: r.nrr
-    }))
+    groups: groupStandings ? groupStandings.map(g => ({
+      label: g.label,
+      standings: g.standings.map(pickStandingsRow)
+    })) : null,
+    standings: standings.map(pickStandingsRow)
   };
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself
@@ -26122,6 +26168,7 @@ function TournamentDetailScreen({
     showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
     tournament: tournament,
     standings: standings,
+    matches: matches,
     onClose: () => setShowShare(false),
     onUpdateTournament: onUpdateTournament
   }),
@@ -31517,6 +31564,7 @@ function QualificationCalculatorModal({
 function TournamentShareModal({
   tournament,
   standings,
+  matches = [],
   onClose,
   onUpdateTournament
 }) {
@@ -31528,7 +31576,7 @@ function TournamentShareModal({
   async function handleShare() {
     setBusy(true);
     setError("");
-    const result = await shareTournament(tournament, standings);
+    const result = await shareTournament(tournament, standings, matches);
     setBusy(false);
     if (result.ok) {
       if (!tournament.shareCode) onUpdateTournament({
@@ -34397,6 +34445,36 @@ function FollowTournamentScreen({
   onExit,
   reachedInApp = false
 }) {
+  // Plain-language "20 overs · 2 groups, top 1 advance · Semifinal, Final" summary of the
+  // snapshot's `format` block -- mirrors the wording tournamentsScreen.js's own New Cup wizard
+  // preview uses, so a spectator sees the same shape of description an organizer does. Returns
+  // null when there's nothing worth a line for (no overs limit, no groups, no knockout stage -- a
+  // bare round robin with an unset overs limit, which formatTournamentViewSnapshot can still
+  // produce for an older tournament created before overs limits were mandatory).
+  function formatSummaryText(format) {
+    if (!format) return null;
+    const parts = [];
+    if (format.oversLimit) parts.push(`${format.oversLimit} overs`);
+    if (format.groupsCount) parts.push(`${format.groupsCount} groups, top ${format.advancePerGroup} advance`);
+    if (format.knockoutStages && format.knockoutStages.length) parts.push(format.knockoutStages.join(", "));
+    return parts.length ? parts.join(" · ") : null;
+  }
+  const sectionCardStyle = {
+    background: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
+  };
+  const sectionLabelStyle = {
+    fontFamily: "'Inter'",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    color: COLORS.inkSoft,
+    marginBottom: 8
+  };
   // Someone reaching this screen from inside the app already has a back button's worth of context
   // (they tapped a Live-tab card) -- render the same small chevron-link every other in-app screen
   // uses for that (see e.g. recordsScreen.js / matchScreen.js), not the big standalone CTA button
@@ -34501,7 +34579,14 @@ function FollowTournamentScreen({
     }, "Go to Club Scorer"));
   }
   const standings = [...data.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr);
-  const scheduledFixtures = (data.fixtures || []).filter(f => f.date);
+  const groups = data.groups ? data.groups.map(g => ({
+    label: g.label,
+    standings: [...g.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr)
+  })) : null;
+  const fixtures = data.fixtures || [];
+  const completedFixtures = fixtures.filter(f => f.result);
+  const scheduledFixtures = fixtures.filter(f => !f.result && f.date);
+  const formatSummary = formatSummaryText(data.format);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       ...wrapStyle,
@@ -34525,113 +34610,81 @@ function FollowTournamentScreen({
       opacity: 0.85,
       marginTop: 2
     }
-  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString())), /*#__PURE__*/React.createElement("div", {
+  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString()), formatSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 2
+    }
+  }, formatSummary), data.venue && /*#__PURE__*/React.createElement("a", {
+    href: buildMapsUrl(data.venue, data.venueLat, data.venueLng),
+    target: "_blank",
+    rel: "noopener noreferrer",
+    className: "cs-btn",
+    "aria-label": `Open ${data.venue} in Maps`,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 6,
+      textDecoration: "none",
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      color: COLORS.creamFixed,
+      opacity: 0.9
+    }
+  }, "📍 ", data.venue)), /*#__PURE__*/React.createElement("div", {
     style: {
       maxWidth: 560,
       margin: "0 auto",
       padding: 16
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: "14px 4px",
-      marginBottom: 20,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)",
-      overflowX: "auto"
-    }
-  }, /*#__PURE__*/React.createElement("table", {
-    className: "cs-no-scrollbar",
-    style: {
-      width: "100%",
-      borderCollapse: "collapse",
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      minWidth: 380
-    }
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
-    style: {
-      color: COLORS.inkSoft,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5
-    }
-  }, ["Team", "P", "W", "L", "T", "NR", "Pts", "NRR"].map(h => /*#__PURE__*/React.createElement("th", {
-    key: h,
-    style: {
-      textAlign: h === "Team" ? "left" : "center",
-      padding: "0 8px 8px",
-      whiteSpace: "nowrap"
-    }
-  }, h)))), /*#__PURE__*/React.createElement("tbody", null, standings.map(r => /*#__PURE__*/React.createElement("tr", {
-    key: r.team,
-    style: {
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("td", {
-    style: {
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.ink,
-      whiteSpace: "nowrap"
-    }
-  }, r.team), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.played), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.won), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.lost), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.tied), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px"
-    }
-  }, r.noResult), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontWeight: 700,
-      color: COLORS.turf
-    }
-  }, r.points), /*#__PURE__*/React.createElement("td", {
-    style: {
-      textAlign: "center",
-      padding: "8px",
-      fontFamily: "'IBM Plex Mono', monospace",
-      color: r.nrr >= 0 ? COLORS.turf : COLORS.ball
-    }
-  }, r.played === 0 ? "\u2014" : (r.nrr >= 0 ? "+" : "") + r.nrr.toFixed(3))))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 16,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
+  }, groups ? groups.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: g.label
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      color: COLORS.inkSoft,
+      color: COLORS.pitch,
       marginBottom: 8
     }
+  }, g.label), /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: g.standings
+  }))) : /*#__PURE__*/React.createElement(StandingsTable, {
+    standings: standings
+  }), completedFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
+  }, "Results"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink
+    }
+  }, completedFixtures.map(f => /*#__PURE__*/React.createElement("div", {
+    key: f.id,
+    style: {
+      padding: "8px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 600
+    }
+  }, f.teamA, " vs ", f.teamB), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 2
+    }
+  }, f.result))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
   }, "Fixtures"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",

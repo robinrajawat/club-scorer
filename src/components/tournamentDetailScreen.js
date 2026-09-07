@@ -365,6 +365,7 @@ export function TournamentDetailScreen({
     showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
     tournament: tournament,
     standings: standings,
+    matches: matches,
     onClose: () => setShowShare(false),
     onUpdateTournament: onUpdateTournament
   }),
