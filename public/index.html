@@ -20606,13 +20606,25 @@ function MyTeamsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, activeClubId ? "Teams" : "My Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing\u2026",
     size: 14,
     style: {
       fontSize: 11.5
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  })), !activeClubId && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14
+    }
+    // "Clearly mention what it is" -- reached from a plain "My Teams" link on Home now rather
+    // than its own bottom tab (see tabBar.js), which used to make "these are YOUR personal teams,
+    // nothing club-owned" obvious just from which tab you were on. That context is gone now that
+    // it's a drill-in screen, so it has to be said outright instead.
+  }, "Your own teams, not tied to any club -- use these for pickup games or matches you score without a club involved. A club's own teams live under that club instead (Clubs tab)."), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
