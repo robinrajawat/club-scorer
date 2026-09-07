@@ -12,6 +12,7 @@ import { ScorecardOverlay } from "./scorecard.js";
 import { SyncConflictModal } from "./matchInsightCards.js";
 import { ShareMenu } from "./shareMenus.js";
 import { SuperOverOpenersSetup, SecondInningsSetup } from "./inningsSetupScreens.js";
+import { RulesEditModal } from "./rulesEditModal.js";
 import { ResultScreen } from "./resultScreen.js";
 import { applyBall, crr, ensureBatsman, ensureBowler, isInLastOvers, isWideNoballLegal, lastBallCommentary, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
@@ -902,6 +903,44 @@ export function MatchScreen({
     setMatch(updated);
     queueSave(updated);
   }
+  // A mistake made during SetupScreen (wrong overs count, a house rule left on/off by accident) --
+  // and normal matches have no separate "first innings setup" screen the way a Super Over/2nd
+  // innings do (SetupScreen already collects openers before the match object even exists), so this
+  // is the ONLY point one could ever be fixed short of abandoning the match and starting over.
+  // Deliberately gone the instant a single ball has been bowled, not just discouraged: every rule
+  // this covers (wideRuns, retirementRuns, ballsPerOver, ...) is baked directly onto innings[0] at
+  // creation (see newInning in scoringEngine.js) and actively governs every ball already scored --
+  // changing it mid-innings would silently make earlier balls inconsistent with later ones, a real
+  // correctness hazard, not just a UX one. "No point" (the actual justification here) reads better
+  // as the option simply not being offered than as a disabled button with no explanation.
+  const canEditMatchRules = !match.isSuperOver && match.innings[0].overs.every(o => o.length === 0);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  // Rebuilds innings[0] via the same newInning() creation uses, so every rule-derived field it
+  // bakes in (wideRuns, retirementRuns, lastOverRules, ...) gets recomputed together rather than
+  // this having to hand-list them and risk drifting out of sync with newInning's own shape. Safe
+  // ONLY because canEditMatchRules already guarantees zero balls have been bowled -- battingOrder/
+  // bowlers/bowlingOrder are still genuinely empty either way, but strikerName/nonStrikerName/
+  // bowlerName (already picked in SetupScreen, before the match even existed) are explicitly
+  // carried over since newInning always resets those to "".
+  function editMatchRules(oversLimit, rules) {
+    const inn = match.innings[0];
+    const updatedMatch = {
+      ...match,
+      oversLimit,
+      rules
+    };
+    const maxWickets = battingTeamXISize(updatedMatch, inn.battingTeam) - 1;
+    const fresh = newInning(inn.battingTeam, inn.bowlingTeam, rules, maxWickets, oversLimit);
+    updatedMatch.innings = [{
+      ...fresh,
+      strikerName: inn.strikerName,
+      nonStrikerName: inn.nonStrikerName,
+      bowlerName: inn.bowlerName,
+      startedAt: inn.startedAt
+    }, ...match.innings.slice(1)];
+    setMatch(updatedMatch);
+    queueSave(updatedMatch);
+  }
   function declareNoResult() {
     pushHistory();
     const updated = {
@@ -1566,6 +1605,36 @@ export function MatchScreen({
       background: COLORS.creamDark,
       margin: "2px 0 6px"
     }
+  }), canEditMatchRules && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowMatchMenu(false);
+      setRulesModalOpen(true);
+    },
+    className: "cs-btn cs-row",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      padding: "12px 10px",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 14,
+      color: COLORS.ink
+    }
+    // Only offered before a single ball is bowled -- see canEditMatchRules's own comment. Not
+    // shown at all once scoring starts rather than shown-but-disabled, matching how this same
+    // "no point once it's live" reasoning already reads for other actions on this screen.
+  }, "Edit match rules"), canEditMatchRules && /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "2px 0 6px"
+    }
   }), isChasing && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
@@ -1665,7 +1734,13 @@ export function MatchScreen({
       color: COLORS.inkSoft,
       padding: "0 10px"
     }
-  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), showRevisedTargetModal && /*#__PURE__*/React.createElement(Modal, {
+  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), rulesModalOpen && /*#__PURE__*/React.createElement(RulesEditModal, {
+    title: "Edit match rules",
+    initialOversLimit: match.oversLimit,
+    initialRules: match.rules,
+    onSave: (oversLimit, rules) => editMatchRules(oversLimit, rules),
+    onClose: () => setRulesModalOpen(false)
+  }), showRevisedTargetModal && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowRevisedTargetModal(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {

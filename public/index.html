@@ -23152,6 +23152,328 @@ function RuleSectionHeader({
   }, label);
 }
 // GENERATED-FN-END: RuleSectionHeader
+// GENERATED-FN-START: RulesEditorFields
+function RulesEditorFields({
+  oversLimit,
+  setOversLimit,
+  oversPlaceholder = "20",
+  rules,
+  setRules
+}) {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Format",
+    first: true
+  }), /*#__PURE__*/React.createElement(Field, {
+    label: "Overs per innings"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: oversLimit,
+    onChange: v => setOversLimit(v.replace(/[^0-9]/g, "")),
+    placeholder: oversPlaceholder,
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  }))), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Players per side",
+    value: rules.playersPerSide,
+    onChange: v => setRules(r => ({
+      ...r,
+      playersPerSide: v
+    })),
+    options: [{
+      value: 6,
+      label: "6"
+    }, {
+      value: 7,
+      label: "7"
+    }, {
+      value: 8,
+      label: "8"
+    }, {
+      value: 9,
+      label: "9"
+    }, {
+      value: 10,
+      label: "10"
+    }, {
+      value: 11,
+      label: "11 (standard)"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Balls per over",
+    value: rules.ballsPerOver,
+    onChange: v => setRules(r => ({
+      ...r,
+      ballsPerOver: v
+    })),
+    options: [{
+      value: 4,
+      label: "4 (kids)"
+    }, {
+      value: 5,
+      label: "5"
+    }, {
+      value: 6,
+      label: "6 (standard)"
+    }, {
+      value: 8,
+      label: "8"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Extras"
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a wide",
+    value: rules.wideRuns,
+    onChange: v => setRules(r => ({
+      ...r,
+      wideRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a no-ball",
+    value: rules.noballRuns,
+    onChange: v => setRules(r => ({
+      ...r,
+      noballRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  }), /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Free hit after a no-ball",
+    value: rules.freeHit,
+    onChange: v => setRules(r => ({
+      ...r,
+      freeHit: v
+    }))
+  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Bowling limits"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Max overs per bowler",
+    value: rules.maxOversPerBowler,
+    onChange: v => setRules(r => ({
+      ...r,
+      maxOversPerBowler: v
+    })),
+    seed: Math.max(1, Math.ceil(parseInt(oversLimit || "20", 10) / 5)),
+    unit: "overs each",
+    hint: "suggested from your overs per innings, editable"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Powerplay",
+    value: rules.powerplayOvers,
+    onChange: v => setRules(r => ({
+      ...r,
+      powerplayOvers: v
+    })),
+    seed: (() => {
+      const n = parseInt(oversLimit || "20", 10);
+      return Math.min(n, n <= 20 ? 6 : Math.round(n / 5));
+    })(),
+    unit: "overs",
+    hint: "at the start of each innings, shown as a badge while it's in effect"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Time cap per innings",
+    value: rules.timeCapMinutes,
+    onChange: v => setRules(r => ({
+      ...r,
+      timeCapMinutes: v
+    })),
+    seed: Math.max(10, Math.round(parseInt(oversLimit || "20", 10) * 4.5)),
+    unit: "minutes",
+    hint: "a flag once you're past it, not a stop"
+  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Batting rules"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Retirement run cap",
+    value: rules.retirementRuns,
+    onChange: v => setRules(r => ({
+      ...r,
+      retirementRuns: v
+    })),
+    seed: 25,
+    unit: "runs — must retire",
+    hint: "a batsman reaching this is prompted to retire (not out)"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Big hit bonus",
+    value: rules.bigHitRuns,
+    onChange: v => setRules(r => ({
+      ...r,
+      bigHitRuns: v
+    })),
+    seed: 10,
+    unit: "runs on a big hit",
+    hint: "a six clearing your ground's extra-distance boundary rope scores this many instead of the standard 6"
+  }), /*#__PURE__*/React.createElement(NullableNumberRule, {
+    label: "Maximum hit bonus",
+    value: rules.maxHitRuns,
+    onChange: v => setRules(r => ({
+      ...r,
+      maxHitRuns: v
+    })),
+    seed: 15,
+    unit: "runs on a maximum hit",
+    hint: "a second, independent bonus-hit tier -- use it however suits your ground (e.g. an even longer boundary than Big Hit above)"
+  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
+    label: "Special rules"
+  }), /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Super Over if the match ties",
+    value: rules.superOver,
+    onChange: v => setRules(r => ({
+      ...r,
+      superOver: v
+    }))
+  }), /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Wide/no-ball counts as a ball",
+    value: rules.wideNoballCountsAsBall,
+    onChange: v => setRules(r => ({
+      ...r,
+      wideNoballCountsAsBall: v
+    }))
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
+    }
+  }, /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Last over rules",
+    value: rules.lastOverRules && rules.lastOverRules.enabled,
+    onChange: v => setRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), enabled: v }
+    }))
+  }), rules.lastOverRules && rules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Applies to the last",
+    value: rules.lastOverRules.overCount || 1,
+    onChange: v => setRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+    })),
+    options: [1, 2, 3, 4, 5].map(n => ({
+      value: n,
+      label: n === 1 ? "1 over" : `${n} overs`
+    }))
+  }), rules.lastOverRules && rules.lastOverRules.enabled && rules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Wide/no-ball illegal again in the last over(s)",
+    value: rules.lastOverRules.wideNoballIllegalAgain,
+    onChange: v => setRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: v }
+    }))
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
+    }
+  }, /*#__PURE__*/React.createElement(ToggleRule, {
+    label: "Impact Player substitution",
+    value: rules.impactPlayerEnabled,
+    onChange: v => setRules(r => ({
+      ...r,
+      impactPlayerEnabled: v
+    }))
+  }), rules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Substitutions allowed per team",
+    value: rules.impactPlayerMaxSubs,
+    onChange: v => setRules(r => ({
+      ...r,
+      impactPlayerMaxSubs: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }, {
+      value: 3,
+      label: "3"
+    }]
+  })));
+}
+// GENERATED-FN-END: RulesEditorFields
+// GENERATED-FN-START: RulesEditModal
+function RulesEditModal({
+  title = "Edit rules",
+  initialOversLimit,
+  initialRules,
+  warningText,
+  onSave,
+  onClose
+}) {
+  const [oversLimit, setOversLimit] = useState(initialOversLimit != null ? String(initialOversLimit) : "");
+  const [rules, setRules] = useState({ ...initialRules });
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function handleConfirm() {
+    setBusy(true);
+    const n = parseInt(oversLimit, 10);
+    await onSave(isNaN(n) || n < 1 ? null : n, rules);
+    setBusy(false);
+    setConfirming(false);
+    onClose();
+  }
+  return /*#__PURE__*/React.createElement(Modal, {
+    onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 20,
+      color: COLORS.pitch,
+      marginBottom: 8
+    }
+  }, title), warningText && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 14,
+      background: COLORS.cream,
+      border: `1px solid ${COLORS.creamDark}`,
+      borderRadius: 10,
+      padding: "10px 12px"
+    }
+  }, warningText), /*#__PURE__*/React.createElement(RulesEditorFields, {
+    oversLimit,
+    setOversLimit,
+    rules,
+    setRules
+  }), /*#__PURE__*/React.createElement(Btn, {
+    variant: "primary",
+    onClick: () => setConfirming(true),
+    style: {
+      width: "100%",
+      marginTop: 16
+    }
+  }, "Save rules"), confirming && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: "Save these rules?",
+    message: warningText || "This updates the rules going forward.",
+    confirmLabel: busy ? "Saving…" : "Save",
+    onConfirm: handleConfirm,
+    onCancel: () => setConfirming(false)
+  }));
+}
+// GENERATED-FN-END: RulesEditModal
 // GENERATED-FN-START: TournamentsScreen
 function TournamentsScreen({
   tournaments,
@@ -25899,6 +26221,21 @@ function TournamentDetailScreen({
       venueLng: lng != null ? lng : null
     });
   }
+  // Was previously a one-way door -- a mistake in the New Cup wizard's rules step (wrong overs
+  // count, a house rule left on/off by accident) had no fix except deleting and recreating the
+  // whole tournament. Safe to allow unconditionally (no "in progress" gate): defaultRules/
+  // defaultOvers are only ever copied into a fixture's match at the moment THAT fixture is started
+  // (see startNewMatch in index.html), so this can never retroactively change an already-created
+  // match. The confirm step's warning text (below) is what actually communicates that scope.
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  function editTournamentRules(oversLimit, rules) {
+    if (!canManage) return;
+    onUpdateTournament({
+      ...tournament,
+      defaultOvers: oversLimit,
+      defaultRules: rules
+    });
+  }
   useEffect(() => {
     let cancelled = false;
     loadTournamentMatches(tournament.id).then(m => {
@@ -26178,13 +26515,43 @@ function TournamentDetailScreen({
     }
     // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
     // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu."), matches !== null && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setRulesModalOpen(true),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 10,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      color: COLORS.turf
+    }
+    // No "in progress" gate here, unlike a single match's own rules edit -- a tournament's
+    // defaultRules are only ever copied into a NEW fixture's match at the moment that fixture is
+    // started (see startNewMatch in index.html), so editing them can never retroactively touch an
+    // already-created match, started or not. The warning text below (built where tournamentMatches
+    // is already computed further down) is what actually communicates that scope, not a block.
+  }, "\ud83d\udcdd House rules")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: tournament.venue || "",
     initialLat: tournament.venueLat,
     initialLng: tournament.venueLng,
     clubs: clubs,
     onSave: (venue, lat, lng) => editTournamentVenue(venue, lat, lng),
     onClose: () => setVenueModalOpen(false)
+  }), rulesModalOpen && /*#__PURE__*/React.createElement(RulesEditModal, {
+    title: "Edit house rules",
+    initialOversLimit: tournament.defaultOvers,
+    initialRules: tournament.defaultRules || DEFAULT_RULES,
+    warningText: tournamentMatches.length > 0 ? "Fixtures already started or completed keep the rules they began with — this only changes what new fixtures inherit from here on." : "Every fixture started from this tournament will use these rules.",
+    onSave: (oversLimit, rules) => editTournamentRules(oversLimit, rules),
+    onClose: () => setRulesModalOpen(false)
   }), matches === null ?  /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -35608,6 +35975,44 @@ function MatchScreen({
     setMatch(updated);
     queueSave(updated);
   }
+  // A mistake made during SetupScreen (wrong overs count, a house rule left on/off by accident) --
+  // and normal matches have no separate "first innings setup" screen the way a Super Over/2nd
+  // innings do (SetupScreen already collects openers before the match object even exists), so this
+  // is the ONLY point one could ever be fixed short of abandoning the match and starting over.
+  // Deliberately gone the instant a single ball has been bowled, not just discouraged: every rule
+  // this covers (wideRuns, retirementRuns, ballsPerOver, ...) is baked directly onto innings[0] at
+  // creation (see newInning in scoringEngine.js) and actively governs every ball already scored --
+  // changing it mid-innings would silently make earlier balls inconsistent with later ones, a real
+  // correctness hazard, not just a UX one. "No point" (the actual justification here) reads better
+  // as the option simply not being offered than as a disabled button with no explanation.
+  const canEditMatchRules = !match.isSuperOver && match.innings[0].overs.every(o => o.length === 0);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  // Rebuilds innings[0] via the same newInning() creation uses, so every rule-derived field it
+  // bakes in (wideRuns, retirementRuns, lastOverRules, ...) gets recomputed together rather than
+  // this having to hand-list them and risk drifting out of sync with newInning's own shape. Safe
+  // ONLY because canEditMatchRules already guarantees zero balls have been bowled -- battingOrder/
+  // bowlers/bowlingOrder are still genuinely empty either way, but strikerName/nonStrikerName/
+  // bowlerName (already picked in SetupScreen, before the match even existed) are explicitly
+  // carried over since newInning always resets those to "".
+  function editMatchRules(oversLimit, rules) {
+    const inn = match.innings[0];
+    const updatedMatch = {
+      ...match,
+      oversLimit,
+      rules
+    };
+    const maxWickets = battingTeamXISize(updatedMatch, inn.battingTeam) - 1;
+    const fresh = newInning(inn.battingTeam, inn.bowlingTeam, rules, maxWickets, oversLimit);
+    updatedMatch.innings = [{
+      ...fresh,
+      strikerName: inn.strikerName,
+      nonStrikerName: inn.nonStrikerName,
+      bowlerName: inn.bowlerName,
+      startedAt: inn.startedAt
+    }, ...match.innings.slice(1)];
+    setMatch(updatedMatch);
+    queueSave(updatedMatch);
+  }
   function declareNoResult() {
     pushHistory();
     const updated = {
@@ -36272,6 +36677,36 @@ function MatchScreen({
       background: COLORS.creamDark,
       margin: "2px 0 6px"
     }
+  }), canEditMatchRules && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setShowMatchMenu(false);
+      setRulesModalOpen(true);
+    },
+    className: "cs-btn cs-row",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: "none",
+      borderRadius: 10,
+      cursor: "pointer",
+      padding: "12px 10px",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 14,
+      color: COLORS.ink
+    }
+    // Only offered before a single ball is bowled -- see canEditMatchRules's own comment. Not
+    // shown at all once scoring starts rather than shown-but-disabled, matching how this same
+    // "no point once it's live" reasoning already reads for other actions on this screen.
+  }, "Edit match rules"), canEditMatchRules && /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: COLORS.creamDark,
+      margin: "2px 0 6px"
+    }
   }), isChasing && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
@@ -36371,7 +36806,13 @@ function MatchScreen({
       color: COLORS.inkSoft,
       padding: "0 10px"
     }
-  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), showRevisedTargetModal && /*#__PURE__*/React.createElement(Modal, {
+  }, "Ends the whole match right now, in either innings, with no winner. Use this when there's genuinely no fair way to reach a result.")), rulesModalOpen && /*#__PURE__*/React.createElement(RulesEditModal, {
+    title: "Edit match rules",
+    initialOversLimit: match.oversLimit,
+    initialRules: match.rules,
+    onSave: (oversLimit, rules) => editMatchRules(oversLimit, rules),
+    onClose: () => setRulesModalOpen(false)
+  }), showRevisedTargetModal && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowRevisedTargetModal(false)
   }, /*#__PURE__*/React.createElement("div", {
     style: {

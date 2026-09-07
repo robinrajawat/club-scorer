@@ -10,9 +10,10 @@ import { TournamentPrintReport } from "./scorecard.js";
 import { TournamentShareModal, QualificationCalculatorModal } from "./miscModals.js";
 import { FixturesSection } from "./fixturesSection.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
+import { RulesEditModal } from "./rulesEditModal.js";
 import { computePlayerStats, suggestPlayerOfTournament, allMatchPlayers } from "../core/statsAndFixtures.js";
 import { matchResultText, safeFilenamePart, buildMapsUrl } from "../core/shareAndFormat.js";
-import { computeStandings, computeGroupStandings } from "../core/appLogic.js";
+import { computeStandings, computeGroupStandings, DEFAULT_RULES } from "../core/appLogic.js";
 
 // A single tournament's own screen: schedule (via FixturesSection)/standings/stats/matches tabs,
 // Player of the Tournament, Orange/Purple Cap and Table Topper callouts, share, PDF export, a
@@ -61,6 +62,21 @@ export function TournamentDetailScreen({
       venue: venue || null,
       venueLat: lat != null ? lat : null,
       venueLng: lng != null ? lng : null
+    });
+  }
+  // Was previously a one-way door -- a mistake in the New Cup wizard's rules step (wrong overs
+  // count, a house rule left on/off by accident) had no fix except deleting and recreating the
+  // whole tournament. Safe to allow unconditionally (no "in progress" gate): defaultRules/
+  // defaultOvers are only ever copied into a fixture's match at the moment THAT fixture is started
+  // (see startNewMatch in index.html), so this can never retroactively change an already-created
+  // match. The confirm step's warning text (below) is what actually communicates that scope.
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  function editTournamentRules(oversLimit, rules) {
+    if (!canManage) return;
+    onUpdateTournament({
+      ...tournament,
+      defaultOvers: oversLimit,
+      defaultRules: rules
     });
   }
   useEffect(() => {
@@ -342,13 +358,43 @@ export function TournamentDetailScreen({
     }
     // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
     // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu."), matches !== null && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setRulesModalOpen(true),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 10,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600,
+      color: COLORS.turf
+    }
+    // No "in progress" gate here, unlike a single match's own rules edit -- a tournament's
+    // defaultRules are only ever copied into a NEW fixture's match at the moment that fixture is
+    // started (see startNewMatch in index.html), so editing them can never retroactively touch an
+    // already-created match, started or not. The warning text below (built where tournamentMatches
+    // is already computed further down) is what actually communicates that scope, not a block.
+  }, "\ud83d\udcdd House rules")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: tournament.venue || "",
     initialLat: tournament.venueLat,
     initialLng: tournament.venueLng,
     clubs: clubs,
     onSave: (venue, lat, lng) => editTournamentVenue(venue, lat, lng),
     onClose: () => setVenueModalOpen(false)
+  }), rulesModalOpen && /*#__PURE__*/React.createElement(RulesEditModal, {
+    title: "Edit house rules",
+    initialOversLimit: tournament.defaultOvers,
+    initialRules: tournament.defaultRules || DEFAULT_RULES,
+    warningText: tournamentMatches.length > 0 ? "Fixtures already started or completed keep the rules they began with — this only changes what new fixtures inherit from here on." : "Every fixture started from this tournament will use these rules.",
+    onSave: (oversLimit, rules) => editTournamentRules(oversLimit, rules),
+    onClose: () => setRulesModalOpen(false)
   }), matches === null ?  /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
