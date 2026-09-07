@@ -3,7 +3,7 @@ import { COLORS } from "./theme.js";
 import { AlertTriangle, ArrowLeftRight, ChevronRight, Info, Pencil, Trophy } from "./icons.js";
 import { Btn, TextField, RuleChoice } from "./formUiAtoms.js";
 import { FabButton, Field } from "./screenAtoms.js";
-import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
+import { LoadingNote, EmptyState } from "./illustrations.js";
 import { TOURNAMENT_STATUS_LABELS, TOURNAMENT_STATUS_COLORS } from "./tournamentStatus.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
 import { VisibilitySwitch } from "./matchDisplayAtoms.js";
@@ -755,7 +755,15 @@ export function TournamentsScreen({
       // the fixed TabBar when it's showing.
       paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
-      margin: "0 auto"
+      margin: "0 auto",
+      // Lets the empty-state box below (flex: 1 on itself) center in whatever space is actually
+      // left under the header/search/filters, rather than a fixed vh fraction of the WHOLE
+      // screen guessing at that -- see EmptyState's own comment in illustrations.js for why a
+      // fixed vh number reads as "too high" on any screen with more header chrome than whichever
+      // screen that number happened to be tuned against.
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100dvh"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1440,28 +1448,7 @@ export function TournamentsScreen({
       color: COLORS.inkSoft,
       flexShrink: 0
     }
-  }))) : !creating && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
-      minHeight: "50vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet.")), !creating && !creatingSeries && !showCreateMenu && /*#__PURE__*/React.createElement(FabButton, {
+  }))) : !creating && /*#__PURE__*/React.createElement(EmptyState, null, tournaments.length > 0 ? "No tournaments match your search/filter." : "No tournaments yet."), !creating && !creatingSeries && !showCreateMenu && /*#__PURE__*/React.createElement(FabButton, {
     // Opens a choice of the two create flows below rather than jumping straight into Tournament --
     // a head-to-head series used to be a plain text link under the info banner ("or start a
     // head-to-head series instead"), easy to miss and inconsistent with the FAB being the one

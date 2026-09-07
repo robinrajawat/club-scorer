@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Trophy } from "./icons.js";
 import { TextField } from "./formUiAtoms.js";
-import { EmptyStateBallIllustration, LoadingNote } from "./illustrations.js";
+import { EmptyState, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
@@ -176,7 +176,12 @@ export function LiveScreen({
       // the fixed TabBar when it's showing.
       paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
-      margin: "0 auto"
+      margin: "0 auto",
+      // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the
+      // header, rather than a fixed vh fraction of the whole screen -- see its own comment.
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100dvh"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -194,24 +199,9 @@ export function LiveScreen({
     label: "Loading…",
     size: 22,
     style: { justifyContent: "center" }
-  })), rawEmpty && !loading && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      minHeight: "50vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      marginTop: 12
-    }
-  }, "Nothing live right now.")), !rawEmpty && /*#__PURE__*/React.createElement("div", {
+  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, {
+    card: false
+  }, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
       marginBottom: 16
@@ -244,24 +234,9 @@ export function LiveScreen({
       fontSize: 20,
       lineHeight: 1
     }
-  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      minHeight: "40vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      marginTop: 12
-    }
-  }, "Nothing matches “", query, "”.")), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, {
+    card: false
+  }, "Nothing matches “", query, "”."), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 26 }
   }, sectionLabel(COLORS.live, `Matches (${filteredMatches.length})`), filteredMatches.map(renderMatchRow)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${filteredTournaments.length})`), filteredTournaments.map(renderTournamentRow)));
 }

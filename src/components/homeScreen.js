@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Bell, ChevronRight, Info, Trophy, Users } from "./icons.js";
 import { Btn, PlayerAvatar, TextField } from "./formUiAtoms.js";
-import { AppMark, LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
+import { AppMark, LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { SyncStatusBanner } from "./scoreboardAtoms.js";
 import { FabButton, InstallHintBanner } from "./screenAtoms.js";
@@ -1145,28 +1145,9 @@ function renderMatchCard(m, i, {
         flexShrink: 0
       }
     }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode }))));
-  })()) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
-      minHeight: "50vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here."))), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
+  })()) : /*#__PURE__*/React.createElement(EmptyState, {
+    minHeight: "50vh"
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading players\u2026"
   }) : filteredPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1296,28 +1277,9 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
-      minHeight: "30vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, "No results for \u201c", query.trim(), "\u201d.")) : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+    minHeight: "30vh"
+  }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
