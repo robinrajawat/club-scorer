@@ -168,7 +168,11 @@ export function FollowTournamentScreen({
   })) : null;
   const fixtures = data.fixtures || [];
   const completedFixtures = fixtures.filter(f => f.result);
-  const scheduledFixtures = fixtures.filter(f => !f.result && f.date);
+  // BUG FIX: this used to require f.date, so an unscheduled fixture (common early in a tournament,
+  // or an informal one where dates are never set at all) fell through both this filter and
+  // completedFixtures above -- present in the snapshot, invisible on screen. Only the date LABEL
+  // below is conditional on f.date now; the fixture itself always shows once it has no result.
+  const scheduledFixtures = fixtures.filter(f => !f.result);
   const formatSummary = formatSummaryText(data.format);
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -277,7 +281,7 @@ export function FollowTournamentScreen({
     }
   }, scheduledFixtures.map(f => /*#__PURE__*/React.createElement("div", {
     key: f.id
-  }, /*#__PURE__*/React.createElement("span", {
+  }, f.date && /*#__PURE__*/React.createElement("span", {
     style: {
       color: COLORS.inkSoft,
       fontSize: 12
