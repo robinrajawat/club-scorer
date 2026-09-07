@@ -13828,18 +13828,6 @@ function ClubPanel({
     setRenaming(false);
     setDescEditing(false);
   }
-  const chipStyle = active => ({
-    padding: "7px 13px",
-    borderRadius: 20,
-    fontFamily: "'Inter'",
-    fontWeight: 600,
-    fontSize: 12.5,
-    cursor: "pointer",
-    border: active ? "none" : `1px solid ${COLORS.willow}`,
-    background: active ? COLORS.pitchFixed : COLORS.surface,
-    color: active ? "#fff" : COLORS.inkSoft,
-    whiteSpace: "nowrap"
-  });
   const orderedClubs = withPinnedFirst(clubs, pinnedClubIds);
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -13868,18 +13856,7 @@ function ClubPanel({
     pinned: pinnedClubIds.includes(c.id),
     onSelect: () => handleSelect(c.id),
     onTogglePin: () => onTogglePinClub(c.id)
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMode(mode ? null : "create"),
-    "aria-label": "Add or join a club",
-    style: { ...chipStyle(false),
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 13,
-    strokeWidth: 2.5
-  }), " Club")), mode && /*#__PURE__*/React.createElement("div", {
+  }))), mode && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 10,
       padding: 12,
@@ -16104,7 +16081,7 @@ function FederationsPanel({
       marginTop: 4,
       marginBottom: 8
     }
-  }, error), mode ? /*#__PURE__*/React.createElement("div", {
+  }, error), mode && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12,
       borderRadius: 12,
@@ -16218,31 +16195,7 @@ function FederationsPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setMode("create");
-      setText("");
-      setError("");
-    },
-    className: "cs-btn",
-    style: {
-      padding: "8px 14px",
-      borderRadius: 10,
-      border: `1px dashed ${COLORS.willow}`,
-      background: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 13,
-    strokeWidth: 2.5
-  }), " Federation"), deleteFedConfirmId && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "Cancel")), deleteFedConfirmId && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Delete federation?",
     message: `This permanently deletes "${(federationsById[deleteFedConfirmId] || {}).name || "this federation"}". It can't be undone, and this is only possible because no clubs are currently affiliated with it.`,
     confirmLabel: "Delete",

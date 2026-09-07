@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { BookOpen, Pencil, Plus } from "./icons.js";
+import { BookOpen, Pencil } from "./icons.js";
 import { Btn, ConfirmModal, TextField } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { SearchAndRequestPanel } from "./searchAndRequestPanel.js";
@@ -1023,7 +1023,7 @@ export function FederationsPanel({
       marginTop: 4,
       marginBottom: 8
     }
-  }, error), mode ? /*#__PURE__*/React.createElement("div", {
+  }, error), mode && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12,
       borderRadius: 12,
@@ -1137,31 +1137,7 @@ export function FederationsPanel({
       cursor: "pointer",
       textDecoration: "underline"
     }
-  }, "Cancel")) : /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setMode("create");
-      setText("");
-      setError("");
-    },
-    className: "cs-btn",
-    style: {
-      padding: "8px 14px",
-      borderRadius: 10,
-      border: `1px dashed ${COLORS.willow}`,
-      background: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 13,
-    strokeWidth: 2.5
-  }), " Federation"), deleteFedConfirmId && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "Cancel")), deleteFedConfirmId && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: "Delete federation?",
     message: `This permanently deletes "${(federationsById[deleteFedConfirmId] || {}).name || "this federation"}". It can't be undone, and this is only possible because no clubs are currently affiliated with it.`,
     confirmLabel: "Delete",

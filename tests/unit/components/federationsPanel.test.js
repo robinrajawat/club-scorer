@@ -58,9 +58,10 @@ function openManage(inst, name) {
 
 test("FederationsPanel: creating a federation fills the name field and calls onCreateFederation", async () => {
   let createdWith = null;
-  const inst = render({ onCreateFederation: name => { createdWith = name; return Promise.resolve({ ok: true }); } });
-  const addBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Federation"));
-  act(() => { addBtn.props.onClick(); });
+  let inst;
+  act(() => {
+    inst = render({ onCreateFederation: name => { createdWith = name; return Promise.resolve({ ok: true }); }, createSignal: 1 });
+  });
 
   const nameField = inst.root.findByType("input");
   act(() => { nameField.props.onChange({ target: { value: "County League" } }); });
@@ -85,13 +86,15 @@ test("FederationsPanel: bumping createSignal (TeamsScreen's 'New Federation' FAB
 
 test("FederationsPanel: 'Find a federation' searches and requests to join on behalf of the selected club", async () => {
   let requestedWith = null;
-  const inst = render({
-    clubs: [{ id: "c1", name: "Riverside CC" }],
-    onSearchPublicFederations: () => Promise.resolve([{ federationId: "fed1", name: "County League" }]),
-    onRequestFederationAffiliation: (direction, clubId, fedId) => { requestedWith = { direction, clubId, fedId }; return Promise.resolve({ ok: true }); }
+  let inst;
+  act(() => {
+    inst = render({
+      clubs: [{ id: "c1", name: "Riverside CC" }],
+      onSearchPublicFederations: () => Promise.resolve([{ federationId: "fed1", name: "County League" }]),
+      onRequestFederationAffiliation: (direction, clubId, fedId) => { requestedWith = { direction, clubId, fedId }; return Promise.resolve({ ok: true }); },
+      createSignal: 1
+    });
   });
-  const addBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Federation"));
-  act(() => { addBtn.props.onClick(); });
   const findBtn = inst.root.findAllByType("button").find(b => b.props.children === "Find a federation");
   act(() => { findBtn.props.onClick(); });
 
