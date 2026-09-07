@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { CalendarClock, ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
-import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
+import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { MoveTeamMenu } from "./shareMenus.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
@@ -76,7 +76,14 @@ export function MyTeamsScreen({
       // the fixed TabBar when it's showing.
       paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
       maxWidth: 560,
-      margin: "0 auto"
+      margin: "0 auto",
+      // Lets EmptyState (flex: 1, further down) center in whatever space is actually left under
+      // the header once teams.length === 0 -- see its own comment. Harmless when there are teams:
+      // the wrapper below only opts into flex itself in the empty case, so a populated list keeps
+      // its old plain-block, hug-its-content height exactly as before.
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100dvh"
     }
   }, onBack && /*#__PURE__*/React.createElement("button", {
     onClick: onBack,
@@ -217,7 +224,8 @@ export function MyTeamsScreen({
     }
   })))), (teamsExpanded || teams.length === 0) && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: teams.length > 0 ? 10 : 14
+      marginTop: teams.length > 0 ? 10 : 14,
+      ...(teams.length === 0 ? { flex: 1, display: "flex", flexDirection: "column" } : {})
     }
   }, teamsLoading && teams.length === 0 ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading your teams\u2026",
@@ -225,28 +233,7 @@ export function MyTeamsScreen({
     style: {
       padding: "10px 4px"
     }
-  }) : teams.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
-      minHeight: "50vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.")) : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
+  }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "right",
       fontFamily: "'Inter'",

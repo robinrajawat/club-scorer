@@ -139,6 +139,7 @@ const FUNCTIONS = [
   { name: "LoadingBallIllustration", file: "src/components/illustrations.js" },
   { name: "LoadingNote", file: "src/components/illustrations.js" },
   { name: "EmptyStateBallIllustration", file: "src/components/illustrations.js" },
+  { name: "EmptyState", file: "src/components/illustrations.js" },
   { name: "RoleBadge", file: "src/components/scoringUiAtoms.js" },
   { name: "BallCelebration", file: "src/components/scoringUiAtoms.js" },
   { name: "MILESTONE_ICONS", file: "src/components/scoringUiAtoms.js" },

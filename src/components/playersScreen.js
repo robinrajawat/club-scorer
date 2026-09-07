@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronLeft } from "./icons.js";
 import { TextField, ConfirmModal, PlayerAvatar } from "./formUiAtoms.js";
-import { LoadingNote, EmptyStateBallIllustration } from "./illustrations.js";
+import { LoadingNote, EmptyState } from "./illustrations.js";
 import { EditPlayerModal, TransferPlayerModal, PLAYER_ROLES, PLAYER_HANDS } from "./playerModals.js";
 import { isClubOwner } from "../core/miscHelpers.js";
 
@@ -305,7 +305,13 @@ export function PlayersScreen({
     style: {
       padding: "20px 16px 60px",
       maxWidth: 560,
-      margin: "0 auto"
+      margin: "0 auto",
+      // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the
+      // header/search box, rather than a fixed vh fraction of the whole screen -- see its own
+      // comment.
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100dvh"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onBack,
@@ -336,28 +342,7 @@ export function PlayersScreen({
     }
   }), loading ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading players\u2026"
-  }) : filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px",
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`,
-      minHeight: "50vh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginTop: 14
-    }
-  }, players.length === 0 ? "No public players yet." : "No players match that search.")) : /*#__PURE__*/React.createElement("div", {
+  }) : filtered.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, players.length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",

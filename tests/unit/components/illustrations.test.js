@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
-import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration } from "../../../src/components/illustrations.js";
+import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration, EmptyState } from "../../../src/components/illustrations.js";
 
 test("AppMark: renders the app icon image sized to the given size prop", () => {
   const tree = renderer.create(React.createElement(AppMark, { size: 32 })).toJSON();
@@ -40,4 +40,21 @@ test("EmptyStateBallIllustration: renders a self-contained svg with no props nee
   const tree = renderer.create(React.createElement(EmptyStateBallIllustration, {})).toJSON();
   assert.equal(tree.type, "svg");
   assert.equal(tree.props.width, "52");
+});
+
+test("EmptyState: is flex:1 by default (fills whatever space a flex-column parent leaves it), shows the illustration and message, and dashed-card styling unless card is false", () => {
+  const card = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).toJSON();
+  assert.equal(card.props.style.flex, 1);
+  assert.ok(card.props.style.border, "card styling is on by default");
+  assert.ok(card.children.some(c => c === "Nothing here yet." || (c && c.children && c.children.includes("Nothing here yet."))));
+  const root = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).root;
+  assert.equal(root.findAllByType(EmptyStateBallIllustration).length, 1);
+
+  const plain = renderer.create(React.createElement(EmptyState, { card: false }, "Nothing live right now.")).toJSON();
+  assert.equal(plain.props.style.border, undefined);
+});
+
+test("EmptyState: an explicit minHeight is passed through, for a screen whose root isn't a flex column", () => {
+  const tree = renderer.create(React.createElement(EmptyState, { minHeight: "50vh" }, "No matches yet.")).toJSON();
+  assert.equal(tree.props.style.minHeight, "50vh");
 });
