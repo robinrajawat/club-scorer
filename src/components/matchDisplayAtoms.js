@@ -1,12 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { COLORS } from "./theme.js";
-import { ChevronRight } from "./icons.js";
-import { tossText, nonStandardRulesText, umpiresText } from "../core/shareAndFormat.js";
 
-// Small presentational components for displaying a match: a single ball's colored badge, a
-// public/private visibility toggle, and the collapsible toss/house-rules/umpires fold shown above
-// the scorecard. Covered by tests/unit/components/matchDisplayAtoms.test.js using
-// react-test-renderer.
+// Small presentational components for displaying a match: a single ball's colored badge and a
+// public/private visibility toggle. Covered by tests/unit/components/matchDisplayAtoms.test.js
+// using react-test-renderer.
 
 export function BallBadge({
   ev,
@@ -153,55 +150,4 @@ export function VisibilitySwitch({
       boxShadow: "0 1px 2px rgba(0,0,0,0.25)"
     }
   })), busy ? "\u2026" : isPublic ? "Public" : "Private");
-}
-
-export function MatchInfoFold({
-  match
-}) {
-  const [open, setOpen] = useState(false);
-  const toss = tossText(match.toss);
-  const houseRules = nonStandardRulesText(match.rules);
-  const umpires = umpiresText(match);
-  if (!toss && !houseRules && !umpires) return null;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setOpen(o => !o),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      padding: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 12,
-    style: {
-      transform: open ? "rotate(90deg)" : "none",
-      transition: "transform 0.15s ease"
-    }
-  }), "Match details"), open && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 6,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6
-    }
-  }, toss, toss && (houseRules || umpires) && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontStyle: "italic"
-    }
-  }, "House rules: ", houseRules), houseRules && umpires && /*#__PURE__*/React.createElement("br", null), umpires));
 }

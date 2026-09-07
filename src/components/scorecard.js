@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronRight, Table2 } from "./icons.js";
+import { ChevronRight, Info, Table2 } from "./icons.js";
 import { RoleBadge } from "./scoringUiAtoms.js";
-import { MatchInfoFold, BallBadge } from "./matchDisplayAtoms.js";
+import { BallBadge } from "./matchDisplayAtoms.js";
 import { OversStrip } from "./scoreboardAtoms.js";
 import { RunRateChart, RunsPerOverChart } from "./matchInsightCards.js";
 import { ExportPdfButton } from "./exportButtons.js";
@@ -617,18 +617,13 @@ export function MatchStatsPanel({
       ballsPerOver: liveInn.ballsPerOver
     }));
   }
-  return /*#__PURE__*/React.createElement(React.Fragment, null, !showOvers && match.venue && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 16px 0",
-      maxWidth: 560,
-      margin: "0 auto",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft
-    }
-  }, "\uD83D\uDCCD ", match.venue), !showOvers && /*#__PURE__*/React.createElement(MatchInfoFold, {
-    match: match
-  }), showLiveSummary && (showOvers ? /*#__PURE__*/React.createElement("div", {
+  // Venue/toss/house-rules/umpires used to render here (an inline "\uD83D\uDCCD venue" line plus a
+  // collapsible MatchInfoFold) whenever showOvers was false -- ScorecardOverlay, this panel's only
+  // other caller besides FollowScreen, now shows the same three fields via its own header (venue
+  // text + an info icon opening a "Match details" popover), matching FollowScreen's own pattern
+  // (see its comment on tossInfo/houseRules/umpires). With both callers now handling this
+  // themselves, this panel never needs to -- MatchInfoFold itself was retired along with it.
+  return /*#__PURE__*/React.createElement(React.Fragment, null, showLiveSummary && (showOvers ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "14px 16px 0",
       maxWidth: 560,
@@ -799,6 +794,17 @@ export function ScorecardOverlay({
   onClose
 }) {
   const [tab, setTab] = useState(match.innings.length - 1);
+  // Same "venue + an info icon opening a Match details popover" header pattern FollowScreen already
+  // uses (see its own comment on these three fields) -- moved here from an inline "📍 venue" line
+  // plus a collapsible MatchInfoFold that used to sit below this header, in the page body. The
+  // scorer is looking at this overlay to check something quickly mid-match; putting venue/toss/
+  // house-rules/umpires in the header means they're visible the instant it opens, not one more
+  // collapsible section to find and expand first.
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
+  const tossInfo = tossText(match.toss);
+  const houseRules = nonStandardRulesText(match.rules);
+  const umpires = umpiresText(match);
+  const hasMatchDetails = !!(tossInfo || houseRules || umpires);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
@@ -819,11 +825,14 @@ export function ScorecardOverlay({
       // (and the Close button inside it) sits flush against the true viewport top and collides with
       // the iPhone status bar/notch.
       padding: "calc(16px + env(safe-area-inset-top)) 16px 16px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
       boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
       zIndex: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -856,12 +865,62 @@ export function ScorecardOverlay({
       cursor: "pointer",
       padding: "6px 10px"
     }
-  }, "Close"))), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, "Close"))), (match.venue || hasMatchDetails) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85
+    }
+  }, match.venue && `📍 ${match.venue}`), hasMatchDetails && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowMatchDetails(true),
+    className: "cs-btn",
+    "aria-label": "Match details",
+    style: {
+      background: "none",
+      border: "none",
+      padding: 2,
+      display: "flex",
+      color: COLORS.creamFixed,
+      opacity: 0.85,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 15
+  })))), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,
     showOvers: false
-  }));
+  }), showMatchDetails && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowMatchDetails(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.ink,
+      marginBottom: 10
+    }
+  }, "Match details"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.7
+    }
+  }, tossInfo, tossInfo && (houseRules || umpires) && /*#__PURE__*/React.createElement("br", null), houseRules && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic"
+    }
+  }, "House rules: ", houseRules), houseRules && umpires && /*#__PURE__*/React.createElement("br", null), umpires)));
 }
 
 export function PrintReport({

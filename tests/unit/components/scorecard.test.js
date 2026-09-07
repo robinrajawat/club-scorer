@@ -4,9 +4,16 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { afterEach } from "node:test";
 import React from "react";
-import renderer from "react-test-renderer";
+import renderer, { act } from "react-test-renderer";
 import { InningScorecard, MatchStatsPanel, ScorecardOverlay, PrintReport, TournamentPrintReport } from "../../../src/components/scorecard.js";
+
+// ScorecardOverlay's "Match details" popover references Modal as a bare, unimported global (same
+// pattern as every other Modal-wrapped screen in this app) -- stubbed only in the tests that open it.
+afterEach(() => {
+  delete globalThis.Modal;
+});
 
 function inning(overrides = {}) {
   return {
@@ -85,20 +92,19 @@ test("MatchStatsPanel: showOvers=false always renders the scorecard and charts i
   assert.doesNotMatch(text, /CRR/); // no live-summary card outside showOvers mode
 });
 
-test("MatchStatsPanel: showOvers=true no longer renders venue or Match details -- FollowScreen shows those in its own header now", () => {
+// MatchStatsPanel used to render an inline "📍 venue" line plus a collapsible MatchInfoFold
+// whenever showOvers was false -- both of its callers (FollowScreen, ScorecardOverlay) now show
+// venue/toss/house-rules/umpires via their own header instead (see ScorecardOverlay's own tests
+// below), so this panel never renders them itself, regardless of showOvers.
+test("MatchStatsPanel: never renders venue or Match details itself, regardless of showOvers -- both callers handle that in their own header now", () => {
   const match = matchWith([inning({ complete: false })], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } });
-  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
-  const text = JSON.stringify(inst.toJSON());
-  assert.doesNotMatch(text, /Willow Park/);
-  assert.doesNotMatch(text, /Match details/);
-});
-
-test("MatchStatsPanel: showOvers=false still renders venue and Match details inline, unchanged", () => {
-  const match = matchWith([inning({ complete: true })], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } });
-  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: false }));
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Willow Park/);
-  assert.match(text, /Match details/);
+  const withOvers = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
+  const withoutOvers = renderer.create(React.createElement(MatchStatsPanel, { match: matchWith([inning({ complete: true })], { venue: "Willow Park", toss: { wonBy: "Riverside CC", decision: "Bat" } }), tab: 0, setTab: () => {}, showOvers: false }));
+  for (const inst of [withOvers, withoutOvers]) {
+    const text = JSON.stringify(inst.toJSON());
+    assert.doesNotMatch(text, /Willow Park/);
+    assert.doesNotMatch(text, /Match details/);
+  }
 });
 
 test("MatchStatsPanel: showOvers=true folds ballCommentary into the score card, not a separate one", () => {
@@ -148,6 +154,42 @@ test("ScorecardOverlay: renders a header with an export button and close button,
   assert.ok(closeBtn);
   closeBtn.props.onClick();
   assert.equal(closed, true);
+});
+
+// IMPROVEMENT: venue and toss/house-rules/umpires used to sit in the page body, below the sticky
+// header, as an inline line plus a collapsible fold -- one more thing to notice and expand before
+// seeing them. Moved into the header itself, matching the pattern FollowScreen already uses for the
+// same three fields, so they're visible the instant the overlay opens.
+test("ScorecardOverlay: shows the venue directly in the header when set", () => {
+  const match = matchWith([inning({ complete: true })], { venue: "Willow Park" });
+  const inst = renderer.create(React.createElement(ScorecardOverlay, { match, onClose: () => {} }));
+  assert.match(JSON.stringify(inst.toJSON()), /Willow Park/);
+});
+
+test("ScorecardOverlay: no second header row at all when there's no venue and no match details to show", () => {
+  const match = matchWith([inning({ complete: true })]);
+  const inst = renderer.create(React.createElement(ScorecardOverlay, { match, onClose: () => {} }));
+  assert.equal(inst.root.findAllByProps({ "aria-label": "Match details" }).length, 0);
+});
+
+test("ScorecardOverlay: the info icon opens a Match details popover with toss/house rules/umpires, closable", () => {
+  globalThis.Modal = ({ children, onClose }) => React.createElement("div", { "data-stub-modal": true, onClick: onClose }, children);
+  const match = matchWith([inning({ complete: true })], {
+    toss: { wonBy: "Riverside CC", decision: "Bat" },
+    rules: { freeHit: true },
+    umpire1: "U1", umpire2: "U2"
+  });
+  const inst = renderer.create(React.createElement(ScorecardOverlay, { match, onClose: () => {} }));
+  const infoBtn = inst.root.findByProps({ "aria-label": "Match details" });
+  act(() => { infoBtn.props.onClick(); });
+  let text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside CC won the toss, chose to bat/);
+  assert.match(text, /Free Hit enabled/);
+  assert.match(text, /Umpires: U1, U2/);
+
+  const modal = inst.root.findByProps({ "data-stub-modal": true });
+  act(() => { modal.props.onClick(); });
+  assert.equal(inst.root.findAllByProps({ "data-stub-modal": true }).length, 0);
 });
 
 test("PrintReport: renders nothing without a match, a result line and scorecards for a completed one", () => {
