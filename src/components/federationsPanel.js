@@ -3,7 +3,6 @@ import { COLORS } from "./theme.js";
 import { BookOpen, Pencil, Plus } from "./icons.js";
 import { Btn, ConfirmModal, TextField } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
-import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { SearchAndRequestPanel } from "./searchAndRequestPanel.js";
 import { uid } from "../core/statsAndFixtures.js";
 import { isClubOwner } from "../core/miscHelpers.js";
@@ -47,7 +46,6 @@ export function FederationsPanel({
   const [text, setText] = useState("");
   const [joinClubId, setJoinClubId] = useState(clubs[0] ? clubs[0].id : "");
   const [busy, setBusy] = useState(false);
-  const [visBusyId, setVisBusyId] = useState(null);
   const [findClubOpen, setFindClubOpen] = useState(false);
   const [error, setError] = useState("");
   const [manageOpenId, setManageOpenId] = useState(null);
@@ -89,6 +87,18 @@ export function FederationsPanel({
   function isOwner(f) {
     return !!f && !!currentUid && (f.createdBy === currentUid || (f.coOwnerUids || []).includes(currentUid));
   }
+  // Federations are always public/directory-listed now -- see ClubPanel's identical comment on
+  // clubs for why (membership and every change to it are already owner/co-owner governed). No
+  // user-facing toggle for it any more; any federation created before this simplification, still
+  // marked private, self-heals here on mount via the same onSetFederationVisibility plumbing the
+  // old toggle used to call by hand.
+  useEffect(() => {
+    federations.forEach(f => {
+      if (isOwner(f) && f.visibility !== "public" && onSetFederationVisibility) {
+        onSetFederationVisibility(f.id, true);
+      }
+    });
+  }, [federationsById, currentUid]);
   // Outgoing federation_to_club invites sent by search (as opposed to the co-owner invites shown
   // lower down) -- these live in federationRequests, not on the federation doc itself, so without
   // this they were invisible in the manage panel: a club could
@@ -141,12 +151,6 @@ export function FederationsPanel({
       error: "Pick which of your clubs is requesting this."
     };
     return onRequestFederationAffiliation("club_to_federation", joinClubId, federation.federationId);
-  }
-  async function handleSetVisibility(federationId, isPublic) {
-    setVisBusyId(federationId);
-    const result = await onSetFederationVisibility(federationId, isPublic);
-    setVisBusyId(null);
-    if (!result.ok) setError(result.error || "Couldn't update visibility.");
   }
   function openManage(f) {
     setManageOpenId(f.id);
@@ -448,11 +452,7 @@ export function FederationsPanel({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
-  }), "Records"), isOwner(f) && /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: f.visibility === "public",
-    busy: visBusyId === f.id,
-    onChange: isPublic => handleSetVisibility(f.id, isPublic)
-  }), isOwner(f) && /*#__PURE__*/React.createElement("button", {
+  }), "Records"), isOwner(f) && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleManage(f),
     className: "cs-btn",
     style: {
@@ -480,16 +480,7 @@ export function FederationsPanel({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated", !isOwner(f) && f.visibility && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: f.visibility === "public" ? COLORS.gold : COLORS.inkSoft
-    }
-  }, f.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), /*#__PURE__*/React.createElement("div", {
+  }, (f.affiliatedClubIds || []).length, " club", (f.affiliatedClubIds || []).length === 1 ? "" : "s", " affiliated"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { BookOpen, ChevronDown, Pencil, Plus } from "./icons.js";
 import { Btn, ConfirmModal, PinnableChip, TextField } from "./formUiAtoms.js";
-import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { SearchAndRequestPanel } from "./searchAndRequestPanel.js";
 import { uid } from "../core/statsAndFixtures.js";
 import { isClubOwner, inviteExpiryLabel, playerAvatarColor, CLUB_LOGO_UPLOAD_ENABLED } from "../core/miscHelpers.js";
@@ -55,7 +54,6 @@ export function ClubPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [visBusy, setVisBusy] = useState(false);
   const [findFedOpen, setFindFedOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -151,6 +149,16 @@ export function ClubPanel({
   const [manageOpen, setManageOpen] = useState(false);
   const activeClub = clubs.find(c => c.id === activeClubId) || null;
   const activeIsOwner = activeClub ? isClubOwner(activeClub, currentUid) : false;
+  // Clubs are always public/directory-listed now -- club membership and every change to it are
+  // already owner/co-owner governed, so a separate visibility gate on top of that added a step
+  // without actually protecting anything. No user-facing toggle for it any more; a club created
+  // before this simplification, still marked private, self-heals the moment its owner opens it
+  // here, via the same onSetVisibility plumbing the old toggle used to call by hand.
+  useEffect(() => {
+    if (activeClub && activeIsOwner && activeClub.visibility !== "public" && onSetVisibility) {
+      onSetVisibility(activeClub.id, true);
+    }
+  }, [activeClub && activeClub.id, activeClub && activeClub.visibility, activeIsOwner]);
   const pendingCoOwnerInvites = activeClub ? coOwnerInvites.filter(inv => inv.scope === "club" && inv.entityId === activeClub.id && inv.status === "pending") : [];
   // Same " · Owner" / " · Co-owner" / "" convention as FederationsPanel's roleLabel(f) just below
   // in this same screen — matching it exactly rather than inventing a parallel one, including
@@ -173,13 +181,6 @@ export function ClubPanel({
     setFindFedOpen(false);
     setManageOpen(false);
   }, [activeClubId]);
-  async function handleSetVisibility(isPublic) {
-    if (!activeClub || !onSetVisibility) return;
-    setVisBusy(true);
-    const result = await onSetVisibility(activeClub.id, isPublic);
-    setVisBusy(false);
-    if (!result.ok) setError(result.error || "Couldn't update visibility.");
-  }
   function requestRemoveCoOwner(uid, name) {
     setConfirmRemoveMember({
       uid,
@@ -614,13 +615,7 @@ export function ClubPanel({
     }
   }, /*#__PURE__*/React.createElement(BookOpen, {
     size: 14
-  }), "Records"), activeIsOwner && onSetVisibility && /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: activeClub.visibility === "public",
-    busy: visBusy,
-    onChange: handleSetVisibility,
-    publicHint: "Public \u2014 federations can find and invite this club",
-    privateHint: "Private \u2014 not discoverable"
-  }), activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }), "Records"), activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => setManageOpen(o => !o),
     className: "cs-btn",
     style: {
@@ -652,16 +647,7 @@ export function ClubPanel({
       marginBottom: 8,
       lineHeight: 1.5
     }
-  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", ".", !activeIsOwner && activeClub.visibility && /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: 8,
-      fontSize: 10.5,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      color: activeClub.visibility === "public" ? COLORS.gold : COLORS.inkSoft
-    }
-  }, activeClub.visibility === "public" ? "\u00b7 Public" : "\u00b7 Private")), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
+  }, "Everyone in \u201C", activeClub.name, "\u201D sees these teams \u2014 only the owner can edit them \u2014 ", activeClub.memberUids.length, " member", activeClub.memberUids.length === 1 ? "" : "s", "."), !activeIsOwner && /*#__PURE__*/React.createElement("button", {
     onClick: () => onLeave(activeClub.id),
     style: {
       padding: "6px 10px",

@@ -311,18 +311,40 @@ test("FederationsPanel: 'Delete this federation' only shows once no clubs are af
   assert.equal(deletedId, "fed1");
 });
 
-test("FederationsPanel: toggling visibility calls onSetFederationVisibility with the new state", async () => {
+test("FederationsPanel: federations are always public now -- no manual visibility toggle, for owner or non-owner", () => {
+  const inst = render({ federationsById: { fed1: federation({ visibility: "public" }) } });
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Make public" }));
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Make private" }));
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /· Public|· Private/);
+
+  const asMember = render({ federationsById: { fed1: federation({ visibility: "public" }) }, currentUid: "someoneElse" });
+  assert.doesNotMatch(JSON.stringify(asMember.toJSON()), /· Public|· Private/);
+});
+
+test("FederationsPanel: a federation still marked private from before this simplification self-heals to public the moment its owner opens this screen", () => {
   let setTo = null;
-  const inst = render({
-    federationsById: { fed1: federation({ visibility: "private" }) },
-    onSetFederationVisibility: (id, isPublic) => { setTo = { id, isPublic }; return Promise.resolve({ ok: true }); }
-  });
-  const publicBtn = inst.root.findByProps({ "aria-label": "Make public" });
-  await act(async () => {
-    publicBtn.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
+  act(() => {
+    render({
+      federationsById: { fed1: federation({ visibility: "private" }) },
+      onSetFederationVisibility: (id, isPublic) => { setTo = { id, isPublic }; return Promise.resolve({ ok: true }); }
+    });
   });
   assert.deepEqual(setTo, { id: "fed1", isPublic: true });
+});
+
+test("FederationsPanel: does not call onSetFederationVisibility for a federation that's already public, or for a non-owner", () => {
+  let called = false;
+  render({
+    federationsById: { fed1: federation({ visibility: "public" }) },
+    onSetFederationVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
+
+  render({
+    federationsById: { fed1: federation({ visibility: "private" }) }, currentUid: "someoneElse",
+    onSetFederationVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(called, false);
 });
 
 test("FederationsPanel: a club owner can stop sharing (leave) a federation", () => {

@@ -219,18 +219,10 @@ test("AccountScreen: linkStatus banner renders and its dismiss button calls onCl
   assert.equal(cleared, true);
 });
 
-test("AccountScreen: 'Discoverable for invites' toggle reflects isProfilePublic and calls onSetProfileVisibility", async () => {
-  let setTo = null;
+test("AccountScreen: no 'Discoverable for invites' toggle any more -- profile discoverability is automatic now, not a manual gate", () => {
   const inst = render({
-    user: { uid: "u1", displayName: "Robin", email: "robin@x.com", providerData: [] },
-    isProfilePublic: false,
-    onSetProfileVisibility: isPublic => { setTo = isPublic; return Promise.resolve({ ok: true }); }
+    user: { uid: "u1", displayName: "Robin", email: "robin@x.com", providerData: [] }
   });
-  assert.match(JSON.stringify(inst.toJSON()), /Discoverable for invites/);
-  const toggle = inst.root.findByProps({ "aria-label": "Make public" });
-  await act(async () => {
-    toggle.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.equal(setTo, true);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Discoverable for invites/);
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Make public" }));
 });

@@ -79,19 +79,13 @@ test("AuthBar: opening the menu when signed in shows 'Manage account' and the pe
   assert.match(document.body.innerHTML, /robin@example\.com/);
 });
 
-test("AuthBar: 'Manage account' shows a Private badge by default, and a Public badge when isProfilePublic is true", () => {
+test("AuthBar: 'Manage account' carries no Public/Private discoverability badge any more", () => {
   act(() => {
     root.render(React.createElement(AuthBar, baseProps({ user: { displayName: "Robin" } })));
   });
   openMenu();
-  assert.match(document.body.innerHTML, />Private</);
-  assert.doesNotMatch(document.body.innerHTML, />Public</);
-
-  act(() => {
-    root.render(React.createElement(AuthBar, baseProps({ user: { displayName: "Robin" }, isProfilePublic: true })));
-  });
-  assert.match(document.body.innerHTML, />Public</);
   assert.doesNotMatch(document.body.innerHTML, />Private</);
+  assert.doesNotMatch(document.body.innerHTML, />Public</);
 });
 
 test("AuthBar: no Public/Private badge on the 'Sign in' item when signed out", () => {
