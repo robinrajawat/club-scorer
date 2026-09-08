@@ -193,6 +193,31 @@ test("TeamEditScreen: adding from the club player pool copies entries onto the r
   assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
 });
 
+test("TeamEditScreen: flags a club roster player who isn't in the club's pool yet, with a way to add them", () => {
+  let addedTo = null, addedPlayers = null;
+  const inst = render({
+    clubId: "c1",
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }],
+    onAddPoolPlayers: (clubId, players) => { addedTo = clubId; addedPlayers = players; }
+  });
+  addPlayer(inst, "D. Singh"); // already in the pool
+  addPlayer(inst, "E. Rao"); // not in the pool yet
+
+  const addBtn = inst.root.findByProps({ "aria-label": "Add E. Rao to the club player pool" });
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Add D. Singh to the club player pool" }));
+
+  act(() => { addBtn.props.onClick(); });
+  assert.equal(addedTo, "c1");
+  assert.equal(addedPlayers.length, 1);
+  assert.equal(addedPlayers[0].name, "E. Rao");
+});
+
+test("TeamEditScreen: no pool marking at all for a personal (non-club) team", () => {
+  const inst = render({ clubId: null });
+  addPlayer(inst, "F. Costa");
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Add F. Costa to the club player pool" }));
+});
+
 test("TeamEditScreen: a display-only summary shows player count and whoever's tagged captain/vice-captain/keeper", () => {
   const inst = render();
   // Reads the live (pre-toJSON) instance tree, where a numeric child is still a real number and
