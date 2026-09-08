@@ -76,9 +76,11 @@ export function planMatchSaveEffects(match, result, {
   if (structuralError) {
     liveMatchesMirror = "skip";
   } else if (match.private) {
-    // Actively removed, not just skipped -- flipping an already-live match to private (MatchScreen's
-    // Visibility toggle) must clear its stale, still-discoverable /liveMatches doc immediately
-    // rather than leaving it to age out on its own TTL.
+    // Actively removed, not just skipped. Visibility is now fixed at creation (derived from
+    // Organizer, no toggle to flip it afterward), so a private match should in practice never
+    // have had a /liveMatches doc to begin with -- this is a harmless no-op delete for the normal
+    // case, and a real cleanup only for a match saved before that field existed or was computed
+    // differently, rather than leaving a stale doc to age out on its own TTL.
     liveMatchesMirror = "delete";
   } else if (hasAccount || !!match.shareCode) {
     liveMatchesMirror = match.status === "complete" ? "writeRecent" : "writeLiveFeed";
