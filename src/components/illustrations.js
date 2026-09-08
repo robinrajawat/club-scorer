@@ -135,22 +135,27 @@ export function EmptyStateBallIllustration() {
 }
 
 // The "nothing here yet" state every list screen (Home, Live, My Teams, Cups, Players, Inbox)
-// falls back to. Used to be copy-pasted per screen with a fixed vh-fraction minHeight to fake
-// vertical centering -- that reads as "too high" on any screen with more header/search/filter
-// chrome above it than whichever screen that fraction happened to be eyeballed against, since a
-// fixed fraction of the WHOLE viewport has no idea how much of it the header already used. `flex:
-// 1` here does the actual job on most screens: it fills exactly whatever space is left below the
-// header, so it centers correctly regardless of how tall that header is -- the one requirement is
-// that the screen's own root element is itself `display: flex, flexDirection: "column"` with a
-// real height to divide up (`minHeight: "100dvh"` on that root, same pattern on every screen that
-// relies on this). Screens whose root isn't (yet) restructured that way can pass `minHeight`
-// instead (a plain block-level minHeight, same old fallback) -- `flex: 1` is simply ignored by a
-// non-flex parent, so this stays correct either way without the caller needing two code paths.
-// `card` toggles the dashed-border/tinted-background treatment every screen but Live uses; Live's
-// is a plain centered message with no card, since it's the top-level "nothing at all yet" state
-// for the whole tab rather than one section's empty list.
+// falls back to -- same look everywhere on purpose, so it doesn't matter which screen you're on.
+// Used to be copy-pasted per screen with a fixed vh-fraction minHeight to fake vertical centering
+// -- that reads as "too high" on any screen with more header/search/filter chrome above it than
+// whichever screen that fraction happened to be eyeballed against, since a fixed fraction of the
+// WHOLE viewport has no idea how much of it the header already used. `flex: 1` on the OUTER,
+// invisible positioning div does the actual job on most screens: it fills exactly whatever space
+// is left below the header, so it centers correctly regardless of how tall that header is -- the
+// one requirement is that the screen's own root element is itself `display: flex, flexDirection:
+// "column"` with a real height to divide up (`minHeight: "100dvh"` on that root, same pattern on
+// every screen that relies on this). Screens whose root isn't (yet) restructured that way can pass
+// `minHeight` instead (a plain block-level minHeight, same old fallback) -- `flex: 1` is simply
+// ignored by a non-flex parent, so this stays correct either way without the caller needing two
+// code paths.
+// Deliberately two nested divs, not one: the OUTER one claims however much vertical space is
+// available (which can be a lot, on a tall screen with little else on it) and just centers its
+// child within that -- the actual dashed-border/tinted-background card stays a second, INNER div
+// sized to its own content (illustration + message), capped at maxWidth so it can't stretch edge
+// to edge on a wide screen either. Collapsing these into one div and giving IT both flex:1 and the
+// border used to make the border itself balloon to fill all the available space -- a small ball
+// icon and a line of text inside a dashed box the height of the whole screen.
 export function EmptyState({
-  card = true,
   minHeight,
   children
 }) {
@@ -159,16 +164,18 @@ export function EmptyState({
       flex: 1,
       ...(minHeight ? { minHeight } : {}),
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
+      padding: "20px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       textAlign: "center",
       padding: "40px 20px",
-      ...(card ? {
-        borderRadius: 16,
-        border: `1.5px dashed ${COLORS.willow}`,
-        background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
-      } : {})
+      maxWidth: 320,
+      borderRadius: 16,
+      border: `1.5px dashed ${COLORS.willow}`,
+      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -178,5 +185,5 @@ export function EmptyState({
       lineHeight: 1.6,
       marginTop: 12
     }
-  }, children));
+  }, children)));
 }

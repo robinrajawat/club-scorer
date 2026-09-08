@@ -199,9 +199,7 @@ export function LiveScreen({
     label: "Loading…",
     size: 22,
     style: { justifyContent: "center" }
-  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, {
-    card: false
-  }, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement("div", {
+  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
       marginBottom: 16
@@ -234,9 +232,7 @@ export function LiveScreen({
       fontSize: 20,
       lineHeight: 1
     }
-  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, {
-    card: false
-  }, "Nothing matches “", query, "”."), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing matches “", query, "”."), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 26 }
   }, sectionLabel(COLORS.live, `Matches (${filteredMatches.length})`), filteredMatches.map(renderMatchRow)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${filteredTournaments.length})`), filteredTournaments.map(renderTournamentRow)));
 }
