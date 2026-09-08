@@ -318,7 +318,46 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played"), (t.captain || t.viceCaptain || t.keeper) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 4,
+      marginTop: 4
+    }
+    // Same quick, display-only summary TeamEditScreen's own roster card shows -- who's tagged
+    // what without opening the team to check.
+  }, t.captain && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.gold,
+      background: "rgba(184,137,43,0.16)",
+      padding: "2px 7px",
+      borderRadius: 10
+    }
+  }, "C \u00b7 ", t.captain), t.viceCaptain && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: "#7a5c22",
+      background: "rgba(201,168,118,0.3)",
+      padding: "2px 7px",
+      borderRadius: 10
+    }
+  }, "VC \u00b7 ", t.viceCaptain), t.keeper && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      color: COLORS.turf,
+      background: "rgba(45,80,22,0.12)",
+      padding: "2px 7px",
+      borderRadius: 10
+    }
+  }, "WK \u00b7 ", t.keeper))), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
     onClick: () => setPollingTeam(t),
     className: "cs-btn",
     "aria-label": `Poll availability for ${t.name}`,
