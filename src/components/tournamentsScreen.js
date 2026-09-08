@@ -579,6 +579,9 @@ export function TournamentsScreen({
       }, {
         value: 2,
         label: "2"
+      }, {
+        value: 3,
+        label: "3"
       }]
     }), /*#__PURE__*/React.createElement(ToggleRule, {
       label: "Free hit after a no-ball",

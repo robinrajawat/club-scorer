@@ -292,6 +292,23 @@ test("SetupScreen: 'Customize' reveals the rules editor, and a rule change is re
   assert.equal(started.rules.ballsPerOver, 8);
 });
 
+test("SetupScreen: 'Runs on a no-ball' offers the same 1/2/3 choices as 'Runs on a wide'", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+  const ruleChoices = inst.root.findAllByType(RuleChoice);
+  const wideOptions = ruleChoices.find(r => r.props.label === "Runs on a wide").props.options.map(o => o.value);
+  const noballOptions = ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.options.map(o => o.value);
+  assert.deepEqual(noballOptions, wideOptions);
+});
+
 // The rules editor used to be one flat, undifferentiated list of 16+ fields, all styled
 // identically -- no visual signal for where one topic ended and the next began. Grouped into
 // labeled sections now (mirroring the same grouping already shipped for the tournament rules
