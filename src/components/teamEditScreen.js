@@ -9,8 +9,9 @@ import { uid } from "../core/statsAndFixtures.js";
 import { normalizeEmail, TEAM_COLOR_PRESETS } from "../core/miscHelpers.js";
 
 // Create/edit a team's roster: name, jersey color, add/remove/reorder players (typed, borrowed
-// from another club's public directory, or copied from this club's own player pool), captain/
-// keeper toggles, and per-player publish/unpublish to the shared player directory. Every write
+// from another club's public directory, or copied from this club's own player pool),
+// captain/vice-captain/keeper toggles, and per-player publish/unpublish to the shared player
+// directory. Every write
 // that reaches Firestore (onPublishPlayer/onUnpublishPlayer/onUpdatePlayerInfo/
 // onLoadPublicPlayers/onAddPoolPlayers/onSave) is a prop -- the one exception is
 // checkDeletedBorrowedPlayers, called from a mount-time useEffect to flag a borrowed roster row
@@ -80,6 +81,7 @@ export function TeamEditScreen({
   const [newPlayer, setNewPlayer] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
+  const [viceCaptain, setViceCaptain] = useState(team ? team.viceCaptain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
   const [color, setColor] = useState(team ? team.color || "" : "");
   // Player details (email + public toggle) are tucked behind a per-row expand, rather than always
@@ -275,6 +277,7 @@ export function TeamEditScreen({
     setPlayers(p => p.filter(x => x._key !== key));
     if (old) {
       if (captain === old.name) setCaptain("");
+      if (viceCaptain === old.name) setViceCaptain("");
       if (keeper === old.name) setKeeper("");
     }
   }
@@ -292,6 +295,7 @@ export function TeamEditScreen({
     } : x));
     if (old) {
       if (captain === old.name) setCaptain(newName);
+      if (viceCaptain === old.name) setViceCaptain(newName);
       if (keeper === old.name) setKeeper(newName);
     }
   }
@@ -326,7 +330,7 @@ export function TeamEditScreen({
   // so savePlayerDetails/makePrivate below can call it too (with an override for the players
   // array, since setPlayers is async and the caller needs the just-updated array immediately,
   // not next render).
-  function buildTeamPayload(playersOverride, captainOverride, keeperOverride) {
+  function buildTeamPayload(playersOverride, captainOverride, keeperOverride, viceCaptainOverride) {
     const savedPlayers = (playersOverride || players).map(p => ({
       name: p.name.trim(),
       number: p.number,
@@ -339,6 +343,7 @@ export function TeamEditScreen({
       name: name.trim(),
       players: savedPlayers,
       captain: (captainOverride !== undefined ? captainOverride : captain).trim(),
+      viceCaptain: (viceCaptainOverride !== undefined ? viceCaptainOverride : viceCaptain).trim(),
       keeper: (keeperOverride !== undefined ? keeperOverride : keeper).trim(),
       color: color || null
     };
@@ -386,15 +391,18 @@ export function TeamEditScreen({
     } : x);
     setPlayers(updatedPlayers);
     // Renaming can now also happen through EditPlayerModal's Save (not just the row's own name
-    // field, which already does this via updateName) -- keep captain/keeper in sync either way,
-    // since both are tracked by name string rather than a stable id. Computed explicitly rather
-    // than read back from state for the buildTeamPayload call below: setCaptain/setKeeper are
-    // async, so the immediate persist would otherwise still see the pre-rename name.
+    // field, which already does this via updateName) -- keep captain/vice-captain/keeper in sync
+    // either way, since all three are tracked by name string rather than a stable id. Computed
+    // explicitly rather than read back from state for the buildTeamPayload call below:
+    // setCaptain/setViceCaptain/setKeeper are async, so the immediate persist would otherwise
+    // still see the pre-rename name.
     const newCaptain = row.name !== info.name && captain === row.name ? info.name : captain;
+    const newViceCaptain = row.name !== info.name && viceCaptain === row.name ? info.name : viceCaptain;
     const newKeeper = row.name !== info.name && keeper === row.name ? info.name : keeper;
     if (newCaptain !== captain) setCaptain(newCaptain);
+    if (newViceCaptain !== viceCaptain) setViceCaptain(newViceCaptain);
     if (newKeeper !== keeper) setKeeper(newKeeper);
-    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper));
+    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper, newViceCaptain));
     return result;
   }
   async function makePrivate(key) {
@@ -573,7 +581,7 @@ export function TeamEditScreen({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -790,6 +798,28 @@ export function TeamEditScreen({
     }
   }, "C"), /*#__PURE__*/React.createElement("button", {
     type: "button",
+    onClick: () => setViceCaptain(viceCaptain === p.name ? "" : p.name),
+    "aria-label": viceCaptain === p.name ? `Remove ${p.name} as vice-captain` : `Make ${p.name} vice-captain`,
+    title: "Vice-captain",
+    style: {
+      width: 30,
+      height: 26,
+      borderRadius: 13,
+      flexShrink: 0,
+      border: viceCaptain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: viceCaptain === p.name ? "rgba(201,168,118,0.4)" : COLORS.surface,
+      color: viceCaptain === p.name ? "#5a4522" : COLORS.inkSoft,
+      boxShadow: viceCaptain === p.name ? "0 1px 4px rgba(201,168,118,0.4)" : "none",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 800,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, "VC"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: () => setKeeper(keeper === p.name ? "" : p.name),
     "aria-label": keeper === p.name ? `Remove ${p.name} as wicketkeeper` : `Make ${p.name} wicketkeeper`,
     title: "Wicketkeeper",
@@ -945,7 +975,7 @@ export function TeamEditScreen({
     }
   }, "Save Team"), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: `Remove ${confirmRemove.name}?`,
-    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain or wicketkeeper here, that's cleared too.`,
+    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain, vice-captain, or wicketkeeper here, that's cleared too.`,
     confirmLabel: "Remove",
     onConfirm: () => {
       removePlayer(confirmRemove._key);

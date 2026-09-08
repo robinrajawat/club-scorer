@@ -10,7 +10,7 @@ import { uid } from "../core/statsAndFixtures.js";
 import { matchResultText, tossText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
 import { genMatchCode } from "../core/miscHelpers.js";
 import { newInning } from "../core/scoringEngine.js";
-import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
+import { captainFor, viceCaptainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Match-complete result screen: winner banner, share/export/View Super Over actions, Player of the
 // Match / Best Fielder cards, and both innings' scorecards. Covered by
@@ -110,9 +110,11 @@ export function ResultScreen({
       teamARoster: match.teamARoster,
       teamBRoster: match.teamBRoster,
       teamACaptain: match.teamACaptain,
+      teamAViceCaptain: match.teamAViceCaptain,
       teamAKeeper: match.teamAKeeper,
       teamAColor: match.teamAColor || null,
       teamBCaptain: match.teamBCaptain,
+      teamBViceCaptain: match.teamBViceCaptain,
       teamBKeeper: match.teamBKeeper,
       teamBColor: match.teamBColor || null,
       oversLimit: 1,
@@ -400,8 +402,10 @@ export function ResultScreen({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: inn,
     battingCaptain: captainFor(match, inn.battingTeam),
+    battingViceCaptain: viceCaptainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
     bowlingNumbers: numbersFor(match, inn.bowlingTeam)

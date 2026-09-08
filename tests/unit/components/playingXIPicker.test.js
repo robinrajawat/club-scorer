@@ -31,15 +31,18 @@ test("PlayingXIPicker: pool players beyond `required` selected are disabled", ()
   assert.equal(poolBtn.props.disabled, true);
 });
 
-test("PlayingXIPicker: with onSetCaptain/onSetKeeper, a selected pill gets C/WK buttons that toggle", () => {
-  let captainSet = null, keeperSet = null;
+test("PlayingXIPicker: with onSetCaptain/onSetViceCaptain/onSetKeeper, a selected pill gets C/VC/WK buttons that toggle", () => {
+  let captainSet = null, viceCaptainSet = null, keeperSet = null;
   const inst = renderer.create(React.createElement(PlayingXIPicker, {
     label: "Playing XI", squad, selected: ["Virat Kohli"], required: 2,
-    onToggle: () => {}, onSetCaptain: n => { captainSet = n; }, onSetKeeper: n => { keeperSet = n; }
+    onToggle: () => {}, onSetCaptain: n => { captainSet = n; }, onSetViceCaptain: n => { viceCaptainSet = n; }, onSetKeeper: n => { keeperSet = n; }
   }));
   const captainBtn = inst.root.findByProps({ "aria-label": "Make Virat Kohli captain" });
   captainBtn.props.onClick();
   assert.equal(captainSet, "Virat Kohli");
+  const viceCaptainBtn = inst.root.findByProps({ "aria-label": "Make Virat Kohli vice-captain" });
+  viceCaptainBtn.props.onClick();
+  assert.equal(viceCaptainSet, "Virat Kohli");
   const keeperBtn = inst.root.findByProps({ "aria-label": "Make Virat Kohli wicketkeeper" });
   keeperBtn.props.onClick();
   assert.equal(keeperSet, "Virat Kohli");

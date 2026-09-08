@@ -15,6 +15,15 @@ test("RoleBadge: renders C/WK/C·WK based on the flags, null when neither is set
   assert.equal(renderer.create(React.createElement(RoleBadge, { isCaptain: true, isKeeper: true })).toJSON().children[0], "C·WK");
 });
 
+test("RoleBadge: isViceCaptain renders its own 'VC' badge, alongside C/WK rather than combined into one label", () => {
+  assert.equal(renderer.create(React.createElement(RoleBadge, { isViceCaptain: false })).toJSON(), null);
+  assert.equal(renderer.create(React.createElement(RoleBadge, { isViceCaptain: true })).toJSON().children[0], "VC");
+  const withKeeper = renderer.create(React.createElement(RoleBadge, { isViceCaptain: true, isKeeper: true })).toJSON();
+  assert.equal(withKeeper.length, 2);
+  assert.equal(withKeeper[0].children[0], "WK");
+  assert.equal(withKeeper[1].children[0], "VC");
+});
+
 test("RoleBadge: isImpact renders an 'IP' badge, alongside a role badge when both apply", () => {
   assert.equal(renderer.create(React.createElement(RoleBadge, { isImpact: false })).toJSON(), null);
   assert.equal(renderer.create(React.createElement(RoleBadge, { isImpact: true })).toJSON().children[0], "IP");
