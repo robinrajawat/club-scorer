@@ -352,6 +352,23 @@ test("TournamentsScreen: 'Players per side' offers 10, not just 6/7/8/9/11", () 
   assert.deepEqual(playersPerSide.props.options.map(o => o.value), [6, 7, 8, 9, 10, 11]);
 });
 
+test("TournamentsScreen: 'Runs on a no-ball' offers the same 1/2/3 choices as 'Runs on a wide'", () => {
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps()));
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  clickNav(inst, "Next"); // details -> rules
+  const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
+  act(() => { customizeBtn.props.onClick(); });
+  const ruleChoices = inst.root.findAllByType(RuleChoice);
+  const wideOptions = ruleChoices.find(r => r.props.label === "Runs on a wide").props.options.map(o => o.value);
+  const noballOptions = ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.options.map(o => o.value);
+  assert.deepEqual(noballOptions, wideOptions);
+});
+
 test("TournamentsScreen: full match-rules parity (balls/over, powerplay, time cap, bowler limit, retirement, Super Over, final-over wide/no-ball, Impact Player) flows into onCreateTournament", async () => {
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({

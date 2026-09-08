@@ -799,6 +799,9 @@ export function SetupScreen({
     }, {
       value: 2,
       label: "2"
+    }, {
+      value: 3,
+      label: "3"
     }]
   }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
