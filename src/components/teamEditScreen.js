@@ -860,7 +860,7 @@ export function TeamEditScreen({
       borderRadius: 8,
       whiteSpace: "nowrap"
     }
-  }, "No longer published")), /*#__PURE__*/React.createElement("div", {
+  }, "No longer published"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -995,7 +995,7 @@ export function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Globe, {
     size: 13
-  })))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
+  }))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
