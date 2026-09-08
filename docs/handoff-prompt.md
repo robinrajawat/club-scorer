@@ -223,7 +223,9 @@ a separate follow-up PR.
   instruction (see above).
 - `scripts/generate.js` — splices `src/core/*.js` into `public/index.html`.
 - `docs/` — project documentation: this file, `history.md` (the detailed
-  session-by-session narrative — see "Current state" below), and
+  session-by-session narrative — see "Current state" below),
+  `parking-lot.md` (ideas discussed and deliberately deferred — check it
+  before re-proposing something that's already been thought through), and
   anywhere else project-level docs land going forward. Not to be confused
   with the old `docs/` — that name used to be reserved for the deployed
   PWA itself (see `docs/history.md`'s "GitHub Pages deploy-mode switch"
