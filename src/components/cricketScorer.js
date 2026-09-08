@@ -1087,9 +1087,11 @@ export function CricketScorer() {
       // rule, same as penalties/fallOfWickets' own "nothing happened, empty array" convention.
       impactSubs: [],
       teamACaptain: setup.teamACaptain || "",
+      teamAViceCaptain: setup.teamAViceCaptain || "",
       teamAKeeper: setup.teamAKeeper || "",
       teamAColor: setup.teamAColor || null,
       teamBCaptain: setup.teamBCaptain || "",
+      teamBViceCaptain: setup.teamBViceCaptain || "",
       teamBKeeper: setup.teamBKeeper || "",
       teamBColor: setup.teamBColor || null,
       teamANumbers: setup.teamANumbers || {},

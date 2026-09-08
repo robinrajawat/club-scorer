@@ -108,16 +108,30 @@ test("TeamEditScreen: duplicate player names (case-insensitive) block Save", () 
   assert.equal(btn(inst, "Save Team").props.disabled, false); // still just the one valid player
 });
 
-test("TeamEditScreen: captain/keeper toggle buttons set and clear by name", () => {
+test("TeamEditScreen: captain/vice-captain/keeper toggle buttons set and clear by name", () => {
   const inst = render();
   addPlayer(inst, "A. Sharma");
   const captainBtn = inst.root.findByProps({ "aria-label": "Make A. Sharma captain" });
   act(() => { captainBtn.props.onClick(); });
   assert.ok(inst.root.findByProps({ "aria-label": "Remove A. Sharma as captain" }));
 
+  const viceCaptainBtn = inst.root.findByProps({ "aria-label": "Make A. Sharma vice-captain" });
+  act(() => { viceCaptainBtn.props.onClick(); });
+  assert.ok(inst.root.findByProps({ "aria-label": "Remove A. Sharma as vice-captain" }));
+
   const keeperBtn = inst.root.findByProps({ "aria-label": "Make A. Sharma wicketkeeper" });
   act(() => { keeperBtn.props.onClick(); });
   assert.ok(inst.root.findByProps({ "aria-label": "Remove A. Sharma as wicketkeeper" }));
+});
+
+test("TeamEditScreen: vice-captain is included in the saved payload, and cleared when that player is removed", () => {
+  let saved = null;
+  const inst = render({ onSave: t => { saved = t; } });
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  addPlayer(inst, "A. Sharma");
+  act(() => { inst.root.findByProps({ "aria-label": "Make A. Sharma vice-captain" }).props.onClick(); });
+  act(() => { btn(inst, "Save Team").props.onClick(); });
+  assert.equal(saved.viceCaptain, "A. Sharma");
 });
 
 test("TeamEditScreen: removing a player opens a confirm dialog, and confirming removes them", () => {

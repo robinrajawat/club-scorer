@@ -254,15 +254,15 @@ test("SecondInningsSetup: confirming a substitution swaps the roster/bench, mark
   assert.deepEqual(updated.teamARoster, ["Hardik Pandya", "Rohit Sharma"]);
   assert.deepEqual(updated.teamABench, []);
   assert.equal(updated.teamAImpactUsed, 1);
-  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: false, wasKeeper: false }]);
+  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: false, wasViceCaptain: false, wasKeeper: false }]);
   // Untouched -- only Riverside CC's own fields change.
   assert.deepEqual(updated.teamBRoster, ["Ben Stokes", "Joe Root"]);
   assert.equal(updated.teamBImpactUsed, undefined);
 });
 
-test("SecondInningsSetup: a substituted-out captain/keeper loses that role", () => {
+test("SecondInningsSetup: a substituted-out captain/vice-captain/keeper loses that role", () => {
   globalThis.saveTransition = () => {};
-  const match = impactMatch({ teamACaptain: "Virat Kohli", teamAKeeper: "Virat Kohli" });
+  const match = impactMatch({ teamACaptain: "Virat Kohli", teamAViceCaptain: "Virat Kohli", teamAKeeper: "Virat Kohli" });
   let updated = null;
   const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: m => { updated = m; } }));
   const [outPicker, inPicker] = inst.root.findAllByType(PlayerPicker).slice(0, 2);
@@ -271,8 +271,9 @@ test("SecondInningsSetup: a substituted-out captain/keeper loses that role", () 
   const confirmBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Confirm substitution" && !b.props.disabled);
   act(() => { confirmBtn.props.onClick(); });
   assert.equal(updated.teamACaptain, "");
+  assert.equal(updated.teamAViceCaptain, "");
   assert.equal(updated.teamAKeeper, "");
-  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: true, wasKeeper: true }]);
+  assert.deepEqual(updated.impactSubs, [{ team: "Riverside CC", outName: "Virat Kohli", inName: "Hardik Pandya", wasCaptain: true, wasViceCaptain: true, wasKeeper: true }]);
 });
 
 test("SecondInningsSetup: a team's card switches to an 'Undo' affordance once its swap is used, offering no new substitution -- the other team's full card stays", () => {
@@ -296,9 +297,9 @@ test("SecondInningsSetup: a team's card switches to an 'Undo' affordance once it
   assert.equal((html.match(/Player going off/g) || []).length, 1);
 });
 
-test("SecondInningsSetup: Undo reverses the roster/bench/used-count/captain and drops the logged entry", () => {
+test("SecondInningsSetup: Undo reverses the roster/bench/used-count/captain/vice-captain and drops the logged entry", () => {
   globalThis.saveTransition = () => {};
-  const match = impactMatch({ teamACaptain: "Virat Kohli" });
+  const match = impactMatch({ teamACaptain: "Virat Kohli", teamAViceCaptain: "Virat Kohli" });
   let updated = null;
   const inst = renderer.create(React.createElement(SecondInningsSetup, { match, setMatch: m => { updated = m; } }));
   const [outPicker, inPicker] = inst.root.findAllByType(PlayerPicker).slice(0, 2);
@@ -314,6 +315,7 @@ test("SecondInningsSetup: Undo reverses the roster/bench/used-count/captain and 
   assert.deepEqual(updated.teamABench, ["Hardik Pandya"]);
   assert.equal(updated.teamAImpactUsed, 0);
   assert.equal(updated.teamACaptain, "Virat Kohli");
+  assert.equal(updated.teamAViceCaptain, "Virat Kohli");
   assert.deepEqual(updated.impactSubs, []);
 });
 

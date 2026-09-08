@@ -48,6 +48,7 @@ export function SetupScreen({
   const [teamASquad, setTeamASquad] = useState([]); // full saved roster, if a saved team was picked
   const [teamAPlayingXI, setTeamAPlayingXI] = useState([]); // subset actually playing this match
   const [teamACaptain, setTeamACaptain] = useState("");
+  const [teamAViceCaptain, setTeamAViceCaptain] = useState("");
   const [teamAKeeper, setTeamAKeeper] = useState("");
   const [teamAColor, setTeamAColor] = useState("");
   const [teamBId, setTeamBId] = useState(null);
@@ -55,6 +56,7 @@ export function SetupScreen({
   const [teamBSquad, setTeamBSquad] = useState([]);
   const [teamBPlayingXI, setTeamBPlayingXI] = useState([]);
   const [teamBCaptain, setTeamBCaptain] = useState("");
+  const [teamBViceCaptain, setTeamBViceCaptain] = useState("");
   const [teamBKeeper, setTeamBKeeper] = useState("");
   const [teamBColor, setTeamBColor] = useState("");
   // Jersey numbers as used for this match only — seeded from the saved squad's numbers when a
@@ -148,6 +150,7 @@ export function SetupScreen({
       setTeamASquad([]);
       setTeamAPlayingXI([]);
       setTeamACaptain("");
+      setTeamAViceCaptain("");
       setTeamAKeeper("");
       setTeamAColor("");
       setTeamAMatchNumbers({});
@@ -159,6 +162,7 @@ export function SetupScreen({
       setTeamASquad(players);
       setTeamAPlayingXI(defaultXI(players));
       setTeamACaptain(team.captain || "");
+      setTeamAViceCaptain(team.viceCaptain || "");
       setTeamAKeeper(team.keeper || "");
       setTeamAColor(team.color || "");
       setTeamAMatchNumbers(seedMatchNumbers(players));
@@ -173,6 +177,7 @@ export function SetupScreen({
       setTeamBSquad([]);
       setTeamBPlayingXI([]);
       setTeamBCaptain("");
+      setTeamBViceCaptain("");
       setTeamBKeeper("");
       setTeamBColor("");
       setTeamBMatchNumbers({});
@@ -184,6 +189,7 @@ export function SetupScreen({
       setTeamBSquad(players);
       setTeamBPlayingXI(defaultXI(players));
       setTeamBCaptain(team.captain || "");
+      setTeamBViceCaptain(team.viceCaptain || "");
       setTeamBKeeper(team.keeper || "");
       setTeamBColor(team.color || "");
       setTeamBMatchNumbers(seedMatchNumbers(players));
@@ -207,8 +213,9 @@ export function SetupScreen({
       if (xi.length >= Math.min(matchRules.playersPerSide, teamASquad.length)) return xi;
       return [...xi, name];
     });
-    // A player dropped from the XI can't stay captain/keeper for this match.
+    // A player dropped from the XI can't stay captain/vice-captain/keeper for this match.
     setTeamACaptain(c => c === name ? "" : c);
+    setTeamAViceCaptain(c => c === name ? "" : c);
     setTeamAKeeper(k => k === name ? "" : k);
     setStrikerA("");
     setNonStrikerA("");
@@ -220,6 +227,7 @@ export function SetupScreen({
       return [...xi, name];
     });
     setTeamBCaptain(c => c === name ? "" : c);
+    setTeamBViceCaptain(c => c === name ? "" : c);
     setTeamBKeeper(k => k === name ? "" : k);
     setBowlerB("");
   }
@@ -1623,10 +1631,12 @@ export function SetupScreen({
     label: `${teamAName || "Team A"} — pick who's playing`,
     squad: teamASquad,
     captain: teamACaptain,
+    viceCaptain: teamAViceCaptain,
     keeper: teamAKeeper,
     selected: teamAPlayingXI,
     onToggle: toggleAXI,
     onSetCaptain: setTeamACaptain,
+    onSetViceCaptain: setTeamAViceCaptain,
     onSetKeeper: setTeamAKeeper,
     required: Math.min(matchRules.playersPerSide, teamASquad.length),
     numbers: teamAMatchNumbers,
@@ -1635,10 +1645,12 @@ export function SetupScreen({
     label: `${teamBName || "Team B"} — pick who's playing`,
     squad: teamBSquad,
     captain: teamBCaptain,
+    viceCaptain: teamBViceCaptain,
     keeper: teamBKeeper,
     selected: teamBPlayingXI,
     onToggle: toggleBXI,
     onSetCaptain: setTeamBCaptain,
+    onSetViceCaptain: setTeamBViceCaptain,
     onSetKeeper: setTeamBKeeper,
     required: Math.min(matchRules.playersPerSide, teamBSquad.length),
     numbers: teamBMatchNumbers,
@@ -1659,6 +1671,7 @@ export function SetupScreen({
     exclude: nonStrikerA,
     placeholder: "Batsman name",
     captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    viceCaptain: teamAIsBattingFirst ? teamAViceCaptain : teamBViceCaptain,
     keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
     numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), /*#__PURE__*/React.createElement(Field, {
@@ -1670,6 +1683,7 @@ export function SetupScreen({
     exclude: strikerA,
     placeholder: "Batsman name",
     captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    viceCaptain: teamAIsBattingFirst ? teamAViceCaptain : teamBViceCaptain,
     keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
     numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), strikerA.trim() && nonStrikerA.trim() && /*#__PURE__*/React.createElement("button", {
@@ -1704,6 +1718,7 @@ export function SetupScreen({
     onChange: setBowlerB,
     placeholder: "Bowler name",
     captain: teamAIsBattingFirst ? teamBCaptain : teamACaptain,
+    viceCaptain: teamAIsBattingFirst ? teamBViceCaptain : teamAViceCaptain,
     keeper: teamAIsBattingFirst ? teamBKeeper : teamAKeeper,
     numbers: teamAIsBattingFirst ? teamBNumbers : teamANumbers
   }))), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
@@ -1799,9 +1814,11 @@ export function SetupScreen({
         teamABench,
         teamBBench,
         teamACaptain,
+        teamAViceCaptain,
         teamAKeeper,
         teamAColor,
         teamBCaptain,
+        teamBViceCaptain,
         teamBKeeper,
         teamBColor,
         teamANumbers,

@@ -6785,6 +6785,9 @@ function isImpactSubFor(match, name) {
 function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
 }
+function viceCaptainFor(match, teamName) {
+  return (teamName === match.teamA ? match.teamAViceCaptain : match.teamBViceCaptain) || "";
+}
 function keeperFor(match, teamName) {
   return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
 }
@@ -8987,10 +8990,11 @@ function OversStrip({
 // GENERATED-FN-START: RoleBadge
 function RoleBadge({
   isCaptain,
+  isViceCaptain,
   isKeeper,
   isImpact
 }) {
-  if (!isCaptain && !isKeeper && !isImpact) return null;
+  if (!isCaptain && !isViceCaptain && !isKeeper && !isImpact) return null;
   function badge(key, label, background, color) {
     return /*#__PURE__*/React.createElement("span", {
       key,
@@ -9010,10 +9014,15 @@ function RoleBadge({
     }, label);
   }
   const badges = [];
+  // Captain and keeper can be the same person (combined into one "C\u00B7WK" badge below), but
+  // vice-captain never coincides with captain in practice -- kept as its own badge rather than
+  // folded into the same combining logic, so a vice-captain who's also keeper still reads clearly
+  // as "VC" + "WK" rather than needing a third combined-label case.
   if (isCaptain || isKeeper) {
     const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
     badges.push(badge("role", label, isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)", isCaptain ? COLORS.gold : COLORS.turf));
   }
+  if (isViceCaptain) badges.push(badge("vice-captain", "VC", "rgba(201,168,118,0.3)", "#7a5c22"));
   // Distinct color from captain (gold) and keeper (turf) so a substitute reads as its own thing at
   // a glance, not a third variant of the same badge -- most useful right where the app already
   // shows player names (scoring header, scorecard rows), so nobody has to cross-reference the
@@ -9682,6 +9691,7 @@ function PlayerPicker({
   excludeList,
   placeholder,
   captain,
+  viceCaptain,
   keeper,
   numbers,
   noteFor
@@ -9718,6 +9728,7 @@ function PlayerPicker({
         }
       }, num ? `#${num} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
         isCaptain: name === captain,
+        isViceCaptain: name === viceCaptain,
         isKeeper: name === keeper
       }), note && /*#__PURE__*/React.createElement("span", {
         style: {
@@ -20891,10 +20902,12 @@ function PlayingXIPicker({
   label,
   squad,
   captain,
+  viceCaptain,
   keeper,
   selected,
   onToggle,
   onSetCaptain,
+  onSetViceCaptain,
   onSetKeeper,
   required,
   numbers,
@@ -20990,6 +21003,7 @@ function PlayingXIPicker({
       }), name), numberInput);
     }
     const isCaptain = name === captain;
+    const isViceCaptain = name === viceCaptain;
     const isKeeper = name === keeper;
     return /*#__PURE__*/React.createElement("div", {
       key: name,
@@ -21056,7 +21070,28 @@ function PlayingXIPicker({
         alignItems: "center",
         justifyContent: "center"
       }
-    }, "C"), onSetKeeper && /*#__PURE__*/React.createElement("button", {
+    }, "C"), onSetViceCaptain && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onSetViceCaptain(isViceCaptain ? "" : name),
+      "aria-label": isViceCaptain ? `Remove ${name} as vice-captain` : `Make ${name} vice-captain`,
+      title: "Vice-captain",
+      style: {
+        width: 26,
+        height: 22,
+        borderRadius: 11,
+        flexShrink: 0,
+        border: "none",
+        background: isViceCaptain ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)",
+        color: isViceCaptain ? "#5a4522" : "#fff",
+        fontFamily: "'Inter'",
+        fontSize: 8.5,
+        fontWeight: 800,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, "VC"), onSetKeeper && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => onSetKeeper(isKeeper ? "" : name),
       "aria-label": isKeeper ? `Remove ${name} as wicketkeeper` : `Make ${name} wicketkeeper`,
@@ -21111,14 +21146,14 @@ function PlayingXIPicker({
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
+  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetViceCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / keeper for this match."), count > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / vice-captain / keeper for this match."), count > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -21167,6 +21202,7 @@ function SetupScreen({
   const [teamASquad, setTeamASquad] = useState([]); // full saved roster, if a saved team was picked
   const [teamAPlayingXI, setTeamAPlayingXI] = useState([]); // subset actually playing this match
   const [teamACaptain, setTeamACaptain] = useState("");
+  const [teamAViceCaptain, setTeamAViceCaptain] = useState("");
   const [teamAKeeper, setTeamAKeeper] = useState("");
   const [teamAColor, setTeamAColor] = useState("");
   const [teamBId, setTeamBId] = useState(null);
@@ -21174,6 +21210,7 @@ function SetupScreen({
   const [teamBSquad, setTeamBSquad] = useState([]);
   const [teamBPlayingXI, setTeamBPlayingXI] = useState([]);
   const [teamBCaptain, setTeamBCaptain] = useState("");
+  const [teamBViceCaptain, setTeamBViceCaptain] = useState("");
   const [teamBKeeper, setTeamBKeeper] = useState("");
   const [teamBColor, setTeamBColor] = useState("");
   // Jersey numbers as used for this match only — seeded from the saved squad's numbers when a
@@ -21267,6 +21304,7 @@ function SetupScreen({
       setTeamASquad([]);
       setTeamAPlayingXI([]);
       setTeamACaptain("");
+      setTeamAViceCaptain("");
       setTeamAKeeper("");
       setTeamAColor("");
       setTeamAMatchNumbers({});
@@ -21278,6 +21316,7 @@ function SetupScreen({
       setTeamASquad(players);
       setTeamAPlayingXI(defaultXI(players));
       setTeamACaptain(team.captain || "");
+      setTeamAViceCaptain(team.viceCaptain || "");
       setTeamAKeeper(team.keeper || "");
       setTeamAColor(team.color || "");
       setTeamAMatchNumbers(seedMatchNumbers(players));
@@ -21292,6 +21331,7 @@ function SetupScreen({
       setTeamBSquad([]);
       setTeamBPlayingXI([]);
       setTeamBCaptain("");
+      setTeamBViceCaptain("");
       setTeamBKeeper("");
       setTeamBColor("");
       setTeamBMatchNumbers({});
@@ -21303,6 +21343,7 @@ function SetupScreen({
       setTeamBSquad(players);
       setTeamBPlayingXI(defaultXI(players));
       setTeamBCaptain(team.captain || "");
+      setTeamBViceCaptain(team.viceCaptain || "");
       setTeamBKeeper(team.keeper || "");
       setTeamBColor(team.color || "");
       setTeamBMatchNumbers(seedMatchNumbers(players));
@@ -21326,8 +21367,9 @@ function SetupScreen({
       if (xi.length >= Math.min(matchRules.playersPerSide, teamASquad.length)) return xi;
       return [...xi, name];
     });
-    // A player dropped from the XI can't stay captain/keeper for this match.
+    // A player dropped from the XI can't stay captain/vice-captain/keeper for this match.
     setTeamACaptain(c => c === name ? "" : c);
+    setTeamAViceCaptain(c => c === name ? "" : c);
     setTeamAKeeper(k => k === name ? "" : k);
     setStrikerA("");
     setNonStrikerA("");
@@ -21339,6 +21381,7 @@ function SetupScreen({
       return [...xi, name];
     });
     setTeamBCaptain(c => c === name ? "" : c);
+    setTeamBViceCaptain(c => c === name ? "" : c);
     setTeamBKeeper(k => k === name ? "" : k);
     setBowlerB("");
   }
@@ -22742,10 +22785,12 @@ function SetupScreen({
     label: `${teamAName || "Team A"} — pick who's playing`,
     squad: teamASquad,
     captain: teamACaptain,
+    viceCaptain: teamAViceCaptain,
     keeper: teamAKeeper,
     selected: teamAPlayingXI,
     onToggle: toggleAXI,
     onSetCaptain: setTeamACaptain,
+    onSetViceCaptain: setTeamAViceCaptain,
     onSetKeeper: setTeamAKeeper,
     required: Math.min(matchRules.playersPerSide, teamASquad.length),
     numbers: teamAMatchNumbers,
@@ -22754,10 +22799,12 @@ function SetupScreen({
     label: `${teamBName || "Team B"} — pick who's playing`,
     squad: teamBSquad,
     captain: teamBCaptain,
+    viceCaptain: teamBViceCaptain,
     keeper: teamBKeeper,
     selected: teamBPlayingXI,
     onToggle: toggleBXI,
     onSetCaptain: setTeamBCaptain,
+    onSetViceCaptain: setTeamBViceCaptain,
     onSetKeeper: setTeamBKeeper,
     required: Math.min(matchRules.playersPerSide, teamBSquad.length),
     numbers: teamBMatchNumbers,
@@ -22778,6 +22825,7 @@ function SetupScreen({
     exclude: nonStrikerA,
     placeholder: "Batsman name",
     captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    viceCaptain: teamAIsBattingFirst ? teamAViceCaptain : teamBViceCaptain,
     keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
     numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), /*#__PURE__*/React.createElement(Field, {
@@ -22789,6 +22837,7 @@ function SetupScreen({
     exclude: strikerA,
     placeholder: "Batsman name",
     captain: teamAIsBattingFirst ? teamACaptain : teamBCaptain,
+    viceCaptain: teamAIsBattingFirst ? teamAViceCaptain : teamBViceCaptain,
     keeper: teamAIsBattingFirst ? teamAKeeper : teamBKeeper,
     numbers: teamAIsBattingFirst ? teamANumbers : teamBNumbers
   })), strikerA.trim() && nonStrikerA.trim() && /*#__PURE__*/React.createElement("button", {
@@ -22823,6 +22872,7 @@ function SetupScreen({
     onChange: setBowlerB,
     placeholder: "Bowler name",
     captain: teamAIsBattingFirst ? teamBCaptain : teamACaptain,
+    viceCaptain: teamAIsBattingFirst ? teamBViceCaptain : teamAViceCaptain,
     keeper: teamAIsBattingFirst ? teamBKeeper : teamAKeeper,
     numbers: teamAIsBattingFirst ? teamBNumbers : teamANumbers
   }))), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
@@ -22918,9 +22968,11 @@ function SetupScreen({
         teamABench,
         teamBBench,
         teamACaptain,
+        teamAViceCaptain,
         teamAKeeper,
         teamAColor,
         teamBCaptain,
+        teamBViceCaptain,
         teamBKeeper,
         teamBColor,
         teamANumbers,
@@ -29656,6 +29708,7 @@ function TeamEditScreen({
   const [newPlayer, setNewPlayer] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
+  const [viceCaptain, setViceCaptain] = useState(team ? team.viceCaptain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
   const [color, setColor] = useState(team ? team.color || "" : "");
   // Player details (email + public toggle) are tucked behind a per-row expand, rather than always
@@ -29851,6 +29904,7 @@ function TeamEditScreen({
     setPlayers(p => p.filter(x => x._key !== key));
     if (old) {
       if (captain === old.name) setCaptain("");
+      if (viceCaptain === old.name) setViceCaptain("");
       if (keeper === old.name) setKeeper("");
     }
   }
@@ -29868,6 +29922,7 @@ function TeamEditScreen({
     } : x));
     if (old) {
       if (captain === old.name) setCaptain(newName);
+      if (viceCaptain === old.name) setViceCaptain(newName);
       if (keeper === old.name) setKeeper(newName);
     }
   }
@@ -29902,7 +29957,7 @@ function TeamEditScreen({
   // so savePlayerDetails/makePrivate below can call it too (with an override for the players
   // array, since setPlayers is async and the caller needs the just-updated array immediately,
   // not next render).
-  function buildTeamPayload(playersOverride, captainOverride, keeperOverride) {
+  function buildTeamPayload(playersOverride, captainOverride, keeperOverride, viceCaptainOverride) {
     const savedPlayers = (playersOverride || players).map(p => ({
       name: p.name.trim(),
       number: p.number,
@@ -29915,6 +29970,7 @@ function TeamEditScreen({
       name: name.trim(),
       players: savedPlayers,
       captain: (captainOverride !== undefined ? captainOverride : captain).trim(),
+      viceCaptain: (viceCaptainOverride !== undefined ? viceCaptainOverride : viceCaptain).trim(),
       keeper: (keeperOverride !== undefined ? keeperOverride : keeper).trim(),
       color: color || null
     };
@@ -29962,15 +30018,18 @@ function TeamEditScreen({
     } : x);
     setPlayers(updatedPlayers);
     // Renaming can now also happen through EditPlayerModal's Save (not just the row's own name
-    // field, which already does this via updateName) -- keep captain/keeper in sync either way,
-    // since both are tracked by name string rather than a stable id. Computed explicitly rather
-    // than read back from state for the buildTeamPayload call below: setCaptain/setKeeper are
-    // async, so the immediate persist would otherwise still see the pre-rename name.
+    // field, which already does this via updateName) -- keep captain/vice-captain/keeper in sync
+    // either way, since all three are tracked by name string rather than a stable id. Computed
+    // explicitly rather than read back from state for the buildTeamPayload call below:
+    // setCaptain/setViceCaptain/setKeeper are async, so the immediate persist would otherwise
+    // still see the pre-rename name.
     const newCaptain = row.name !== info.name && captain === row.name ? info.name : captain;
+    const newViceCaptain = row.name !== info.name && viceCaptain === row.name ? info.name : viceCaptain;
     const newKeeper = row.name !== info.name && keeper === row.name ? info.name : keeper;
     if (newCaptain !== captain) setCaptain(newCaptain);
+    if (newViceCaptain !== viceCaptain) setViceCaptain(newViceCaptain);
     if (newKeeper !== keeper) setKeeper(newKeeper);
-    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper));
+    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper, newViceCaptain));
     return result;
   }
   async function makePrivate(key) {
@@ -30149,7 +30208,7 @@ function TeamEditScreen({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -30366,6 +30425,28 @@ function TeamEditScreen({
     }
   }, "C"), /*#__PURE__*/React.createElement("button", {
     type: "button",
+    onClick: () => setViceCaptain(viceCaptain === p.name ? "" : p.name),
+    "aria-label": viceCaptain === p.name ? `Remove ${p.name} as vice-captain` : `Make ${p.name} vice-captain`,
+    title: "Vice-captain",
+    style: {
+      width: 30,
+      height: 26,
+      borderRadius: 13,
+      flexShrink: 0,
+      border: viceCaptain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
+      background: viceCaptain === p.name ? "rgba(201,168,118,0.4)" : COLORS.surface,
+      color: viceCaptain === p.name ? "#5a4522" : COLORS.inkSoft,
+      boxShadow: viceCaptain === p.name ? "0 1px 4px rgba(201,168,118,0.4)" : "none",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 800,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, "VC"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: () => setKeeper(keeper === p.name ? "" : p.name),
     "aria-label": keeper === p.name ? `Remove ${p.name} as wicketkeeper` : `Make ${p.name} wicketkeeper`,
     title: "Wicketkeeper",
@@ -30521,7 +30602,7 @@ function TeamEditScreen({
     }
   }, "Save Team"), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: `Remove ${confirmRemove.name}?`,
-    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain or wicketkeeper here, that's cleared too.`,
+    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain, vice-captain, or wicketkeeper here, that's cleared too.`,
     confirmLabel: "Remove",
     onConfirm: () => {
       removePlayer(confirmRemove._key);
@@ -32174,8 +32255,10 @@ function TournamentShareModal({
 function InningScorecard({
   inning,
   battingCaptain,
+  battingViceCaptain,
   battingKeeper,
   bowlingCaptain,
+  bowlingViceCaptain,
   bowlingKeeper,
   battingNumbers,
   bowlingNumbers,
@@ -32280,6 +32363,7 @@ function InningScorecard({
       }
     }, "#", battingNumbers[name], " "), name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === battingCaptain,
+      isViceCaptain: name === battingViceCaptain,
       isKeeper: name === battingKeeper,
       isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
@@ -32470,6 +32554,7 @@ function InningScorecard({
       }
     }, "#", bowlingNumbers[name], " "), name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === bowlingCaptain,
+      isViceCaptain: name === bowlingViceCaptain,
       isKeeper: name === bowlingKeeper,
       isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
@@ -32601,8 +32686,10 @@ function PrintReport({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: inn,
     battingCaptain: captainFor(match, inn.battingTeam),
+    battingViceCaptain: viceCaptainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
     bowlingNumbers: numbersFor(match, inn.bowlingTeam),
@@ -33844,8 +33931,10 @@ function MatchStatsPanel({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: match.innings[tab],
     battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingViceCaptain: viceCaptainFor(match, match.innings[tab].battingTeam),
     battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
@@ -33902,8 +33991,10 @@ function MatchStatsPanel({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: match.innings[tab],
     battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingViceCaptain: viceCaptainFor(match, match.innings[tab].battingTeam),
     battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
@@ -37117,6 +37208,7 @@ function MatchScreen({
       }
     }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
+      isViceCaptain: name === viceCaptainFor(match, inning.battingTeam),
       isKeeper: name === keeperFor(match, inning.battingTeam),
       isImpact: isImpactSubFor(match, name)
     }))), /*#__PURE__*/React.createElement("span", {
@@ -37173,6 +37265,7 @@ function MatchScreen({
     }
   }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
+    isViceCaptain: inning.bowlerName === viceCaptainFor(match, inning.bowlingTeam),
     isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam),
     isImpact: isImpactSubFor(match, inning.bowlerName)
   })), /*#__PURE__*/React.createElement("span", {
@@ -37372,6 +37465,7 @@ function MatchScreen({
     noteFor: n => inning.batsmen[n] && inning.batsmen[n].retiredHurt ? "RETURNING" : null,
     placeholder: "Batsman name",
     captain: captainFor(match, inning.battingTeam),
+    viceCaptain: viceCaptainFor(match, inning.battingTeam),
     keeper: keeperFor(match, inning.battingTeam),
     numbers: numbersFor(match, inning.battingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
@@ -37640,6 +37734,7 @@ function MatchScreen({
     excludeList: maxOversExcludeList,
     placeholder: "Bowler name",
     captain: captainFor(match, inning.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
   }), inning.maxOversPerBowler && atMaxOvers.length > 0 && !maxOversWaived && /*#__PURE__*/React.createElement("div", {
@@ -37926,6 +38021,7 @@ function MatchScreen({
     onChange: setFielderDraftName,
     placeholder: "Fielder name",
     captain: captainFor(match, inning.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
   })), /*#__PURE__*/React.createElement(Btn, {
@@ -38237,6 +38333,7 @@ function SuperOverOpenersSetup({
     exclude: nonStriker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -38248,6 +38345,7 @@ function SuperOverOpenersSetup({
     exclude: striker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -38258,6 +38356,7 @@ function SuperOverOpenersSetup({
     onChange: setBowler,
     placeholder: "Bowler name",
     captain: captainFor(match, inn.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     keeper: keeperFor(match, inn.bowlingTeam),
     numbers: numbersFor(match, inn.bowlingTeam)
   }))), /*#__PURE__*/React.createElement(Btn, {
@@ -38273,8 +38372,9 @@ function SuperOverOpenersSetup({
 // Applies one Impact Player substitution: swaps outName for inName in that team's XI (and out of
 // its bench), counts one more against the team's impactPlayerMaxSubs allowance (a tournament's own
 // rule book can set this above the standard 1 -- e.g. Billund's allows up to 2), drops outName
-// from captain/keeper if they held either (same "can't stay captain/keeper once out of the XI"
-// rule toggleAXI enforces at setup time), and logs it to match.impactSubs for the scorecard. Every
+// from captain/vice-captain/keeper if they held any of the three (same "can't stay captain/
+// vice-captain/keeper once out of the XI" rule toggleAXI enforces at setup time), and logs it to
+// match.impactSubs for the scorecard. Every
 // picker on the app already reads the XI via rosterFor, so updating teamARoster/teamBRoster here
 // is the entire mechanism -- nothing else needs to know a substitution happened. Its sibling
 // export just below, ImpactPlayerCard, carries no comment of its own -- see docs/history.md's
@@ -38294,10 +38394,13 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
   const benchKey = isTeamA ? "teamABench" : "teamBBench";
   const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
   const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const viceCaptainKey = isTeamA ? "teamAViceCaptain" : "teamBViceCaptain";
   const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
   // Recorded on the sub itself (not re-derived at undo time) so undoLastImpactSub can restore
-  // exactly what this substitution cleared, even if captain/keeper has changed again since.
+  // exactly what this substitution cleared, even if captain/vice-captain/keeper has changed again
+  // since.
   const wasCaptain = match[captainKey] === outName;
+  const wasViceCaptain = match[viceCaptainKey] === outName;
   const wasKeeper = match[keeperKey] === outName;
   const updatedMatch = {
     ...match,
@@ -38305,12 +38408,14 @@ function confirmImpactSub(match, setMatch, team, outName, inName) {
     [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
     [usedKey]: (match[usedKey] || 0) + 1,
     [captainKey]: wasCaptain ? "" : match[captainKey],
+    [viceCaptainKey]: wasViceCaptain ? "" : match[viceCaptainKey],
     [keeperKey]: wasKeeper ? "" : match[keeperKey],
     impactSubs: [...(match.impactSubs || []), {
       team,
       outName,
       inName,
       wasCaptain,
+      wasViceCaptain,
       wasKeeper
     }]
   };
@@ -38341,6 +38446,7 @@ function undoLastImpactSub(match, setMatch, team) {
   const benchKey = isTeamA ? "teamABench" : "teamBBench";
   const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
   const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const viceCaptainKey = isTeamA ? "teamAViceCaptain" : "teamBViceCaptain";
   const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
   const updatedMatch = {
     ...match,
@@ -38348,6 +38454,7 @@ function undoLastImpactSub(match, setMatch, team) {
     [benchKey]: [...(match[benchKey] || []), sub.inName],
     [usedKey]: Math.max(0, (match[usedKey] || 0) - 1),
     [captainKey]: sub.wasCaptain ? sub.outName : match[captainKey],
+    [viceCaptainKey]: sub.wasViceCaptain ? sub.outName : match[viceCaptainKey],
     [keeperKey]: sub.wasKeeper ? sub.outName : match[keeperKey],
     impactSubs: subs.filter((_, i) => i !== lastIndex)
   };
@@ -38472,6 +38579,7 @@ function ImpactPlayerCard({
     onChange: setOutName,
     placeholder: "Player name",
     captain: captainFor(match, team),
+    viceCaptain: viceCaptainFor(match, team),
     keeper: keeperFor(match, team),
     numbers: numbersFor(match, team)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -38845,6 +38953,7 @@ function SecondInningsSetup({
     exclude: nonStriker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -38856,6 +38965,7 @@ function SecondInningsSetup({
     exclude: striker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -38866,6 +38976,7 @@ function SecondInningsSetup({
     onChange: setBowler,
     placeholder: "Bowler name",
     captain: captainFor(match, inn.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     keeper: keeperFor(match, inn.bowlingTeam),
     numbers: numbersFor(match, inn.bowlingTeam)
   }))), /*#__PURE__*/React.createElement(Btn, {
@@ -39274,9 +39385,11 @@ function ResultScreen({
       teamARoster: match.teamARoster,
       teamBRoster: match.teamBRoster,
       teamACaptain: match.teamACaptain,
+      teamAViceCaptain: match.teamAViceCaptain,
       teamAKeeper: match.teamAKeeper,
       teamAColor: match.teamAColor || null,
       teamBCaptain: match.teamBCaptain,
+      teamBViceCaptain: match.teamBViceCaptain,
       teamBKeeper: match.teamBKeeper,
       teamBColor: match.teamBColor || null,
       oversLimit: 1,
@@ -39564,8 +39677,10 @@ function ResultScreen({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: inn,
     battingCaptain: captainFor(match, inn.battingTeam),
+    battingViceCaptain: viceCaptainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
     bowlingNumbers: numbersFor(match, inn.bowlingTeam)
@@ -40472,9 +40587,11 @@ function CricketScorer() {
       // rule, same as penalties/fallOfWickets' own "nothing happened, empty array" convention.
       impactSubs: [],
       teamACaptain: setup.teamACaptain || "",
+      teamAViceCaptain: setup.teamAViceCaptain || "",
       teamAKeeper: setup.teamAKeeper || "",
       teamAColor: setup.teamAColor || null,
       teamBCaptain: setup.teamBCaptain || "",
+      teamBViceCaptain: setup.teamBViceCaptain || "",
       teamBKeeper: setup.teamBKeeper || "",
       teamBColor: setup.teamBColor || null,
       teamANumbers: setup.teamANumbers || {},

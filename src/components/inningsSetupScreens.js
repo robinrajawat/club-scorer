@@ -6,7 +6,7 @@ import { Field } from "./screenAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { ScorecardOverlay } from "./scorecard.js";
 import { ensureBatsman, ensureBowler, oversLabel } from "../core/scoringEngine.js";
-import { rosterFor, benchFor, impactSubsRemainingFor, captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
+import { rosterFor, benchFor, impactSubsRemainingFor, captainFor, viceCaptainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Screens shown between innings, before scoring resumes: SuperOverOpenersSetup (pick openers for a
 // one-over-each decider) and SecondInningsSetup (pick openers for the chase, with a scorecard
@@ -119,6 +119,7 @@ export function SuperOverOpenersSetup({
     exclude: nonStriker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -130,6 +131,7 @@ export function SuperOverOpenersSetup({
     exclude: striker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -140,6 +142,7 @@ export function SuperOverOpenersSetup({
     onChange: setBowler,
     placeholder: "Bowler name",
     captain: captainFor(match, inn.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     keeper: keeperFor(match, inn.bowlingTeam),
     numbers: numbersFor(match, inn.bowlingTeam)
   }))), /*#__PURE__*/React.createElement(Btn, {
@@ -155,8 +158,9 @@ export function SuperOverOpenersSetup({
 // Applies one Impact Player substitution: swaps outName for inName in that team's XI (and out of
 // its bench), counts one more against the team's impactPlayerMaxSubs allowance (a tournament's own
 // rule book can set this above the standard 1 -- e.g. Billund's allows up to 2), drops outName
-// from captain/keeper if they held either (same "can't stay captain/keeper once out of the XI"
-// rule toggleAXI enforces at setup time), and logs it to match.impactSubs for the scorecard. Every
+// from captain/vice-captain/keeper if they held any of the three (same "can't stay captain/
+// vice-captain/keeper once out of the XI" rule toggleAXI enforces at setup time), and logs it to
+// match.impactSubs for the scorecard. Every
 // picker on the app already reads the XI via rosterFor, so updating teamARoster/teamBRoster here
 // is the entire mechanism -- nothing else needs to know a substitution happened. Its sibling
 // export just below, ImpactPlayerCard, carries no comment of its own -- see docs/history.md's
@@ -174,10 +178,13 @@ export function confirmImpactSub(match, setMatch, team, outName, inName) {
   const benchKey = isTeamA ? "teamABench" : "teamBBench";
   const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
   const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const viceCaptainKey = isTeamA ? "teamAViceCaptain" : "teamBViceCaptain";
   const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
   // Recorded on the sub itself (not re-derived at undo time) so undoLastImpactSub can restore
-  // exactly what this substitution cleared, even if captain/keeper has changed again since.
+  // exactly what this substitution cleared, even if captain/vice-captain/keeper has changed again
+  // since.
   const wasCaptain = match[captainKey] === outName;
+  const wasViceCaptain = match[viceCaptainKey] === outName;
   const wasKeeper = match[keeperKey] === outName;
   const updatedMatch = {
     ...match,
@@ -185,12 +192,14 @@ export function confirmImpactSub(match, setMatch, team, outName, inName) {
     [benchKey]: (match[benchKey] || []).filter(n => n !== inName),
     [usedKey]: (match[usedKey] || 0) + 1,
     [captainKey]: wasCaptain ? "" : match[captainKey],
+    [viceCaptainKey]: wasViceCaptain ? "" : match[viceCaptainKey],
     [keeperKey]: wasKeeper ? "" : match[keeperKey],
     impactSubs: [...(match.impactSubs || []), {
       team,
       outName,
       inName,
       wasCaptain,
+      wasViceCaptain,
       wasKeeper
     }]
   };
@@ -219,6 +228,7 @@ export function undoLastImpactSub(match, setMatch, team) {
   const benchKey = isTeamA ? "teamABench" : "teamBBench";
   const usedKey = isTeamA ? "teamAImpactUsed" : "teamBImpactUsed";
   const captainKey = isTeamA ? "teamACaptain" : "teamBCaptain";
+  const viceCaptainKey = isTeamA ? "teamAViceCaptain" : "teamBViceCaptain";
   const keeperKey = isTeamA ? "teamAKeeper" : "teamBKeeper";
   const updatedMatch = {
     ...match,
@@ -226,6 +236,7 @@ export function undoLastImpactSub(match, setMatch, team) {
     [benchKey]: [...(match[benchKey] || []), sub.inName],
     [usedKey]: Math.max(0, (match[usedKey] || 0) - 1),
     [captainKey]: sub.wasCaptain ? sub.outName : match[captainKey],
+    [viceCaptainKey]: sub.wasViceCaptain ? sub.outName : match[viceCaptainKey],
     [keeperKey]: sub.wasKeeper ? sub.outName : match[keeperKey],
     impactSubs: subs.filter((_, i) => i !== lastIndex)
   };
@@ -348,6 +359,7 @@ export function ImpactPlayerCard({
     onChange: setOutName,
     placeholder: "Player name",
     captain: captainFor(match, team),
+    viceCaptain: viceCaptainFor(match, team),
     keeper: keeperFor(match, team),
     numbers: numbersFor(match, team)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -698,6 +710,7 @@ export function SecondInningsSetup({
     exclude: nonStriker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -709,6 +722,7 @@ export function SecondInningsSetup({
     exclude: striker,
     placeholder: "Batsman name",
     captain: captainFor(match, inn.battingTeam),
+    viceCaptain: viceCaptainFor(match, inn.battingTeam),
     keeper: keeperFor(match, inn.battingTeam),
     numbers: numbersFor(match, inn.battingTeam)
   })), /*#__PURE__*/React.createElement(Field, {
@@ -719,6 +733,7 @@ export function SecondInningsSetup({
     onChange: setBowler,
     placeholder: "Bowler name",
     captain: captainFor(match, inn.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     keeper: keeperFor(match, inn.bowlingTeam),
     numbers: numbersFor(match, inn.bowlingTeam)
   }))), /*#__PURE__*/React.createElement(Btn, {

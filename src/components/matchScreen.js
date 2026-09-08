@@ -16,7 +16,7 @@ import { RulesEditModal } from "./rulesEditModal.js";
 import { ResultScreen } from "./resultScreen.js";
 import { applyBall, crr, ensureBatsman, ensureBowler, isInLastOvers, isWideNoballLegal, lastBallCommentary, newInning, oversLabel, retirementCapDue, retirementCapThreshold } from "../core/scoringEngine.js";
 import {
-  battingTeamXISize, bowlersAtMaxOvers, captainFor, computeQualificationTarget,
+  battingTeamXISize, bowlersAtMaxOvers, captainFor, viceCaptainFor, computeQualificationTarget,
   decimalOversToLabel, dlsResourcePercent, dlsTarget, inPowerplay, isImpactSubFor, isOverTimeCap,
   keeperFor, maxWicketsFor, numberFor, numbersFor, oversLeftTrueDecimal, rosterFor, suggestedNextBowler
 } from "../core/appLogic.js";
@@ -1967,6 +1967,7 @@ export function MatchScreen({
       }
     }, "#", numberFor(match, inning.battingTeam, name)), name, /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === captainFor(match, inning.battingTeam),
+      isViceCaptain: name === viceCaptainFor(match, inning.battingTeam),
       isKeeper: name === keeperFor(match, inning.battingTeam),
       isImpact: isImpactSubFor(match, name)
     }))), /*#__PURE__*/React.createElement("span", {
@@ -2023,6 +2024,7 @@ export function MatchScreen({
     }
   }, "#", numberFor(match, inning.bowlingTeam, inning.bowlerName)), inning.bowlerName, /*#__PURE__*/React.createElement(RoleBadge, {
     isCaptain: inning.bowlerName === captainFor(match, inning.bowlingTeam),
+    isViceCaptain: inning.bowlerName === viceCaptainFor(match, inning.bowlingTeam),
     isKeeper: inning.bowlerName === keeperFor(match, inning.bowlingTeam),
     isImpact: isImpactSubFor(match, inning.bowlerName)
   })), /*#__PURE__*/React.createElement("span", {
@@ -2222,6 +2224,7 @@ export function MatchScreen({
     noteFor: n => inning.batsmen[n] && inning.batsmen[n].retiredHurt ? "RETURNING" : null,
     placeholder: "Batsman name",
     captain: captainFor(match, inning.battingTeam),
+    viceCaptain: viceCaptainFor(match, inning.battingTeam),
     keeper: keeperFor(match, inning.battingTeam),
     numbers: numbersFor(match, inning.battingTeam)
   }), /*#__PURE__*/React.createElement(Btn, {
@@ -2490,6 +2493,7 @@ export function MatchScreen({
     excludeList: maxOversExcludeList,
     placeholder: "Bowler name",
     captain: captainFor(match, inning.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
   }), inning.maxOversPerBowler && atMaxOvers.length > 0 && !maxOversWaived && /*#__PURE__*/React.createElement("div", {
@@ -2776,6 +2780,7 @@ export function MatchScreen({
     onChange: setFielderDraftName,
     placeholder: "Fielder name",
     captain: captainFor(match, inning.bowlingTeam),
+    viceCaptain: viceCaptainFor(match, inning.bowlingTeam),
     keeper: keeperFor(match, inning.bowlingTeam),
     numbers: numbersFor(match, inning.bowlingTeam)
   })), /*#__PURE__*/React.createElement(Btn, {

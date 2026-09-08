@@ -3,18 +3,20 @@ import { COLORS } from "./theme.js";
 import { TextField } from "./formUiAtoms.js";
 
 // Squad -> playing-XI picker: pick up to `required` players from a squad, optionally set captain/
-// keeper and per-match jersey numbers, with a search box once the squad's big enough (>15) to make
-// one worth showing. Every callback is a prop, no bare globals at all. Covered by
+// vice-captain/keeper and per-match jersey numbers, with a search box once the squad's big enough
+// (>15) to make one worth showing. Every callback is a prop, no bare globals at all. Covered by
 // tests/unit/components/playingXIPicker.test.js.
 
 export function PlayingXIPicker({
   label,
   squad,
   captain,
+  viceCaptain,
   keeper,
   selected,
   onToggle,
   onSetCaptain,
+  onSetViceCaptain,
   onSetKeeper,
   required,
   numbers,
@@ -110,6 +112,7 @@ export function PlayingXIPicker({
       }), name), numberInput);
     }
     const isCaptain = name === captain;
+    const isViceCaptain = name === viceCaptain;
     const isKeeper = name === keeper;
     return /*#__PURE__*/React.createElement("div", {
       key: name,
@@ -176,7 +179,28 @@ export function PlayingXIPicker({
         alignItems: "center",
         justifyContent: "center"
       }
-    }, "C"), onSetKeeper && /*#__PURE__*/React.createElement("button", {
+    }, "C"), onSetViceCaptain && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onSetViceCaptain(isViceCaptain ? "" : name),
+      "aria-label": isViceCaptain ? `Remove ${name} as vice-captain` : `Make ${name} vice-captain`,
+      title: "Vice-captain",
+      style: {
+        width: 26,
+        height: 22,
+        borderRadius: 11,
+        flexShrink: 0,
+        border: "none",
+        background: isViceCaptain ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.2)",
+        color: isViceCaptain ? "#5a4522" : "#fff",
+        fontFamily: "'Inter'",
+        fontSize: 8.5,
+        fontWeight: 800,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, "VC"), onSetKeeper && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => onSetKeeper(isKeeper ? "" : name),
       "aria-label": isKeeper ? `Remove ${name} as wicketkeeper` : `Make ${name} wicketkeeper`,
@@ -231,14 +255,14 @@ export function PlayingXIPicker({
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
+  }, "Set jersey numbers for this match \u2014 doesn't change the saved squad."), count === required && (onSetCaptain || onSetViceCaptain || onSetKeeper) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginBottom: 8
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), " or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / keeper for this match."), count > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " to set captain / vice-captain / keeper for this match."), count > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
