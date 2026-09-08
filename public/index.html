@@ -39155,21 +39155,42 @@ function PlayerOfMatchCard({
   const players = allMatchPlayers(match);
   const [picking, setPicking] = useState(false);
   const current = match.playerOfMatch;
-  function pick(name) {
+  async function pick(name) {
     const updated = {
       ...match,
       playerOfMatch: name
     };
     setMatch(updated);
-    saveMatch(updated).then(result => {
-      if (result.ok && result.writeSeq != null) {
+    setPicking(false);
+    let result = await saveMatch(updated);
+    if (result.conflict && result.remoteMatch) {
+      // Something else saved this match in between (the Best Fielder card right below picked at
+      // the same moment, most likely, or a device still live-scoring) -- retry against the
+      // server's actual current document with just this one field applied, rather than resending
+      // our own now-stale copy and silently erasing whatever that other save just committed.
+      // Without this, the conflict used to be dropped entirely: no error, no retry, and this
+      // card's local writeSeq was left permanently behind the server's real one, so every
+      // following pick kept losing the same race forever -- which read as "the award can't be
+      // changed" once it happened once.
+      const retried = {
+        ...result.remoteMatch,
+        playerOfMatch: name
+      };
+      result = await saveMatch(retried);
+      if (result.ok) {
         setMatch(cur => cur ? {
-          ...cur,
+          ...retried,
           writeSeq: result.writeSeq
         } : cur);
+        return;
       }
-    });
-    setPicking(false);
+    }
+    if (result.ok && result.writeSeq != null) {
+      setMatch(cur => cur ? {
+        ...cur,
+        writeSeq: result.writeSeq
+      } : cur);
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -39310,21 +39331,42 @@ function BestFielderCard({
   const players = allMatchPlayers(match);
   const [picking, setPicking] = useState(false);
   const current = match.bestFielder;
-  function pick(name) {
+  async function pick(name) {
     const updated = {
       ...match,
       bestFielder: name
     };
     setMatch(updated);
-    saveMatch(updated).then(result => {
-      if (result.ok && result.writeSeq != null) {
+    setPicking(false);
+    let result = await saveMatch(updated);
+    if (result.conflict && result.remoteMatch) {
+      // Something else saved this match in between (the Player of the Match card right above
+      // picked at the same moment, most likely, or a device still live-scoring) -- retry against
+      // the server's actual current document with just this one field applied, rather than
+      // resending our own now-stale copy and silently erasing whatever that other save just
+      // committed. Without this, the conflict used to be dropped entirely: no error, no retry,
+      // and this card's local writeSeq was left permanently behind the server's real one, so
+      // every following pick kept losing the same race forever -- which read as "the award can't
+      // be changed" once it happened once.
+      const retried = {
+        ...result.remoteMatch,
+        bestFielder: name
+      };
+      result = await saveMatch(retried);
+      if (result.ok) {
         setMatch(cur => cur ? {
-          ...cur,
+          ...retried,
           writeSeq: result.writeSeq
         } : cur);
+        return;
       }
-    });
-    setPicking(false);
+    }
+    if (result.ok && result.writeSeq != null) {
+      setMatch(cur => cur ? {
+        ...cur,
+        writeSeq: result.writeSeq
+      } : cur);
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {

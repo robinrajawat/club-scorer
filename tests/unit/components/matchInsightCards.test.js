@@ -106,6 +106,48 @@ test("PlayerOfMatchCard: clicking Confirm calls the (stubbed) saveMatch and setM
   }
 });
 
+test("PlayerOfMatchCard: a conflict (e.g. the Best Fielder card saving at the same moment) is retried against the server's real document, not silently dropped", async () => {
+  // Best Fielder was set by a save that landed on the server in between this card's own attempt
+  // and its response coming back -- exactly what the bug looked like from the outside: the pick
+  // seemed to go through locally, but a second change later would silently fail forever because
+  // the conflict was never retried and the local writeSeq never caught up to the server's.
+  const match = {
+    playerOfMatch: null, bestFielder: null, writeSeq: 3,
+    innings: [{
+      battingTeam: "A", ballsPerOver: 6,
+      battingOrder: ["Virat Kohli"], bowlingOrder: [],
+      batsmen: { "Virat Kohli": { runs: 80 } }, bowlers: {}
+    }]
+  };
+  const remoteMatch = { ...match, bestFielder: "Jonty Rhodes", writeSeq: 4 };
+  const calls = [];
+  globalThis.saveMatch = m => {
+    calls.push(m);
+    if (calls.length === 1) return Promise.resolve({ ok: false, conflict: true, remoteMatch });
+    return Promise.resolve({ ok: true, writeSeq: 5 });
+  };
+  try {
+    let setTo = null;
+    // A real setMatch(updater) supports the functional form (updater(prevState)), same as any
+    // React state setter -- this stub mirrors that instead of just recording the raw argument, so
+    // the retry path's setMatch(cur => ({...})) resolves to the actual merged object below.
+    const setMatch = m => { setTo = typeof m === "function" ? m(setTo) : m; };
+    const inst = renderer.create(React.createElement(PlayerOfMatchCard, { match, setMatch }));
+    const [confirmBtn] = inst.root.findAllByType(Btn);
+    await confirmBtn.props.onClick();
+
+    assert.equal(calls.length, 2);
+    // The retry must be built on the server's real document (so Jonty Rhodes survives), not on
+    // this card's own stale copy (which still thinks bestFielder is null).
+    assert.equal(calls[1].bestFielder, "Jonty Rhodes");
+    assert.equal(calls[1].playerOfMatch, "Virat Kohli");
+    assert.equal(setTo.bestFielder, "Jonty Rhodes");
+    assert.equal(setTo.writeSeq, 5);
+  } finally {
+    delete globalThis.saveMatch;
+  }
+});
+
 test("BestFielderCard: shows the current pick, or a suggestion with Confirm/Pick-someone-else", () => {
   const withPick = { bestFielder: "Jonty Rhodes", innings: [] };
   const treeWithPick = JSON.stringify(renderer.create(React.createElement(BestFielderCard, { match: withPick, setMatch: () => {} })).toJSON());
@@ -122,4 +164,37 @@ test("BestFielderCard: shows the current pick, or a suggestion with Confirm/Pick
   const inst = renderer.create(React.createElement(BestFielderCard, { match, setMatch: () => {} }));
   const text = JSON.stringify(inst.toJSON());
   assert.match(text, /Suggested, by catches \+ run outs/);
+});
+
+test("BestFielderCard: a conflict (e.g. the Player of the Match card saving at the same moment) is retried against the server's real document, not silently dropped", async () => {
+  const match = {
+    bestFielder: null, playerOfMatch: null, writeSeq: 3,
+    innings: [{
+      battingTeam: "A", ballsPerOver: 6,
+      battingOrder: ["Virat Kohli"], bowlingOrder: [],
+      batsmen: { "Virat Kohli": { out: true, how: "c Ravindra Jadeja b Bumrah" } }
+    }]
+  };
+  const remoteMatch = { ...match, playerOfMatch: "Virat Kohli", writeSeq: 4 };
+  const calls = [];
+  globalThis.saveMatch = m => {
+    calls.push(m);
+    if (calls.length === 1) return Promise.resolve({ ok: false, conflict: true, remoteMatch });
+    return Promise.resolve({ ok: true, writeSeq: 5 });
+  };
+  try {
+    let setTo = null;
+    const setMatch = m => { setTo = typeof m === "function" ? m(setTo) : m; };
+    const inst = renderer.create(React.createElement(BestFielderCard, { match, setMatch }));
+    const [confirmBtn] = inst.root.findAllByType(Btn);
+    await confirmBtn.props.onClick();
+
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].playerOfMatch, "Virat Kohli");
+    assert.equal(calls[1].bestFielder, "Ravindra Jadeja");
+    assert.equal(setTo.playerOfMatch, "Virat Kohli");
+    assert.equal(setTo.writeSeq, 5);
+  } finally {
+    delete globalThis.saveMatch;
+  }
 });
