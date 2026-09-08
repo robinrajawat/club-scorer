@@ -18843,8 +18843,30 @@ function HomeScreen({
   // in Saved Matches, not a second time down here just because it's also currently live or recent.
   const ownMatchIds = new Set(matches.map(m => m.id));
   const filteredRecentMatches = q && recentMatches ? recentMatches.filter(m => !ownMatchIds.has(m.id) && (m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q))) : [];
-  const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q)) : publicPlayers) : [];
   const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
+  // Two more sources of player names besides the public directory, both already sitting in memory
+  // (no fetch needed, same reasoning filteredTournaments/filteredTeamsList above already give) --
+  // yet neither used to be searchable from here at all, which was the actual gap: a club's own
+  // Player Pool is deliberately NOT published to the public directory by default (no email
+  // required, see teamsScreen.js's own pool copy), so most clubs' players were only ever findable
+  // by remembering which team/club they were on and navigating there by hand. Tagged with enough
+  // context (which club's pool, which team's roster) to disambiguate two different people who
+  // happen to share a name, and kept as separate sections below rather than merged into one list
+  // with the public directory for the same reason.
+  const myPoolPlayers = q ? clubs.flatMap(c => (c.playerPool || []).filter(p => p.status !== "inactive" && (p.name.toLowerCase().includes(q) || (p.team || "").toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q))).map(p => ({ ...p,
+    _clubId: c.id,
+    _clubName: c.name
+  }))) : [];
+  // team.players entries are either a plain string (an older saved team, before per-player role/
+  // hand fields existed) or a {name, ...} object -- normalized the same way setupScreen.js's own
+  // normalizePlayers does, since this is the only other place in the app that reads a team's roster
+  // generically rather than for a specific already-known team.
+  const myRosterPlayers = q ? teams.flatMap(t => (t.players || []).map(p => typeof p === "string" ? {
+    name: p
+  } : p).filter(p => p.name && (p.name.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q))).map(p => ({ ...p,
+    _team: t
+  }))) : [];
+  const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q)) : publicPlayers) : [];
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
   // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
   // taps Start on it. Searched alongside saved matches so "that Riverside game" finds it whether
@@ -19146,6 +19168,72 @@ function renderMatchCard(m, i, {
   }
   function renderClubRow(c) {
     return searchResultRow(c.id, () => onOpenClub(c.id), c.name, "Club");
+  }
+  // Shared row shape for all three player sources (public directory, a club's pool, a team's
+  // roster) -- same avatar-plus-two-line look regardless of source, only the click target and the
+  // context subtitle differ, so a mixed set of matches still reads as one consistent list.
+  function renderPlayerRow(key, onClick, p, subtitle) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: key,
+      type: "button",
+      onClick: onClick,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        gap: 10,
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: "none",
+        background: COLORS.surface,
+        cursor: "pointer",
+        textAlign: "left",
+        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+      }
+    }, /*#__PURE__*/React.createElement(PlayerAvatar, {
+      name: p.name,
+      photoURL: p.photoURL,
+      size: 34
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, p.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, subtitle)));
+  }
+  function renderPublicPlayerRow(p) {
+    return renderPlayerRow(p.id, () => onOpenPlayer(p), p, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" · "));
+  }
+  // Opens the club this pool player belongs to (same destination as tapping the club itself in
+  // search) -- the Player Pool section lives there, one tap under "Manage", rather than a
+  // dedicated profile screen a pool player doesn't have (unlike a published public player).
+  function renderPoolPlayerRow(p) {
+    return renderPlayerRow(`pool:${p._clubId}:${p.id}`, () => onOpenClub(p._clubId), p, [roleLabel(p.role), p.team ? `${p._clubName} · ${p.team}` : p._clubName].filter(Boolean).join(" · "));
+  }
+  // Opens the team itself (same onOpenTeam a Teams-scope result already uses) -- straight to the
+  // roster this name actually lives on, personal or a specific club's.
+  function renderRosterPlayerRow(p, idx) {
+    const club = p._team._clubId ? clubs.find(c => c.id === p._team._clubId) : null;
+    return renderPlayerRow(`roster:${p._team.id}:${idx}`, () => onOpenTeam(p._team), p, [roleLabel(p.role), `${club ? club.name : "Personal"} · ${p._team.name}`].filter(Boolean).join(" · "));
   }
   function renderFederationRow(f) {
     return searchResultRow(f.id, () => onOpenFederation(), f.name, "Federation");
@@ -19543,7 +19631,7 @@ function renderMatchCard(m, i, {
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it's a public directory fetched fresh, so pick that chip on purpose rather than every search reaching out for it."), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
+  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it searches every team roster and club Player Pool you have access to, plus the cross-club public directory (a fresh fetch, so pick that chip on purpose rather than every search reaching out for it)."), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",
@@ -19811,9 +19899,10 @@ function renderMatchCard(m, i, {
     }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode }))));
   })()) : /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "50vh"
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading players\u2026"
-  }) : filteredPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Loading players\u2026",
+    style: { marginBottom: 14 }
+  }), !playersLoading && filteredPlayers.length === 0 && myPoolPlayers.length === 0 && myRosterPlayers.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -19822,51 +19911,31 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       fontStyle: "italic"
     }
-  }, (publicPlayers || []).length === 0 ? "No public players yet." : "No players match that search.") : /*#__PURE__*/React.createElement("div", {
+  }, !q && (publicPlayers || []).length === 0 ? "No public players yet." : "No players match that search."), myRosterPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 18 }
+  }, categorySectionLabel("Team rosters"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
       gap: 6
     }
-  }, filteredPlayers.map(p => /*#__PURE__*/React.createElement("button", {
-    key: p.id,
-    type: "button",
-    onClick: () => onOpenPlayer(p),
+  }, myRosterPlayers.map((p, i) => renderRosterPlayerRow(p, i)))), myPoolPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 18 }
+  }, categorySectionLabel("Your clubs' pools"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      gap: 10,
-      padding: "12px 14px",
-      borderRadius: 12,
-      border: "none",
-      background: COLORS.surface,
-      cursor: "pointer",
-      textAlign: "left",
-      boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
+      flexDirection: "column",
+      gap: 6
     }
-  }, /*#__PURE__*/React.createElement(PlayerAvatar, {
-    name: p.name,
-    photoURL: p.photoURL,
-    size: 34
-  }), /*#__PURE__*/React.createElement("div", {
+  }, myPoolPlayers.map(renderPoolPlayerRow))), !playersLoading && filteredPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 18 }
+  }, categorySectionLabel("Public directory"), /*#__PURE__*/React.createElement("div", {
     style: {
-      minWidth: 0
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 14,
-      color: COLORS.ink
-    }
-  }, p.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft
-    }
-  }, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" \u00b7 "))))))), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredPlayers.map(renderPublicPlayerRow)))), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -19941,7 +20010,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && myRosterPlayers.length === 0 && myPoolPlayers.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "30vh"
   }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19993,7 +20062,19 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), (myRosterPlayers.length > 0 || myPoolPlayers.length > 0) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 18
+    }
+    // Only the two free, in-memory sources here -- the public directory is a real network fetch
+    // (see hasPlayerSearch), so it stays behind the deliberate Players chip tap, same as always.
+  }, categorySectionLabel("Players"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, myRosterPlayers.slice(0, ALL_SCOPE_CAP).map((p, i) => renderRosterPlayerRow(p, i)), myPoolPlayers.slice(0, Math.max(0, ALL_SCOPE_CAP - myRosterPlayers.length)).map(renderPoolPlayerRow)), myRosterPlayers.length + myPoolPlayers.length > ALL_SCOPE_CAP && seeAllLink("players", myRosterPlayers.length + myPoolPlayers.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
