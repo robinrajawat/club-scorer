@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Plus, Globe, Users, Check, Trash2 } from "./icons.js";
+import { ChevronLeft, ChevronDown, Plus, Globe, Users, Check, Trash2 } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
@@ -860,7 +860,31 @@ export function TeamEditScreen({
       borderRadius: 8,
       whiteSpace: "nowrap"
     }
-  }, "No longer published"))), /*#__PURE__*/React.createElement("div", {
+  }, "No longer published")), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
+    "aria-label": p.public ? `${p.name} is a public player — edit details` : `Add an email to make ${p.name} a public player`,
+    title: "Player details (email, public)",
+    className: "cs-btn",
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: "50%",
+      flexShrink: 0,
+      border: "none",
+      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : "transparent",
+      color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+    // Moved here from row 2 (was a globe icon) -- a chevron next to the name is a more generic
+    // "expand for details" affordance, and row 2 no longer needs a third, unrelated icon crowding
+    // the role pill.
+  }, /*#__PURE__*/React.createElement(ChevronDown, {
+    size: 15
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -963,27 +987,7 @@ export function TeamEditScreen({
       fontWeight: 800,
       cursor: "pointer"
     }
-  }, "WK")), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
-    "aria-label": p.public ? `${p.name} is a public player \u2014 edit details` : `Add an email to make ${p.name} a public player`,
-    title: "Player details (email, public)",
-    style: {
-      width: 24,
-      height: 24,
-      borderRadius: "50%",
-      flexShrink: 0,
-      border: "none",
-      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : "transparent",
-      color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(Globe, {
-    size: 13
-  }))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
+  }, "WK"))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
