@@ -179,9 +179,7 @@ test("SetupScreen: walking every page to Start Match calls onStart with the asse
   assert.deepEqual(started.toss, { wonBy: "Oakwood CC", decision: "Bowl" });
 });
 
-test("SetupScreen: Visibility defaults to public, and the review-page toggle flips onStart's private flag", () => {
-  let started = null;
-  const inst = render({ onStart: m => { started = m; } });
+function walkToReview(inst) {
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
   const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
@@ -196,23 +194,45 @@ test("SetupScreen: Visibility defaults to public, and the review-page toggle fli
   });
   act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
   act(() => { btn(inst, "Review").props.onClick(); });
+}
 
-  const visibilityBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make private");
-  assert.ok(visibilityBtn, "expected a public-by-default Visibility toggle on the review page");
+// Visibility used to be its own manual toggle on the review page -- now there's no toggle at all,
+// only an Organizer picker (hidden entirely when this account owns no club/federation, same as
+// TournamentsScreen's own create form), and privacy is derived downstream from whichever of
+// clubId/federationId this match ends up carrying.
+test("SetupScreen: with no club/federation owned, there's no Organizer picker and the match carries no clubId/federationId", () => {
+  let started = null;
+  const inst = render({ onStart: m => { started = m; } });
+  walkToReview(inst);
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
   act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.private, false);
-
-  started = null;
-  act(() => { visibilityBtn.props.onClick(); });
-  act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.private, true);
+  assert.equal(started.clubId, null);
+  assert.equal(started.federationId, null);
 });
 
-test("SetupScreen: a private tournament's fixture defaults Visibility to private too", () => {
+test("SetupScreen: picking an owned club as Organizer on the review page passes its id through to onStart as clubId", () => {
   let started = null;
   const inst = render({
     onStart: m => { started = m; },
-    presetTournament: { id: "t1", name: "Winter Cup", private: true, fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
+    clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }],
+    currentUid: "owner1"
+  });
+  walkToReview(inst);
+  const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
+  assert.ok(organizerChoice, "owning a club should surface the Organizer picker");
+  act(() => { organizerChoice.props.onChange("club:c1"); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.clubId, "c1");
+  assert.equal(started.federationId, null);
+});
+
+test("SetupScreen: a fixture started from within a tournament inherits ITS organizer, with no Organizer picker of its own", () => {
+  let started = null;
+  const inst = render({
+    onStart: m => { started = m; },
+    clubs: [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }],
+    currentUid: "owner1",
+    presetTournament: { id: "t1", name: "Winter Cup", private: false, _clubId: "c1", fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
   });
   const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   act(() => { tossBtn.props.onClick(); });
@@ -226,9 +246,10 @@ test("SetupScreen: a private tournament's fixture defaults Visibility to private
   });
   act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
   act(() => { btn(inst, "Review").props.onClick(); });
-  assert.ok(inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make public"), "expected the toggle to already read Private");
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
   act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.private, true);
+  assert.equal(started.clubId, "c1");
+  assert.equal(started.federationId, null);
 });
 
 test("SetupScreen: umpires are optional and pass through to onStart", () => {

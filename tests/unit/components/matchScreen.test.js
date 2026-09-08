@@ -663,22 +663,6 @@ test("MatchScreen: abandoning the match via the match menu ends it with no resul
   assert.equal(ctx.match.noResult, true);
 });
 
-test("MatchScreen: toggling Visibility in the match menu flips match.private and saves it", async () => {
-  let saved = null;
-  globalThis.saveMatch = m => { saved = m; return Promise.resolve({ ok: true, writeSeq: 1 }); };
-  const ctx = renderMatch(baseMatch({ private: false }));
-  const menuBtn = ctx.inst.root.findAllByProps({ "aria-label": "Match menu" })[0];
-  act(() => { menuBtn.props.onClick(); });
-  const visibilityToggle = ctx.inst.root.findAllByProps({ "aria-label": "Make private" })[0];
-  assert.ok(visibilityToggle, "starts public, so the switch offers to make it private");
-  await act(async () => {
-    visibilityToggle.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.equal(ctx.match.private, true);
-  assert.equal(saved.private, true);
-});
-
 // IMPROVEMENT: a mistake made in SetupScreen (wrong overs count, a house rule left on/off by
 // accident) used to have no fix short of abandoning the match and starting over -- normal matches
 // have no separate "first innings setup" screen (unlike a Super Over/2nd innings) where this could

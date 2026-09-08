@@ -42,15 +42,14 @@ test("EmptyStateBallIllustration: renders a self-contained svg with no props nee
   assert.equal(tree.props.width, "52");
 });
 
-test("EmptyState: the outer positioning div is flex:1 (fills whatever space a flex-column parent leaves it) and unstyled; the dashed card is a separate, content-sized inner div", () => {
+test("EmptyState: a flex:1 div with no border/background, centering the ball icon and text directly (no card)", () => {
   const tree = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).toJSON();
   assert.equal(tree.props.style.flex, 1);
-  assert.equal(tree.props.style.border, undefined, "the outer positioning div carries no card styling of its own");
+  assert.equal(tree.props.style.border, undefined, "no dashed-card border any more");
+  assert.equal(tree.props.style.background, undefined, "no tinted-card background any more");
 
-  const card = tree.children[0];
-  assert.ok(card.props.style.border, "the inner card has the dashed border");
-  assert.ok(card.props.style.maxWidth, "the card is capped, not stretched full-width by the outer flex:1");
-  assert.ok(card.children.some(c => c === "Nothing here yet." || (c && c.children && c.children.includes("Nothing here yet."))));
+  const text = tree.children[1];
+  assert.ok(text.children.includes("Nothing here yet."));
 
   const root = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).root;
   assert.equal(root.findAllByType(EmptyStateBallIllustration).length, 1);

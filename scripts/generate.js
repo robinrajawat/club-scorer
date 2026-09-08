@@ -201,7 +201,6 @@ const FUNCTIONS = [
   { name: "WhatsAppIcon", file: "src/components/icons.js" },
   { name: "Btn", file: "src/components/formUiAtoms.js" },
   { name: "BallBadge", file: "src/components/matchDisplayAtoms.js" },
-  { name: "VisibilitySwitch", file: "src/components/matchDisplayAtoms.js" },
   { name: "Field", file: "src/components/screenAtoms.js" },
   { name: "FabButton", file: "src/components/screenAtoms.js" },
   { name: "InstallHintBanner", file: "src/components/screenAtoms.js" },
