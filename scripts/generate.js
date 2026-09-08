@@ -216,7 +216,6 @@ const FUNCTIONS = [
   { name: "SyncConflictModal", file: "src/components/matchInsightCards.js" },
   { name: "PlayerOfMatchCard", file: "src/components/matchInsightCards.js" },
   { name: "BestFielderCard", file: "src/components/matchInsightCards.js" },
-  { name: "MoveTeamMenu", file: "src/components/shareMenus.js" },
   { name: "ShareMenu", file: "src/components/shareMenus.js" },
   { name: "OversStrip", file: "src/components/scoreboardAtoms.js" },
   { name: "FixturePollSummary", file: "src/components/scoreboardAtoms.js" },

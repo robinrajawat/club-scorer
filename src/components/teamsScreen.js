@@ -80,6 +80,7 @@ export function TeamsScreen({
   const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
   const activeClubName = activeClub && activeClub.name;
   const canManage = !activeClubId || isClubOwner(activeClub, currentUid);
+  const activeClubTeamCount = activeClubId ? (clubTeamsById[activeClubId] || []).length : 0;
   const [showInfo, setShowInfo] = useState(false);
   // Bumped to trigger ClubPanel's/FederationsPanel's own create form open from the FAB below --
   // see createSignal's own comment on each panel for why this indirection (a changing prop, not a
@@ -787,7 +788,21 @@ export function TeamsScreen({
     fontSize: 12.5,
     borderRadius: 12
   }
-}, canManage ? "Manage teams" : "View teams", /*#__PURE__*/React.createElement(ChevronRight, {
+}, canManage ? "Manage teams" : "View teams", !!activeClubTeamCount && /*#__PURE__*/React.createElement("span", {
+  style: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 16,
+    height: 16,
+    padding: "0 5px",
+    borderRadius: 8,
+    fontSize: 10.5,
+    fontWeight: 700,
+    background: "rgba(42,36,32,0.08)",
+    color: COLORS.inkSoft
+  }
+}, activeClubTeamCount), /*#__PURE__*/React.createElement(ChevronRight, {
   size: 14
 })))), tab === "federations" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(FederationsPanel, {
     federationsById: federationsById,

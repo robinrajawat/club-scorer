@@ -192,3 +192,51 @@ test("TeamEditScreen: adding from the club player pool copies entries onto the r
   act(() => { addSelectedBtn.props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
 });
+
+test("TeamEditScreen: a display-only summary shows player count and whoever's tagged captain/vice-captain/keeper", () => {
+  const inst = render();
+  // Reads the live (pre-toJSON) instance tree, where a numeric child is still a real number and
+  // string fragments haven't been comma-joined into one big JSON blob -- .join("") reassembles a
+  // span's own text across its several children the same way the browser would render it.
+  function summaryText() {
+    return inst.root.findAllByType("span")
+      .filter(s => s.props.style && s.props.style.borderRadius === 12 && s.props.style.padding === "3px 9px")
+      .map(s => [].concat(s.props.children).join(""));
+  }
+  addPlayer(inst, "A. Sharma");
+  addPlayer(inst, "B. Kumar");
+  assert.ok(summaryText().includes("2 players"));
+  // Nobody's tagged yet -- no C/VC/WK summary pill.
+  assert.equal(summaryText().length, 1);
+
+  act(() => { inst.root.findByProps({ "aria-label": "Make A. Sharma captain" }).props.onClick(); });
+  assert.ok(summaryText().includes("C · A. Sharma"));
+  act(() => { inst.root.findByProps({ "aria-label": "Make B. Kumar vice-captain" }).props.onClick(); });
+  assert.ok(summaryText().includes("VC · B. Kumar"));
+  act(() => { inst.root.findByProps({ "aria-label": "Make B. Kumar wicketkeeper" }).props.onClick(); });
+  assert.ok(summaryText().includes("WK · B. Kumar"));
+});
+
+test("TeamEditScreen: no Delete team button when creating a new team, or when the caller offers no onDelete", () => {
+  const noOnDelete = render({ team: { id: "t1", name: "Riverside CC", players: [], captain: "", keeper: "" } });
+  assert.doesNotMatch(JSON.stringify(noOnDelete.toJSON()), /Delete team/);
+
+  const newTeam = render({ onDelete: () => {} });
+  assert.doesNotMatch(JSON.stringify(newTeam.toJSON()), /Delete team/);
+});
+
+test("TeamEditScreen: 'Delete team' opens a confirm dialog, and confirming calls onDelete", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let deleted = false;
+  const inst = render({
+    team: { id: "t1", name: "Riverside CC", players: [{ name: "A. Sharma" }], captain: "", keeper: "" },
+    onDelete: () => { deleted = true; }
+  });
+  const deleteBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Delete team"));
+  act(() => { deleteBtn.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Delete Riverside CC\?/);
+
+  const confirmBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Delete");
+  act(() => { confirmBtn.props.onClick(); });
+  assert.equal(deleted, true);
+});
