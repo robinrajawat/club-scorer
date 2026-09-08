@@ -1643,6 +1643,29 @@ export function CricketScorer() {
       document.removeEventListener("touchend", onTouchEnd);
     };
   }, []);
+  // Every .cs-no-scrollbar strip (club/team chip rows, tournament filter chips, the overs strip,
+  // ...) relies on a horizontal swipe to see what's off-screen -- reported as unreachable on a
+  // desktop with a plain mouse (no trackpad, no touchscreen), since a bare vertical wheel doesn't
+  // scroll a horizontal-only container in most browsers, and the hidden scrollbar (the whole point
+  // of the class) leaves nothing to click-drag either. Converts an ordinary vertical wheel gesture
+  // over one of these strips into horizontal scrolling instead, so a mouse alone is enough.
+  // Deliberately skips a gesture that already has its own horizontal component (deltaX >= deltaY --
+  // a trackpad swipe or a shift+wheel scroll) and a strip with nothing to scroll to, so this never
+  // swallows an ordinary page scroll that merely happens to pass over a fully-visible strip.
+  useEffect(() => {
+    function onWheel(e) {
+      const scroller = e.target && e.target.closest && e.target.closest(".cs-no-scrollbar");
+      if (!scroller) return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      if (scroller.scrollWidth <= scroller.clientWidth) return;
+      scroller.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+    document.addEventListener("wheel", onWheel, {
+      passive: false
+    });
+    return () => document.removeEventListener("wheel", onWheel);
+  }, []);
   // Opened from a Player Pool group in TeamsScreen ("Create team" next to a team tag like "U15")
   // -- jumps straight into team-edit for a brand-new team pre-filled with that tag's name and
   // everyone in it, instead of the usual empty roster. clubId comes from the caller (always the
