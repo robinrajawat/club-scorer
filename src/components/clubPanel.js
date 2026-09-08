@@ -17,6 +17,7 @@ import { withPinnedFirst } from "../core/appLogic.js";
 
 export function ClubPanel({
   clubs,
+  clubTeamsById = {},
   activeClubId,
   onSelect,
   onCreate,
@@ -395,6 +396,7 @@ export function ClubPanel({
   }, orderedClubs.map(c => /*#__PURE__*/React.createElement(PinnableChip, {
     key: c.id,
     label: c.name + (c.ownerUid === currentUid ? " · Owner" : (c.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : ""),
+    count: (clubTeamsById[c.id] || []).length,
     active: activeClubId === c.id,
     pinned: pinnedClubIds.includes(c.id),
     onSelect: () => handleSelect(c.id),

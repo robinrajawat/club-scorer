@@ -120,6 +120,22 @@ test("ClubPanel: selecting a club chip calls onSelect", () => {
   assert.equal(selected, "c1");
 });
 
+test("ClubPanel: a club's chip shows its team count, hidden entirely for a club with none", () => {
+  const inst = render({
+    clubs: [club(), club({ id: "c2", name: "Oakwood CC" })],
+    clubTeamsById: { c1: [{ id: "t1", name: "1st XI" }, { id: "t2", name: "2nd XI" }] }
+  });
+  const withTeams = JSON.stringify(inst.toJSON());
+  assert.match(withTeams, /Riverside CC/);
+  const chipBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  const badgeSpan = chipBtn.props.children.flat(Infinity).find(c => c && c.type === "span" && c.props && typeof c.props.children === "number");
+  assert.equal(badgeSpan.props.children, 2);
+
+  const noTeamsChip = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Oakwood CC"));
+  const noBadge = noTeamsChip.props.children.flat(Infinity).find(c => c && c.type === "span" && c.props && typeof c.props.children === "number");
+  assert.equal(noBadge, undefined);
+});
+
 test("ClubPanel: 'Edit club name & description' saves changed fields via onRename/onUpdateDescription only", async () => {
   let renamedWith = null, descUpdatedWith = null, addressCalled = false;
   const inst = render({

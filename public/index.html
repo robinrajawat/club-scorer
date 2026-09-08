@@ -13432,6 +13432,7 @@ function JoinCodeBar({
 // GENERATED-FN-START: PinnableChip
 function PinnableChip({
   label,
+  count,
   active,
   pinned,
   onSelect,
@@ -13463,7 +13464,21 @@ function PinnableChip({
   }, pinned && /*#__PURE__*/React.createElement(Pin, {
     size: 10,
     fill: "currentColor"
-  }), label);
+  }), label, !!count && /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 15,
+      height: 15,
+      padding: "0 4px",
+      borderRadius: 8,
+      fontSize: 10,
+      fontWeight: 700,
+      background: active ? "rgba(255,255,255,0.28)" : "rgba(42,36,32,0.08)",
+      color: active ? "#fff" : COLORS.inkSoft
+    }
+  }, count));
 }
 
 // A single-button counterpart to ConfirmModal, for the handful of "something went wrong, here's
@@ -13474,6 +13489,7 @@ function PinnableChip({
 // GENERATED-FN-START: ClubPanel
 function ClubPanel({
   clubs,
+  clubTeamsById = {},
   activeClubId,
   onSelect,
   onCreate,
@@ -13852,6 +13868,7 @@ function ClubPanel({
   }, orderedClubs.map(c => /*#__PURE__*/React.createElement(PinnableChip, {
     key: c.id,
     label: c.name + (c.ownerUid === currentUid ? " · Owner" : (c.coOwnerUids || []).includes(currentUid) ? " · Co-owner" : ""),
+    count: (clubTeamsById[c.id] || []).length,
     active: activeClubId === c.id,
     pinned: pinnedClubIds.includes(c.id),
     onSelect: () => handleSelect(c.id),
@@ -28844,6 +28861,7 @@ function AvailabilityPollModal({
 function TeamsScreen({
   onManageTeams,
   clubs,
+  clubTeamsById = {},
   activeClubId,
   currentUid,
   tab,
@@ -29062,6 +29080,7 @@ function TeamsScreen({
     }
   }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
     clubs: clubs,
+    clubTeamsById: clubTeamsById,
     activeClubId: activeClubAdminId,
     onSelect: onSelectClubAdmin,
     onCreate: onCreateClub,
@@ -42434,6 +42453,7 @@ function CricketScorer() {
   }) : /*#__PURE__*/React.createElement(TeamsScreen, {
     onManageTeams: () => setManageClubTeamsOpen(true),
     clubs: clubs,
+    clubTeamsById: clubTeamsById,
     activeClubId: activeClubAdminId,
     currentUid: user && user.uid,
     pinnedClubIds: pinnedClubIds,
