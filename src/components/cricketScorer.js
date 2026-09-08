@@ -2932,6 +2932,7 @@ export function CricketScorer() {
   }) : /*#__PURE__*/React.createElement(TeamsScreen, {
     onManageTeams: () => setManageClubTeamsOpen(true),
     clubs: clubs,
+    clubTeamsById: clubTeamsById,
     activeClubId: activeClubAdminId,
     currentUid: user && user.uid,
     pinnedClubIds: pinnedClubIds,

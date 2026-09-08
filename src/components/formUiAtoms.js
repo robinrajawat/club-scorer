@@ -191,6 +191,7 @@ export function TeamChips({
 
 export function PinnableChip({
   label,
+  count,
   active,
   pinned,
   onSelect,
@@ -222,7 +223,21 @@ export function PinnableChip({
   }, pinned && /*#__PURE__*/React.createElement(Pin, {
     size: 10,
     fill: "currentColor"
-  }), label);
+  }), label, !!count && /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 15,
+      height: 15,
+      padding: "0 4px",
+      borderRadius: 8,
+      fontSize: 10,
+      fontWeight: 700,
+      background: active ? "rgba(255,255,255,0.28)" : "rgba(42,36,32,0.08)",
+      color: active ? "#fff" : COLORS.inkSoft
+    }
+  }, count));
 }
 
 // A single-button counterpart to ConfirmModal, for the handful of "something went wrong, here's

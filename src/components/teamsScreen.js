@@ -19,6 +19,7 @@ import { TAB_BAR_HEIGHT } from "./tabBar.js";
 export function TeamsScreen({
   onManageTeams,
   clubs,
+  clubTeamsById = {},
   activeClubId,
   currentUid,
   tab,
@@ -237,6 +238,7 @@ export function TeamsScreen({
     }
   }, "Only the owner (and anyone they've made a co-owner) can rename a club, edit its description, invite people, or manage its teams and tournaments \u2014 everyone else is a plain member."), /*#__PURE__*/React.createElement(ClubPanel, {
     clubs: clubs,
+    clubTeamsById: clubTeamsById,
     activeClubId: activeClubAdminId,
     onSelect: onSelectClubAdmin,
     onCreate: onCreateClub,
