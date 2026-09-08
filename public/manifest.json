@@ -1,7 +1,7 @@
 {
   "name": "Club Scorer",
   "short_name": "Club Scorer",
-  "description": "Ball-by-ball cricket scoring for friendly club games.",
+  "description": "Ball-by-ball cricket scoring for friendly club games. Sync your matches and teams across devices, join clubs, and share live scores.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
