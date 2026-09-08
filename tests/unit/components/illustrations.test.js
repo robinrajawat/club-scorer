@@ -42,16 +42,18 @@ test("EmptyStateBallIllustration: renders a self-contained svg with no props nee
   assert.equal(tree.props.width, "52");
 });
 
-test("EmptyState: is flex:1 by default (fills whatever space a flex-column parent leaves it), shows the illustration and message, and dashed-card styling unless card is false", () => {
-  const card = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).toJSON();
-  assert.equal(card.props.style.flex, 1);
-  assert.ok(card.props.style.border, "card styling is on by default");
+test("EmptyState: the outer positioning div is flex:1 (fills whatever space a flex-column parent leaves it) and unstyled; the dashed card is a separate, content-sized inner div", () => {
+  const tree = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).toJSON();
+  assert.equal(tree.props.style.flex, 1);
+  assert.equal(tree.props.style.border, undefined, "the outer positioning div carries no card styling of its own");
+
+  const card = tree.children[0];
+  assert.ok(card.props.style.border, "the inner card has the dashed border");
+  assert.ok(card.props.style.maxWidth, "the card is capped, not stretched full-width by the outer flex:1");
   assert.ok(card.children.some(c => c === "Nothing here yet." || (c && c.children && c.children.includes("Nothing here yet."))));
+
   const root = renderer.create(React.createElement(EmptyState, {}, "Nothing here yet.")).root;
   assert.equal(root.findAllByType(EmptyStateBallIllustration).length, 1);
-
-  const plain = renderer.create(React.createElement(EmptyState, { card: false }, "Nothing live right now.")).toJSON();
-  assert.equal(plain.props.style.border, undefined);
 });
 
 test("EmptyState: an explicit minHeight is passed through, for a screen whose root isn't a flex column", () => {
