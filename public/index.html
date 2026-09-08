@@ -30461,13 +30461,10 @@ function TeamEditScreen({
       flexShrink: 0,
       display: "flex",
       alignItems: "center",
-      color: COLORS.turf,
-      background: "rgba(45,80,22,0.12)",
-      padding: "2px 5px",
-      borderRadius: 8
+      color: COLORS.turf
     }
   }, /*#__PURE__*/React.createElement(Check, {
-    size: 11
+    size: 13
   })) : /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => addToPoolFromRoster(p),
@@ -30493,27 +30490,31 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 10
-  }), "Pool")), /*#__PURE__*/React.createElement("button", {
+  }), "Pool")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderRadius: 10,
+      overflow: "hidden",
+      border: `1px solid ${COLORS.willow}`,
+      flexShrink: 0
+    }
+    // One pill divided into three sections, rather than three separate same-sized round buttons
+    // floating with gaps between them -- reads as a single "set the role" control.
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
     title: "Captain",
     style: {
-      width: 26,
-      height: 26,
-      borderRadius: "50%",
-      flexShrink: 0,
-      border: captain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: captain === p.name ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
+      padding: "5px 9px",
+      border: "none",
+      borderRight: `1px solid ${COLORS.willow}`,
+      background: captain === p.name ? COLORS.gold : "transparent",
       color: captain === p.name ? "#2e1c04" : COLORS.inkSoft,
-      boxShadow: captain === p.name ? "0 1px 4px rgba(184,137,43,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 10,
       fontWeight: 800,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
+      cursor: "pointer"
     }
   }, "C"), /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -30521,21 +30522,15 @@ function TeamEditScreen({
     "aria-label": viceCaptain === p.name ? `Remove ${p.name} as vice-captain` : `Make ${p.name} vice-captain`,
     title: "Vice-captain",
     style: {
-      width: 30,
-      height: 26,
-      borderRadius: 13,
-      flexShrink: 0,
-      border: viceCaptain === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: viceCaptain === p.name ? "rgba(201,168,118,0.4)" : COLORS.surface,
+      padding: "5px 9px",
+      border: "none",
+      borderRight: `1px solid ${COLORS.willow}`,
+      background: viceCaptain === p.name ? "#c9a876" : "transparent",
       color: viceCaptain === p.name ? "#5a4522" : COLORS.inkSoft,
-      boxShadow: viceCaptain === p.name ? "0 1px 4px rgba(201,168,118,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 9,
       fontWeight: 800,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
+      cursor: "pointer"
     }
   }, "VC"), /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -30543,34 +30538,27 @@ function TeamEditScreen({
     "aria-label": keeper === p.name ? `Remove ${p.name} as wicketkeeper` : `Make ${p.name} wicketkeeper`,
     title: "Wicketkeeper",
     style: {
-      width: 30,
-      height: 26,
-      borderRadius: 13,
-      flexShrink: 0,
-      border: keeper === p.name ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: keeper === p.name ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      padding: "5px 9px",
+      border: "none",
+      background: keeper === p.name ? COLORS.turf : "transparent",
       color: keeper === p.name ? "#fff" : COLORS.inkSoft,
-      boxShadow: keeper === p.name ? "0 1px 4px rgba(45,80,22,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 9,
       fontWeight: 800,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
+      cursor: "pointer"
     }
-  }, "WK"), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
+  }, "WK")), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
     "aria-label": p.public ? `${p.name} is a public player \u2014 edit details` : `Add an email to make ${p.name} a public player`,
     title: "Player details (email, public)",
     style: {
-      width: 26,
-      height: 26,
+      width: 24,
+      height: 24,
       borderRadius: "50%",
       flexShrink: 0,
-      border: expandedKey === p._key ? "none" : `1.5px solid ${COLORS.willow}`,
-      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : COLORS.surface,
+      border: "none",
+      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : "transparent",
       color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
       cursor: "pointer",
       display: "flex",
