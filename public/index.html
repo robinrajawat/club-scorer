@@ -17834,7 +17834,46 @@ function WelcomeScreen({
       marginTop: 4,
       lineHeight: 1.5
     }
-  }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
+  }, "Matches and teams stay on this device only. You can sign in anytime from Account."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 28,
+      paddingTop: 20,
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11,
+      fontWeight: 700,
+      color: COLORS.turf,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 10
+    }
+  }, "What's inside"), /*#__PURE__*/React.createElement("ul", {
+    style: {
+      listStyle: "none",
+      margin: 0,
+      padding: 0
+    }
+  }, ["Ball-by-ball live scoring with overs, partnerships and run rates tracked as you go", "Clubs, tournaments and series with fixtures and live standings", "Availability polls and squad management for your team", "Rain-affected target adjustments and CSV scorecard exports"].map((feature, i) => /*#__PURE__*/React.createElement("li", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "flex-start",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      color: COLORS.pitch
+    }
+  }, "•"), feature)))));
 }
 // GENERATED-FN-END: WelcomeScreen
 // "Today" / "Yesterday" / "Sat, 14 Jun" (plus year if not this year) — used on the saved-matches
