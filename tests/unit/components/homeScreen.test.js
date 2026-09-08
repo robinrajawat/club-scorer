@@ -429,6 +429,96 @@ test("HomeScreen: picking the 'Players' search chip lazily loads the public play
   assert.equal(loadCalls, 1);
 });
 
+// IMPROVEMENT: Players search used to only ever cover the cross-club public directory -- a real
+// gap, since a club's own Player Pool (teamsScreen.js's own roster-building tool) is deliberately
+// NOT published there by default (no email required), so most clubs' own players were simply
+// unfindable from Home at all short of navigating to that exact club by hand. Both this and the
+// roster test below are free, in-memory sources (unlike the public directory), so no lazy-load
+// stub is needed -- they're expected to show up the instant the Players chip is picked.
+test("HomeScreen: the 'Players' chip also searches every club's Player Pool, tagged with which club/team, opening that club on tap", () => {
+  let opened = null;
+  const inst = render({
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "p1", name: "Amit Shah", role: "batsman", team: "U15" }] }],
+    onOpenClub: id => { opened = id; },
+    onLoadPublicPlayers: () => Promise.resolve([])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "Amit" } }); });
+  const playersChip = inst.root.findAllByType("button").find(b => b.props.children === "Players");
+  act(() => { playersChip.props.onClick(); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Amit Shah/);
+  assert.match(text, /Riverside CC/);
+  assert.match(text, /U15/);
+  const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Amit Shah"));
+  resultRow.props.onClick();
+  assert.equal(opened, "c1");
+});
+
+// An inactive pool player (retired/left the club, see teamsScreen.js's own status toggle) is
+// excluded the same way poolTeamGroups already excludes them from the "create team from tag"
+// picker -- someone who left shouldn't keep surfacing in search.
+test("HomeScreen: an inactive Player Pool entry is excluded from search", () => {
+  const inst = render({
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "p1", name: "Amit Shah", status: "inactive" }] }],
+    onLoadPublicPlayers: () => Promise.resolve([])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "Amit" } }); });
+  const playersChip = inst.root.findAllByType("button").find(b => b.props.children === "Players");
+  act(() => { playersChip.props.onClick(); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Amit Shah/);
+});
+
+test("HomeScreen: the 'Players' chip also searches every team's roster (personal and club), opening that team on tap", () => {
+  let opened = null;
+  const team = { id: "t1", name: "Riverside 1st XI", players: [{ name: "Priya Nair", role: "bowler" }] };
+  const inst = render({
+    teams: [team],
+    onOpenTeam: t => { opened = t; },
+    onLoadPublicPlayers: () => Promise.resolve([])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "Priya" } }); });
+  const playersChip = inst.root.findAllByType("button").find(b => b.props.children === "Players");
+  act(() => { playersChip.props.onClick(); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Priya Nair/);
+  assert.match(text, /Riverside 1st XI/);
+  const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Priya Nair"));
+  resultRow.props.onClick();
+  assert.equal(opened.id, "t1");
+});
+
+// A roster entry can still be a plain string on an older saved team, predating per-player role/
+// hand fields (see setupScreen.js's own normalizePlayers) -- the only other place in the app that
+// reads a roster generically has to handle both shapes the same way.
+test("HomeScreen: a plain-string roster entry (an older saved team) is still searchable by name", () => {
+  const inst = render({
+    teams: [{ id: "t1", name: "Riverside 1st XI", players: ["Priya Nair"] }],
+    onLoadPublicPlayers: () => Promise.resolve([])
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "Priya" } }); });
+  const playersChip = inst.root.findAllByType("button").find(b => b.props.children === "Players");
+  act(() => { playersChip.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Priya Nair/);
+});
+
+// Pool/roster players are free, in-memory sources (unlike the public directory), so -- like
+// Matches/Cups/Teams/Clubs -- they show up under "All" without needing the dedicated Players chip.
+test("HomeScreen: pool and roster players also show up under the 'All' scope, unlike the public directory", () => {
+  const inst = render({
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "p1", name: "Amit Shah" }] }],
+    teams: [{ id: "t1", name: "Riverside 1st XI", players: [{ name: "Priya Nair" }] }]
+  });
+  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
+  act(() => { search.props.onChange({ target: { value: "a" } }); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Amit Shah/);
+  assert.match(text, /Priya Nair/);
+});
+
 test("HomeScreen: showInstallHint renders InstallHintBanner wired to onDismissInstallHint", () => {
   let dismissed = false;
   const inst = render({ showInstallHint: true, onDismissInstallHint: () => { dismissed = true; } });
