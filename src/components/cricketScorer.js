@@ -1133,19 +1133,23 @@ export function CricketScorer() {
     ensureBatsman(m.innings[0], setup.strikerA);
     ensureBatsman(m.innings[0], setup.nonStrikerA);
     ensureBowler(m.innings[0], setup.bowlerB);
-    // Auto-share tournament matches up front when more than one person could plausibly need to
-    // pick up scoring this exact match -- every "co-owner can't continue scoring" bug fixed this
-    // session traced back to the same gap: a club tournament match stayed locked to just its
-    // creator's own account until they remembered to tap Share, so a teammate who saw it in
-    // "Continue Scoring" (via the world-readable tournamentMatches/entries pointer) hit a dead
-    // end. Minting the code here with the same genMatchCode() the manual Share button uses closes
-    // that gap outright instead of only wording the resulting error message better (see
-    // checkTournamentMatchShareStatus). Scoped to clubs with more than one member and federations
-    // with at least one co-owner -- a solo personal tournament has no one else who'd ever need
-    // this, so it isn't worth the wider access a share code grants.
-    if (m.tournamentId && presetTournament) {
-      const club = presetTournament._clubId ? clubs.find(c => c.id === presetTournament._clubId) : null;
-      const federation = presetTournament._federationId ? federationsById[presetTournament._federationId] : null;
+    // Auto-share club/federation matches up front when more than one person could plausibly need
+    // to pick up scoring this exact match -- every "co-owner can't continue scoring" bug fixed this
+    // session traced back to the same gap: a club match (tournament or standalone) stayed locked to
+    // just its creator's own account until they remembered to tap Share, so a teammate who saw it
+    // in "Continue Scoring" (via the world-readable tournamentMatches/entries pointer, for a
+    // tournament match) hit a dead end. Minting the code here with the same genMatchCode() the
+    // manual Share button uses closes that gap outright instead of only wording the resulting
+    // error message better (see checkTournamentMatchShareStatus). Keyed off m.clubId/m.federationId
+    // directly rather than presetTournament -- covers a standalone match organized under a club/
+    // federation via SetupScreen's own Organizer picker the same way as a tournament fixture that
+    // inherited its organizer from presetTournament, since both end up setting the same fields.
+    // Scoped to clubs with more than one member and federations with at least one co-owner -- a
+    // solo personal match/tournament has no one else who'd ever need this, so it isn't worth the
+    // wider access a share code grants.
+    {
+      const club = m.clubId ? clubs.find(c => c.id === m.clubId) : null;
+      const federation = m.federationId ? federationsById[m.federationId] : null;
       if (club && (club.memberUids || []).length > 1 || federation && (federation.coOwnerUids || []).length > 0) {
         m.shareCode = genMatchCode();
       }

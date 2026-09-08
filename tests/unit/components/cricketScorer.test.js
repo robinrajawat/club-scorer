@@ -458,7 +458,7 @@ test("CricketScorer: starting a match in a club tournament with other members au
   act(() => { detail.props.onStartMatch(tournament); });
   const setup = inst.root.findByType(SetupScreen);
   await act(async () => {
-    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, tournamentId: "t1" });
+    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, tournamentId: "t1", clubId: "club1" });
     await new Promise(r => setTimeout(r, 0));
   });
   assert.ok(savedMatch, "saveMatch should have been called");
@@ -490,11 +490,43 @@ test("CricketScorer: starting a match in a solo club tournament (no other member
   act(() => { detail.props.onStartMatch(tournament); });
   const setup = inst.root.findByType(SetupScreen);
   await act(async () => {
-    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, tournamentId: "t1" });
+    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, tournamentId: "t1", clubId: "club1" });
     await new Promise(r => setTimeout(r, 0));
   });
   assert.ok(savedMatch, "saveMatch should have been called");
   assert.ok(!savedMatch.shareCode, "a solo club tournament has no one else who'd need this, so no share code should be minted");
+});
+
+// IMPROVEMENT: the auto-share fix above used to be keyed off presetTournament._clubId, so it only
+// ever applied to a match started FROM a tournament -- a standalone match tagged to the same club
+// via SetupScreen's own Organizer picker (no tournamentId at all) fell through this exact gap
+// silently, re-introducing the "co-owner can't continue scoring" bug the tournament case was
+// already fixed for. Re-keyed onto m.clubId/m.federationId directly so both paths share the fix.
+test("CricketScorer: starting a standalone match (no tournament) under a multi-member club as Organizer also auto-mints a share code", async () => {
+  let savedMatch = null;
+  globalThis.saveMatch = m => { savedMatch = m; return Promise.resolve({ ok: true, writeSeq: 1 }); };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  const inst = await render();
+  globalThis.loadClubs = () => Promise.resolve([
+    { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1", "u2"] }
+  ]);
+  globalThis.loadClubTeams = () => Promise.resolve([]);
+  globalThis.loadClubTournaments = () => Promise.resolve([]);
+  globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  await flush();
+  await signIn(inst);
+  await flush();
+  await flush();
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onNew(); });
+  const setup = inst.root.findByType(SetupScreen);
+  await act(async () => {
+    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, clubId: "club1" });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(savedMatch, "saveMatch should have been called");
+  assert.ok(savedMatch.shareCode, "a standalone match organized under a multi-member club should be auto-shared, same as a tournament one");
 });
 
 // BUG FIX: TournamentsScreen's create form has always collected an optional default venue and
