@@ -229,6 +229,22 @@ export function TeamEditScreen({
       return next;
     });
   }
+  // Live suggestions for the free-text "Player name" field below, so a name already in the club's
+  // pool can be picked instead of retyped (and mistyped) from scratch. Same substring match as the
+  // Browse-pool search box, scoped to what's currently typed; excludes anyone already on this
+  // roster (nothing useful to suggest) and an exact match of the text already typed (nothing left
+  // to autocomplete). Capped at 5 so a big pool doesn't turn one keystroke into a wall of rows.
+  const trimmedNewPlayer = newPlayer.trim();
+  const nameSuggestions = trimmedNewPlayer ? clubPool.filter(pp => pp.name.toLowerCase().includes(trimmedNewPlayer.toLowerCase()) && pp.name.trim().toLowerCase() !== trimmedNewPlayer.toLowerCase() && !players.some(p => p.name.trim().toLowerCase() === pp.name.trim().toLowerCase())).slice(0, 5) : [];
+  // Picking a suggestion adds that pool player outright (same path as ticking them in the Browse
+  // picker) rather than just filling the text field -- they're already a known pool entry, so
+  // there's nothing left to edit before adding, and this saves the extra tap on "+".
+  function pickNameSuggestion(pp) {
+    addPoolPlayersToRoster([pp]);
+    setNewPlayer("");
+    setNewNumber("");
+    setAddError("");
+  }
   const [addError, setAddError] = useState("");
   // Typing a brand-new name into the roster only ever added them to THIS team -- there was no way
   // to also get them into the club's reusable pool without leaving team editing entirely, adding
@@ -694,7 +710,37 @@ export function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }))), clubId && /*#__PURE__*/React.createElement("div", {
+  }))), nameSuggestions.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10,
+      border: `1px solid ${COLORS.cardDivider}`,
+      borderRadius: 10,
+      overflow: "hidden"
+    }
+  }, nameSuggestions.map((pp, idx) => /*#__PURE__*/React.createElement("button", {
+    key: pp.id,
+    type: "button",
+    onClick: () => pickNameSuggestion(pp),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: COLORS.surface,
+      border: "none",
+      borderBottom: idx < nameSuggestions.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
+      padding: "8px 10px",
+      cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ink
+    }
+  }, pp.name, " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.inkSoft,
+      fontSize: 11
+    }
+  }, "\u00b7 from club pool")))), clubId && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: addError ? 4 : 10
     }

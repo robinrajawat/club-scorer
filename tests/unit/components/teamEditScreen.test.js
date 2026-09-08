@@ -194,6 +194,38 @@ test("TeamEditScreen: adding from the club player pool copies entries onto the r
   assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
 });
 
+test("TeamEditScreen: typing a partial match against the club pool offers it as a suggestion; picking it adds the player and clears the field", () => {
+  const inst = render({
+    clubId: "c1",
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }]
+  });
+  act(() => { input(inst, "Player name").props.onChange({ target: { value: "sin" } }); });
+  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "D. Singh"));
+  assert.ok(suggestionBtn, "expected a suggestion row for the matching pool player");
+
+  act(() => { suggestionBtn.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
+  assert.equal(input(inst, "Player name").props.value, "");
+});
+
+test("TeamEditScreen: a pool player already on the roster is never suggested again", () => {
+  const inst = render({
+    clubId: "c1",
+    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }]
+  });
+  addPlayer(inst, "D. Singh"); // already on the roster
+  act(() => { input(inst, "Player name").props.onChange({ target: { value: "sin" } }); });
+  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "· from club pool"));
+  assert.equal(suggestionBtn, undefined);
+});
+
+test("TeamEditScreen: no pool suggestions for a personal (non-club) team", () => {
+  const inst = render({ clubId: null });
+  act(() => { input(inst, "Player name").props.onChange({ target: { value: "anything" } }); });
+  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "· from club pool"));
+  assert.equal(suggestionBtn, undefined);
+});
+
 test("TeamEditScreen: flags a club roster player who isn't in the club's pool yet, with a way to add them", () => {
   let addedTo = null, addedPlayers = null;
   const inst = render({
