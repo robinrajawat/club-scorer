@@ -2207,13 +2207,13 @@ export function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
-      // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
-      // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
-      // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
-      // already have, still overridable per match. Club/federation tournaments are never private
-      // (TournamentsScreen's own create form hides the toggle once an organizer other than
-      // Personal is picked -- membership there is already owner/co-owner governed) -- enforced
-      // here too, not just in the UI, since isPrivate is whatever this function was called with.
+      // A private tournament's fixtures default to private too -- a fixture started from within one
+      // inherits presetTournament.private directly (see SetupScreen), same "set once, inherited by
+      // every fixture" relationship defaultOvers/defaultRules already have. Club/federation
+      // tournaments are never private (isPrivate here is already derived from Organizer by
+      // TournamentsScreen's create form, which has no manual Visibility choice at all any more --
+      // membership there is already owner/co-owner governed) -- enforced here too, not just in the
+      // UI, since isPrivate is whatever this function was called with.
       private: activeTournamentClubId || activeTournamentFederationId ? false : !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
@@ -2448,8 +2448,10 @@ export function CricketScorer() {
       ok: true
     };
   }
-  // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
-  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, which on its
+  // Flips a tournament's own Visibility after creation. There's no manual UI for this any more --
+  // Visibility is derived from Organizer and fixed at creation -- so the only caller left is
+  // TournamentDetailScreen's self-heal effect, correcting one still carrying the opposite of what
+  // its organizer now implies. Saves through the normal handleUpdateTournament path, which on its
   // own now handles the "going public" side (maybeAutoPublishTournament -- mints a share code and
   // publishes for the first time if this tournament was never shared, or just republishes if it
   // was). All this function needs to add is the one thing handleUpdateTournament has no reason to
