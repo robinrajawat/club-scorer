@@ -58,6 +58,30 @@ test("MyTeamsScreen: deleting goes through SwipeableRow's onDelete, calling onDe
   assert.equal(deletedClubId, null);
 });
 
+test("MyTeamsScreen: a team row shows captain/vice-captain/keeper pills when set, nothing extra when not", () => {
+  // Same live-tree read as TeamEditScreen's own summary-card test: a span's text can be split
+  // across several children (e.g. "C", " · ", name), which .join("") reassembles faithfully,
+  // unlike JSON.stringify(toJSON()) which comma-separates them into unmatchable fragments.
+  function pillText(inst) {
+    return inst.root.findAllByType("span")
+      .filter(s => s.props.style && s.props.style.borderRadius === 10 && s.props.style.padding === "2px 7px")
+      .map(s => [].concat(s.props.children).join(""));
+  }
+  const plain = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onNewTeam: () => {}
+  }));
+  assert.equal(pillText(plain).length, 0);
+
+  const tagged = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team({ captain: "A. Sharma", viceCaptain: "B. Kumar", keeper: "C. Patel" })],
+    matches: [], onNewTeam: () => {}
+  }));
+  const text = pillText(tagged);
+  assert.ok(text.includes("C · A. Sharma"));
+  assert.ok(text.includes("VC · B. Kumar"));
+  assert.ok(text.includes("WK · C. Patel"));
+});
+
 test("MyTeamsScreen: shows a loading state while teamsLoading is true, without crashing", () => {
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
     teams: [], teamsLoading: true, matches: [], onBack: () => {}, onNewTeam: () => {}
