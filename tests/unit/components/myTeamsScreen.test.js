@@ -37,7 +37,7 @@ test("MyTeamsScreen: lists teams, wires onEditTeam/onDeleteTeam/onNewTeam", () =
   const teams = [team()];
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
     teams, matches: [], onBack: () => {}, onNewTeam: () => {},
-    onEditTeam: t => { edited = t; }, onDeleteTeam: () => {}, onMoveTeam: () => {}
+    onEditTeam: t => { edited = t; }, onDeleteTeam: () => {}
   }));
   assert.match(JSON.stringify(inst.toJSON()), /Riverside 1st XI/);
   const editBtn = inst.root.findByProps({ "aria-label": `Edit ${teams[0].name}` });
@@ -50,7 +50,7 @@ test("MyTeamsScreen: deleting goes through SwipeableRow's onDelete, calling onDe
   const teams = [team()];
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
     teams, matches: [], onBack: () => {}, onNewTeam: () => {},
-    onDeleteTeam: (id, clubId) => { deletedId = id; deletedClubId = clubId; }, onMoveTeam: () => {}
+    onDeleteTeam: (id, clubId) => { deletedId = id; deletedClubId = clubId; }
   }));
   const row = inst.root.findByType(SwipeableRow);
   row.props.onDelete();

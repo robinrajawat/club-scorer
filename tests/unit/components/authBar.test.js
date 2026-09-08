@@ -1,6 +1,6 @@
 // Account button + popover menu in the app header (src/components/authBar.js). Its menu calls
-// ReactDOM.createPortal(..., document.body) directly (a bare global, same as ShareMenu/
-// MoveTeamMenu) only once open, so tests render through real react-dom (createRoot) into a jsdom
+// ReactDOM.createPortal(..., document.body) directly (a bare global, same as ShareMenu)
+// only once open, so tests render through real react-dom (createRoot) into a jsdom
 // container instead of react-test-renderer -- same setup as shareMenus.test.js, for the same
 // reason (react-test-renderer can't host a portal targeting a real DOM node). ConfirmModal (shown
 // for the sign-out confirm step) references Modal as its own separate bare global, stubbed too.

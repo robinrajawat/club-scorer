@@ -2627,44 +2627,6 @@ export function CricketScorer() {
   const teamsForTeamsScreen = activeClubAdminId ? (clubTeamsById[activeClubAdminId] || []).map(t => ({ ...t,
     _clubId: activeClubAdminId
   })) : allTeamsFlat;
-  // Copies a team into the destination first, then deletes it from the source — so a failed or
-  // denied destination write (e.g. rules not yet published) never loses the team.
-  // fromClubId is passed explicitly for the same reason clubId is on handleSaveTeam/
-  // handleDeleteTeam above -- reading ambient activeClubId here would silently assume the team
-  // being moved came from wherever activeClubId currently happens to point, which is wrong (and
-  // effectively duplicates the team without ever removing the original) the moment this is
-  // called from anywhere that isn't the Teams tab, e.g. Home's own team list.
-  async function handleMoveTeam(team, fromClubId, toClubId) {
-    if (toClubId === fromClubId) return;
-    if (toClubId) {
-      const result = await saveClubTeam(toClubId, team);
-      if (!result.ok) {
-        setAlertModal({
-          message: result.error || "Couldn't move the team."
-        });
-        return;
-      }
-      setClubTeamsById(prev => ({
-        ...prev,
-        [toClubId]: [...(prev[toClubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
-      }));
-    } else {
-      const updated = [...teams.filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name));
-      setTeams(updated);
-      await saveTeams(updated);
-    }
-    if (fromClubId) {
-      await deleteClubTeam(fromClubId, team.id);
-      setClubTeamsById(prev => ({
-        ...prev,
-        [fromClubId]: (prev[fromClubId] || []).filter(t => t.id !== team.id)
-      }));
-    } else {
-      const updated = teams.filter(t => t.id !== team.id);
-      setTeams(updated);
-      await saveTeams(updated);
-    }
-  }
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
@@ -2902,7 +2864,6 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId),
     showTabBar: false
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
@@ -2929,7 +2890,6 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
-    onMoveTeam: (team, toClubId) => handleMoveTeam(team, team._clubId || null, toClubId),
     showTabBar: true
   }) : /*#__PURE__*/React.createElement(TeamsScreen, {
     onManageTeams: () => setManageClubTeamsOpen(true),
@@ -3210,7 +3170,8 @@ export function CricketScorer() {
     onAddPoolPlayers: handleAddPoolPlayers,
     presetTeamSeed: presetTeamSeed,
     onSave: team => handleSaveTeam(team, activeClubAdminId),
-    onCancel: () => setScreen(teamEditReturnScreen)
+    onCancel: () => setScreen(teamEditReturnScreen),
+    onDelete: editingTeam ? () => handleDeleteTeam(editingTeam.id, activeClubAdminId).then(() => setScreen(teamEditReturnScreen)) : undefined
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
     match: match
   }), matchLoading && /*#__PURE__*/React.createElement("div", {
