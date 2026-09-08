@@ -12,6 +12,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { TeamEditScreen } from "../../../src/components/teamEditScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
+import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
 
 afterEach(() => {
   delete globalThis.Modal;
@@ -134,12 +135,12 @@ test("TeamEditScreen: vice-captain is included in the saved payload, and cleared
   assert.equal(saved.viceCaptain, "A. Sharma");
 });
 
-test("TeamEditScreen: removing a player opens a confirm dialog, and confirming removes them", () => {
+test("TeamEditScreen: removing a player goes through SwipeableRow's onDelete, opening a confirm dialog; confirming removes them", () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inst = render();
   addPlayer(inst, "A. Sharma");
-  const removeBtn = inst.root.findByProps({ "aria-label": "Remove A. Sharma" });
-  act(() => { removeBtn.props.onClick(); });
+  const row = inst.root.findByType(SwipeableRow);
+  act(() => { row.props.onDelete(); });
   assert.match(JSON.stringify(inst.toJSON()), /Remove A. Sharma\?/);
 
   const confirmBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Remove");
