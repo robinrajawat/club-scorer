@@ -497,6 +497,63 @@ test("CricketScorer: starting a match in a solo club tournament (no other member
   assert.ok(!savedMatch.shareCode, "a solo club tournament has no one else who'd need this, so no share code should be minted");
 });
 
+// BUG FIX: a fixture's matchId only ever got written by handleStartFixtureMatch's own "Start
+// Fixture" path. Starting the exact same pairing via the tournament's plain "Start Match" button
+// instead (handleStartMatchInTournament -- no specific fixture card involved) created a match that
+// counted correctly in standings (computeStandings matches by team name + tournamentId alone) but
+// left the fixture stuck looking "upcoming" forever in both the Fixtures tab and the public share
+// snapshot, since both read a completed result purely off fixture.matchId. startNewMatch now
+// back-fills that link via findFixtureToAutoLink whenever there's exactly one unplayed fixture
+// between these two teams.
+test("CricketScorer: starting a match via 'Start Match' (not a specific fixture card) still back-fills the fixture's matchId when the pairing is unambiguous", async () => {
+  let savedMatch = null;
+  let savedTournament = null;
+  globalThis.saveMatch = m => { savedMatch = m; return Promise.resolve({ ok: true, writeSeq: 1 }); };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  const inst = await render();
+  globalThis.loadClubs = () => Promise.resolve([
+    { id: "club1", name: "Riverside CC", ownerUid: "u1", coOwnerUids: [], memberUids: ["u1"] }
+  ]);
+  globalThis.loadClubTeams = () => Promise.resolve([]);
+  const tournament = {
+    id: "t1", name: "Summer Cup", _clubId: "club1", _federationId: null,
+    teams: ["Riverside CC", "Oakwood CC"],
+    fixtures: [{ id: "fx1", teamA: "Riverside CC", teamB: "Oakwood CC" }],
+    // Already published (shareCode set) -- keeps this test isolated to the fixture-linking
+    // behavior under test. A never-shared tournament would also fire openTournamentDetail's own
+    // auto-publish-on-open flow (maybeAutoPublishTournament), an unrelated saveClubTournament
+    // write (minting a share code from the ORIGINAL, unlinked fixtures) racing this test's own on
+    // the same stubbed saveClubTournament; an already-shared one only re-syncs the public config
+    // doc/standings instead (syncTournamentConfig/refreshTournamentStandingsLive, already
+    // no-op-stubbed by render() below), never touching saveClubTournament at all.
+    shareCode: "EXISTING"
+  };
+  // linkFixtureToMatch (the write side of this fix) resolves which store a tournament lives in by
+  // searching clubTournamentsById itself -- same as the real app, this needs to already be loaded
+  // (as it would be from visiting the Tournaments tab) before startNewMatch can find it to write to.
+  globalThis.loadClubTournaments = () => Promise.resolve([tournament]);
+  globalThis.loadTournamentMatches = () => Promise.resolve([]);
+  globalThis.loadPendingPollItems = () => Promise.resolve([]);
+  globalThis.saveClubTournament = (clubId, updated) => { savedTournament = updated; return Promise.resolve({ ok: true }); };
+  await flush();
+  await signIn(inst);
+  await flush();
+  await flush();
+  await flush();
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenTournament(tournament); });
+  const detail = inst.root.findByType(TournamentDetailScreen);
+  act(() => { detail.props.onStartMatch(tournament); });
+  const setup = inst.root.findByType(SetupScreen);
+  await act(async () => {
+    setup.props.onStart({ teamA: "Riverside CC", teamB: "Oakwood CC", oversLimit: 20, tournamentId: "t1", clubId: "club1" });
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.ok(savedMatch, "saveMatch should have been called");
+  assert.ok(savedTournament, "saveClubTournament should have been called to back-fill the fixture's matchId");
+  assert.equal(savedTournament.fixtures[0].matchId, savedMatch.id);
+});
+
 // IMPROVEMENT: the auto-share fix above used to be keyed off presetTournament._clubId, so it only
 // ever applied to a match started FROM a tournament -- a standalone match tagged to the same club
 // via SetupScreen's own Organizer picker (no tournamentId at all) fell through this exact gap

@@ -194,3 +194,35 @@ test("FollowTournamentScreen: a grouped tournament shows one standings table per
   assert.match(text, /Group A/);
   assert.match(text, /Group B/);
 });
+
+test("FollowTournamentScreen: shows Orange/Purple Cap and a Stats section when the snapshot carries player stats", async () => {
+  const data = snapshotData({
+    topBatters: [
+      { name: "A. Sharma", runs: 210, battingInnings: 4, battingAvg: 70, strikeRate: 130 },
+      { name: "B. Kumar", runs: 150, battingInnings: 4, battingAvg: 50, strikeRate: 110 }
+    ],
+    topBowlers: [
+      { name: "D. Singh", wickets: 9, runsConceded: 120, bowlingAvg: 13.3, economy: 5.2 }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Orange Cap/);
+  assert.match(text, /A\. Sharma/);
+  assert.match(text, /210/);
+  assert.match(text, /Purple Cap/);
+  assert.match(text, /D\. Singh/);
+  assert.match(text, /Stats/);
+  assert.match(text, /Most runs/);
+  assert.match(text, /B\. Kumar/);
+  assert.match(text, /Most wickets/);
+});
+
+test("FollowTournamentScreen: no Orange/Purple Cap or Stats section when the snapshot has no player stats yet", async () => {
+  const data = snapshotData(); // no topBatters/topBowlers at all -- an older snapshot, or nothing completed yet
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Orange Cap/);
+  assert.doesNotMatch(text, /Purple Cap/);
+  assert.doesNotMatch(text, /Stats/);
+});

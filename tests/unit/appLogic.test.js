@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   computeStandings, formatTournamentViewSnapshot, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal,
-  computeQualificationTarget, decimalOversToLabel
+  computeQualificationTarget, decimalOversToLabel, findFixtureToAutoLink
 } from "../../src/core/appLogic.js";
 
 test("normal result: winner gets 2pts and positive NRR, loser gets 0pts and negative NRR", () => {
@@ -203,6 +203,87 @@ test("formatTournamentViewSnapshot: no groups means no per-group breakdown", () 
   const snapshot = formatTournamentViewSnapshot(tournament, []);
   assert.equal(snapshot.groups, null);
   assert.equal(snapshot.format.groupsCount, null);
+});
+
+test("formatTournamentViewSnapshot: carries Orange/Purple Cap stats (top batters/bowlers) for the public view, same top-10 cut as the owner's own screen", () => {
+  const tournament = { id: "T1", name: "Summer Cup", teams: ["Billund", "Bengal Tigers"], fixtures: [] };
+  const match = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 8,
+    innings: [
+      {
+        battingTeam: "Billund", bowlingTeam: "Bengal Tigers", runs: 90, wickets: 3, legalBalls: 48, ballsPerOver: 6, maxWickets: 10,
+        batsmen: { "A. Sharma": { runs: 60, balls: 30, out: false } },
+        bowlers: {}
+      },
+      {
+        battingTeam: "Bengal Tigers", bowlingTeam: "Billund", runs: 70, wickets: 5, legalBalls: 48, ballsPerOver: 6, maxWickets: 10,
+        batsmen: {},
+        bowlers: { "D. Singh": { wickets: 4, runsConceded: 20, ballsBowled: 24 } }
+      }
+    ]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, computeStandings(tournament, [match]), [match]);
+  assert.equal(snapshot.topBatters.length, 1);
+  assert.equal(snapshot.topBatters[0].name, "A. Sharma");
+  assert.equal(snapshot.topBatters[0].runs, 60);
+  assert.equal(snapshot.topBowlers.length, 1);
+  assert.equal(snapshot.topBowlers[0].name, "D. Singh");
+  assert.equal(snapshot.topBowlers[0].wickets, 4);
+});
+
+test("formatTournamentViewSnapshot: no completed match with real batting/bowling lines means no stats to show (null, not an empty array)", () => {
+  const tournament = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [] };
+  const snapshot = formatTournamentViewSnapshot(tournament, []);
+  assert.equal(snapshot.topBatters, null);
+  assert.equal(snapshot.topBowlers, null);
+});
+
+test("formatTournamentViewSnapshot: stats only ever come from THIS tournament's own matches, not an unrelated one that happens to be in the same matches array", () => {
+  const tournament = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [] };
+  const ownMatch = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 8,
+    innings: [{ battingTeam: "A", bowlingTeam: "B", runs: 50, wickets: 2, legalBalls: 48, ballsPerOver: 6, maxWickets: 10, batsmen: { "A. Sharma": { runs: 30, balls: 20, out: false } }, bowlers: {} }]
+  };
+  const foreignMatch = {
+    id: "M2", tournamentId: "T2", status: "complete", oversLimit: 8,
+    innings: [{ battingTeam: "C", bowlingTeam: "D", runs: 200, wickets: 0, legalBalls: 48, ballsPerOver: 6, maxWickets: 10, batsmen: { "Foreign Star": { runs: 150, balls: 40, out: false } }, bowlers: {} }]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, [], [ownMatch, foreignMatch]);
+  assert.equal(snapshot.topBatters.length, 1);
+  assert.equal(snapshot.topBatters[0].name, "A. Sharma");
+});
+
+test("findFixtureToAutoLink: matches the one unplayed fixture between these two teams, either order", () => {
+  const tournament = {
+    fixtures: [
+      { id: "f1", teamA: "Billund", teamB: "Bengal Tigers" },
+      { id: "f2", teamA: "Billund", teamB: "Viborg" }
+    ]
+  };
+  assert.equal(findFixtureToAutoLink(tournament, "Billund", "Bengal Tigers"), "f1");
+  // Order-independent -- a freshly-created match's own battingTeam/bowlingTeam don't necessarily
+  // land in the same order the fixture itself was generated in (that depends on the toss).
+  assert.equal(findFixtureToAutoLink(tournament, "Bengal Tigers", "Billund"), "f1");
+});
+
+test("findFixtureToAutoLink: no candidate fixture between these teams returns null", () => {
+  const tournament = { fixtures: [{ id: "f1", teamA: "Billund", teamB: "Viborg" }] };
+  assert.equal(findFixtureToAutoLink(tournament, "Billund", "Bengal Tigers"), null);
+});
+
+test("findFixtureToAutoLink: a fixture already linked to a match is never a candidate, even on a name match", () => {
+  const tournament = { fixtures: [{ id: "f1", teamA: "Billund", teamB: "Bengal Tigers", matchId: "existingMatch" }] };
+  assert.equal(findFixtureToAutoLink(tournament, "Billund", "Bengal Tigers"), null);
+});
+
+test("findFixtureToAutoLink: two unplayed fixtures for the same pairing (e.g. a double round robin) is ambiguous -- returns null rather than guessing", () => {
+  const tournament = {
+    fixtures: [
+      { id: "f1", teamA: "Billund", teamB: "Bengal Tigers" },
+      { id: "f2", teamA: "Bengal Tigers", teamB: "Billund" }
+    ]
+  };
+  assert.equal(findFixtureToAutoLink(tournament, "Billund", "Bengal Tigers"), null);
 });
 
 test("DLS-revised overs credit the all-out chasing side with the revised limit, not the original", () => {

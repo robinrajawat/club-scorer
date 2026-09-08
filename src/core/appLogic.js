@@ -1,16 +1,22 @@
 // Tournament standings/DLS/bracket-placement logic, plus a grab-bag of smaller app-wide helpers
 // (localStorage-backed prefs, theme/tour/install-hint flags, a couple of small UI hooks) that
 // happened to live in the same stretch of index.html. Kept as one file rather than split further
-// for now — these have no dependencies on each other or on anything outside this file, so grouping
-// is just about not having proven out the splice pipeline on more than one module shape yet.
+// for now — these have no dependencies on each other, so grouping is just about not having proven
+// out the splice pipeline on more than one module shape yet.
 // computeStandings/dlsTarget/dlsResourcePercent/oversLeftTrueDecimal are covered by
 // tests/unit/appLogic.test.js; the rest (DOM/localStorage-dependent) isn't unit-testable in Node
 // and is unchanged from before this refactor. useLongPress is a real React hook (used by
 // src/components/formUiAtoms.js's PinnableChip), hence the useRef import below -- everything else
 // in this file is plain logic and needs nothing from react.
+//
+// The statsAndFixtures.js import below is a genuine circular one (that module imports
+// maxWicketsFor from here) -- safe in practice since both sides only ever reach into it from
+// inside a function body at call time, never at module-evaluation time, so it doesn't matter which
+// of the two finishes loading first.
 
 import { useRef } from "react";
 import { matchResultText } from "./shareAndFormat.js";
+import { computePlayerStats } from "./statsAndFixtures.js";
 
 export function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
@@ -149,9 +155,42 @@ function pickStandingsRow(r) {
     nrr: r.nrr
   };
 }
+// Picks the same fields TournamentDetailScreen's own stats table columns actually show (name,
+// runs/Inn/Avg/SR for batting; name, wickets/Runs/Avg/Econ for bowling) -- computePlayerStats'
+// full return also carries a matchIds Set, which neither JSON.stringify (Firestore's own SDK
+// included) nor a document field can hold, so this can't just spread the raw stat object in.
+function pickBattingRow(p) {
+  return {
+    name: p.name,
+    runs: p.runs,
+    battingInnings: p.battingInnings,
+    battingAvg: p.battingAvg,
+    strikeRate: p.strikeRate
+  };
+}
+function pickBowlingRow(p) {
+  return {
+    name: p.name,
+    wickets: p.wickets,
+    runsConceded: p.runsConceded,
+    bowlingAvg: p.bowlingAvg,
+    economy: p.economy
+  };
+}
 export function formatTournamentViewSnapshot(tournament, standings, matches = []) {
   const matchById = new Map(matches.map(m => [m.id, m]));
   const groupStandings = computeGroupStandings(tournament, matches);
+  // Orange/Purple Cap and the batting/bowling stats tables, same source and same top-10-by-runs/
+  // top-10-by-wickets cut TournamentDetailScreen's own tournamentBatters/tournamentBowlers use --
+  // this is what lets the public share view (FollowTournamentScreen) show the same two callouts
+  // and tables the owner's in-app screen already does, instead of only ever carrying standings and
+  // fixtures. Deliberately includes knockout-stage performances (no stage filter here), same as the
+  // owner's screen -- unlike the league table above, "most runs in the tournament" is meant to
+  // include the Final.
+  const completedMatches = matches.filter(m => m.tournamentId === tournament.id && m.status === "complete");
+  const playerStats = computePlayerStats(completedMatches);
+  const topBatters = [...playerStats].filter(p => p.balls > 0).sort((a, b) => b.runs - a.runs).slice(0, 10).map(pickBattingRow);
+  const topBowlers = [...playerStats].filter(p => p.ballsBowled > 0).sort((a, b) => b.wickets - a.wickets || a.runsConceded - b.runsConceded).slice(0, 10).map(pickBowlingRow);
   // Mirrors the "how many teams advance out of the groups" math FixturesSection already uses to
   // decide which knockout stages apply (Quarterfinal/Semifinal/Final) — a single-pool tournament's
   // own team count stands in for it when there are no groups at all.
@@ -180,7 +219,12 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
       label: g.label,
       standings: g.standings.map(pickStandingsRow)
     })) : null,
-    standings: standings.map(pickStandingsRow)
+    standings: standings.map(pickStandingsRow),
+    // null (not []) once there's nothing to show yet, matching every other optional section here —
+    // FollowTournamentScreen only renders the Orange/Purple Cap callouts and stats tables once at
+    // least one completed match has actually contributed a real batting/bowling line.
+    topBatters: topBatters.length ? topBatters : null,
+    topBowlers: topBowlers.length ? topBowlers : null
   };
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself
@@ -231,6 +275,24 @@ export function crossGroupKnockoutPairs(groupStandings, advancePerGroup) {
     }
   }
   return pairs;
+}
+// A match only ever gets linked back onto the fixture it came from (matchId written onto the
+// fixture) when it's started via "Start Fixture" on that specific card -- starting the same pairing
+// some other way (e.g. a plain "New Match" from Home with the tournament picked as Organizer)
+// creates a match that's correctly counted in computeStandings (which matches by team name +
+// tournamentId, independent of any fixture link) but leaves the fixture itself stuck looking
+// "upcoming" forever in both the Fixtures tab and the public share snapshot, which both read
+// isFixturePlayed/result purely off f.matchId. This looks for a fixture to backfill that link onto:
+// only ever a fixture that ISN'T ALREADY linked (never overwrites an existing result), matched by
+// team name in either order, and only when EXACTLY ONE such fixture exists -- a tournament can
+// legitimately have this same pairing scheduled more than once (a double round robin, or the same
+// two teams meeting again in a later stage), and guessing which specific instance a freshly-started
+// match belongs to would risk attaching the wrong result to the wrong fixture. Returns null (leave
+// it unlinked, exactly today's behavior) rather than guess in that ambiguous case.
+export function findFixtureToAutoLink(tournament, teamA, teamB) {
+  if (!tournament) return null;
+  const candidates = (tournament.fixtures || []).filter(f => !f.matchId && (f.teamA === teamA && f.teamB === teamB || f.teamA === teamB && f.teamB === teamA));
+  return candidates.length === 1 ? candidates[0].id : null;
 }
 // Renders a decimal overs count (e.g. 15.667) as cricket's own overs.balls notation ("15.4") —
 // NOT a decimal number, the digit after the point is a ball count from 0-5 (or 0 to
