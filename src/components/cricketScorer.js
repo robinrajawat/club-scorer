@@ -34,7 +34,7 @@ import {
 } from "../core/miscHelpers.js";
 import {
   hasSeenTour, loadThemePref, loadPinnedIds, savePinnedIds, applyTheme, saveThemePref, isIOSSafari,
-  isStandalone, hasSeenInstallHint, markInstallHintSeen, DEFAULT_RULES, computeStandings
+  isStandalone, hasSeenInstallHint, markInstallHintSeen, DEFAULT_RULES, computeStandings, findFixtureToAutoLink
 } from "../core/appLogic.js";
 import { ensureBatsman, ensureBowler, newInning } from "../core/scoringEngine.js";
 import {
@@ -1186,6 +1186,19 @@ export function CricketScorer() {
     // failure here shouldn't block the match that was just created and already navigated to.
     if (setup.fixtureId && setup.tournamentId) {
       linkFixtureToMatch(setup.tournamentId, setup.fixtureId, m.id, setup.rules, setup.venue, setup.oversLimit);
+    } else if (setup.tournamentId) {
+      // Same pairing, started some other way (e.g. "Start Match" from within the tournament
+      // itself, rather than "Start Fixture" on one specific card) — back-fill the link if exactly
+      // one still-unplayed fixture matches these two teams, so it doesn't stay stuck looking
+      // "upcoming" everywhere else despite already counting toward standings. presetTournament is
+      // safe to read here even after setPresetTournament(null) just above -- that only schedules a
+      // future re-render, this closure's own copy still holds the tournament setup.tournamentId
+      // came from (SetupScreen's Organizer picker has no independent way to set tournamentId at
+      // all; it's only ever populated from presetTournament in the first place, via
+      // handleStartMatchInTournament/handleStartFixtureMatch). See findFixtureToAutoLink's own
+      // comment for why an ambiguous match (0 or 2+ candidates) is left alone rather than guessed at.
+      const fixtureId = findFixtureToAutoLink(presetTournament, m.innings[0].battingTeam, m.innings[0].bowlingTeam);
+      if (fixtureId) linkFixtureToMatch(setup.tournamentId, fixtureId, m.id, setup.rules, setup.venue, setup.oversLimit);
     }
   }
   // Takes either a plain match id (Home's own matches -- always loadable straight from this

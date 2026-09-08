@@ -174,6 +174,12 @@ export function FollowTournamentScreen({
   // below is conditional on f.date now; the fixture itself always shows once it has no result.
   const scheduledFixtures = fixtures.filter(f => !f.result);
   const formatSummary = formatSummaryText(data.format);
+  // Same "just the top row of the stats table" shortcut TournamentDetailScreen's own Orange/Purple
+  // Cap callouts use -- topBatters/topBowlers already arrive from the snapshot sorted and cut to
+  // the top 10 (formatTournamentViewSnapshot, src/core/appLogic.js), so there's no local
+  // recomputation to do here, just picking [0].
+  const orangeCap = data.topBatters && data.topBatters[0];
+  const purpleCap = data.topBowlers && data.topBowlers[0];
   return /*#__PURE__*/React.createElement("div", {
     style: {
       ...wrapStyle,
@@ -242,7 +248,66 @@ export function FollowTournamentScreen({
     standings: g.standings
   }))) : /*#__PURE__*/React.createElement(StandingsTable, {
     standings: standings
-  }), completedFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), (orangeCap || purpleCap) && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, orangeCap && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: purpleCap ? 10 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: "#e8791c"
+    }
+  }, "Orange Cap — most runs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch
+    }
+  }, orangeCap.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 14,
+      fontWeight: 700,
+      color: COLORS.pitch
+    }
+  }, orangeCap.runs, " runs")), purpleCap && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: "#7b3fa0"
+    }
+  }, "Purple Cap — most wickets"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch
+    }
+  }, purpleCap.name)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 14,
+      fontWeight: 700,
+      color: COLORS.pitch
+    }
+  }, purpleCap.wickets, " wkts"))), completedFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: sectionCardStyle
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
@@ -292,7 +357,61 @@ export function FollowTournamentScreen({
     day: "numeric",
     hour: "numeric",
     minute: "2-digit"
-  }), " \u2014 "), f.teamA, " vs ", f.teamB)))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
+  }), " \u2014 "), f.teamA, " vs ", f.teamB)))), (data.topBatters || data.topBowlers) && /*#__PURE__*/React.createElement("div", {
+    style: sectionCardStyle
+  }, /*#__PURE__*/React.createElement("div", {
+    style: sectionLabelStyle
+  }, "Stats"), data.topBatters && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: data.topBowlers ? 14 : 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Most runs"), data.topBatters.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.name,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink,
+      padding: "5px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600
+    }
+  }, p.runs)))), data.topBowlers && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      marginBottom: 4
+    }
+  }, "Most wickets"), data.topBowlers.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.name,
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.ink,
+      padding: "5px 0",
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 600
+    }
+  }, p.wickets))))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginTop: 20
