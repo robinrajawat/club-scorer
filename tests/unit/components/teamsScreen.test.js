@@ -136,6 +136,22 @@ test("TeamsScreen: 'Manage teams' calls onManageTeams", () => {
   assert.equal(managed, true);
 });
 
+test("TeamsScreen: 'Manage teams' shows the active club's team count as a badge, hidden when it has none", () => {
+  const withTeams = render({
+    tab: "clubs", clubs: [club()], activeClubId: "c1",
+    clubTeamsById: { c1: [{ id: "t1", name: "1st XI" }, { id: "t2", name: "2nd XI" }] }
+  });
+  const manageBtn = withTeams.root.findAllByType(Btn).find(b => hasText(b.props.children, "Manage teams"));
+  const badge = manageBtn.props.children.flat(Infinity).find(c => c && c.type === "span");
+  assert.ok(badge, "expected a count badge span inside the button");
+  assert.equal(badge.props.children, 2);
+
+  const noTeams = render({ tab: "clubs", clubs: [club()], activeClubId: "c1" });
+  const noTeamsBtn = noTeams.root.findAllByType(Btn).find(b => hasText(b.props.children, "Manage teams"));
+  const noBadge = noTeamsBtn.props.children.flat(Infinity).find(c => c && c.type === "span");
+  assert.equal(noBadge, undefined);
+});
+
 test("TeamsScreen: opening the player pool and adding a player calls onAddPoolPlayers", async () => {
   let addedWith = null;
   const inst = render({

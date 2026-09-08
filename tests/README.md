@@ -102,10 +102,10 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   real "Confirm" click without touching Firebase, same pattern as
   `Modal`'s stub in `formUiAtoms.test.js`.
 - `src/components/shareMenus.js` / `tests/unit/components/shareMenus.test.js`
-  — `MoveTeamMenu`/`ShareMenu`, two portal popover menus
+  — `ShareMenu`, a portal popover menu
   (`ReactDOM.createPortal(..., document.body)`, plus
-  `getBoundingClientRect`/`window.innerWidth`/`innerHeight` and, for
-  `ShareMenu`, `navigator.clipboard`). **The one component test file in
+  `getBoundingClientRect`/`window.innerWidth`/`innerHeight` and
+  `navigator.clipboard`). **The one component test file in
   this repo that renders through real `react-dom` instead of
   `react-test-renderer`** — `react-test-renderer` can't host a portal
   targeting a genuine DOM node (its own reconciler only understands its
@@ -339,7 +339,7 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   `MilestoneToast`'s own props via `findByType`.
 - `src/components/authBar.js` / `tests/unit/components/authBar.test.js`
   — `AuthBar`, the account button + popover menu in the app header.
-  Like `ShareMenu`/`MoveTeamMenu`, its menu only calls
+  Like `ShareMenu`, its menu only calls
   `ReactDOM.createPortal(..., document.body)` once open, so this test
   file uses the same real react-dom+jsdom rendering `shareMenus.test.js`
   established, not `react-test-renderer`. Also stubs `Modal` (a

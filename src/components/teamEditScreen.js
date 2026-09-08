@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Plus, Globe, Users, Check } from "./icons.js";
+import { ChevronLeft, Plus, Globe, Users, Check, Trash2 } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
@@ -34,7 +34,8 @@ export function TeamEditScreen({
   // instead of the usual empty new-team state. { name, players: [pool player objects] } | null.
   presetTeamSeed,
   onSave,
-  onCancel
+  onCancel,
+  onDelete
 }) {
   const [name, setName] = useState(team ? team.name : presetTeamSeed ? presetTeamSeed.name : "");
   const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
@@ -123,6 +124,10 @@ export function TeamEditScreen({
   // had on this team, so it goes through the same ConfirmModal pattern as every other destructive
   // action in the app, instead of the previous single-tap X.
   const [confirmRemove, setConfirmRemove] = useState(null); // the player row object, or null
+  // Deleting the whole team, not just one player off its roster -- same ConfirmModal pattern,
+  // gated on there actually being an existing team (and a caller that wants to offer it at all)
+  // rather than a brand-new one that's never been saved and has nothing to delete yet.
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
   // Checked once on mount against whatever borrowed players this roster already had (see
   // isBorrowed) — a set of emails whose player doc no longer exists at all, so the badge below
   // can flag a roster row whose source was actually deleted, not just merely unpublished.
@@ -576,6 +581,55 @@ export function TeamEditScreen({
     }
   }, "Players"), players.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginBottom: 10
+    }
+    // Quick, display-only summary of the roster's current shape -- no need to scan every row's
+    // own C/VC/WK tag just to answer "how many players do we have" or "who's captain right now".
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.inkSoft,
+      background: COLORS.cream,
+      padding: "3px 9px",
+      borderRadius: 12
+    }
+  }, players.length, " player", players.length === 1 ? "" : "s"), captain && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.gold,
+      background: "rgba(184,137,43,0.16)",
+      padding: "3px 9px",
+      borderRadius: 12
+    }
+  }, "C \u00b7 ", captain), viceCaptain && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: "#7a5c22",
+      background: "rgba(201,168,118,0.3)",
+      padding: "3px 9px",
+      borderRadius: 12
+    }
+  }, "VC \u00b7 ", viceCaptain), keeper && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: COLORS.turf,
+      background: "rgba(45,80,22,0.12)",
+      padding: "3px 9px",
+      borderRadius: 12
+    }
+  }, "WK \u00b7 ", keeper)), players.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
@@ -973,7 +1027,38 @@ export function TeamEditScreen({
     style: {
       width: "100%"
     }
-  }, "Save Team"), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
+  }, "Save Team"), team && onDelete && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setConfirmDeleteTeam(true),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      width: "100%",
+      marginTop: 10,
+      padding: "10px 0",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: COLORS.ball,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement(Trash2, {
+    size: 15
+  }), "Delete team"), confirmDeleteTeam && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: `Delete ${name.trim() || "this team"}?`,
+    message: "Removes this team and its roster entirely. Matches already scored with it are untouched \u2014 this only affects future ones. This can't be undone.",
+    confirmLabel: "Delete",
+    onConfirm: () => {
+      setConfirmDeleteTeam(false);
+      onDelete();
+    },
+    onCancel: () => setConfirmDeleteTeam(false)
+  }), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: `Remove ${confirmRemove.name}?`,
     message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain, vice-captain, or wicketkeeper here, that's cleared too.`,
     confirmLabel: "Remove",

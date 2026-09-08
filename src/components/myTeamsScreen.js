@@ -3,7 +3,6 @@ import { COLORS } from "./theme.js";
 import { CalendarClock, ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
-import { MoveTeamMenu } from "./shareMenus.js";
 import { AvailabilityPollModal } from "./availabilityPollModal.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { isClubOwner } from "../core/miscHelpers.js";
@@ -16,10 +15,10 @@ import { TAB_BAR_HEIGHT } from "./tabBar.js";
 // every club at once via a source-chip picker, back when managing a club's teams meant leaving
 // the Clubs tab for this one -- now that a club's own screen hosts its roster directly, there's
 // no longer a case where this needs to show more than one source at a time, so that picker (and
-// the per-row source tag it existed to disambiguate) is gone. Per-team new/edit/delete/move/
+// the per-row source tag it existed to disambiguate) is gone. Per-team new/edit/delete/
 // send-poll actions remain. Covered by tests/unit/components/myTeamsScreen.test.js.
 //
-// Every write action is a prop (onDeleteTeam/onEditTeam/onMoveTeam/etc.), not a bare global, so
+// Every write action is a prop (onDeleteTeam/onEditTeam/etc.), not a bare global, so
 // this needs no Firestore stubbing at all -- AvailabilityPollModal (used for the "send poll"
 // action) still needs Modal as a bare global internally, same as everywhere else it's used, but
 // that's handled inside its own module and test file, not here.
@@ -35,7 +34,6 @@ export function MyTeamsScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
-  onMoveTeam,
   showTabBar = false
 }) {
   const [teamsExpanded, setTeamsExpanded] = useState(true);
@@ -320,12 +318,7 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), canManageTeam(t) && /*#__PURE__*/React.createElement(MoveTeamMenu, {
-    team: t,
-    clubs: clubs,
-    currentClubId: t._clubId || null,
-    onMove: onMoveTeam
-  }), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played")), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
     onClick: () => setPollingTeam(t),
     className: "cs-btn",
     "aria-label": `Poll availability for ${t.name}`,

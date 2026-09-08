@@ -3,124 +3,16 @@ import { COLORS } from "./theme.js";
 import { ArrowLeftRight, Check, Users, Share } from "./icons.js";
 import { buildFollowUrl, buildLiveShareText, buildShareText } from "../core/shareAndFormat.js";
 
-// Popover menus that portal to document.body so they're never clipped by an ancestor's
-// overflow:hidden or trapped by its stacking context: MoveTeamMenu (pick which club a team
-// belongs to) and ShareMenu (invite a co-scorer, share a read-only live link, or share a plain
-// score summary). Both read real window/document/navigator APIs directly -- getBoundingClientRect
-// for positioning, window.innerWidth/innerHeight, ReactDOM.createPortal(..., document.body), and
-// (ShareMenu only) navigator.clipboard -- so like Modal, they need a real jsdom-backed DOM to test
-// meaningfully; see tests/unit/components/shareMenus.test.js.
+// Popover menu that portals to document.body so it's never clipped by an ancestor's
+// overflow:hidden or trapped by its stacking context: ShareMenu (invite a co-scorer, share a
+// read-only live link, or share a plain score summary). Reads real window/document/navigator APIs
+// directly -- getBoundingClientRect for positioning, window.innerWidth/innerHeight,
+// ReactDOM.createPortal(..., document.body), and navigator.clipboard -- so like Modal, it needs a
+// real jsdom-backed DOM to test meaningfully; see tests/unit/components/shareMenus.test.js.
 //
-// ShareMenu's handleShareLive/handleShareDetails call `shareText` (navigator.share/clipboard,
-// defined in public/index.html, not extracted -- browser-only and side-effecting, nothing to
-// unit-test in the function itself) from their onClick handlers, same as elsewhere in this app.
-
-export function MoveTeamMenu({
-  team,
-  clubs,
-  currentClubId,
-  onMove
-}) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const btnRef = useRef(null);
-  const destinations = [{
-    id: null,
-    name: "My Teams"
-  }, ...clubs.map(c => ({
-    id: c.id,
-    name: c.name
-  }))].filter(d => d.id !== currentClubId);
-  if (destinations.length === 0) return null;
-  function toggle() {
-    setOpen(o => {
-      const next = !o;
-      if (next && btnRef.current) {
-        const rect = btnRef.current.getBoundingClientRect();
-        setPos({
-          top: rect.bottom + 6,
-          right: Math.max(8, window.innerWidth - rect.right)
-        });
-      }
-      return next;
-    });
-  }
-  async function handlePick(destId) {
-    setOpen(false);
-    setBusy(true);
-    await onMove(team, destId);
-    setBusy(false);
-  }
-  const menu = open && pos && /*#__PURE__*/ReactDOM.createPortal(/*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    onClick: () => setOpen(false),
-    style: {
-      position: "fixed",
-      inset: 0,
-      zIndex: 100
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    onClick: e => e.stopPropagation(),
-    style: {
-      position: "fixed",
-      top: pos.top,
-      right: pos.right,
-      minWidth: 170,
-      background: COLORS.ink,
-      color: COLORS.creamFixed,
-      borderRadius: 12,
-      padding: 6,
-      fontFamily: "'Inter'",
-      boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-      zIndex: 101
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "6px 8px",
-      fontSize: 10.5,
-      opacity: 0.6,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: 0.5
-    }
-  }, "Move team to"), destinations.map(d => /*#__PURE__*/React.createElement("button", {
-    key: d.id || "personal",
-    onClick: () => handlePick(d.id),
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: "none",
-      color: COLORS.creamFixed,
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      fontWeight: 600,
-      padding: "8px 8px",
-      borderRadius: 8,
-      cursor: "pointer"
-    }
-  }, d.name)))), document.body);
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    ref: btnRef,
-    onClick: toggle,
-    disabled: busy,
-    className: "cs-btn",
-    "aria-label": "Move team",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: busy ? "default" : "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement(ArrowLeftRight, {
-    size: 16
-  })), menu);
-}
+// handleShareLive/handleShareDetails call `shareText` (navigator.share/clipboard, defined in
+// public/index.html, not extracted -- browser-only and side-effecting, nothing to unit-test in
+// the function itself) from their onClick handlers, same as elsewhere in this app.
 
 export function ShareMenu({
   match,

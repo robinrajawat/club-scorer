@@ -1,7 +1,7 @@
-// Portal popover menus (src/components/shareMenus.js). Both MoveTeamMenu and ShareMenu call
+// Portal popover menu (src/components/shareMenus.js). ShareMenu calls
 // ReactDOM.createPortal(..., document.body) directly, along with getBoundingClientRect,
-// window.innerWidth/innerHeight, and (ShareMenu only) navigator.clipboard -- real DOM APIs, same
-// as Modal. Unlike every other component test in this directory, these render through real
+// window.innerWidth/innerHeight, and navigator.clipboard -- real DOM APIs, same
+// as Modal. Unlike every other component test in this directory, this renders through real
 // react-dom (createRoot) into a jsdom container instead of react-test-renderer: react-test-renderer
 // manages its own fake "instance" tree and can't host a portal whose target is a real DOM node
 // (confirmed by trying it first -- it throws "parentInstance.children.indexOf is not a function"
@@ -15,7 +15,7 @@ import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import ReactDOM from "react-dom";
 import { createRoot } from "react-dom/client";
-import { MoveTeamMenu, ShareMenu } from "../../../src/components/shareMenus.js";
+import { ShareMenu } from "../../../src/components/shareMenus.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,51 +46,11 @@ afterEach(() => {
   delete globalThis.navigator;
 });
 
-// A real, positioned, document-attached button so MoveTeamMenu/ShareMenu's own getBoundingClientRect
+// A real, positioned, document-attached button so ShareMenu's own getBoundingClientRect
 // reads back a fixed, predictable rect (jsdom's own layout engine always reports 0s).
 function stubRect(el, rect) {
   el.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, ...rect });
 }
-
-test("MoveTeamMenu: renders nothing when there's nowhere else to move the team", () => {
-  act(() => {
-    root.render(React.createElement(MoveTeamMenu, {
-      team: { id: "t1" }, clubs: [], currentClubId: null, onMove: () => {}
-    }));
-  });
-  assert.equal(container.innerHTML, "");
-});
-
-test("MoveTeamMenu: opens a portal menu listing destinations, picking one calls onMove and closes it", async () => {
-  let movedTo;
-  act(() => {
-    root.render(React.createElement(MoveTeamMenu, {
-      team: { id: "t1" }, clubs: [{ id: "c1", name: "Riverside CC" }], currentClubId: "c2",
-      onMove: (team, destId) => { movedTo = destId; }
-    }));
-  });
-  const trigger = container.querySelector("[aria-label='Move team']");
-  stubRect(trigger, { top: 40, bottom: 60, left: 10, right: 90 });
-  // Nothing portaled to document.body until opened.
-  assert.doesNotMatch(document.body.innerHTML, /Riverside CC/);
-
-  act(() => { trigger.dispatchEvent(new window.MouseEvent("click", { bubbles: true })); });
-  assert.match(document.body.innerHTML, /Riverside CC/);
-  assert.match(document.body.innerHTML, /My Teams/);
-
-  const destButton = [...document.body.querySelectorAll("button")].find(b => b.textContent === "Riverside CC");
-  assert.ok(destButton);
-  // handlePick is async (awaits onMove before its own setBusy(false)), so its state update after
-  // that await lands in a later microtask -- flush it inside act() rather than let it warn as an
-  // update outside of act.
-  await act(async () => {
-    destButton.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.equal(movedTo, "c1");
-  // Menu closes after a pick.
-  assert.doesNotMatch(document.body.innerHTML, /Riverside CC/);
-});
 
 test("ShareMenu: opens a portal menu with invite/share/copy rows, closes on scrim click", () => {
   act(() => {
