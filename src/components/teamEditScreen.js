@@ -4,6 +4,7 @@ import { ChevronLeft, Plus, Globe, Users, Check, Trash2 } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
+import { SwipeableRow } from "./scoringUiAtoms.js";
 import { PLAYER_ROLES, EditPlayerModal } from "./playerModals.js";
 import { uid } from "../core/statsAndFixtures.js";
 import { normalizeEmail, TEAM_COLOR_PRESETS } from "../core/miscHelpers.js";
@@ -654,7 +655,7 @@ export function TeamEditScreen({
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper \u2014 tap again to clear."), /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper \u2014 tap again to clear. Swipe a row left to remove that player."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -761,14 +762,26 @@ export function TeamEditScreen({
     }
   }, players.map(p => /*#__PURE__*/React.createElement(React.Fragment, {
     key: p._key
+  }, /*#__PURE__*/React.createElement(SwipeableRow, {
+    onDelete: () => setConfirmRemove(p),
+    deleteLabel: "Remove"
+    // Swipe reveals Remove instead of an always-visible button -- same confirm-before-removing
+    // flow as before (this still only opens confirmRemove; the actual removal still needs
+    // confirming there), just freeing up row space that button used to take.
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "7px 8px 7px 6px",
+      borderRadius: 12,
+      background: COLORS.creamDark
+    }
+    // Two rows, not one -- a jersey number and name (row 1), plus the pool marker and
+    // C/VC/WK/public controls (row 2) below it. Cramming all of that plus a remove button onto a
+    // single line left the name input barely wide enough for a few letters.
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
-      padding: "7px 8px 7px 6px",
-      borderRadius: 12,
-      background: COLORS.creamDark
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -847,7 +860,18 @@ export function TeamEditScreen({
       borderRadius: 8,
       whiteSpace: "nowrap"
     }
-  }, "No longer published"), clubId && !isBorrowed(p) && (isInPool(p) ? /*#__PURE__*/React.createElement("span", {
+  }, "No longer published")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+      marginTop: 6,
+      paddingLeft: 52
+    }
+    // Row 2: pool marker, then the role toggles, then the public-player toggle -- everything that
+    // used to be crammed alongside the name input on one line now has the full row to itself.
+  }, clubId && !isBorrowed(p) && (isInPool(p) ? /*#__PURE__*/React.createElement("span", {
     title: "Already in this club's player pool.",
     style: {
       flexShrink: 0,
@@ -885,7 +909,7 @@ export function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 10
-  }), "Pool"))), /*#__PURE__*/React.createElement("button", {
+  }), "Pool")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
@@ -971,27 +995,7 @@ export function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Globe, {
     size: 13
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setConfirmRemove(p),
-    className: "cs-btn",
-    style: {
-      background: "rgba(42,36,32,0.12)",
-      border: "none",
-      borderRadius: "50%",
-      width: 22,
-      height: 22,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      color: COLORS.ink,
-      fontSize: 12,
-      lineHeight: 1,
-      padding: 0,
-      flexShrink: 0
-    },
-    "aria-label": `Remove ${p.name}`
-  }, "✕")), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
+  })))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexDirection: "column",
