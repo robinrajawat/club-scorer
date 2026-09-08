@@ -70,6 +70,25 @@ test("PinnableChip: shows a pin icon only when pinned, calls onSelect on click",
   assert.equal(pinnedRoot.findAllByType("svg").length, 1);
 });
 
+test("PinnableChip: an optional count renders as a small badge after the label, hidden when zero/omitted", () => {
+  const noCount = renderer.create(React.createElement(PinnableChip, {
+    label: "Eagles", active: false, pinned: false, onSelect: () => {}, onTogglePin: () => {}
+  })).toJSON();
+  assert.ok(!noCount.children.some(c => c && c.type === "span"), "no badge span with no count");
+
+  const zeroCount = renderer.create(React.createElement(PinnableChip, {
+    label: "Eagles", count: 0, active: false, pinned: false, onSelect: () => {}, onTogglePin: () => {}
+  })).toJSON();
+  assert.ok(!zeroCount.children.some(c => c && c.type === "span"), "no badge span for a zero count");
+
+  const withCount = renderer.create(React.createElement(PinnableChip, {
+    label: "Eagles", count: 3, active: false, pinned: false, onSelect: () => {}, onTogglePin: () => {}
+  })).toJSON();
+  const badge = withCount.children.find(c => c && c.type === "span");
+  assert.ok(badge, "renders a badge span for a non-zero count");
+  assert.equal(badge.children[0], "3"); // toJSON() renders every text child as a string
+});
+
 test("Btn: applies the variant's styling and disabled state, renders children", () => {
   const primary = renderer.create(React.createElement(Btn, { variant: "primary" }, "Save")).toJSON();
   assert.ok(primary.children.includes("Save"));
