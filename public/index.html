@@ -12917,7 +12917,7 @@ function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.6
     }
-  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed and app-wide search \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 and stays findable there for a few days after it ends, not just while it's live. A non-private tournament works the same way: its standings and fixtures show up in the Home screen's Live tournaments strip and refresh themselves automatically as results come in, with nothing extra to turn on \u2014 there's no separate \u201cshare\u201d step anymore. Mark a match (or a whole tournament, which its matches inherit by default) private in Setup to keep it out of these feeds, live or after completion; a share or view link you generate yourself still works exactly the same either way. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
+  }, "What's stored on this device vs. synced, and who can see it \u2014 tap to read."), privacyOpen && ["Scoring on this device alone needs nothing from you \u2014 no account, and nothing leaves your phone.", "Signing in to sync across devices or share a live-view link stores your email and whatever team and player details you enter (names, roles, batting/bowling hand, notes) in Firestore, Google's cloud database, under this app's own project. A live-view link is read-only and works for anyone with the link or code; there's no login on the viewing side.", "Any match currently in progress also appears in the Home screen's Live now feed and app-wide search \u2014 visible to anyone using the app, not just people you've sent a link to \u2014 and stays findable there for a few days after it ends, not just while it's live. A public tournament works the same way: its standings and fixtures show up in the Home screen's Live tournaments strip and refresh themselves automatically as results come in, with nothing extra to turn on \u2014 there's no separate \u201cshare\u201d step. Whether a match or tournament is private or public isn't a separate choice \u2014 it follows its Organizer: Personal is always private, a club or federation is always public (a fixture started from within a tournament inherits that tournament's own Organizer). A private one stays out of these feeds entirely, live or after completion; a share or view link you generate yourself still works exactly the same either way. A match scored fully offline, with no account and no match code, never appears here at all.", "Publishing a player to the cross-club directory makes their name, email, and those same details visible to other clubs searching for them, until you make them private again. Turning on \u201cDiscoverable for invites\u201d in Account does the same for your own account \u2014 your name, email, and photo become findable by name to any club or federation owner sending an invite, until you turn it off.", "There are no analytics, no trackers, and no ads in this app \u2014 nothing here is sold or shared with advertisers."].map((para, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       fontFamily: "'Inter'",
@@ -41509,13 +41509,13 @@ function CricketScorer() {
       advancePerGroup: groups ? advancePerGroup || 2 : null,
       defaultOvers: defaultOvers || null,
       defaultRules: defaultRules || null,
-      // A private tournament's fixtures default to private too (see SetupScreen, which seeds its
-      // own Visibility toggle from presetTournament.private) -- opt-out at the tournament level,
-      // same "set once, inherited by every fixture" relationship defaultOvers/defaultRules
-      // already have, still overridable per match. Club/federation tournaments are never private
-      // (TournamentsScreen's own create form hides the toggle once an organizer other than
-      // Personal is picked -- membership there is already owner/co-owner governed) -- enforced
-      // here too, not just in the UI, since isPrivate is whatever this function was called with.
+      // A private tournament's fixtures default to private too -- a fixture started from within one
+      // inherits presetTournament.private directly (see SetupScreen), same "set once, inherited by
+      // every fixture" relationship defaultOvers/defaultRules already have. Club/federation
+      // tournaments are never private (isPrivate here is already derived from Organizer by
+      // TournamentsScreen's create form, which has no manual Visibility choice at all any more --
+      // membership there is already owner/co-owner governed) -- enforced here too, not just in the
+      // UI, since isPrivate is whatever this function was called with.
       private: activeTournamentClubId || activeTournamentFederationId ? false : !!isPrivate,
       // BUG FIX: tournamentsScreen.js's create form has always collected an optional default venue
       // (see its own "Default venue" field/VenueEditModal) and passed it as this 7th argument, but
@@ -41750,8 +41750,10 @@ function CricketScorer() {
       ok: true
     };
   }
-  // Flips a tournament's own Visibility after creation (TournamentDetailScreen's own toggle,
-  // mirroring MatchScreen's) -- saves through the normal handleUpdateTournament path, which on its
+  // Flips a tournament's own Visibility after creation. There's no manual UI for this any more --
+  // Visibility is derived from Organizer and fixed at creation -- so the only caller left is
+  // TournamentDetailScreen's self-heal effect, correcting one still carrying the opposite of what
+  // its organizer now implies. Saves through the normal handleUpdateTournament path, which on its
   // own now handles the "going public" side (maybeAutoPublishTournament -- mints a share code and
   // publishes for the first time if this tournament was never shared, or just republishes if it
   // was). All this function needs to add is the one thing handleUpdateTournament has no reason to
