@@ -36,6 +36,15 @@ test("PlayerPicker: shows the captain/keeper role badge next to the matching nam
   assert.equal(badges[1].props.isCaptain, false, "P2's badge not flagged as captain");
 });
 
+test("PlayerPicker: shows the vice-captain role badge next to the matching name", () => {
+  const inst = renderer.create(React.createElement(PlayerPicker, {
+    roster: ["P1", "P2"], value: null, onChange: () => {}, viceCaptain: "P2"
+  }));
+  const badges = inst.root.findAllByType(RoleBadge);
+  assert.equal(badges[0].props.isViceCaptain, false, "P1's badge not flagged as vice-captain");
+  assert.equal(badges[1].props.isViceCaptain, true, "P2's badge flagged as vice-captain");
+});
+
 test("JoinCodeBar: collapsed by default, expands to a text field + Join button on click", () => {
   const inst = renderer.create(React.createElement(JoinCodeBar, { onJoin: async () => ({ ok: true }) }));
   let text = JSON.stringify(inst.toJSON());

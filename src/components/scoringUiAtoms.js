@@ -10,10 +10,11 @@ import { hasSeenSwipeHint, markSwipeHintSeen } from "../core/appLogic.js";
 
 export function RoleBadge({
   isCaptain,
+  isViceCaptain,
   isKeeper,
   isImpact
 }) {
-  if (!isCaptain && !isKeeper && !isImpact) return null;
+  if (!isCaptain && !isViceCaptain && !isKeeper && !isImpact) return null;
   function badge(key, label, background, color) {
     return /*#__PURE__*/React.createElement("span", {
       key,
@@ -33,10 +34,15 @@ export function RoleBadge({
     }, label);
   }
   const badges = [];
+  // Captain and keeper can be the same person (combined into one "C\u00B7WK" badge below), but
+  // vice-captain never coincides with captain in practice -- kept as its own badge rather than
+  // folded into the same combining logic, so a vice-captain who's also keeper still reads clearly
+  // as "VC" + "WK" rather than needing a third combined-label case.
   if (isCaptain || isKeeper) {
     const label = isCaptain && isKeeper ? "C\u00B7WK" : isCaptain ? "C" : "WK";
     badges.push(badge("role", label, isCaptain ? "rgba(184,137,43,0.16)" : "rgba(45,80,22,0.12)", isCaptain ? COLORS.gold : COLORS.turf));
   }
+  if (isViceCaptain) badges.push(badge("vice-captain", "VC", "rgba(201,168,118,0.3)", "#7a5c22"));
   // Distinct color from captain (gold) and keeper (turf) so a substitute reads as its own thing at
   // a glance, not a third variant of the same badge -- most useful right where the app already
   // shows player names (scoring header, scorecard rows), so nobody has to cross-reference the

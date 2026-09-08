@@ -1199,6 +1199,9 @@ export function isImpactSubFor(match, name) {
 export function captainFor(match, teamName) {
   return (teamName === match.teamA ? match.teamACaptain : match.teamBCaptain) || "";
 }
+export function viceCaptainFor(match, teamName) {
+  return (teamName === match.teamA ? match.teamAViceCaptain : match.teamBViceCaptain) || "";
+}
 export function keeperFor(match, teamName) {
   return (teamName === match.teamA ? match.teamAKeeper : match.teamBKeeper) || "";
 }

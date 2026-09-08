@@ -8,7 +8,7 @@ import { RunRateChart, RunsPerOverChart } from "./matchInsightCards.js";
 import { ExportPdfButton } from "./exportButtons.js";
 import { oversLabel, crr } from "../core/scoringEngine.js";
 import { chasingInfo, matchResultText, tossText, umpiresText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
-import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
+import { captainFor, viceCaptainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
 // Full ball-by-ball scorecard, built from smaller, already-extracted pieces: InningScorecard (one
 // innings' batting/bowling tables), MatchStatsPanel (tabs between innings plus the two charts and
@@ -21,8 +21,10 @@ import { captainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 export function InningScorecard({
   inning,
   battingCaptain,
+  battingViceCaptain,
   battingKeeper,
   bowlingCaptain,
+  bowlingViceCaptain,
   bowlingKeeper,
   battingNumbers,
   bowlingNumbers,
@@ -127,6 +129,7 @@ export function InningScorecard({
       }
     }, "#", battingNumbers[name], " "), name, isBatting ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === battingCaptain,
+      isViceCaptain: name === battingViceCaptain,
       isKeeper: name === battingKeeper,
       isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
@@ -317,6 +320,7 @@ export function InningScorecard({
       }
     }, "#", bowlingNumbers[name], " "), name, isBowling ? " *" : "", /*#__PURE__*/React.createElement(RoleBadge, {
       isCaptain: name === bowlingCaptain,
+      isViceCaptain: name === bowlingViceCaptain,
       isKeeper: name === bowlingKeeper,
       isImpact: impactNames.has(name)
     })), /*#__PURE__*/React.createElement("span", {
@@ -718,8 +722,10 @@ export function MatchStatsPanel({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: match.innings[tab],
     battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingViceCaptain: viceCaptainFor(match, match.innings[tab].battingTeam),
     battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
@@ -776,8 +782,10 @@ export function MatchStatsPanel({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: match.innings[tab],
     battingCaptain: captainFor(match, match.innings[tab].battingTeam),
+    battingViceCaptain: viceCaptainFor(match, match.innings[tab].battingTeam),
     battingKeeper: keeperFor(match, match.innings[tab].battingTeam),
     bowlingCaptain: captainFor(match, match.innings[tab].bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, match.innings[tab].bowlingTeam),
     bowlingKeeper: keeperFor(match, match.innings[tab].bowlingTeam),
     battingNumbers: numbersFor(match, match.innings[tab].battingTeam),
     bowlingNumbers: numbersFor(match, match.innings[tab].bowlingTeam),
@@ -1016,8 +1024,10 @@ export function PrintReport({
   }, /*#__PURE__*/React.createElement(InningScorecard, {
     inning: inn,
     battingCaptain: captainFor(match, inn.battingTeam),
+    battingViceCaptain: viceCaptainFor(match, inn.battingTeam),
     battingKeeper: keeperFor(match, inn.battingTeam),
     bowlingCaptain: captainFor(match, inn.bowlingTeam),
+    bowlingViceCaptain: viceCaptainFor(match, inn.bowlingTeam),
     bowlingKeeper: keeperFor(match, inn.bowlingTeam),
     battingNumbers: numbersFor(match, inn.battingTeam),
     bowlingNumbers: numbersFor(match, inn.bowlingTeam),

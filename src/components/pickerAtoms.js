@@ -16,6 +16,7 @@ export function PlayerPicker({
   excludeList,
   placeholder,
   captain,
+  viceCaptain,
   keeper,
   numbers,
   noteFor
@@ -52,6 +53,7 @@ export function PlayerPicker({
         }
       }, num ? `#${num} ${name}` : name, /*#__PURE__*/React.createElement(RoleBadge, {
         isCaptain: name === captain,
+        isViceCaptain: name === viceCaptain,
         isKeeper: name === keeper
       }), note && /*#__PURE__*/React.createElement("span", {
         style: {
