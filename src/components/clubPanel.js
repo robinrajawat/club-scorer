@@ -373,6 +373,13 @@ export function ClubPanel({
     setDescEditing(false);
   }
   const orderedClubs = withPinnedFirst(clubs, pinnedClubIds);
+  // Landing on this tab with nothing picked yet (first visit, or the previously-active club was
+  // just left/deleted) used to leave the chip row with none highlighted and no detail panel below
+  // it -- default to the first (pinned-first-ordered) club instead of making everyone re-tap.
+  const firstClubId = orderedClubs.length > 0 ? orderedClubs[0].id : null;
+  useEffect(() => {
+    if (!activeClubId && firstClubId) onSelect(firstClubId);
+  }, [activeClubId, firstClubId]);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18

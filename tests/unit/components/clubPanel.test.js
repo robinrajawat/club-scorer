@@ -120,6 +120,38 @@ test("ClubPanel: selecting a club chip calls onSelect", () => {
   assert.equal(selected, "c1");
 });
 
+test("ClubPanel: with nothing selected, defaults to the first club in pinned-first order", () => {
+  let selected = "not called";
+  act(() => {
+    render({
+      clubs: [club(), club({ id: "c2", name: "Oakwood CC" })],
+      pinnedClubIds: ["c2"],
+      onSelect: id => { selected = id; }
+    });
+  });
+  assert.equal(selected, "c2");
+});
+
+test("ClubPanel: never overrides a club that's already selected", () => {
+  let selected = "not called";
+  act(() => {
+    render({
+      clubs: [club(), club({ id: "c2", name: "Oakwood CC" })],
+      activeClubId: "c2",
+      onSelect: id => { selected = id; }
+    });
+  });
+  assert.equal(selected, "not called");
+});
+
+test("ClubPanel: with no clubs at all, never calls onSelect", () => {
+  let selected = "not called";
+  act(() => {
+    render({ clubs: [], onSelect: id => { selected = id; } });
+  });
+  assert.equal(selected, "not called");
+});
+
 test("ClubPanel: a club's chip shows its team count, hidden entirely for a club with none", () => {
   const inst = render({
     clubs: [club(), club({ id: "c2", name: "Oakwood CC" })],
