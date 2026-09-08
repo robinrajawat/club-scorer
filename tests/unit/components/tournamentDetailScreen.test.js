@@ -133,17 +133,6 @@ test("TournamentDetailScreen: offers to add a default venue when unset, and edit
   assert.equal(updated.venueLng, 56.78);
 });
 
-test("TournamentDetailScreen: toggling Visibility calls onToggleVisibility with the tournament", async () => {
-  let toggledWith = null;
-  const inst = await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
-    onToggleVisibility: t => { toggledWith = t; return Promise.resolve({ ok: true }); }
-  });
-  const visibilityToggle = inst.root.findAllByProps({ "aria-label": "Make private" })[0];
-  assert.ok(visibilityToggle, "starts public, so the switch offers to make it private");
-  act(() => { visibilityToggle.props.onClick(); });
-  assert.equal(toggledWith.id, "t1");
-});
-
 test("TournamentDetailScreen: no Visibility toggle when canManage is false", async () => {
   const inst = await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
     canManage: false, onToggleVisibility: () => Promise.resolve({ ok: true })
@@ -166,7 +155,7 @@ test("TournamentDetailScreen: a club/federation tournament still marked private 
   assert.equal(toggledWith.id, "t1");
 });
 
-test("TournamentDetailScreen: does not self-heal a personal tournament, or one that's already public", async () => {
+test("TournamentDetailScreen: does not self-heal a personal tournament that's already private, or a club/federation one that's already public", async () => {
   let called = false;
   await renderScreen(tournamentFixture({ private: true }), [completedMatch()], {
     isPersonal: true, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
@@ -177,6 +166,14 @@ test("TournamentDetailScreen: does not self-heal a personal tournament, or one t
     isPersonal: false, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
   });
   assert.equal(called, false);
+});
+
+test("TournamentDetailScreen: a personal tournament still marked public from before this simplification self-heals to private on open", async () => {
+  let toggledWith = null;
+  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
+    isPersonal: true, onToggleVisibility: t => { toggledWith = t; return Promise.resolve({ ok: true }); }
+  });
+  assert.equal(toggledWith.id, "t1");
 });
 
 test("TournamentDetailScreen: shows the venue as a Maps link with an edit affordance once set", async () => {

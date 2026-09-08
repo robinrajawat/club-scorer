@@ -4,7 +4,6 @@ import { CalendarClock, Cap, ChevronLeft, Download, Pencil, Plus, Share, Trophy 
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { StandingsTable } from "./tableAtoms.js";
-import { VisibilitySwitch } from "./matchDisplayAtoms.js";
 import { ExportTournamentPdfButton } from "./exportButtons.js";
 import { TournamentPrintReport } from "./scorecard.js";
 import { TournamentShareModal, QualificationCalculatorModal } from "./miscModals.js";
@@ -56,15 +55,16 @@ export function TournamentDetailScreen({
   // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
   // set, still wins -- this only fills in the default.
   const [venueModalOpen, setVenueModalOpen] = useState(false);
-  // A club/federation tournament is always public now -- same reasoning as ClubPanel's/
-  // FederationsPanel's own identical comment (membership there is already owner/co-owner
-  // governed), so there's no toggle for one any more (see the Visibility section below, gated on
-  // isPersonal). One created before this simplification, still marked private, self-heals the
-  // moment its owner opens it here.
+  // Visibility is no longer a manual choice anywhere -- it's derived straight from who's
+  // organizing: a club/federation tournament is always public (membership there is already
+  // owner/co-owner governed, same reasoning ClubPanel's/FederationsPanel's own identical comment
+  // gives), a personal one is always private. Either one created before this simplification, still
+  // carrying the opposite of what its organizer now implies, self-heals the moment its owner opens
+  // it here.
   useEffect(() => {
-    if (!isPersonal && canManage && tournament.private && onToggleVisibility) {
-      onToggleVisibility(tournament);
-    }
+    if (!canManage || !onToggleVisibility) return;
+    if (!isPersonal && tournament.private) onToggleVisibility(tournament);
+    else if (isPersonal && !tournament.private) onToggleVisibility(tournament);
   }, [tournament.id, tournament.private, isPersonal, canManage]);
   function editTournamentVenue(venue, lat, lng) {
     if (!canManage) return;
@@ -347,38 +347,7 @@ export function TournamentDetailScreen({
       marginBottom: 18,
       marginTop: -8
     }
-  }, isPersonal && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !tournament.private,
-    onChange: () => onToggleVisibility && onToggleVisibility(tournament),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginTop: 4
-    }
-    // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
-    // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), matches !== null && /*#__PURE__*/React.createElement("button", {
+  }, matches !== null && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setRulesModalOpen(true),
     className: "cs-btn",

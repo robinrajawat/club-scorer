@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeftRight, ChevronDown, ChevronLeft, Check, MoreVer
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { RoleBadge, BallCelebration, MilestoneToast, OdometerScore, InningsTimer } from "./scoringUiAtoms.js";
-import { BallBadge, VisibilitySwitch } from "./matchDisplayAtoms.js";
+import { BallBadge } from "./matchDisplayAtoms.js";
 import { OversStrip, SyncStatusBanner } from "./scoreboardAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { ExportPdfButton } from "./exportButtons.js";
@@ -890,19 +890,6 @@ export function MatchScreen({
   // threshold varies by competition and isn't something this app models) -- this is entirely the
   // scorer's own judgment call, same reasoning as endInningEarly already being a judgment call
   // rather than something the app tries to infer on its own.
-  // Flips this match's own Visibility (the same flag SetupScreen's Review page collects before the
-  // match starts -- see its own VisibilitySwitch), now editable after the fact too. Just flips the
-  // field and re-saves through the normal queueSave -> saveMatch path -- saveMatch itself handles
-  // both directions of the /liveMatches Home-feed mirror (writes it fresh when now public, deletes
-  // it immediately when now private), so nothing further is needed here.
-  function toggleVisibility() {
-    const updated = {
-      ...match,
-      private: !match.private
-    };
-    setMatch(updated);
-    queueSave(updated);
-  }
   // A mistake made during SetupScreen (wrong overs count, a house rule left on/off by accident) --
   // and normal matches have no separate "first innings setup" screen the way a Super Over/2nd
   // innings do (SetupScreen already collects openers before the match object even exists), so this
@@ -1570,36 +1557,6 @@ export function MatchScreen({
       marginBottom: 14
     }
   }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !match.private,
-    onChange: pub => toggleVisibility(),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, match.private ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to."), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.creamDark,

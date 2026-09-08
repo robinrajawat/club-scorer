@@ -254,7 +254,7 @@ test("TournamentsScreen: no venue set sends null, not an empty object, to onCrea
   assert.equal(createdWith, null);
 });
 
-test("TournamentsScreen: Visibility defaults to public, and the review-page toggle passes isPrivate through to onCreateTournament", async () => {
+test("TournamentsScreen: a personal tournament (the default Organizer) is created private -- no manual Visibility choice any more", async () => {
   let isPrivateArg = "unset";
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
     onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) => {
@@ -270,10 +270,6 @@ test("TournamentsScreen: Visibility defaults to public, and the review-page togg
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
   clickNav(inst, "Next"); // details -> rules
   clickNav(inst, "Review"); // rules -> review
-
-  const visibilityBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Make private");
-  assert.ok(visibilityBtn, "expected a public-by-default Visibility toggle on the review page");
-  act(() => { visibilityBtn.props.onClick(); });
 
   const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
   await act(async () => {

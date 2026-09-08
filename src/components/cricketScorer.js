@@ -1102,11 +1102,19 @@ export function CricketScorer() {
       umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
       status: "in-progress",
-      // Opt-out from the Home screen's Live now feed / app-wide search (see SetupScreen's
-      // Visibility toggle, defaulted from a tournament's own private flag when starting a
-      // fixture). Gates the /liveMatches mirror write in saveMatch -- a private match is never
-      // written there at all, live or after completion.
-      private: !!setup.private,
+      // Who this match is organized under -- mirrors the same club/federation/personal distinction
+      // tournaments already have, just stored as an explicit field here instead of which collection
+      // the record lives in (matches, unlike tournaments, have always been one flat collection with
+      // no per-club/federation subcollection split). Set by SetupScreen's own Organizer picker for
+      // a standalone match, or inherited from presetTournament._clubId/_federationId for one started
+      // from within a tournament -- either way, at most one of the two is ever set.
+      clubId: setup.clubId || null,
+      federationId: setup.federationId || null,
+      // Opt-out from the Home screen's Live now feed / app-wide search, derived straight from the
+      // organizer above rather than a separate manual choice -- a personal match is always private,
+      // a club/federation one always public. Gates the /liveMatches mirror write in saveMatch -- a
+      // private match is never written there at all, live or after completion.
+      private: !setup.clubId && !setup.federationId,
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,
@@ -2827,7 +2835,9 @@ export function CricketScorer() {
     rules: rules,
     presetTournament: presetTournament,
     clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || [],
-    clubs: clubs
+    clubs: clubs,
+    currentUid: user && user.uid,
+    myFederations: myOwnedFederationIds.map(id => federationsById[id]).filter(Boolean)
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
