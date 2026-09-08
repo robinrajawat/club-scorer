@@ -9306,22 +9306,18 @@ function EmptyStateBallIllustration() {
 // Used to be copy-pasted per screen with a fixed vh-fraction minHeight to fake vertical centering
 // -- that reads as "too high" on any screen with more header/search/filter chrome above it than
 // whichever screen that fraction happened to be eyeballed against, since a fixed fraction of the
-// WHOLE viewport has no idea how much of it the header already used. `flex: 1` on the OUTER,
-// invisible positioning div does the actual job on most screens: it fills exactly whatever space
-// is left below the header, so it centers correctly regardless of how tall that header is -- the
-// one requirement is that the screen's own root element is itself `display: flex, flexDirection:
-// "column"` with a real height to divide up (`minHeight: "100dvh"` on that root, same pattern on
-// every screen that relies on this). Screens whose root isn't (yet) restructured that way can pass
-// `minHeight` instead (a plain block-level minHeight, same old fallback) -- `flex: 1` is simply
-// ignored by a non-flex parent, so this stays correct either way without the caller needing two
-// code paths.
-// Deliberately two nested divs, not one: the OUTER one claims however much vertical space is
-// available (which can be a lot, on a tall screen with little else on it) and just centers its
-// child within that -- the actual dashed-border/tinted-background card stays a second, INNER div
-// sized to its own content (illustration + message), capped at maxWidth so it can't stretch edge
-// to edge on a wide screen either. Collapsing these into one div and giving IT both flex:1 and the
-// border used to make the border itself balloon to fill all the available space -- a small ball
-// icon and a line of text inside a dashed box the height of the whole screen.
+// WHOLE viewport has no idea how much of it the header already used. `flex: 1` on this div does
+// the actual job on most screens: it fills exactly whatever space is left below the header, so it
+// centers correctly regardless of how tall that header is -- the one requirement is that the
+// screen's own root element is itself `display: flex, flexDirection: "column"` with a real height
+// to divide up (`minHeight: "100dvh"` on that root, same pattern on every screen that relies on
+// this). Screens whose root isn't (yet) restructured that way can pass `minHeight` instead (a
+// plain block-level minHeight, same old fallback) -- `flex: 1` is simply ignored by a non-flex
+// parent, so this stays correct either way without the caller needing two code paths.
+// No card/border/background around the icon+text -- a dashed box around "nothing here" read as
+// more chrome than the empty state deserved, and swallowed a screen's worth of tint on any screen
+// with a lot of leftover space (see Cups vs. Live). The icon and copy alone already read as
+// unmistakably empty, not broken, without a container drawing attention to itself.
 // GENERATED-FN-END: EmptyStateBallIllustration
 // GENERATED-FN-START: EmptyState
 function EmptyState({
@@ -9333,18 +9329,11 @@ function EmptyState({
       flex: 1,
       ...(minHeight ? { minHeight } : {}),
       display: "flex",
+      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: "20px 0"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
       textAlign: "center",
-      padding: "40px 20px",
-      maxWidth: 320,
-      borderRadius: 16,
-      border: `1.5px dashed ${COLORS.willow}`,
-      background: `color-mix(in srgb, ${COLORS.surface} 40%, transparent)`
+      padding: "20px 0"
     }
   }, /*#__PURE__*/React.createElement(EmptyStateBallIllustration, null), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -9352,9 +9341,10 @@ function EmptyState({
       fontSize: 13.5,
       color: COLORS.inkSoft,
       lineHeight: 1.6,
-      marginTop: 12
+      marginTop: 12,
+      maxWidth: 280
     }
-  }, children)));
+  }, children));
 }
 // GENERATED-FN-END: EmptyState
 // GENERATED-FN-START: LoadingBallIllustration
@@ -9499,63 +9489,6 @@ function Btn({
   }, children);
 }
 // GENERATED-FN-END: Btn
-// Small public/private toggle used on a club or federation's own admin card. Owner-only —
-// callers are expected to only render this when the viewer already passed an isOwner check.
-// GENERATED-FN-START: VisibilitySwitch
-function VisibilitySwitch({
-  isPublic,
-  busy,
-  onChange,
-  publicHint = "Public \u2014 discoverable by search",
-  privateHint = "Private \u2014 not discoverable"
-}) {
-  return /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => !busy && onChange(!isPublic),
-    disabled: busy,
-    className: "cs-btn",
-    "aria-label": isPublic ? "Make private" : "Make public",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      background: "none",
-      border: `1px solid ${isPublic ? COLORS.gold : COLORS.willow}`,
-      borderRadius: 20,
-      padding: "3px 9px 3px 3px",
-      cursor: busy ? "default" : "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 10.5,
-      color: isPublic ? COLORS.gold : COLORS.inkSoft,
-      textTransform: "uppercase",
-      letterSpacing: 0.4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 26,
-      height: 15,
-      borderRadius: 8,
-      background: isPublic ? COLORS.gold : COLORS.willow,
-      position: "relative",
-      flexShrink: 0,
-      transition: "background 0.15s ease"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: "absolute",
-      top: 1.5,
-      left: isPublic ? 12 : 1.5,
-      width: 12,
-      height: 12,
-      borderRadius: "50%",
-      background: COLORS.surface,
-      transition: "left 0.15s ease",
-      boxShadow: "0 1px 2px rgba(0,0,0,0.25)"
-    }
-  })), busy ? "\u2026" : isPublic ? "Public" : "Private");
-}
-// GENERATED-FN-END: VisibilitySwitch
 // Search-and-request UI shared by both directions of federation affiliation: a club owner
 // searching federationDirectory to request joining one, or a federation owner searching
 // clubDirectory to invite one. `items` are the raw directory entries ({name, ownerName, id}) —
@@ -21142,7 +21075,9 @@ function SetupScreen({
   rules,
   presetTournament,
   clubUmpires,
-  clubs
+  clubs = [],
+  currentUid,
+  myFederations = []
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -21163,10 +21098,28 @@ function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
-  // Defaults from the tournament's own private flag when starting a fixture from one -- see
-  // handleCreateTournament's own Visibility toggle -- but always overridable per match, same
-  // "tournament sets the default, this match can differ" relationship overs/venue already have.
-  const [isPrivate, setIsPrivate] = useState(!!(presetTournament && presetTournament.private));
+  // Who this standalone match is organized under -- "personal" | `club:${id}` | `federation:${id}`,
+  // same composite-key RuleChoice pattern as TournamentsScreen's own Organizer picker. Only shown
+  // (and only meaningful) when there's no presetTournament: a fixture started from within a
+  // tournament always inherits ITS organizer instead (see presetTournament._clubId/_federationId
+  // below) -- there's no separate choice to make there. Visibility used to be its own manual
+  // toggle on this screen; it's now derived straight from this instead (personal stays private,
+  // club/federation is always public), so there's one less decision per match, not two.
+  const [organizerKey, setOrganizerKey] = useState("personal");
+  const ownableClubs = clubs.filter(c => isClubOwner(c, currentUid));
+  const organizerOptions = [{
+    value: "personal",
+    label: "Personal"
+  }, ...ownableClubs.map(c => ({
+    value: `club:${c.id}`,
+    label: c.name
+  })), ...myFederations.map(f => ({
+    value: `federation:${f.id}`,
+    label: f.name
+  }))];
+  const matchClubId = organizerKey.startsWith("club:") ? organizerKey.slice(5) : null;
+  const matchFederationId = organizerKey.startsWith("federation:") ? organizerKey.slice("federation:".length) : null;
+  const isPrivate = presetTournament ? !!presetTournament.private : organizerKey === "personal";
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
   // own default venue (see TournamentsScreen's own venue picker) doesn't carry verified coordinates
@@ -22814,34 +22767,25 @@ function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && !presetTournament && organizerOptions.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.04s backwards"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !isPrivate,
-    onChange: pub => setIsPrivate(!pub),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Organizer",
+    value: organizerKey,
+    onChange: setOrganizerKey,
+    options: organizerOptions
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.inkSoft,
-      lineHeight: 1.5
+      lineHeight: 1.5,
+      marginTop: 8
     }
-  }, isPrivate ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to.")), /*#__PURE__*/React.createElement("div", {
+  }, isPrivate ? "Personal \u2014 this match won't appear in the Home screen's Live now feed or app-wide search. A share or view code you generate yourself still works exactly as before." : "Club/federation \u2014 while in progress and for a few days after it ends, this match can be found by anyone using the app in the Live now feed and app-wide search.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -22905,7 +22849,8 @@ function SetupScreen({
         } : null,
         tournamentId: presetTournament ? presetTournament.id : null,
         fixtureId: presetTournament ? presetTournament.fixtureId || null : null,
-        private: isPrivate
+        clubId: presetTournament ? presetTournament._clubId || null : matchClubId,
+        federationId: presetTournament ? presetTournament._federationId || null : matchFederationId
       });
     }
   }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
@@ -23566,10 +23511,6 @@ function TournamentsScreen({
   const [tournamentRules, setTournamentRules] = useState({
     ...DEFAULT_RULES
   });
-  // Tournament-level default for the Live now feed / app-wide match search -- see SetupScreen,
-  // which seeds a fixture's own Visibility toggle from this. Public by default, same as a
-  // standalone match.
-  const [isPrivate, setIsPrivate] = useState(false);
   // Same paginated pattern as SetupScreen's own "New Match" flow -- one page at a time instead of
   // one long scroll past teams, groups, and (now that it covers every match rule, not just 5) a
   // much longer rules editor than when this form was first built.
@@ -23638,6 +23579,11 @@ function TournamentsScreen({
   // flat options list) can drive both onSelectSource and onSelectFederationSource from one picker,
   // reset to "personal" by openCreate/openCreateSeries below.
   const organizerKey = activeFederationId ? `federation:${activeFederationId}` : activeClubId ? `club:${activeClubId}` : "personal";
+  // Visibility used to be its own manual toggle on this form -- removed in favor of deriving it
+  // straight from who's organizing: a personal tournament stays private (nobody else's business),
+  // a club/federation one is always public (membership there is already owner/co-owner governed,
+  // same reasoning ClubPanel/FederationsPanel already apply). One less decision to make per create.
+  const isPrivate = organizerKey === "personal";
   function setOrganizerKey(key) {
     if (key === "personal") {
       onSelectSource(null);
@@ -23678,7 +23624,6 @@ function TournamentsScreen({
     setTournamentRules({
       ...DEFAULT_RULES
     });
-    setIsPrivate(false);
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setOrganizerKey("personal");
     setCreating(true);
@@ -24643,37 +24588,7 @@ function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules))), organizerKey === "personal" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !isPrivate,
-    onChange: pub => setIsPrivate(!pub),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, isPrivate ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public when it's started." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after. Any single match can be switched to private when it's started.")), error && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules)), /*#__PURE__*/React.createElement("div", null, isPrivate ? "Private \u2014 personal tournaments don't appear in the Live now feed or app-wide search." : "Public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after.")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -26289,15 +26204,16 @@ function TournamentDetailScreen({
   // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
   // set, still wins -- this only fills in the default.
   const [venueModalOpen, setVenueModalOpen] = useState(false);
-  // A club/federation tournament is always public now -- same reasoning as ClubPanel's/
-  // FederationsPanel's own identical comment (membership there is already owner/co-owner
-  // governed), so there's no toggle for one any more (see the Visibility section below, gated on
-  // isPersonal). One created before this simplification, still marked private, self-heals the
-  // moment its owner opens it here.
+  // Visibility is no longer a manual choice anywhere -- it's derived straight from who's
+  // organizing: a club/federation tournament is always public (membership there is already
+  // owner/co-owner governed, same reasoning ClubPanel's/FederationsPanel's own identical comment
+  // gives), a personal one is always private. Either one created before this simplification, still
+  // carrying the opposite of what its organizer now implies, self-heals the moment its owner opens
+  // it here.
   useEffect(() => {
-    if (!isPersonal && canManage && tournament.private && onToggleVisibility) {
-      onToggleVisibility(tournament);
-    }
+    if (!canManage || !onToggleVisibility) return;
+    if (!isPersonal && tournament.private) onToggleVisibility(tournament);
+    else if (isPersonal && !tournament.private) onToggleVisibility(tournament);
   }, [tournament.id, tournament.private, isPersonal, canManage]);
   function editTournamentVenue(venue, lat, lng) {
     if (!canManage) return;
@@ -26580,38 +26496,7 @@ function TournamentDetailScreen({
       marginBottom: 18,
       marginTop: -8
     }
-  }, isPersonal && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !tournament.private,
-    onChange: () => onToggleVisibility && onToggleVisibility(tournament),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginTop: 4
-    }
-    // Mirrors the create-time copy in tournamentsScreen.js's own New Cup wizard -- same flag, same
-    // wording, now editable after the fact too.
-  }, tournament.private ? "Every match started from this tournament defaults to private too \u2014 none of them will appear in the Home screen's Live now feed or app-wide search. Any single match can still be switched back to public from its own menu." : "Every match started from this tournament defaults to public \u2014 discoverable in the Live now feed and app-wide search. Any single match can be switched to private from its own menu.")), matches !== null && /*#__PURE__*/React.createElement("button", {
+  }, matches !== null && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setRulesModalOpen(true),
     className: "cs-btn",
@@ -36072,19 +35957,6 @@ function MatchScreen({
   // threshold varies by competition and isn't something this app models) -- this is entirely the
   // scorer's own judgment call, same reasoning as endInningEarly already being a judgment call
   // rather than something the app tries to infer on its own.
-  // Flips this match's own Visibility (the same flag SetupScreen's Review page collects before the
-  // match starts -- see its own VisibilitySwitch), now editable after the fact too. Just flips the
-  // field and re-saves through the normal queueSave -> saveMatch path -- saveMatch itself handles
-  // both directions of the /liveMatches Home-feed mirror (writes it fresh when now public, deletes
-  // it immediately when now private), so nothing further is needed here.
-  function toggleVisibility() {
-    const updated = {
-      ...match,
-      private: !match.private
-    };
-    setMatch(updated);
-    queueSave(updated);
-  }
   // A mistake made during SetupScreen (wrong overs count, a house rule left on/off by accident) --
   // and normal matches have no separate "first innings setup" screen the way a Super Over/2nd
   // innings do (SetupScreen already collects openers before the match object even exists), so this
@@ -36752,36 +36624,6 @@ function MatchScreen({
       marginBottom: 14
     }
   }, "Deliberately a step further away than Retire or Swap Strike \u2014 both of these end more than just the current ball, so they get an extra tap before you're even at the \u201care you sure\u201d stage."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 10,
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Visibility"), /*#__PURE__*/React.createElement(VisibilitySwitch, {
-    isPublic: !match.private,
-    onChange: pub => toggleVisibility(),
-    publicHint: "Public \u2014 discoverable",
-    privateHint: "Private \u2014 not discoverable"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, match.private ? "This match won't appear in the Home screen's Live now feed or app-wide search, live or after it ends. A share or view code you generate yourself still works exactly as before." : "While in progress and for a few days after it ends, this match can be found by anyone using the app \u2014 in the Live now feed and app-wide search \u2014 not just people you send a link to."), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
       background: COLORS.creamDark,
@@ -40562,11 +40404,19 @@ function CricketScorer() {
       umpire2: setup.umpire2 || null,
       currentInningIndex: 0,
       status: "in-progress",
-      // Opt-out from the Home screen's Live now feed / app-wide search (see SetupScreen's
-      // Visibility toggle, defaulted from a tournament's own private flag when starting a
-      // fixture). Gates the /liveMatches mirror write in saveMatch -- a private match is never
-      // written there at all, live or after completion.
-      private: !!setup.private,
+      // Who this match is organized under -- mirrors the same club/federation/personal distinction
+      // tournaments already have, just stored as an explicit field here instead of which collection
+      // the record lives in (matches, unlike tournaments, have always been one flat collection with
+      // no per-club/federation subcollection split). Set by SetupScreen's own Organizer picker for
+      // a standalone match, or inherited from presetTournament._clubId/_federationId for one started
+      // from within a tournament -- either way, at most one of the two is ever set.
+      clubId: setup.clubId || null,
+      federationId: setup.federationId || null,
+      // Opt-out from the Home screen's Live now feed / app-wide search, derived straight from the
+      // organizer above rather than a separate manual choice -- a personal match is always private,
+      // a club/federation one always public. Gates the /liveMatches mirror write in saveMatch -- a
+      // private match is never written there at all, live or after completion.
+      private: !setup.clubId && !setup.federationId,
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,
@@ -42287,7 +42137,9 @@ function CricketScorer() {
     rules: rules,
     presetTournament: presetTournament,
     clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || [],
-    clubs: clubs
+    clubs: clubs,
+    currentUid: user && user.uid,
+    myFederations: myOwnedFederationIds.map(id => federationsById[id]).filter(Boolean)
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection
