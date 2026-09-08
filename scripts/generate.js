@@ -315,9 +315,16 @@ function toGlobalScript(source) {
     .replace(/^\n+/, "");
 }
 
-function splice(html, startMarker, endMarker, replacement, label) {
-  const startIdx = html.indexOf(startMarker);
-  const endIdx = html.indexOf(endMarker);
+export function splice(html, startMarker, endMarker, replacement, label) {
+  // Anchored on a trailing newline, not a bare substring search: every marker name is an
+  // identifier, so if one registered name is a strict prefix of another (e.g. "EmptyState" and
+  // "EmptyStateBallIllustration"), a bare `indexOf(startMarker)` for the shorter name matches
+  // inside the longer name's OWN marker line instead of the shorter name's real one -- silently
+  // splicing the wrong function into the wrong slot with no error at all (this shipped a live
+  // ReferenceError crash on clubscorer.com once already). Every real marker line is followed by a
+  // newline; a false prefix match never is (the next character is another identifier character).
+  const startIdx = html.indexOf(startMarker + "\n");
+  const endIdx = html.indexOf(endMarker + "\n");
   if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
     throw new Error(
       `Could not find ${label} markers in public/index.html — expected ` +
@@ -470,4 +477,6 @@ function run() {
   console.log("Regenerated public/index.html from src/core/*.js.");
 }
 
-run();
+// Guarded so this module can be `import`ed (e.g. from a test exercising `splice` directly)
+// without immediately reading/rewriting public/index.html as a side effect of the import itself.
+if (import.meta.url === `file://${process.argv[1]}`) run();
