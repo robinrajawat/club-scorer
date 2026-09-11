@@ -21,12 +21,20 @@ function hasText(node, str) {
   return false;
 }
 
+// Node has a built-in read-only `navigator` global (getter-only, no setter) since Node 21, so a
+// plain `globalThis.navigator = ...` assignment throws -- redefine the property instead, same
+// pattern followScreen.test.js/shareMenus.test.js use for the same reason.
+function setNavigator(value) {
+  Object.defineProperty(globalThis, "navigator", { value, configurable: true, writable: true });
+}
+
 afterEach(() => {
   delete globalThis.saveTransition;
   delete globalThis.saveMatch;
   delete globalThis.loadMatch;
   delete globalThis.Modal;
   delete globalThis.polishMatchRecap;
+  delete globalThis.navigator;
 });
 
 function inning(overrides = {}) {
@@ -220,4 +228,23 @@ test("ResultScreen: a failed/unconfigured polish falls back to the plain draft w
     await polishBtn.props.onClick();
   });
   assert.match(JSON.stringify(inst.toJSON()), /AI polish unavailable right now/);
+});
+
+// BUG FIX: recapCopied was set by handleCopyRecap but never actually read anywhere in the button's
+// own render -- it always said "Copy" no matter what, so a real click produced no visible feedback
+// at all (confirmed live: "copy doesn't give any message or response"). Guards against the exact
+// same gap recurring by asserting the rendered label actually changes, not just that
+// navigator.clipboard.writeText was called.
+test("ResultScreen: Copy flashes 'Copied!' after a successful clipboard write", async () => {
+  let copiedText = null;
+  setNavigator({ clipboard: { writeText: text => { copiedText = text; return Promise.resolve(); } } });
+  const inst = renderScreen(completeMatch());
+  const copyBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Copy"));
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Copied!/);
+  await act(async () => {
+    copyBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.match(copiedText, /Riverside CC made 150\/8/);
+  assert.match(JSON.stringify(inst.toJSON()), /Copied!/);
 });
