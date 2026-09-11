@@ -1577,18 +1577,27 @@ async function searchAddress(query) {
 // recap card already treats "polish unavailable" as a normal, expected outcome, not an error state.
 const RECAP_WORKER_URL = "https://ai.clubscorer.com";
 async function polishMatchRecap(draft, provider) {
-  if (!RECAP_WORKER_URL) return { text: draft, polished: false };
+  if (!RECAP_WORKER_URL) return { text: draft, polished: false, error: "RECAP_WORKER_URL not configured" };
   try {
     const res = await fetch(RECAP_WORKER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(provider ? { draft, provider } : { draft })
     });
-    if (!res.ok) return { text: draft, polished: false };
-    const data = await res.json();
-    return { text: data.text || draft, polished: !!data.polished, provider: data.provider };
+    // Parsed defensively, separate from the res.ok check below -- a non-2xx response (a Cloudflare
+    // edge error, a WAF block, an Access wall) may not be JSON at all, and BUG FIX: the previous
+    // version returned {polished:false} with no `error` field on both this branch and the catch
+    // below, which meant the diagnostic console.warn added alongside this call (see ResultScreen's
+    // handlePolishRecap) silently never fired for the two most likely failure modes -- only a 200
+    // response whose OWN body set `error` (e.g. a missing Worker secret) was ever visible at all.
+    let data = null;
+    try { data = await res.json(); } catch (parseErr) { /* not JSON -- data stays null, error below falls back to the HTTP status */ }
+    if (!res.ok) return { text: draft, polished: false, error: (data && data.error) || `HTTP ${res.status}` };
+    return { text: (data && data.text) || draft, polished: !!(data && data.polished), provider: data && data.provider, error: data && data.error };
   } catch (e) {
-    return { text: draft, polished: false };
+    // A CORS block or network failure throws here rather than ever producing a response object --
+    // e.g. "Failed to fetch" -- distinct from, and more likely than, a clean non-2xx HTTP response.
+    return { text: draft, polished: false, error: String((e && e.message) || e) };
   }
 }
 // GENERATED-FN-START: inningsLine
