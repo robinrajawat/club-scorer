@@ -40,18 +40,31 @@
 // models/gemini-2.0-flash is no longer available... use models/gemini-3.6-flash"), not guessed.
 // GEMINI_MODEL (env) still overrides this without a redeploy if it drifts again.
 const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
-const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+// llama-3.3-70b-versatile was also retired ("model_not_found" live) -- confirmed working replacement
+// is openai/gpt-oss-20b (Groq's hosted GPT-OSS, verified against a sibling project's own working
+// config, not guessed). Unlike llama-3.3, GPT-OSS IS a reasoning model -- see GROQ_MAX_OUTPUT_TOKENS
+// below for why that matters here.
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const MAX_DRAFT_LENGTH = 1200; // a buildMatchRecapDraft() output is a few hundred chars; this leaves headroom without inviting abuse-sized input
-const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; used for Groq, which isn't a thinking model
-// Gemini-specific, deliberately higher than MAX_OUTPUT_TOKENS: gemini-3.6-flash thinks by default
+// Gemini-specific, deliberately generous: gemini-3.6-flash thinks by default
 // and thinking tokens count against maxOutputTokens the same as the visible reply -- at 150 the
 // model was burning the entire budget on reasoning and returning a near-empty/truncated reply
-// (confirmed live: a 3-word draft polish came back as literally ")"). This is a stopgap trading
-// some of the token-efficiency goal (see file header) for a working reply while the correct
-// thinkingConfig shape for this model is still unverified (its predecessor's shape, thinkingBudget:
-// 0, was REJECTED outright with a 400 -- see the git history here). Revisit once that's confirmed:
-// properly disabling thinking should let this come back down near MAX_OUTPUT_TOKENS.
-const GEMINI_MAX_OUTPUT_TOKENS = 1024;
+// (confirmed live: a 3-word draft polish came back as literally ")"). 1024 was tried first and
+// still wasn't always enough -- thinking-token consumption varies per request, and one real test
+// still came back cut off mid-sentence at that budget. This is a stopgap trading a meaningful chunk
+// of the token-efficiency goal (see file header) for a working reply while the correct thinkingConfig
+// shape for this model is still unverified (its predecessor's shape, thinkingBudget: 0, was REJECTED
+// outright with a 400 -- see the git history here); Gemini also isn't the primary provider anymore
+// (see DEFAULT_PROVIDER in wrangler.toml -- Groq goes first), so this budget mostly matters for the
+// fallback path now, not the common case. Revisit once the correct thinkingConfig shape is confirmed:
+// properly disabling thinking should let this come back down.
+const GEMINI_MAX_OUTPUT_TOKENS = 2048;
+// Same story as GEMINI_MAX_OUTPUT_TOKENS above, for Groq: openai/gpt-oss-20b (DEFAULT_GROQ_MODEL,
+// replacing the retired llama-3.3-70b-versatile) is ALSO a reasoning model, unlike its predecessor --
+// confirmed live: at the shared MAX_OUTPUT_TOKENS=150, it returned no usable content at all ("Groq
+// response had no text"), the reasoning-eats-the-budget failure mode all over again just on the
+// other provider. No known way to disable Groq's reasoning for this model either, so same stopgap.
+const GROQ_MAX_OUTPUT_TOKENS = 1024;
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days -- a completed match's recap is immutable, so this is really "cache forever" in practice
 const SYSTEM_INSTRUCTION = "Rewrite this cricket match recap in a livelier tone, 2-4 short sentences. Keep every name, number, and result exactly as given. Reply with only the rewritten text.";
 
@@ -79,7 +92,7 @@ function corsHeaders(request, env) {
 // after the fix deployed, since the cache key never changed for that exact (provider, draft) pair.
 // Bump this string on any future change to what actually gets sent to a provider or how its reply
 // is parsed -- anything that could change what a given draft SHOULD produce.
-const CACHE_VERSION = "2";
+const CACHE_VERSION = "4"; // bumped again -- Groq's model/budget changed (llama-3.3-70b-versatile -> openai/gpt-oss-20b), which changes what a draft SHOULD produce via that provider
 async function cacheKeyFor(provider, draft) {
   const bytes = new TextEncoder().encode(`${CACHE_VERSION}:${provider}:${draft}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -133,7 +146,7 @@ async function callGroq(draft, env) {
         { role: "user", content: draft }
       ],
       temperature: 0.7,
-      max_tokens: MAX_OUTPUT_TOKENS
+      max_tokens: GROQ_MAX_OUTPUT_TOKENS
     })
   });
   if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
@@ -193,7 +206,14 @@ export default {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const text = await cached.text();
-        return respond({ draft, text, polished: true, provider, cached: true });
+        // Same fallbackErrors treatment as the fresh-success path below -- a cache hit reached only
+        // after an earlier provider failed IN THIS REQUEST needs to say so too, not just a fresh
+        // call. (Confirmed live: a request that fell through from a failing Groq to an
+        // already-cached Gemini entry returned cached:true with no trace of the Groq failure at
+        // all, since this branch never checked `errors`.)
+        const payload = { draft, text, polished: true, provider, cached: true };
+        if (errors.length) payload.fallbackErrors = errors;
+        return respond(payload);
       }
       try {
         const text = await PROVIDERS[provider].call(draft, env);
@@ -201,7 +221,14 @@ export default {
         // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
         // request's own latency.
         ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
-        return respond({ draft, text, polished: true, provider });
+        // BUG FIX: a provider earlier in `configured` failing and this one succeeding used to
+        // discard the earlier failure entirely -- the caller only ever saw errors when EVERY
+        // provider failed, so a silent fallback (the preferred provider having a bad day, papered
+        // over by the next one working) was indistinguishable from the preferred provider actually
+        // succeeding. `fallbackErrors` surfaces that gap without changing `polished`/`text` at all.
+        const payload = { draft, text, polished: true, provider };
+        if (errors.length) payload.fallbackErrors = errors;
+        return respond(payload);
       } catch (err) {
         errors.push(`${provider}: ${String(err.message || err)}`);
       }
