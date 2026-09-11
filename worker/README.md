@@ -74,6 +74,10 @@ are deliberate:
   hardcoded defaults (`recap-worker.js`) without a redeploy if a model gets
   retired or renamed — check each provider's current model list if a call
   starts failing with a "model not found" style error.
-- **Not wired into the app yet.** `public/index.html` doesn't call this
-  Worker anywhere — building the "Polish with AI" button and pointing it at
-  a deployed Worker URL is a separate follow-up.
+- **Deployed URL not configured.** `ResultScreen`'s "Polish with AI" button
+  (and the `polishMatchRecap`/`RECAP_WORKER_URL` bare globals it calls, in
+  `public/index.html`) are wired in, but `RECAP_WORKER_URL` is left empty
+  until this Worker is actually deployed — set it to the deployed URL once
+  `wrangler deploy` gives you one. Until then the button still renders and
+  works, it just always falls back to the plain (unpolished) draft, exactly
+  like a network failure at that URL would.

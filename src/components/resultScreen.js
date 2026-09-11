@@ -8,6 +8,7 @@ import { ShareMenu } from "./shareMenus.js";
 import { InningScorecard } from "./scorecard.js";
 import { uid } from "../core/statsAndFixtures.js";
 import { matchResultText, tossText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
+import { buildMatchRecapDraft } from "../core/matchRecap.js";
 import { genMatchCode } from "../core/miscHelpers.js";
 import { newInning } from "../core/scoringEngine.js";
 import { captainFor, viceCaptainFor, keeperFor, numbersFor } from "../core/appLogic.js";
@@ -53,6 +54,26 @@ export function ResultScreen({
   const impactSubs = impactSubsText(match.impactSubs);
   const [startingSuperOver, setStartingSuperOver] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
+  // Match recap: a deterministic, zero-cost draft (buildMatchRecapDraft -- no network call) shown
+  // by default, with an optional "Polish with AI" step layered on top (polishMatchRecap, a bare
+  // global that POSTs to the recap-polish Worker -- see worker/ in the repo). Available to whoever
+  // already has this match's result screen open, same as every other action here (Share, Export
+  // PDF, Fix a mistake) -- not admin-gated: this app's one "admin" concept (isFeedbackAdmin) is a
+  // single hardcoded email for the feedback inbox, not a role that makes sense to require here.
+  const recapDraft = buildMatchRecapDraft(match);
+  const [recap, setRecap] = useState(null);
+  const [recapLoading, setRecapLoading] = useState(false);
+  async function handlePolishRecap() {
+    if (recapLoading || !recapDraft) return;
+    setRecapLoading(true);
+    const result = await polishMatchRecap(recapDraft);
+    setRecap(result);
+    setRecapLoading(false);
+  }
+  function handleCopyRecap() {
+    const text = recap ? recap.text : recapDraft;
+    if (text && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+  }
   // startsWith, not ===, since a decided Super Over appends " — {team} won the Super Over" to
   // this same string (see matchResultText) -- still a tie in every way that matters here (offering
   // a NEW Super Over, reopening the innings), just no longer literally the bare "Match tied" text.
@@ -389,7 +410,49 @@ export function ResultScreen({
   }), /*#__PURE__*/React.createElement(BestFielderCard, {
     match: match,
     setMatch: setMatch
-  }), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+  }), recapDraft && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      marginBottom: 8
+    }
+  }, "Match recap"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 10
+    }
+  }, recap ? recap.text : recapDraft), recap && !recap.polished && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 10
+    }
+  }, "AI polish unavailable right now — showing the plain recap."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, !recap && /*#__PURE__*/React.createElement(Btn, {
+    onClick: handlePolishRecap,
+    disabled: recapLoading
+  }, recapLoading ? "Polishing…" : "✨ Polish with AI"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleCopyRecap
+  }, "Copy"))), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       background: COLORS.surface,

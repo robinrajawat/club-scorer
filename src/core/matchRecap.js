@@ -8,7 +8,13 @@ import { oversLabel } from "./scoringEngine.js";
 // takes this exact string as its starting draft rather than reassembling the match from raw data
 // itself, so the LLM is only ever rephrasing something already factually correct.
 
-function inningsLine(inn) {
+// The three helpers below are exported (not just called from buildMatchRecapDraft in the same
+// file) purely so scripts/generate.js's splice pipeline can find and register each one by name --
+// an unexported/unregistered top-level helper sitting ahead of the one registered export in a file
+// gets silently dropped from public/index.html (see auditReachability's own comment in
+// scripts/generate.js, and generate.test.js), which would have shipped buildMatchRecapDraft as a
+// live ReferenceError. None of the three are meant to be used from outside this module otherwise.
+export function inningsLine(inn) {
   const overs = oversLabel(inn.legalBalls, inn.ballsPerOver);
   const batters = Object.entries(inn.batsmen || {}).filter(([, b]) => (b.balls || 0) > 0 || (b.runs || 0) > 0).sort((a, b) => (b[1].runs || 0) - (a[1].runs || 0));
   const top = batters[0];
@@ -16,7 +22,7 @@ function inningsLine(inn) {
   return `${inn.battingTeam} made ${inn.runs}/${inn.wickets} in ${overs} overs${topLine}`;
 }
 
-function bestBowlingLine(inn) {
+export function bestBowlingLine(inn) {
   const bowlers = Object.entries(inn.bowlers || {}).filter(([, b]) => (b.wickets || 0) > 0).sort((a, b) => b[1].wickets - a[1].wickets || a[1].runs - b[1].runs);
   if (!bowlers.length) return null;
   const [name, figures] = bowlers[0];
@@ -27,7 +33,7 @@ function bestBowlingLine(inn) {
 // bowling moments; batting fifties/hundreds and big partnerships are covered by the top-scorer
 // line above already, so only pull the bowling-side ones here to avoid repeating the same numbers
 // twice in a two-paragraph recap.
-function standoutMilestones(match) {
+export function standoutMilestones(match) {
   const lines = [];
   for (const inn of match.innings || []) {
     for (const m of inn.milestones || []) {

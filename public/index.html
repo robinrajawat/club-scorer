@@ -1571,6 +1571,79 @@ async function searchAddress(query) {
     return [];
   }
 }
+// Cloudflare Worker URL for the optional "polish match recap with AI" step (see worker/ in the
+// repo -- not deployed by default). Empty until a Worker is actually deployed and this is set to
+// its URL, in which case polishMatchRecap below always falls back to the plain draft it was given,
+// exactly like a network failure at that URL would -- ResultScreen's recap card already treats
+// "polish unavailable" as a normal, expected outcome, not an error state.
+const RECAP_WORKER_URL = "";
+async function polishMatchRecap(draft, provider) {
+  if (!RECAP_WORKER_URL) return { text: draft, polished: false };
+  try {
+    const res = await fetch(RECAP_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(provider ? { draft, provider } : { draft })
+    });
+    if (!res.ok) return { text: draft, polished: false };
+    const data = await res.json();
+    return { text: data.text || draft, polished: !!data.polished, provider: data.provider };
+  } catch (e) {
+    return { text: draft, polished: false };
+  }
+}
+// GENERATED-FN-START: inningsLine
+function inningsLine(inn) {
+  const overs = oversLabel(inn.legalBalls, inn.ballsPerOver);
+  const batters = Object.entries(inn.batsmen || {}).filter(([, b]) => (b.balls || 0) > 0 || (b.runs || 0) > 0).sort((a, b) => (b[1].runs || 0) - (a[1].runs || 0));
+  const top = batters[0];
+  const topLine = top ? `, led by ${top[0]}'s ${top[1].runs} (${top[1].balls})` : "";
+  return `${inn.battingTeam} made ${inn.runs}/${inn.wickets} in ${overs} overs${topLine}`;
+}
+// GENERATED-FN-END: inningsLine
+// GENERATED-FN-START: bestBowlingLine
+function bestBowlingLine(inn) {
+  const bowlers = Object.entries(inn.bowlers || {}).filter(([, b]) => (b.wickets || 0) > 0).sort((a, b) => b[1].wickets - a[1].wickets || a[1].runs - b[1].runs);
+  if (!bowlers.length) return null;
+  const [name, figures] = bowlers[0];
+  return `${name} took ${figures.wickets}/${figures.runs} for ${inn.bowlingTeam}`;
+}
+
+// Milestones worth a callout in a short recap — hat-tricks and five-wicket hauls are the standout
+// bowling moments; batting fifties/hundreds and big partnerships are covered by the top-scorer
+// line above already, so only pull the bowling-side ones here to avoid repeating the same numbers
+// twice in a two-paragraph recap.
+// GENERATED-FN-END: bestBowlingLine
+// GENERATED-FN-START: standoutMilestones
+function standoutMilestones(match) {
+  const lines = [];
+  for (const inn of match.innings || []) {
+    for (const m of inn.milestones || []) {
+      if (m.type === "hatTrick" || m.type === "fiveFor") lines.push(m.text);
+    }
+  }
+  return lines;
+}
+
+// Builds the plain-text recap draft for a completed match. Returns null for anything not actually
+// finished (matchResultText's own contract) rather than guessing at an incomplete match.
+// GENERATED-FN-END: standoutMilestones
+// GENERATED-FN-START: buildMatchRecapDraft
+function buildMatchRecapDraft(match) {
+  const result = matchResultText(match, null);
+  if (result == null) return null;
+  const [i1, i2] = match.innings;
+  const sentences = [inningsLine(i1) + "."];
+  if (i2) sentences.push(inningsLine(i2) + ".");
+  const bowling = [i1, i2].filter(Boolean).map(bestBowlingLine).filter(Boolean);
+  if (bowling.length) sentences.push(bowling.join(". ") + ".");
+  for (const line of standoutMilestones(match)) sentences.push(line + ".");
+  sentences.push(result + ".");
+  const pom = suggestPlayerOfMatch(match);
+  if (pom) sentences.push(`${pom} was named Player of the Match.`);
+  return sentences.join(" ");
+}
+// GENERATED-FN-END: buildMatchRecapDraft
 // WMO weather interpretation codes (the `weather_code` Open-Meteo returns) -> a short label and an
 // emoji rather than a hand-authored SVG icon, consistent with how venue already uses a plain pin
 // emoji rather than a custom icon component on this card.
@@ -39707,6 +39780,26 @@ function ResultScreen({
   const impactSubs = impactSubsText(match.impactSubs);
   const [startingSuperOver, setStartingSuperOver] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
+  // Match recap: a deterministic, zero-cost draft (buildMatchRecapDraft -- no network call) shown
+  // by default, with an optional "Polish with AI" step layered on top (polishMatchRecap, a bare
+  // global that POSTs to the recap-polish Worker -- see worker/ in the repo). Available to whoever
+  // already has this match's result screen open, same as every other action here (Share, Export
+  // PDF, Fix a mistake) -- not admin-gated: this app's one "admin" concept (isFeedbackAdmin) is a
+  // single hardcoded email for the feedback inbox, not a role that makes sense to require here.
+  const recapDraft = buildMatchRecapDraft(match);
+  const [recap, setRecap] = useState(null);
+  const [recapLoading, setRecapLoading] = useState(false);
+  async function handlePolishRecap() {
+    if (recapLoading || !recapDraft) return;
+    setRecapLoading(true);
+    const result = await polishMatchRecap(recapDraft);
+    setRecap(result);
+    setRecapLoading(false);
+  }
+  function handleCopyRecap() {
+    const text = recap ? recap.text : recapDraft;
+    if (text && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+  }
   // startsWith, not ===, since a decided Super Over appends " — {team} won the Super Over" to
   // this same string (see matchResultText) -- still a tie in every way that matters here (offering
   // a NEW Super Over, reopening the innings), just no longer literally the bare "Match tied" text.
@@ -40043,7 +40136,49 @@ function ResultScreen({
   }), /*#__PURE__*/React.createElement(BestFielderCard, {
     match: match,
     setMatch: setMatch
-  }), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+  }), recapDraft && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 6px 18px rgba(42,36,32,0.05)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13,
+      color: COLORS.ink,
+      marginBottom: 8
+    }
+  }, "Match recap"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13.5,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6,
+      marginBottom: 10
+    }
+  }, recap ? recap.text : recapDraft), recap && !recap.polished && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      fontStyle: "italic",
+      marginBottom: 10
+    }
+  }, "AI polish unavailable right now — showing the plain recap."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, !recap && /*#__PURE__*/React.createElement(Btn, {
+    onClick: handlePolishRecap,
+    disabled: recapLoading
+  }, recapLoading ? "Polishing…" : "✨ Polish with AI"), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleCopyRecap
+  }, "Copy"))), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       background: COLORS.surface,

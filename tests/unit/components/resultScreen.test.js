@@ -26,6 +26,7 @@ afterEach(() => {
   delete globalThis.saveMatch;
   delete globalThis.loadMatch;
   delete globalThis.Modal;
+  delete globalThis.polishMatchRecap;
 });
 
 function inning(overrides = {}) {
@@ -184,4 +185,39 @@ test("ResultScreen: isTied + superOver rule hides PlayerOfMatchCard in favor of 
   });
   const inst = renderScreen(tied);
   assert.match(JSON.stringify(inst.toJSON()), /Player of the Match will be picked once the Super Over settles it\./);
+});
+
+test("ResultScreen: shows the deterministic recap draft with a 'Polish with AI' button, available to whoever has the match open (no admin gate)", () => {
+  const inst = renderScreen(completeMatch());
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside CC made 150\/8/);
+  const polishBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Polish with AI"));
+  assert.ok(polishBtn, "expected a 'Polish with AI' button");
+});
+
+test("ResultScreen: 'Polish with AI' calls the bare-global polishMatchRecap and swaps in the polished text", async () => {
+  let calledWith = null;
+  globalThis.polishMatchRecap = draft => {
+    calledWith = draft;
+    return Promise.resolve({ text: "A cracking win for Riverside CC!", polished: true, provider: "gemini" });
+  };
+  const inst = renderScreen(completeMatch());
+  const polishBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Polish with AI"));
+  await act(async () => {
+    await polishBtn.props.onClick();
+  });
+  assert.match(calledWith, /Riverside CC made 150\/8/);
+  assert.match(JSON.stringify(inst.toJSON()), /A cracking win for Riverside CC!/);
+  // Once polished, the button disappears rather than offering to re-polish.
+  assert.equal(inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Polish with AI")), undefined);
+});
+
+test("ResultScreen: a failed/unconfigured polish falls back to the plain draft with an explanatory note", async () => {
+  globalThis.polishMatchRecap = draft => Promise.resolve({ text: draft, polished: false });
+  const inst = renderScreen(completeMatch());
+  const polishBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Polish with AI"));
+  await act(async () => {
+    await polishBtn.props.onClick();
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /AI polish unavailable right now/);
 });
