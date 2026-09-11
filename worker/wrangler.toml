@@ -6,9 +6,12 @@ compatibility_date = "2026-09-01"
 # (e.g. "https://www.clubscorer.com,https://billundcricket.dk"). Left unset, CORS allows any origin
 # -- fine for local testing, tighten before sharing the Worker's URL anywhere public.
 # DEFAULT_PROVIDER: "gemini" or "groq", used when a request doesn't specify one. Defaults to
-# "gemini" in code if unset here.
+# "gemini" in code if unset here. Set to "groq" here (not the code default) since Groq responds
+# faster and, not being a thinking model, doesn't share Gemini's truncation issue (see
+# GEMINI_MAX_OUTPUT_TOKENS in recap-worker.js) -- Gemini is still tried as the automatic fallback
+# if Groq ever fails.
 [vars]
 ALLOWED_ORIGIN = ""
-DEFAULT_PROVIDER = "gemini"
+DEFAULT_PROVIDER = "groq"
 
 # Secrets (GEMINI_API_KEY, GROQ_API_KEY) are NOT set here -- see README.md, `wrangler secret put`.

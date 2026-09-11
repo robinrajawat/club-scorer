@@ -46,12 +46,16 @@ const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; used for
 // Gemini-specific, deliberately higher than MAX_OUTPUT_TOKENS: gemini-3.6-flash thinks by default
 // and thinking tokens count against maxOutputTokens the same as the visible reply -- at 150 the
 // model was burning the entire budget on reasoning and returning a near-empty/truncated reply
-// (confirmed live: a 3-word draft polish came back as literally ")"). This is a stopgap trading
-// some of the token-efficiency goal (see file header) for a working reply while the correct
-// thinkingConfig shape for this model is still unverified (its predecessor's shape, thinkingBudget:
-// 0, was REJECTED outright with a 400 -- see the git history here). Revisit once that's confirmed:
-// properly disabling thinking should let this come back down near MAX_OUTPUT_TOKENS.
-const GEMINI_MAX_OUTPUT_TOKENS = 1024;
+// (confirmed live: a 3-word draft polish came back as literally ")"). 1024 was tried first and
+// still wasn't always enough -- thinking-token consumption varies per request, and one real test
+// still came back cut off mid-sentence at that budget. This is a stopgap trading a meaningful chunk
+// of the token-efficiency goal (see file header) for a working reply while the correct thinkingConfig
+// shape for this model is still unverified (its predecessor's shape, thinkingBudget: 0, was REJECTED
+// outright with a 400 -- see the git history here); Gemini also isn't the primary provider anymore
+// (see DEFAULT_PROVIDER in wrangler.toml -- Groq, which isn't a thinking model, goes first), so this
+// budget mostly matters for the fallback path now, not the common case. Revisit once the correct
+// thinkingConfig shape is confirmed: properly disabling thinking should let this come back down.
+const GEMINI_MAX_OUTPUT_TOKENS = 2048;
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days -- a completed match's recap is immutable, so this is really "cache forever" in practice
 const SYSTEM_INSTRUCTION = "Rewrite this cricket match recap in a livelier tone, 2-4 short sentences. Keep every name, number, and result exactly as given. Reply with only the rewritten text.";
 
