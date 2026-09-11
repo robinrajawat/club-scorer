@@ -1572,11 +1572,10 @@ async function searchAddress(query) {
   }
 }
 // Cloudflare Worker URL for the optional "polish match recap with AI" step (see worker/ in the
-// repo -- not deployed by default). Empty until a Worker is actually deployed and this is set to
-// its URL, in which case polishMatchRecap below always falls back to the plain draft it was given,
-// exactly like a network failure at that URL would -- ResultScreen's recap card already treats
-// "polish unavailable" as a normal, expected outcome, not an error state.
-const RECAP_WORKER_URL = "";
+// repo). If this is ever unset or the Worker becomes unreachable, polishMatchRecap below falls
+// back to the plain draft it was given, exactly like this happening on purpose -- ResultScreen's
+// recap card already treats "polish unavailable" as a normal, expected outcome, not an error state.
+const RECAP_WORKER_URL = "https://ai.clubscorer.com";
 async function polishMatchRecap(draft, provider) {
   if (!RECAP_WORKER_URL) return { text: draft, polished: false };
   try {
