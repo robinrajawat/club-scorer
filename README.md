@@ -67,6 +67,7 @@ Ball-by-ball cricket scoring for friendly club and social games. Single HTML fil
 **After the match**
 - Full scorecard with batting and bowling figures, toss result, Player of the Match, and Best Fielder (catches + run outs) — both auto-suggested with the reasoning shown (runs + 20/wicket for Player of the Match; most fielding dismissals for Best Fielder) or picked manually from anyone in the match.
 - Saved matches show a relative date at a glance — Today, Yesterday, or the day and date further back.
+- A **match recap** on the result screen, built entirely offline from the match's own result, top scorer/bowler, and milestones — no account or network needed. An optional "Polish with AI" button (available only to whoever has the match's own result screen open, not shown on the public live-follow page) sends that text to a third-party AI provider to rephrase it more vividly; skipping it leaves the plain recap exactly as it was.
 
 **Tournaments**
 - Build a group stage with one tap — round-robin fixtures (single or double, so every team plays every other team once or twice) generated automatically from whichever teams you pick, including teams borrowed from other clubs in the same federation. Dates are left blank on generation and filled in later per-fixture with a native date/time picker, since a real club season's scheduling rarely maps onto anything a generator could guess.
