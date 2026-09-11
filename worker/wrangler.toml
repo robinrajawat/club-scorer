@@ -2,16 +2,19 @@ name = "club-scorer-recap"
 main = "recap-worker.js"
 compatibility_date = "2026-09-01"
 
-# Non-secret config. ALLOWED_ORIGIN: comma-separated list of origins allowed to call this Worker
-# (e.g. "https://www.clubscorer.com,https://billundcricket.dk"). Left unset, CORS allows any origin
-# -- fine for local testing, tighten before sharing the Worker's URL anywhere public.
+# Non-secret config. ALLOWED_ORIGIN: comma-separated list of origins allowed to call this Worker.
+# Set to the app's own domain (public/CNAME) plus its bare form, in case that ever resolves
+# directly rather than always redirecting to www -- this Worker's URL (RECAP_WORKER_URL in
+# public/index.html) has been public since the app first wired it in, so this was always overdue,
+# not merely "tighten before sharing publicly" as originally written here. Left unset, CORS allows
+# any origin.
 # DEFAULT_PROVIDER: "gemini" or "groq", used when a request doesn't specify one. Defaults to
 # "gemini" in code if unset here. Set to "groq" here (not the code default) since Groq responds
 # faster and, not being a thinking model, doesn't share Gemini's truncation issue (see
 # GEMINI_MAX_OUTPUT_TOKENS in recap-worker.js) -- Gemini is still tried as the automatic fallback
 # if Groq ever fails.
 [vars]
-ALLOWED_ORIGIN = ""
+ALLOWED_ORIGIN = "https://www.clubscorer.com,https://clubscorer.com"
 DEFAULT_PROVIDER = "groq"
 
 # Secrets (GEMINI_API_KEY, GROQ_API_KEY) are NOT set here -- see README.md, `wrangler secret put`.
