@@ -77,9 +77,16 @@ async function callGemini(draft, env) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
       contents: [{ role: "user", parts: [{ text: draft }] }],
+      // thinkingConfig dropped: gemini-2.0-flash's retirement (see DEFAULT_GEMINI_MODEL) also broke
+      // this call with a bare "400 INVALID_ARGUMENT" once switched to gemini-3.6-flash -- no field-
+      // level detail in Gemini's error body, and this session has no reachable, verified source for
+      // that model's current request shape (postdates training data; Google's docs are also
+      // unreachable from this sandbox's network policy). thinkingConfig is the least-certain, newest
+      // part of this request and isn't load-bearing (a defensive cost control, not correctness), so
+      // it's the first thing to drop while isolating the actual cause -- re-add once confirmed
+      // working again, ideally against gemini-3.6-flash's own current docs rather than guessed back in.
       generationConfig: {
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: 0 } // see file header -- this task needs no reasoning step
+        maxOutputTokens: MAX_OUTPUT_TOKENS
       }
     })
   });
