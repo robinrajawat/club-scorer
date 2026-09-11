@@ -1,0 +1,14 @@
+name = "club-scorer-recap"
+main = "recap-worker.js"
+compatibility_date = "2026-09-01"
+
+# Non-secret config. ALLOWED_ORIGIN: comma-separated list of origins allowed to call this Worker
+# (e.g. "https://www.clubscorer.com,https://billundcricket.dk"). Left unset, CORS allows any origin
+# -- fine for local testing, tighten before sharing the Worker's URL anywhere public.
+# DEFAULT_PROVIDER: "gemini" or "groq", used when a request doesn't specify one. Defaults to
+# "gemini" in code if unset here.
+[vars]
+ALLOWED_ORIGIN = ""
+DEFAULT_PROVIDER = "gemini"
+
+# Secrets (GEMINI_API_KEY, GROQ_API_KEY) are NOT set here -- see README.md, `wrangler secret put`.
