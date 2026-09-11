@@ -63,16 +63,28 @@ export function ResultScreen({
   const recapDraft = buildMatchRecapDraft(match);
   const [recap, setRecap] = useState(null);
   const [recapLoading, setRecapLoading] = useState(false);
+  const [recapCopied, setRecapCopied] = useState(false);
   async function handlePolishRecap() {
     if (recapLoading || !recapDraft) return;
     setRecapLoading(true);
     const result = await polishMatchRecap(recapDraft);
+    // The Worker's own `error` field (missing key, provider error, bad response shape -- see
+    // worker/recap-worker.js) is deliberately never shown in the UI itself (a scorer doesn't need
+    // to see "GEMINI_API_KEY not configured", they just see the plain recap stay as-is), but
+    // throwing it away entirely left this failure mode completely silent -- no console error,
+    // nothing -- since the Worker still responds 200 with `polished:false` rather than an HTTP
+    // error. Logging it is the only diagnostic trail for whoever's actually running the Worker.
+    if (!result.polished && result.error) console.warn("[polishMatchRecap] AI polish unavailable:", result.error);
     setRecap(result);
     setRecapLoading(false);
   }
   function handleCopyRecap() {
     const text = recap ? recap.text : recapDraft;
-    if (text && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    if (!text || !navigator.clipboard || !navigator.clipboard.writeText) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setRecapCopied(true);
+      setTimeout(() => setRecapCopied(false), 1500);
+    }).catch(() => {});
   }
   // startsWith, not ===, since a decided Super Over appends " — {team} won the Super Over" to
   // this same string (see matchResultText) -- still a tie in every way that matters here (offering
