@@ -39,7 +39,16 @@
 const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 const MAX_DRAFT_LENGTH = 1200; // a buildMatchRecapDraft() output is a few hundred chars; this leaves headroom without inviting abuse-sized input
-const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; caps worst-case spend per call on both providers
+const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; used for Groq, which isn't a thinking model
+// Gemini-specific, deliberately higher than MAX_OUTPUT_TOKENS: gemini-3.6-flash thinks by default
+// and thinking tokens count against maxOutputTokens the same as the visible reply -- at 150 the
+// model was burning the entire budget on reasoning and returning a near-empty/truncated reply
+// (confirmed live: a 3-word draft polish came back as literally ")"). This is a stopgap trading
+// some of the token-efficiency goal (see file header) for a working reply while the correct
+// thinkingConfig shape for this model is still unverified (its predecessor's shape, thinkingBudget:
+// 0, was REJECTED outright with a 400 -- see the git history here). Revisit once that's confirmed:
+// properly disabling thinking should let this come back down near MAX_OUTPUT_TOKENS.
+const GEMINI_MAX_OUTPUT_TOKENS = 1024;
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days -- a completed match's recap is immutable, so this is really "cache forever" in practice
 const SYSTEM_INSTRUCTION = "Rewrite this cricket match recap in a livelier tone, 2-4 short sentences. Keep every name, number, and result exactly as given. Reply with only the rewritten text.";
 
@@ -86,7 +95,7 @@ async function callGemini(draft, env) {
       // it's the first thing to drop while isolating the actual cause -- re-add once confirmed
       // working again, ideally against gemini-3.6-flash's own current docs rather than guessed back in.
       generationConfig: {
-        maxOutputTokens: MAX_OUTPUT_TOKENS
+        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS
       }
     })
   });
