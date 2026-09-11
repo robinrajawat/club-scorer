@@ -356,7 +356,12 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   than resolving a one-shot promise); tests drive updates by calling
   the captured `onNext`/`onError` directly. Celebration/milestone-toast
   tests call `onNext` twice and check `BallCelebration`/
-  `MilestoneToast`'s own props via `findByType`.
+  `MilestoneToast`'s own props via `findByType`. Also renders the same
+  `buildMatchRecapDraft` recap text `ResultScreen` shows (from
+  `matchRecap.js` — see above), but read-only: no "Polish with AI" or Copy
+  action here, since this page is reached anonymously by anyone with the
+  link and the Worker call is deliberately kept one tap away for the
+  match's own owner only, not offered to every follower.
 - `src/components/authBar.js` / `tests/unit/components/authBar.test.js`
   — `AuthBar`, the account button + popover menu in the app header.
   Like `ShareMenu`, its menu only calls

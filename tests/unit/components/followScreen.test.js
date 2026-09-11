@@ -374,3 +374,24 @@ test("FollowScreen: never shows the staleness hint on a completed match", t => {
   act(() => { t.mock.timers.tick(10 * 60 * 1000); });
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /No updates in a while/);
 });
+
+test("FollowScreen: a completed match shows the read-only recap text, with no Polish/Copy action (this page is reached anonymously)", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  const i1 = inning({ battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC", runs: 150, wickets: 6, legalBalls: 120, overs: [] });
+  const i2 = inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 120, wickets: 10, legalBalls: 114, overs: [] });
+  const match = matchWith([i1, i2], { status: "complete" });
+  act(() => { captured.onNext({ exists: true, data: () => match }); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside CC made 150\/6/);
+  assert.doesNotMatch(text, /Polish with AI/);
+  assert.doesNotMatch(text, />Copy</);
+});
+
+test("FollowScreen: an in-progress match shows no recap text (buildMatchRecapDraft returns null)", () => {
+  const captured = {};
+  const inst = renderScreen(captured);
+  const match = matchWith([inning()]); // status: "in-progress" (matchWith's default)
+  act(() => { captured.onNext({ exists: true, data: () => match }); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /made \d+\/\d+ in/);
+});

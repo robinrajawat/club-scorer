@@ -5,6 +5,7 @@ import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
 import { Share, Check, Info } from "./icons.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
+import { buildMatchRecapDraft } from "../core/matchRecap.js";
 import { matchResultText, matchScoreLine, buildFollowUrl, buildFollowMatchUrl, tossText, nonStandardRulesText, umpiresText } from "../core/shareAndFormat.js";
 import { lastBallCommentary } from "../core/scoringEngine.js";
 
@@ -322,6 +323,12 @@ export function FollowScreen({
     }, "Go to Club Scorer")));
   }
   const resultText = matchResultText(match);
+  // Read-only, text-only -- same buildMatchRecapDraft ResultScreen uses, but deliberately no
+  // "Polish with AI" button or Copy action here: this page is reached anonymously by anyone with
+  // the link, and the Worker call is a credentialed action that should only ever be one tap away
+  // for the match's own owner, not offered to every follower. null for anything not yet complete
+  // (buildMatchRecapDraft's own contract), so this naturally only ever shows post-match.
+  const recapDraft = buildMatchRecapDraft(match);
   const inningsBreak = match.awaitingSecondInningsSetup && match.status !== "complete";
   const inningsBreakText = inningsBreak && match.innings[0] ? `Innings break \u2014 ${match.innings[0].bowlingTeam} need ${match.innings[0].runs + 1} to win` : null;
   // Same three fields MatchInfoFold already surfaces on the scorer's own Scorecard overlay --
@@ -504,7 +511,19 @@ export function FollowScreen({
       maxWidth: 560,
       margin: "4px auto 0"
     }
-  }, resultText || inningsBreakText)), /*#__PURE__*/React.createElement(MatchStatsPanel, {
+  }, resultText || inningsBreakText)), recapDraft && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.surface,
+      borderRadius: 14,
+      padding: 14,
+      maxWidth: 560,
+      margin: "12px auto 0",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.6
+    }
+  }, recapDraft), /*#__PURE__*/React.createElement(MatchStatsPanel, {
     match: match,
     tab: tab,
     setTab: setTab,
