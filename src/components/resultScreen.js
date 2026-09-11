@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Trophy, Undo2 } from "./icons.js";
+import { ChevronLeft, Trophy, Undo2, Check } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { ExportPdfButton } from "./exportButtons.js";
 import { PlayerOfMatchCard, BestFielderCard } from "./matchInsightCards.js";
@@ -468,7 +468,9 @@ export function ResultScreen({
     disabled: recapLoading
   }, recapLoading ? "Polishing…" : "✨ Polish with AI"), /*#__PURE__*/React.createElement(Btn, {
     onClick: handleCopyRecap
-  }, "Copy"))), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
+  }, recapCopied ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+    size: 14
+  }), "Copied!") : "Copy"))), [i1, i2].filter(Boolean).map((inn, idx) => /*#__PURE__*/React.createElement("div", {
     key: idx,
     style: {
       background: COLORS.surface,

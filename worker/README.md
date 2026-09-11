@@ -31,10 +31,14 @@ wrangler secret put GROQ_API_KEY     # optional, only if you want Groq too
 wrangler deploy
 ```
 
-Before deploying somewhere the URL will be public, set `ALLOWED_ORIGIN` in
-`wrangler.toml` to the actual site(s) that should be allowed to call it (e.g.
-`https://www.clubscorer.com`) — left blank, CORS allows any origin, which is
-fine for local testing but not for a live URL with real API keys behind it.
+`ALLOWED_ORIGIN` in `wrangler.toml` is already set to the app's own domain
+(`https://www.clubscorer.com,https://clubscorer.com`) — left blank, CORS
+allows any origin, fine for local testing but not for a live URL with real
+API keys behind it. `wrangler deploy` picks this up automatically; deploying
+via the dashboard's own editor (as this Worker currently is — see below)
+needs it set separately as a **Variable** (not Secret) under Settings →
+Variables and Secrets, since a dashboard paste doesn't read `wrangler.toml`
+at all.
 
 ## Request shape
 
