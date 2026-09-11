@@ -7,10 +7,13 @@
 // already correct before it saw them, and if the call fails for any reason the caller still has the
 // original draft to fall back to -- this endpoint is additive, not load-bearing.
 //
-// Two providers, both with a free tier, picked between at request time (falling back to
-// DEFAULT_PROVIDER): Gemini (generativelanguage.googleapis.com) and Groq (api.groq.com, OpenAI-
-// compatible chat-completions shape, serving open-weight models like Llama). Each needs its own API
-// key as a Worker secret -- see README.md in this directory for setup.
+// Two providers, both with a free tier: Gemini (generativelanguage.googleapis.com) and Groq
+// (api.groq.com, OpenAI-compatible chat-completions shape, serving open-weight models like Llama).
+// The request's `provider` field (or DEFAULT_PROVIDER) picks which one is tried FIRST, but not the
+// only one tried -- if it fails for any reason, every other configured provider is tried in turn
+// before giving up, so one provider having a bad day (a retired model, a tripped quota, an outage)
+// doesn't take the whole feature down as long as another is configured. Each provider needs its own
+// API key as a Worker secret -- see README.md in this directory for setup.
 //
 // Token efficiency, since a free tier's quota is the whole point of using one -- three deliberate
 // choices, in order of how much quota they actually save:
@@ -39,7 +42,16 @@
 const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 const MAX_DRAFT_LENGTH = 1200; // a buildMatchRecapDraft() output is a few hundred chars; this leaves headroom without inviting abuse-sized input
-const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; caps worst-case spend per call on both providers
+const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; used for Groq, which isn't a thinking model
+// Gemini-specific, deliberately higher than MAX_OUTPUT_TOKENS: gemini-3.6-flash thinks by default
+// and thinking tokens count against maxOutputTokens the same as the visible reply -- at 150 the
+// model was burning the entire budget on reasoning and returning a near-empty/truncated reply
+// (confirmed live: a 3-word draft polish came back as literally ")"). This is a stopgap trading
+// some of the token-efficiency goal (see file header) for a working reply while the correct
+// thinkingConfig shape for this model is still unverified (its predecessor's shape, thinkingBudget:
+// 0, was REJECTED outright with a 400 -- see the git history here). Revisit once that's confirmed:
+// properly disabling thinking should let this come back down near MAX_OUTPUT_TOKENS.
+const GEMINI_MAX_OUTPUT_TOKENS = 1024;
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days -- a completed match's recap is immutable, so this is really "cache forever" in practice
 const SYSTEM_INSTRUCTION = "Rewrite this cricket match recap in a livelier tone, 2-4 short sentences. Keep every name, number, and result exactly as given. Reply with only the rewritten text.";
 
@@ -59,8 +71,17 @@ function corsHeaders(request, env) {
 // drafts (unlikely, but e.g. two rain-abandoned matches with the same score line) legitimately
 // share one cached polish, and nothing needs to know about matches/IDs at all, which keeps this
 // Worker match-schema-agnostic.
+//
+// CACHE_VERSION is folded into the key specifically so it CAN be invalidated -- a real incident
+// showed why: the request-building logic changed (dropping thinkingConfig, raising the output
+// budget) but the cache didn't know that, and kept serving a draft's already-cached BROKEN reply
+// (a literal ")" from the truncated-by-thinking-tokens bug) for the rest of its 7-day TTL even
+// after the fix deployed, since the cache key never changed for that exact (provider, draft) pair.
+// Bump this string on any future change to what actually gets sent to a provider or how its reply
+// is parsed -- anything that could change what a given draft SHOULD produce.
+const CACHE_VERSION = "2";
 async function cacheKeyFor(provider, draft) {
-  const bytes = new TextEncoder().encode(`${provider}:${draft}`);
+  const bytes = new TextEncoder().encode(`${CACHE_VERSION}:${provider}:${draft}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
   return new Request(`https://recap-cache.internal/${provider}/${hex}`);
@@ -77,9 +98,16 @@ async function callGemini(draft, env) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
       contents: [{ role: "user", parts: [{ text: draft }] }],
+      // thinkingConfig dropped: gemini-2.0-flash's retirement (see DEFAULT_GEMINI_MODEL) also broke
+      // this call with a bare "400 INVALID_ARGUMENT" once switched to gemini-3.6-flash -- no field-
+      // level detail in Gemini's error body, and this session has no reachable, verified source for
+      // that model's current request shape (postdates training data; Google's docs are also
+      // unreachable from this sandbox's network policy). thinkingConfig is the least-certain, newest
+      // part of this request and isn't load-bearing (a defensive cost control, not correctness), so
+      // it's the first thing to drop while isolating the actual cause -- re-add once confirmed
+      // working again, ideally against gemini-3.6-flash's own current docs rather than guessed back in.
       generationConfig: {
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: 0 } // see file header -- this task needs no reasoning step
+        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS
       }
     })
   });
@@ -139,34 +167,48 @@ export default {
       return new Response(JSON.stringify({ error: `draft must be a non-empty string under ${MAX_DRAFT_LENGTH} characters` }), { status: 400, headers: { ...headers, "Content-Type": "application/json" } });
     }
 
-    const provider = PROVIDERS[body.provider] ? body.provider : env.DEFAULT_PROVIDER in PROVIDERS ? env.DEFAULT_PROVIDER : "gemini";
-    const { call, keyName } = PROVIDERS[provider];
+    const preferred = PROVIDERS[body.provider] ? body.provider : env.DEFAULT_PROVIDER in PROVIDERS ? env.DEFAULT_PROVIDER : "gemini";
+    // Try the preferred provider first, then fall back through the others -- one provider having a
+    // bad day (a retired model, a tripped quota, an outage) no longer takes the whole feature down,
+    // it just silently falls through to whichever provider actually still works. This is the one
+    // thing worth adopting from a sibling project's own AI-gateway Worker (sakura-notes.com's
+    // ai/complete endpoint) after today's incident: gemini-2.0-flash's retirement broke every single
+    // request with no fallback, even though Groq (unaffected) was configured and ready the whole
+    // time.
+    const order = [preferred, ...Object.keys(PROVIDERS).filter(p => p !== preferred)];
+    const configured = order.filter(p => !!env[PROVIDERS[p].keyName]);
 
     const respond = (payload) => new Response(JSON.stringify(payload), { headers: { ...headers, "Content-Type": "application/json" } });
 
-    if (!env[keyName]) {
+    if (configured.length === 0) {
       // Not configured -- fall back to the original draft rather than a hard error, since the
       // polish step is optional and the caller already has a perfectly usable recap without it.
-      return respond({ draft, text: draft, polished: false, provider, error: `${keyName} not configured` });
+      return respond({ draft, text: draft, polished: false, provider: preferred, error: `${PROVIDERS[preferred].keyName} not configured` });
     }
 
     const cache = caches.default;
-    const cacheKey = await cacheKeyFor(provider, draft);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      const text = await cached.text();
-      return respond({ draft, text, polished: true, provider, cached: true });
+    const errors = [];
+    for (const provider of configured) {
+      const cacheKey = await cacheKeyFor(provider, draft);
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const text = await cached.text();
+        return respond({ draft, text, polished: true, provider, cached: true });
+      }
+      try {
+        const text = await PROVIDERS[provider].call(draft, env);
+        // Cache-write happens after the response is already on its way back to the caller --
+        // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
+        // request's own latency.
+        ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
+        return respond({ draft, text, polished: true, provider });
+      } catch (err) {
+        errors.push(`${provider}: ${String(err.message || err)}`);
+      }
     }
-
-    try {
-      const text = await call(draft, env);
-      // Cache-write happens after the response is already on its way back to the caller --
-      // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
-      // request's own latency.
-      ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
-      return respond({ draft, text, polished: true, provider });
-    } catch (err) {
-      return respond({ draft, text: draft, polished: false, provider, error: String(err.message || err) });
-    }
+    // Every configured provider failed -- report all of them, not just the last, so whoever's
+    // reading the console.warn on the other end (see ResultScreen's handlePolishRecap) doesn't have
+    // to guess which one actually mattered.
+    return respond({ draft, text: draft, polished: false, provider: preferred, error: errors.join("; ") });
   }
 };
