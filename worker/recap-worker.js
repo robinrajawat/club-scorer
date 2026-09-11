@@ -71,8 +71,17 @@ function corsHeaders(request, env) {
 // drafts (unlikely, but e.g. two rain-abandoned matches with the same score line) legitimately
 // share one cached polish, and nothing needs to know about matches/IDs at all, which keeps this
 // Worker match-schema-agnostic.
+//
+// CACHE_VERSION is folded into the key specifically so it CAN be invalidated -- a real incident
+// showed why: the request-building logic changed (dropping thinkingConfig, raising the output
+// budget) but the cache didn't know that, and kept serving a draft's already-cached BROKEN reply
+// (a literal ")" from the truncated-by-thinking-tokens bug) for the rest of its 7-day TTL even
+// after the fix deployed, since the cache key never changed for that exact (provider, draft) pair.
+// Bump this string on any future change to what actually gets sent to a provider or how its reply
+// is parsed -- anything that could change what a given draft SHOULD produce.
+const CACHE_VERSION = "2";
 async function cacheKeyFor(provider, draft) {
-  const bytes = new TextEncoder().encode(`${provider}:${draft}`);
+  const bytes = new TextEncoder().encode(`${CACHE_VERSION}:${provider}:${draft}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
   return new Request(`https://recap-cache.internal/${provider}/${hex}`);
