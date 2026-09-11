@@ -43,13 +43,33 @@ On any failure (missing key, provider error, bad response shape), it returns
 `polished: false` with `text` equal to the original `draft` — the caller
 always gets back something usable, never a hard error.
 
+## Token efficiency
+
+Free-tier quota is the actual constraint here, not latency, so three things
+are deliberate:
+
+- **Response caching** — `caches.default` (Workers' built-in edge cache, no
+  paid KV needed), keyed by a hash of `(provider, draft)`. A match's recap
+  never changes once scored, so the same draft is only ever sent to the LLM
+  once; every repeat call for it (a retry, a re-opened screen) is a cache hit
+  and costs zero tokens. Cached for 7 days — effectively "forever" for a
+  finished match. A response includes `"cached": true` when this fires.
+- **Capped output** (`MAX_OUTPUT_TOKENS` = 150) — a recap is 2-4 sentences,
+  not an essay; this bounds worst-case spend per call on both providers.
+- **Thinking off for Gemini** (`thinkingConfig.thinkingBudget: 0`) — the
+  default model doesn't think by default, but if `GEMINI_MODEL` ever gets
+  pointed at a thinking-capable variant, reasoning tokens are quota'd the
+  same as output tokens and can dwarf the visible reply for a task this
+  simple. Set defensively rather than left to the model's own default.
+
 ## Known gaps (not built here)
 
 - **No rate limiting.** Anyone with the Worker's URL can call it as fast as
-  Cloudflare allows, which could burn through a free-tier quota. Cloudflare's
-  own [rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/)
-  (dashboard, no code change) or a KV-backed counter in the Worker itself are
-  both reasonable next steps if this gets real traffic.
+  Cloudflare allows — the caching above only helps for a *repeated* draft,
+  not a flood of distinct ones. Cloudflare's own
+  [rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/)
+  (dashboard, no code change) are the natural next step if this gets real
+  traffic.
 - **Model IDs may drift.** `GEMINI_MODEL`/`GROQ_MODEL` vars override the
   hardcoded defaults (`recap-worker.js`) without a redeploy if a model gets
   retired or renamed — check each provider's current model list if a call
