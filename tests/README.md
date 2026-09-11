@@ -42,6 +42,23 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   player avatars, over-label parsing, feedback/auth-error copy, and
   `window.location` query-param readers (same try/catch fallback pattern
   as `buildPollUrl`/`buildFollowUrl` above).
+- `src/core/matchRecap.js` / `tests/unit/matchRecap.test.js` — the deterministic, zero-cost
+  match-recap draft (`buildMatchRecapDraft`), built entirely from data already computed elsewhere
+  (`matchResultText`, `suggestPlayerOfMatch`, an innings' own `milestones`) — no network call. Its
+  three private helpers (`inningsLine`/`bestBowlingLine`/`standoutMilestones`) are exported and each
+  individually registered in `scripts/generate.js`'s `FUNCTIONS` list purely so the splice pipeline
+  can find them — they sit ahead of the file's only originally-exported function in source order,
+  which is exactly the shape `auditReachability` (see that function's own comment in
+  `scripts/generate.js`) exists to catch: an unregistered helper positioned before every registered
+  export in its file is silently dropped from `public/index.html`, no error, until whatever calls it
+  throws a live `ReferenceError`. Rendered client-side in `ResultScreen` (see
+  `src/components/resultScreen.js` / `resultScreen.test.js`), with an optional "Polish with AI" step
+  that POSTs this draft to the Cloudflare Worker in `worker/` (not deployed by default —
+  `polishMatchRecap`/`RECAP_WORKER_URL`, hand-maintained bare globals in `public/index.html` like
+  `saveMatch`/`searchAddress`, fall back to the plain draft whenever no Worker URL is configured or
+  the call fails) — available to whoever already has the match's result screen open, not gated
+  behind this app's one "admin" concept (`isFeedbackAdmin`, a single hardcoded email for the
+  feedback inbox), since that would make the feature usable by nobody but the app's own owner.
 - `src/core/liveMatchRegistry.js` / `tests/unit/liveMatchRegistry.test.js`
   — the in-memory registry a background sync uses to update a live-open
   match's `writeSeq` outside React's normal render path. Pure closures
@@ -319,7 +336,10 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   `react-test-renderer`; tests exercise `onGetCode`/`onGetViewCode` by
   grabbing the `ShareMenu` element (`findByType(ShareMenu)`) and calling
   those props directly, without ever opening the popover (that's
-  `shareMenus.test.js`'s job).
+  `shareMenus.test.js`'s job). Also renders the match-recap card
+  (`buildMatchRecapDraft`, from `matchRecap.js` above) with its "Polish with
+  AI" button — `polishMatchRecap` (another bare global, not extracted) is
+  stubbed per test the same way `saveMatch`/`loadMatch` are.
 - `src/components/playersScreen.js` /
   `tests/unit/components/playersScreen.test.js` — `PlayersScreen`, the
   public player directory. Both mount effects call props
