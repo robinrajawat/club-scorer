@@ -75,6 +75,10 @@ export function ResultScreen({
     // nothing -- since the Worker still responds 200 with `polished:false` rather than an HTTP
     // error. Logging it is the only diagnostic trail for whoever's actually running the Worker.
     if (!result.polished && result.error) console.warn("[polishMatchRecap] AI polish unavailable:", result.error);
+    // A successful polish can still mean an earlier-preferred provider failed first and silently
+    // fell back (see recap-worker.js's fallbackErrors) -- worth knowing about even though it didn't
+    // block the result, e.g. the preferred provider having gone stale again.
+    if (result.polished && result.fallbackErrors && result.fallbackErrors.length) console.warn("[polishMatchRecap] succeeded via fallback; earlier provider(s) failed:", result.fallbackErrors);
     setRecap(result);
     setRecapLoading(false);
   }

@@ -205,7 +205,14 @@ export default {
         // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
         // request's own latency.
         ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
-        return respond({ draft, text, polished: true, provider });
+        // BUG FIX: a provider earlier in `configured` failing and this one succeeding used to
+        // discard the earlier failure entirely -- the caller only ever saw errors when EVERY
+        // provider failed, so a silent fallback (the preferred provider having a bad day, papered
+        // over by the next one working) was indistinguishable from the preferred provider actually
+        // succeeding. `fallbackErrors` surfaces that gap without changing `polished`/`text` at all.
+        const payload = { draft, text, polished: true, provider };
+        if (errors.length) payload.fallbackErrors = errors;
+        return respond(payload);
       } catch (err) {
         errors.push(`${provider}: ${String(err.message || err)}`);
       }
