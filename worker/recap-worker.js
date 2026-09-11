@@ -83,7 +83,7 @@ function corsHeaders(request, env) {
 // after the fix deployed, since the cache key never changed for that exact (provider, draft) pair.
 // Bump this string on any future change to what actually gets sent to a provider or how its reply
 // is parsed -- anything that could change what a given draft SHOULD produce.
-const CACHE_VERSION = "2";
+const CACHE_VERSION = "3"; // bumped again -- fallbackErrors is now attached on a cache hit too (see below), which a stale "2" entry wouldn't carry
 async function cacheKeyFor(provider, draft) {
   const bytes = new TextEncoder().encode(`${CACHE_VERSION}:${provider}:${draft}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -197,7 +197,14 @@ export default {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const text = await cached.text();
-        return respond({ draft, text, polished: true, provider, cached: true });
+        // Same fallbackErrors treatment as the fresh-success path below -- a cache hit reached only
+        // after an earlier provider failed IN THIS REQUEST needs to say so too, not just a fresh
+        // call. (Confirmed live: a request that fell through from a failing Groq to an
+        // already-cached Gemini entry returned cached:true with no trace of the Groq failure at
+        // all, since this branch never checked `errors`.)
+        const payload = { draft, text, polished: true, provider, cached: true };
+        if (errors.length) payload.fallbackErrors = errors;
+        return respond(payload);
       }
       try {
         const text = await PROVIDERS[provider].call(draft, env);
