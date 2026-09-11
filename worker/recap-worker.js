@@ -22,17 +22,21 @@
 // 2. Output is capped short server-side (maxOutputTokens/max_tokens below) -- a recap is 2-4
 //    sentences, not an essay, and an uncapped response risks the model rambling well past what's
 //    needed, which is pure wasted output-token spend on a free tier that counts them.
-// 3. Gemini's thinkingConfig is explicitly set to budget 0. gemini-2.0-flash (the default model
-//    below) doesn't think by default, but if GEMINI_MODEL is ever swapped to a "thinking" variant,
-//    thinking tokens are billed/quota'd like output tokens and can be 10-100x the size of the
-//    visible reply for a task this simple -- rephrasing a paragraph needs no reasoning step, so
-//    this is set defensively rather than left to whatever the model's own default happens to be.
+// 3. Gemini's thinkingConfig is explicitly set to budget 0, regardless of whether the current
+//    default model (see DEFAULT_GEMINI_MODEL below) thinks by default or not -- if GEMINI_MODEL is
+//    ever pointed at a "thinking" variant, thinking tokens are billed/quota'd like output tokens
+//    and can be 10-100x the size of the visible reply for a task this simple -- rephrasing a
+//    paragraph needs no reasoning step, so this stays set rather than relying on whatever the
+//    model's own default happens to be.
 //
 // Model IDs below are current as of when this was written but both providers retire/rename models
 // faster than this file will be revisited -- GEMINI_MODEL/GROQ_MODEL env vars override the
 // defaults without a code change if a call starts failing with a "model not found" error.
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+// gemini-2.0-flash was retired -- confirmed live via the deployed Worker's own 404 ("This model
+// models/gemini-2.0-flash is no longer available... use models/gemini-3.6-flash"), not guessed.
+// GEMINI_MODEL (env) still overrides this without a redeploy if it drifts again.
+const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 const MAX_DRAFT_LENGTH = 1200; // a buildMatchRecapDraft() output is a few hundred chars; this leaves headroom without inviting abuse-sized input
 const MAX_OUTPUT_TOKENS = 150; // 2-4 short sentences never needs more; caps worst-case spend per call on both providers
