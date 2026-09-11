@@ -6,8 +6,12 @@ rephrase it more vividly. Optional by design: if this Worker is never
 deployed, or a request to it fails, the app still has a complete, factually
 correct recap with zero network dependency.
 
-Two providers, both with a free tier, chosen per request (`provider: "gemini"`
-or `"groq"` in the POST body) or via the `DEFAULT_PROVIDER` var:
+Two providers, both with a free tier. `provider: "gemini"` or `"groq"` in the
+POST body (or the `DEFAULT_PROVIDER` var) picks which one is tried **first**,
+not the only one tried — if it fails for any reason, every other configured
+provider is tried in turn before giving up, so one provider having a bad day
+(a retired model, a tripped quota, an outage) doesn't take the whole feature
+down as long as another is configured:
 
 - **Gemini** — needs a key from [Google AI Studio](https://aistudio.google.com/apikey).
 - **Groq** — needs a key from [console.groq.com](https://console.groq.com/keys).
@@ -39,9 +43,10 @@ POST /  { "draft": "<the recap text>", "provider": "gemini" | "groq" }
 ->      { "draft": "...", "text": "...", "polished": true, "provider": "gemini" }
 ```
 
-On any failure (missing key, provider error, bad response shape), it returns
-`polished: false` with `text` equal to the original `draft` — the caller
-always gets back something usable, never a hard error.
+On any failure, it first tries every other configured provider before giving
+up; only once all of them have failed does it return `polished: false` with
+`text` equal to the original `draft` (and `error` naming what each one said)
+— the caller always gets back something usable, never a hard error.
 
 ## Token efficiency
 

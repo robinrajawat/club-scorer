@@ -7,10 +7,13 @@
 // already correct before it saw them, and if the call fails for any reason the caller still has the
 // original draft to fall back to -- this endpoint is additive, not load-bearing.
 //
-// Two providers, both with a free tier, picked between at request time (falling back to
-// DEFAULT_PROVIDER): Gemini (generativelanguage.googleapis.com) and Groq (api.groq.com, OpenAI-
-// compatible chat-completions shape, serving open-weight models like Llama). Each needs its own API
-// key as a Worker secret -- see README.md in this directory for setup.
+// Two providers, both with a free tier: Gemini (generativelanguage.googleapis.com) and Groq
+// (api.groq.com, OpenAI-compatible chat-completions shape, serving open-weight models like Llama).
+// The request's `provider` field (or DEFAULT_PROVIDER) picks which one is tried FIRST, but not the
+// only one tried -- if it fails for any reason, every other configured provider is tried in turn
+// before giving up, so one provider having a bad day (a retired model, a tripped quota, an outage)
+// doesn't take the whole feature down as long as another is configured. Each provider needs its own
+// API key as a Worker secret -- see README.md in this directory for setup.
 //
 // Token efficiency, since a free tier's quota is the whole point of using one -- three deliberate
 // choices, in order of how much quota they actually save:
@@ -155,34 +158,48 @@ export default {
       return new Response(JSON.stringify({ error: `draft must be a non-empty string under ${MAX_DRAFT_LENGTH} characters` }), { status: 400, headers: { ...headers, "Content-Type": "application/json" } });
     }
 
-    const provider = PROVIDERS[body.provider] ? body.provider : env.DEFAULT_PROVIDER in PROVIDERS ? env.DEFAULT_PROVIDER : "gemini";
-    const { call, keyName } = PROVIDERS[provider];
+    const preferred = PROVIDERS[body.provider] ? body.provider : env.DEFAULT_PROVIDER in PROVIDERS ? env.DEFAULT_PROVIDER : "gemini";
+    // Try the preferred provider first, then fall back through the others -- one provider having a
+    // bad day (a retired model, a tripped quota, an outage) no longer takes the whole feature down,
+    // it just silently falls through to whichever provider actually still works. This is the one
+    // thing worth adopting from a sibling project's own AI-gateway Worker (sakura-notes.com's
+    // ai/complete endpoint) after today's incident: gemini-2.0-flash's retirement broke every single
+    // request with no fallback, even though Groq (unaffected) was configured and ready the whole
+    // time.
+    const order = [preferred, ...Object.keys(PROVIDERS).filter(p => p !== preferred)];
+    const configured = order.filter(p => !!env[PROVIDERS[p].keyName]);
 
     const respond = (payload) => new Response(JSON.stringify(payload), { headers: { ...headers, "Content-Type": "application/json" } });
 
-    if (!env[keyName]) {
+    if (configured.length === 0) {
       // Not configured -- fall back to the original draft rather than a hard error, since the
       // polish step is optional and the caller already has a perfectly usable recap without it.
-      return respond({ draft, text: draft, polished: false, provider, error: `${keyName} not configured` });
+      return respond({ draft, text: draft, polished: false, provider: preferred, error: `${PROVIDERS[preferred].keyName} not configured` });
     }
 
     const cache = caches.default;
-    const cacheKey = await cacheKeyFor(provider, draft);
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      const text = await cached.text();
-      return respond({ draft, text, polished: true, provider, cached: true });
+    const errors = [];
+    for (const provider of configured) {
+      const cacheKey = await cacheKeyFor(provider, draft);
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const text = await cached.text();
+        return respond({ draft, text, polished: true, provider, cached: true });
+      }
+      try {
+        const text = await PROVIDERS[provider].call(draft, env);
+        // Cache-write happens after the response is already on its way back to the caller --
+        // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
+        // request's own latency.
+        ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
+        return respond({ draft, text, polished: true, provider });
+      } catch (err) {
+        errors.push(`${provider}: ${String(err.message || err)}`);
+      }
     }
-
-    try {
-      const text = await call(draft, env);
-      // Cache-write happens after the response is already on its way back to the caller --
-      // ctx.waitUntil keeps the Worker alive long enough to finish it without adding to this
-      // request's own latency.
-      ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}` } })));
-      return respond({ draft, text, polished: true, provider });
-    } catch (err) {
-      return respond({ draft, text: draft, polished: false, provider, error: String(err.message || err) });
-    }
+    // Every configured provider failed -- report all of them, not just the last, so whoever's
+    // reading the console.warn on the other end (see ResultScreen's handlePolishRecap) doesn't have
+    // to guess which one actually mattered.
+    return respond({ draft, text: draft, polished: false, provider: preferred, error: errors.join("; ") });
   }
 };
