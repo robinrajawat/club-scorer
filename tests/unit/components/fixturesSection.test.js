@@ -191,3 +191,56 @@ test("FixturesSection: once the group stage is complete, proposing the Final cre
   });
   assert.match(JSON.stringify(inst2.toJSON()), /"Riverside CC"," won the tournament"/);
 });
+
+// Reported live: "we should be able to create the fixtures, then the teams can be populated as
+// soon as the tournament progresses" -- an organizer often already knows when the final will be
+// played (venue booked, broadcast slot, etc.) well before the bracket has reached it. Proposing a
+// stage should work even before its teams are decided, creating a real fixture (so date/venue can
+// be set right away) with teamA/teamB left null rather than being blocked entirely.
+test("FixturesSection: a stage can be proposed before it's ready, creating a TBD-teams fixture that can still take a date/venue", async () => {
+  let currentTournament = tournament({ fixtures: [] }); // no group fixtures at all yet
+  const inst = render({
+    tournament: currentTournament,
+    onUpdateTournament: t => { currentTournament = t; return Promise.resolve(); }
+  });
+  const proposeBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Propose Final"));
+  assert.ok(proposeBtn, "Final should be proposable even with no group fixtures yet");
+  await act(async () => {
+    proposeBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(currentTournament.fixtures.length, 1);
+  const finalFixture = currentTournament.fixtures[0];
+  assert.equal(finalFixture.stage, "Final");
+  assert.equal(finalFixture.teamA, null);
+  assert.equal(finalFixture.teamB, null);
+});
+
+// The counterpart to the test above: once a TBD stage's fixtures were already proposed, completing
+// the round they depend on should fill in the SAME fixture objects (same id, any date/venue already
+// set kept) rather than needing the organizer to do anything else.
+test("FixturesSection: a TBD knockout fixture proposed in advance gets its teams filled in automatically once the group stage completes", async () => {
+  const completedMatch = {
+    id: "m1", tournamentId: "t1", status: "complete", teamA: "Riverside CC", teamB: "Oakwood CC",
+    innings: [
+      { battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC", runs: 180, wickets: 4, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
+      { battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 150, wickets: 10, legalBalls: 110, ballsPerOver: 6, maxWickets: 10 }
+    ]
+  };
+  const groupFixture = { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC", date: "", matchId: "m1" };
+  const tbdFinal = { id: "f2", teamA: null, teamB: null, date: "2026-09-20T15:00", venue: "Riverside Oval", matchId: null, stage: "Final" };
+  let updatedWith = null;
+  render({
+    tournament: tournament({ fixtures: [groupFixture, tbdFinal] }),
+    matches: [completedMatch],
+    onUpdateTournament: t => { updatedWith = t; return Promise.resolve(); }
+  });
+  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+  assert.ok(updatedWith, "the auto-fill effect should have fired");
+  const finalFixture = updatedWith.fixtures.find(f => f.id === "f2");
+  assert.equal(finalFixture.teamA, "Riverside CC");
+  assert.equal(finalFixture.teamB, "Oakwood CC");
+  // The fixture's own scheduling details, entered while it was still TBD, must survive the fill.
+  assert.equal(finalFixture.date, "2026-09-20T15:00");
+  assert.equal(finalFixture.venue, "Riverside Oval");
+});

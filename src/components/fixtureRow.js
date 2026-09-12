@@ -32,6 +32,13 @@ export function FixtureRow({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // A knockout fixture proposed ahead of the round it depends on (see fixturesSection.js's
+  // pairsForStage/the auto-fill effect) starts with no team on one or both sides -- everything
+  // about scheduling it (date, venue, calendar export) still works, but there's nothing to score
+  // yet and no team roster to match for an availability poll.
+  const teamsKnown = !!(fixture.teamA && fixture.teamB);
+  const displayTeamA = fixture.teamA || "TBD";
+  const displayTeamB = fixture.teamB || "TBD";
   const rawDate = fixture.date || "";
   const isIsoDate = ISO_DATETIME_RE.test(rawDate);
   const friendlyDateTime = formatFixtureDateTime(rawDate);
@@ -105,7 +112,7 @@ export function FixtureRow({
       fontSize: 13.5,
       color: COLORS.ink
     }
-  }, fixture.teamA, " vs ", fixture.teamB), /*#__PURE__*/React.createElement("button", {
+  }, displayTeamA, " vs ", displayTeamB), /*#__PURE__*/React.createElement("button", {
     onClick: onDelete,
     className: "cs-btn",
     "aria-label": "Remove fixture",
@@ -273,7 +280,7 @@ export function FixtureRow({
     size: 14
   })), fixture.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => downloadTextFile(`${fixture.teamA}-vs-${fixture.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(fixture, tournament.name, venue, venueLat, venueLng)),
+    onClick: () => downloadTextFile(`${displayTeamA}-vs-${displayTeamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS({ ...fixture, teamA: displayTeamA, teamB: displayTeamB }, tournament.name, venue, venueLat, venueLng)),
     className: "cs-btn",
     "aria-label": "Add to calendar",
     style: {
@@ -307,7 +314,7 @@ export function FixtureRow({
       flexShrink: 0,
       whiteSpace: "nowrap"
     }
-  }, match.status === "complete" ? matchResultText(match) || "View" : matchScoreLine(match) || "In progress") : /*#__PURE__*/React.createElement(Btn, {
+  }, match.status === "complete" ? matchResultText(match) || "View" : matchScoreLine(match) || "In progress") : teamsKnown ? /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onScore,
     style: {
@@ -315,7 +322,16 @@ export function FixtureRow({
       fontSize: 12,
       flexShrink: 0
     }
-  }, "Score")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, "Score") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      flexShrink: 0,
+      whiteSpace: "nowrap"
+    }
+  }, "Teams TBD")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: venue || "",
     initialLat: venueLat,
     initialLng: venueLng,
