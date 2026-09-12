@@ -211,6 +211,7 @@ const FUNCTIONS = [
   { name: "ExportPdfButton", file: "src/components/exportButtons.js" },
   { name: "ExportTournamentPdfButton", file: "src/components/exportButtons.js" },
   { name: "Modal", file: "src/components/modal.js" },
+  { name: "WheelPicker", file: "src/components/wheelPicker.js" },
   { name: "RunRateChart", file: "src/components/matchInsightCards.js" },
   { name: "RunsPerOverChart", file: "src/components/matchInsightCards.js" },
   { name: "SyncConflictModal", file: "src/components/matchInsightCards.js" },

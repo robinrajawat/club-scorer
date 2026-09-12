@@ -83,6 +83,33 @@ test("FixtureDateTimeModal: Save is a no-op until a day is picked, calls onSave 
   assert.match(savedIso, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
 });
 
+// The minute picker used to offer only ["00", "15", "30", "45"] -- a real fixture's kickoff is
+// rarely on the quarter-hour, forcing rounding. Now 5-minute increments (12 options), and the
+// hour/minute/AM-PM pickers are WheelPicker instances (scrollable "wheel" columns) rather than
+// <select> dropdowns / a segmented button row -- selecting still works the same way from a test's
+// perspective (find the option by role/text, click it), it's just no longer a plain <select>.
+test("FixtureDateTimeModal: minute picker offers 5-minute increments, and picking hour/minute/period flows into the saved ISO", () => {
+  let savedIso = null;
+  const inst = renderer.create(React.createElement(FixtureDateTimeModal, {
+    value: "", onSave: iso => { savedIso = iso; }, onClear: () => {}, onClose: () => {}
+  }));
+  const minuteWheel = inst.root.findByProps({ "aria-label": "Minute" });
+  const minuteLabels = minuteWheel.findAllByProps({ role: "option" }).map(o => o.props.children);
+  assert.deepEqual(minuteLabels, ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"]);
+
+  const dayButtons = inst.root.findAllByType("button").filter(b => typeof b.props.children === "number");
+  dayButtons[0].props.onClick();
+
+  inst.root.findByProps({ "aria-label": "Hour" }).findAllByProps({ role: "option" })
+    .find(o => o.props.children === "7").props.onClick();
+  minuteWheel.findAllByProps({ role: "option" }).find(o => o.props.children === "35").props.onClick();
+  inst.root.findByProps({ "aria-label": "AM/PM" }).findAllByProps({ role: "option" })
+    .find(o => o.props.children === "PM").props.onClick();
+
+  inst.root.findAllByType(Btn).find(b => b.props.children === "Save").props.onClick();
+  assert.match(savedIso, /T19:35$/);
+});
+
 test("FixtureDateTimeModal: month navigation changes the visible month label", () => {
   const inst = renderer.create(React.createElement(FixtureDateTimeModal, {
     value: "", onSave: () => {}, onClear: () => {}, onClose: () => {}
