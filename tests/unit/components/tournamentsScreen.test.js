@@ -216,6 +216,71 @@ test("TournamentsScreen: auto-split puts contiguous blocks of selected teams int
   assert.equal(createdWith.advancePerGroup, 1);
 });
 
+// BUG FIX: openCreate() (the "New Tournament" entry point) never reset useGroups/numGroups/
+// advancePerGroup/groupOverrides -- so a team manually cycled to a different group (or a non-default
+// group count) while creating one tournament silently carried over into the very next tournament
+// created in the same app session. groupOverrides is keyed by team NAME, so a club that reuses the
+// same team names across tournaments (the common case) got those specific teams re-overridden into
+// whatever group they were last manually moved to, even on a tournament with no manual moves of its
+// own -- producing a lopsided split (reported live: 5 teams in one group, 1 in the other) that looked
+// like the auto-split itself was broken, when the auto-split was actually fine (see the test above).
+test("TournamentsScreen: a manual group override from a previous tournament doesn't carry into the next one", async () => {
+  const teamNames = ["Billund", "Bengal Tigers", "Viborg", "Kolding", "IBCC", "Horsens"];
+  const calls = [];
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    teamOptions: teamNames,
+    onCreateTournament: (name, teams, groups, advancePerGroup) => {
+      calls.push({ name, teams, groups, advancePerGroup });
+      return Promise.resolve({ ok: true });
+    }
+  })));
+
+  // --- Tournament 1: select all six, turn on groups, manually cycle "Billund" into Group B, create ---
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "First Cup" } }); });
+  for (const name of teamNames) {
+    const btn = inst.root.findAllByType("button").find(b => b.props.children === name);
+    act(() => { btn.props.onClick(); });
+  }
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+  const moveChip = inst.root.findAllByType("button").find(b => Array.isArray(b.props.children) && b.props.children[0] === "Billund");
+  act(() => { moveChip.props.onClick(); }); // Billund: Group A -> Group B
+
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  await act(async () => {
+    inst.root.findAllByType(Btn).find(b => b.props.children === "Create").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].groups.find(g => g.label === "Group B").teams.includes("Billund"), "sanity check: the manual move took effect on tournament 1");
+
+  // --- Tournament 2: same six teams, same order, no manual moves this time ---
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cricket Tournament" } }); });
+  for (const name of teamNames) {
+    const btn = inst.root.findAllByType("button").find(b => b.props.children === name);
+    act(() => { btn.props.onClick(); });
+  }
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
+  const advanceOneBtn = inst.root.findAllByType("button").find(b => b.props.children === 1);
+  act(() => { advanceOneBtn.props.onClick(); });
+
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  await act(async () => {
+    inst.root.findAllByType(Btn).find(b => b.props.children === "Create").props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1].groups.map(g => g.teams), [
+    ["Billund", "Bengal Tigers", "Viborg"],
+    ["Kolding", "IBCC", "Horsens"]
+  ], "tournament 2 must not inherit tournament 1's manual override on Billund");
+});
+
 test("TournamentsScreen: creating a tournament with no rules customization sends null defaults", async () => {
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
