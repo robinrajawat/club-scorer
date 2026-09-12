@@ -32031,12 +32031,14 @@ function Modal({
   // scrollTop on close (rather than letting the browser do it) avoids the page silently jumping
   // to the top while the sheet was open.
   useEffect(() => {
-    const isOutermost = openModalCount === 0;
-    openModalCount++;
+    if (!window.__csModalLock) window.__csModalLock = { count: 0, scrollY: 0, bodyStyle: null };
+    const lock = window.__csModalLock;
+    const isOutermost = lock.count === 0;
+    lock.count++;
     if (isOutermost) {
       const body = document.body;
-      savedScrollY = window.scrollY;
-      savedBodyStyle = {
+      lock.scrollY = window.scrollY;
+      lock.bodyStyle = {
         position: body.style.position,
         top: body.style.top,
         left: body.style.left,
@@ -32044,22 +32046,22 @@ function Modal({
         width: body.style.width
       };
       body.style.position = "fixed";
-      body.style.top = `-${savedScrollY}px`;
+      body.style.top = `-${lock.scrollY}px`;
       body.style.left = "0";
       body.style.right = "0";
       body.style.width = "100%";
     }
     return () => {
-      openModalCount--;
-      if (openModalCount === 0) {
+      lock.count--;
+      if (lock.count === 0) {
         const body = document.body;
-        body.style.position = savedBodyStyle.position;
-        body.style.top = savedBodyStyle.top;
-        body.style.left = savedBodyStyle.left;
-        body.style.right = savedBodyStyle.right;
-        body.style.width = savedBodyStyle.width;
-        window.scrollTo(0, savedScrollY);
-        savedBodyStyle = null;
+        body.style.position = lock.bodyStyle.position;
+        body.style.top = lock.bodyStyle.top;
+        body.style.left = lock.bodyStyle.left;
+        body.style.right = lock.bodyStyle.right;
+        body.style.width = lock.bodyStyle.width;
+        window.scrollTo(0, lock.scrollY);
+        lock.bodyStyle = null;
       }
     };
   }, []);

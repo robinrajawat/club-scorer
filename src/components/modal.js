@@ -8,8 +8,8 @@ import { COLORS } from "./theme.js";
 // (see tests/unit/components/modal.test.js) rather than the ambient-global-only pattern used by
 // components that don't need a real DOM.
 
-// Module-level (not React state) so nested Modal instances share one lock -- several screens open
-// a Modal-based editor that itself opens a ConfirmModal (also a Modal) for its final confirm step
+// A shared lock, stashed on `window` rather than a module-level variable -- several screens open a
+// Modal-based editor that itself opens a ConfirmModal (also a Modal) for its final confirm step
 // (e.g. RulesEditModal -> ConfirmModal). Without this, each Modal's own scroll-lock effect reads
 // window.scrollY independently -- but once the OUTER modal has already pinned body to
 // `position: fixed`, the page has nothing left to scroll, so window.scrollY genuinely reads 0 to
@@ -19,9 +19,16 @@ import { COLORS } from "./theme.js";
 // as page content/fixed elements visibly shifting around a nested confirm step. Tracking a shared
 // open count means only the first (outermost) Modal to mount actually locks the page, and only the
 // last one to unmount actually restores it, using the one true pre-any-modal scroll position.
-let openModalCount = 0;
-let savedScrollY = 0;
-let savedBodyStyle = null;
+//
+// A plain module-level `let` (the first version of this fix) broke in production: public/index.html
+// is built by splicing each named function's OWN body out of its src/components/*.js file
+// (scripts/generate.js's per-function FUNCTIONS entries), not the whole module -- so a top-level
+// `let` sitting above the function never made it into the generated file, leaving every reference
+// to it an undeclared identifier and throwing ReferenceError the moment any Modal tried to mount.
+// A property on `window` survives that splice untouched, since it's a real runtime global rather
+// than a module-scoped declaration. Read/written inline inside Modal itself (not a separate helper
+// function) for the same reason: a helper function would need its OWN entry in generate.js's
+// FUNCTIONS array to be spliced in at all, and this file only registers "Modal".
 
 export function Modal({
   children,
@@ -61,12 +68,14 @@ export function Modal({
   // scrollTop on close (rather than letting the browser do it) avoids the page silently jumping
   // to the top while the sheet was open.
   useEffect(() => {
-    const isOutermost = openModalCount === 0;
-    openModalCount++;
+    if (!window.__csModalLock) window.__csModalLock = { count: 0, scrollY: 0, bodyStyle: null };
+    const lock = window.__csModalLock;
+    const isOutermost = lock.count === 0;
+    lock.count++;
     if (isOutermost) {
       const body = document.body;
-      savedScrollY = window.scrollY;
-      savedBodyStyle = {
+      lock.scrollY = window.scrollY;
+      lock.bodyStyle = {
         position: body.style.position,
         top: body.style.top,
         left: body.style.left,
@@ -74,22 +83,22 @@ export function Modal({
         width: body.style.width
       };
       body.style.position = "fixed";
-      body.style.top = `-${savedScrollY}px`;
+      body.style.top = `-${lock.scrollY}px`;
       body.style.left = "0";
       body.style.right = "0";
       body.style.width = "100%";
     }
     return () => {
-      openModalCount--;
-      if (openModalCount === 0) {
+      lock.count--;
+      if (lock.count === 0) {
         const body = document.body;
-        body.style.position = savedBodyStyle.position;
-        body.style.top = savedBodyStyle.top;
-        body.style.left = savedBodyStyle.left;
-        body.style.right = savedBodyStyle.right;
-        body.style.width = savedBodyStyle.width;
-        window.scrollTo(0, savedScrollY);
-        savedBodyStyle = null;
+        body.style.position = lock.bodyStyle.position;
+        body.style.top = lock.bodyStyle.top;
+        body.style.left = lock.bodyStyle.left;
+        body.style.right = lock.bodyStyle.right;
+        body.style.width = lock.bodyStyle.width;
+        window.scrollTo(0, lock.scrollY);
+        lock.bodyStyle = null;
       }
     };
   }, []);
