@@ -1873,6 +1873,17 @@ function tournamentMatchesConfigDoc(tournament, code) {
       teamB: f.teamB,
       date: f.date || "",
       stage: f.stage || null,
+      // BUG FIX: a fixture's own venue override (e.g. the Final played at a different ground than
+      // the tournament's default) never made it into this config doc, only the tournament-level
+      // venue above did -- harmless for the owner's own device (which reads live tournament.fixtures
+      // directly via shareTournament/syncTournamentConfig), but refreshTournamentStandingsLive
+      // rebuilds the public snapshot from THIS doc on every match completion (owner's or a guest's,
+      // via saveMatch) -- the single most common way a live tournament's snapshot gets refreshed.
+      // Without these three fields, a fixture-specific venue would show correctly for a moment then
+      // silently revert to the tournament's default (or blank) the next time any match finished.
+      venue: f.venue || null,
+      venueLat: f.venueLat != null ? f.venueLat : null,
+      venueLng: f.venueLng != null ? f.venueLng : null,
       matchId: f.matchId || null
     })),
     private: !!tournament.private,
