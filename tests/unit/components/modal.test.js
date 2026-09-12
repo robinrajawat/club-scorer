@@ -151,10 +151,10 @@ test("Modal: a nested Modal (e.g. a ConfirmModal inside another Modal) doesn't r
     return node;
   };
 
-  // openModalCount (modal.js) is module-level, not reset per test -- if an assertion below threw
-  // before both instances unmount, the leaked count would silently break every later test in this
-  // file (each would see a nonzero count and wrongly treat itself as "nested"). try/finally
-  // guarantees both unmount regardless, same as the rest of this file's own pattern.
+  // The shared lock lives on window.__csModalLock (see modal.js), and beforeEach installs a brand
+  // new jsdom window per test, so it can't leak between tests -- but try/finally still guarantees
+  // both instances unmount even if an assertion below throws, same as the rest of this file's
+  // pattern, so a failure here doesn't leave a stray "fixed" body behind for the rest of THIS test.
   let outerInst, innerInst;
   try {
     act(() => {
