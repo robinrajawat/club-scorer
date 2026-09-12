@@ -191,6 +191,77 @@ export function FollowTournamentScreen({
   // recomputation to do here, just picking [0].
   const orangeCap = data.topBatters && data.topBatters[0];
   const purpleCap = data.topBowlers && data.topBowlers[0];
+  // Shared by both the Results and Fixtures sections below -- used to just be a single bare
+  // "teamA vs teamB" line with a result/date squeezed underneath, all crammed into one shared card.
+  // Reported live: a knockout fixture proposed ahead of its round (see fixturesSection.js) showed
+  // as a bare "vs" with nothing on either side, and nothing here ever showed which stage a fixture
+  // even was (Final vs. an ordinary group match looked identical) or where it was being played.
+  // Gives each fixture its own small card instead: a stage badge (same styling FixtureRow already
+  // uses in-app) when one exists, "TBD" for a team not yet known, and a venue link (via
+  // buildMapsUrl, already imported) when one's set -- same fixture-overrides-tournament-default
+  // venue formatTournamentViewSnapshot now resolves before this ever sees it.
+  function renderFixtureCard(f, { showResult }) {
+    const dateLabel = f.date ? new Date(`${f.date}:00`).toLocaleString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    }) : null;
+    return /*#__PURE__*/React.createElement("div", {
+      key: f.id,
+      style: {
+        background: COLORS.cream,
+        borderRadius: 12,
+        padding: "10px 12px",
+        marginBottom: 8
+      }
+    }, f.stage && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: COLORS.gold,
+        marginBottom: 4
+      }
+    }, f.stage), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 600,
+        fontSize: 14,
+        color: COLORS.ink
+      }
+    }, f.teamA || "TBD", " vs ", f.teamB || "TBD"), (dateLabel || f.venue) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+        marginTop: 4,
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        color: COLORS.inkSoft
+      }
+    }, dateLabel && /*#__PURE__*/React.createElement("span", null, dateLabel), f.venue && /*#__PURE__*/React.createElement("a", {
+      href: buildMapsUrl(f.venue, f.venueLat, f.venueLng),
+      target: "_blank",
+      rel: "noopener noreferrer",
+      style: {
+        color: COLORS.turf,
+        fontWeight: 600,
+        textDecoration: "none"
+      }
+    }, "📍 ", f.venue)), showResult && f.result && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.pitch,
+        marginTop: 4
+      }
+    }, f.result));
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       ...wrapStyle,
@@ -322,53 +393,11 @@ export function FollowTournamentScreen({
     style: sectionCardStyle
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
-  }, "Results"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink
-    }
-  }, completedFixtures.map(f => /*#__PURE__*/React.createElement("div", {
-    key: f.id,
-    style: {
-      padding: "8px 0",
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600
-    }
-  }, f.teamA, " vs ", f.teamB), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 2
-    }
-  }, f.result))))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Results"), completedFixtures.map(f => renderFixtureCard(f, { showResult: true }))), scheduledFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: sectionCardStyle
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle
-  }, "Fixtures"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      lineHeight: 2
-    }
-  }, scheduledFixtures.map(f => /*#__PURE__*/React.createElement("div", {
-    key: f.id
-  }, f.date && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.inkSoft,
-      fontSize: 12
-    }
-  }, new Date(`${f.date}:00`).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }), " \u2014 "), f.teamA, " vs ", f.teamB)))), (data.topBatters || data.topBowlers) && /*#__PURE__*/React.createElement("div", {
+  }, "Fixtures"), scheduledFixtures.map(f => renderFixtureCard(f, { showResult: false }))), (data.topBatters || data.topBowlers) && /*#__PURE__*/React.createElement("div", {
     style: sectionCardStyle
   }, /*#__PURE__*/React.createElement("div", {
     style: sectionLabelStyle

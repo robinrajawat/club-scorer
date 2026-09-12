@@ -153,9 +153,26 @@ test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fie
   };
   const snapshot = formatTournamentViewSnapshot(tournament, [], [match]);
   assert.deepEqual(snapshot.fixtures, [
-    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", result: "A won by 50 runs" },
-    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", result: null }
+    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", venue: null, venueLat: null, venueLng: null, result: "A won by 50 runs" },
+    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", stage: null, venue: null, venueLat: null, venueLng: null, result: null }
   ]);
+});
+
+// A fixture's own venue overrides the tournament's default, same convention FixtureRow/
+// UpcomingFixtureCard already use -- so the public view can show the right ground per fixture, not
+// just the tournament's own default (or nothing at all, which is what it showed before this).
+test("formatTournamentViewSnapshot: a fixture's own venue wins over the tournament's default; the tournament's is the fallback", () => {
+  const tournament = {
+    id: "T1", name: "Summer Cup", teams: ["A", "B"],
+    venue: "Green Park", venueLat: 26.45, venueLng: 80.33,
+    fixtures: [
+      { id: "F1", teamA: "A", teamB: "B", date: "", venue: "Riverside Oval", venueLat: 1, venueLng: 2 },
+      { id: "F2", teamA: "A", teamB: "B", date: "" }
+    ]
+  };
+  const snapshot = formatTournamentViewSnapshot(tournament, []);
+  assert.deepEqual(snapshot.fixtures[0], { id: "F1", teamA: "A", teamB: "B", date: "", stage: null, venue: "Riverside Oval", venueLat: 1, venueLng: 2, result: null });
+  assert.deepEqual(snapshot.fixtures[1], { id: "F2", teamA: "A", teamB: "B", date: "", stage: null, venue: "Green Park", venueLat: 26.45, venueLng: 80.33, result: null });
 });
 
 test("formatTournamentViewSnapshot: carries venue and a format summary through", () => {

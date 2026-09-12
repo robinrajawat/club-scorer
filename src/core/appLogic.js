@@ -208,11 +208,21 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
       advancePerGroup: tournament.groups ? tournament.advancePerGroup || 2 : null,
       knockoutStages: knockoutStages.length ? knockoutStages : null
     },
+    // stage (Quarterfinal/Semifinal/Final, or a custom playoff label) and venue were dropped here
+    // for a long time, treated as internal-only detail -- but a spectator looking at "vs" with no
+    // teams filled in yet (a knockout fixture proposed ahead of its round, see fixturesSection.js)
+    // has no way to tell that's the Final rather than some group match, and no venue at all showed
+    // for any fixture on the public view even though the in-app schedule always has one. Same
+    // fixture-overrides-tournament venue fallback FixtureRow/UpcomingFixtureCard already use.
     fixtures: (tournament.fixtures || []).map(f => ({
       id: f.id,
       teamA: f.teamA,
       teamB: f.teamB,
       date: f.date || "",
+      stage: f.stage || null,
+      venue: f.venue || tournament.venue || null,
+      venueLat: f.venue ? (f.venueLat != null ? f.venueLat : null) : (tournament.venueLat != null ? tournament.venueLat : null),
+      venueLng: f.venue ? (f.venueLng != null ? f.venueLng : null) : (tournament.venueLng != null ? tournament.venueLng : null),
       result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null
     })),
     groups: groupStandings ? groupStandings.map(g => ({
