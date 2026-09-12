@@ -172,7 +172,18 @@ export function FollowTournamentScreen({
   // or an informal one where dates are never set at all) fell through both this filter and
   // completedFixtures above -- present in the snapshot, invisible on screen. Only the date LABEL
   // below is conditional on f.date now; the fixture itself always shows once it has no result.
-  const scheduledFixtures = fixtures.filter(f => !f.result);
+  // Sorted by date/time (earliest first) rather than left in whatever order fixtures happen to be
+  // generated/added in (e.g. all of Group A's matches, then all of Group B's) -- a viewer checking
+  // what's coming up next wants "what's on today, in order," not the schedule grouped by pool. An
+  // undated fixture has no time to sort by, so it sorts after every dated one (ISO "YYYY-MM-DDTHH:MM"
+  // strings compare correctly as plain strings), keeping its position relative to other undated
+  // fixtures stable rather than jumbling them.
+  const scheduledFixtures = fixtures.filter(f => !f.result).sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  });
   const formatSummary = formatSummaryText(data.format);
   // Same "just the top row of the stats table" shortcut TournamentDetailScreen's own Orange/Purple
   // Cap callouts use -- topBatters/topBowlers already arrive from the snapshot sorted and cut to

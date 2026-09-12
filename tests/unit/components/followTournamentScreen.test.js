@@ -157,6 +157,30 @@ test("FollowTournamentScreen: a fixture with no result and no date still shows u
   assert.match(text, /Riverside 2nd XI/);
 });
 
+// Fixtures used to render in whatever order they're stored in (typically all of one group's
+// matches, then the next group's -- see generateGroupRoundRobinFixtures), not chronological order,
+// so a viewer checking what's on today had to scan the whole list rather than read top to bottom.
+test("FollowTournamentScreen: scheduled fixtures are sorted by date/time, earliest first, regardless of storage order", async () => {
+  const data = snapshotData({
+    fixtures: [
+      { id: "f3", date: "2026-09-13T12:45", teamA: "IBCC", teamB: "Horsens" },
+      { id: "f1", date: "2026-09-13T09:30", teamA: "Billund", teamB: "Bengal Tigers" },
+      { id: "f5", date: "", teamA: "Kolding", teamB: "Viborg" },
+      { id: "f2", date: "2026-09-13T10:35", teamA: "Kolding", teamB: "IBCC" }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  const posA = text.indexOf("Billund");
+  const posB = text.indexOf("IBCC\",\" vs \",\"Horsens");
+  const posC = text.indexOf("Kolding\",\" vs \",\"IBCC");
+  const posUndated = text.indexOf("Kolding\",\" vs \",\"Viborg");
+  assert.ok(posA !== -1 && posC !== -1 && posB !== -1 && posUndated !== -1, "all four fixtures render");
+  assert.ok(posA < posC, "09:30 fixture (Billund) renders before the 10:35 one (Kolding vs IBCC)");
+  assert.ok(posC < posB, "10:35 fixture (Kolding vs IBCC) renders before the 12:45 one (IBCC vs Horsens)");
+  assert.ok(posB < posUndated, "every dated fixture renders before the undated one");
+});
+
 test("FollowTournamentScreen: shows venue and a format summary line when the snapshot carries them", async () => {
   const data = snapshotData({
     venue: "Green Park", venueLat: 26.45, venueLng: 80.33,
