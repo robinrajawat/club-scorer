@@ -25380,6 +25380,13 @@ function FixtureRow({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // A knockout fixture proposed ahead of the round it depends on (see fixturesSection.js's
+  // pairsForStage/the auto-fill effect) starts with no team on one or both sides -- everything
+  // about scheduling it (date, venue, calendar export) still works, but there's nothing to score
+  // yet and no team roster to match for an availability poll.
+  const teamsKnown = !!(fixture.teamA && fixture.teamB);
+  const displayTeamA = fixture.teamA || "TBD";
+  const displayTeamB = fixture.teamB || "TBD";
   const rawDate = fixture.date || "";
   const isIsoDate = ISO_DATETIME_RE.test(rawDate);
   const friendlyDateTime = formatFixtureDateTime(rawDate);
@@ -25453,7 +25460,7 @@ function FixtureRow({
       fontSize: 13.5,
       color: COLORS.ink
     }
-  }, fixture.teamA, " vs ", fixture.teamB), /*#__PURE__*/React.createElement("button", {
+  }, displayTeamA, " vs ", displayTeamB), /*#__PURE__*/React.createElement("button", {
     onClick: onDelete,
     className: "cs-btn",
     "aria-label": "Remove fixture",
@@ -25621,7 +25628,7 @@ function FixtureRow({
     size: 14
   })), fixture.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => downloadTextFile(`${fixture.teamA}-vs-${fixture.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(fixture, tournament.name, venue, venueLat, venueLng)),
+    onClick: () => downloadTextFile(`${displayTeamA}-vs-${displayTeamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS({ ...fixture, teamA: displayTeamA, teamB: displayTeamB }, tournament.name, venue, venueLat, venueLng)),
     className: "cs-btn",
     "aria-label": "Add to calendar",
     style: {
@@ -25655,7 +25662,7 @@ function FixtureRow({
       flexShrink: 0,
       whiteSpace: "nowrap"
     }
-  }, match.status === "complete" ? matchResultText(match) || "View" : matchScoreLine(match) || "In progress") : /*#__PURE__*/React.createElement(Btn, {
+  }, match.status === "complete" ? matchResultText(match) || "View" : matchScoreLine(match) || "In progress") : teamsKnown ? /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: onScore,
     style: {
@@ -25663,7 +25670,16 @@ function FixtureRow({
       fontSize: 12,
       flexShrink: 0
     }
-  }, "Score")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
+  }, "Score") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      color: COLORS.inkSoft,
+      flexShrink: 0,
+      whiteSpace: "nowrap"
+    }
+  }, "Teams TBD")), venueModalOpen && /*#__PURE__*/React.createElement(VenueEditModal, {
     value: venue || "",
     initialLat: venueLat,
     initialLng: venueLng,
@@ -25923,35 +25939,51 @@ function FixturesSection({
   // selected in at creation, not anything resembling qualification.
   const groupStageDone = groupFixtures.length > 0 && groupFixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
   const nextStageIndex = stages.findIndex(s => fixturesForStage(s.label).length === 0);
-  const nextStageReady = nextStageIndex === -1 ? false : nextStageIndex === 0 ? groupStageDone : stageDecided(stages[nextStageIndex - 1].label);
-  async function generateStage(index) {
-    if (!canManage) return;
+  function stageReady(index) {
+    return index === 0 ? groupStageDone : stageDecided(stages[index - 1].label);
+  }
+  // Pairs for one stage, in bracket order, one entry per fixture slot -- [null, null] for a slot
+  // whose teams aren't known yet rather than skipping it, so a stage can be proposed (its fixture
+  // rows created, so date/venue/other details can be filled in) well before the tournament has
+  // actually reached it. Only ever computed against completed data (standings/previous-round
+  // winners), never a guess from a still-in-progress table.
+  function pairsForStage(index) {
     const stage = stages[index];
-    let pairs;
+    if (!stageReady(index)) return Array.from({ length: stage.size / 2 }, () => [null, null]);
     if (index === 0 && groupStandings) {
       // Entry round of a grouped tournament: cross-group pairing (Group A #1 vs Group B #2, etc.)
       // instead of a single overall-standings seed — see crossGroupKnockoutPairs for why.
-      pairs = crossGroupKnockoutPairs(groupStandings, advancePerGroup);
-    } else if (index === 0) {
+      return crossGroupKnockoutPairs(groupStandings, advancePerGroup);
+    }
+    if (index === 0) {
       // Entry round: seed straight off the standings, keeping #1 and #2 apart until the final.
       const top = standings.map(r => r.team).slice(0, stage.size);
-      pairs = (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
-    } else {
-      // Later rounds: teams are just the winners of the previous round, taken in the order those
-      // fixtures were generated (already bracket-consistent), paired up sequentially.
-      const winners = fixturesForStage(stages[index - 1].label).map(f => matchWinner(matchById.get(f.matchId), matchById));
-      pairs = [];
-      for (let k = 0; k < winners.length; k += 2) pairs.push([winners[k], winners[k + 1]]);
+      return (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
     }
-    const newFixtures = pairs.filter(([a, b]) => a && b).map(([a, b]) => ({
+    // Later rounds: teams are just the winners of the previous round, taken in the order those
+    // fixtures were generated (already bracket-consistent), paired up sequentially.
+    const winners = fixturesForStage(stages[index - 1].label).map(f => matchWinner(matchById.get(f.matchId), matchById));
+    const pairs = [];
+    for (let k = 0; k < winners.length; k += 2) pairs.push([winners[k] || null, winners[k + 1] || null]);
+    return pairs;
+  }
+  // Creates a stage's fixture slots right away, whether or not its teams are already decided --
+  // that's the whole point (reported live: "we should be able to create the fixtures, then the
+  // teams can be populated as soon as the tournament progresses," so the qualifier/semis/final
+  // schedule, venue, etc. can all be set up in advance). A slot with no resolvable team yet is
+  // created with teamA/teamB null (FixtureRow shows "TBD"); the effect below fills those in, in
+  // place, once the data it needs actually exists.
+  async function generateStage(index) {
+    if (!canManage) return;
+    const stage = stages[index];
+    const newFixtures = pairsForStage(index).map(([a, b]) => ({
       id: uid(),
-      teamA: a,
-      teamB: b,
+      teamA: a || null,
+      teamB: b || null,
       date: "",
       matchId: null,
       stage: stage.label
     }));
-    if (!newFixtures.length) return;
     setBusy(true);
     await onUpdateTournament({
       ...tournament,
@@ -25959,6 +25991,36 @@ function FixturesSection({
     });
     setBusy(false);
   }
+  // Fills in teamA/teamB on knockout fixtures that were proposed before their teams were known, in
+  // place (same id/date/venue), once the round they depend on is actually decided -- e.g. a Final
+  // fixture created the day the bracket opened gets its two semifinal winners slotted in the moment
+  // both semis are complete, with no action needed from the organizer. Runs every render (cheap: at
+  // most a handful of stages/fixtures) but only ever writes when something is genuinely resolvable
+  // and different from what's already stored, so it settles after one write per stage transition
+  // rather than looping.
+  useEffect(() => {
+    if (!canManage) return;
+    let changed = false;
+    let working = fixtures;
+    stages.forEach((stage, index) => {
+      const stageFixtures = working.filter(f => f.stage === stage.label);
+      if (stageFixtures.length === 0 || !stageFixtures.some(f => !f.teamA || !f.teamB)) return;
+      if (!stageReady(index)) return;
+      const pairs = pairsForStage(index);
+      let slot = 0;
+      working = working.map(f => {
+        if (f.stage !== stage.label) return f;
+        const pair = pairs[slot];
+        slot++;
+        if (!pair || !pair[0] || !pair[1]) return f;
+        if (f.teamA === pair[0] && f.teamB === pair[1]) return f;
+        changed = true;
+        return { ...f, teamA: pair[0], teamB: pair[1] };
+      });
+    });
+    if (changed) onUpdateTournament({ ...tournament, fixtures: working });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament, matches]);
   const finalStage = stages.length ? stages[stages.length - 1] : null;
   const championFixture = finalStage && stageDecided(finalStage.label) ? fixturesForStage(finalStage.label)[0] : null;
   const champion = championFixture ? matchWinner(matchById.get(championFixture.matchId), matchById) : null;
@@ -26091,18 +26153,18 @@ function FixturesSection({
   })(), nextStageIndex !== -1 && canManage && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: () => generateStage(nextStageIndex),
-    disabled: busy || !nextStageReady,
+    disabled: busy,
     style: {
       width: "100%"
     }
-  }, busy ? "Generating\u2026" : `Propose ${stages[nextStageIndex].label}`), !nextStageReady && /*#__PURE__*/React.createElement("div", {
+  }, busy ? "Generating\u2026" : `Propose ${stages[nextStageIndex].label}`), !stageReady(nextStageIndex) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, nextStageIndex === 0 ? groupFixtures.length === 0 ? "Generate or add group fixtures first, then complete them to unlock this." : "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
+  }, nextStageIndex === 0 ? "Teams will be filled in automatically once the group stage is complete — go ahead and set its date/venue now." : `Teams will be filled in automatically once the ${stages[nextStageIndex - 1].label} is decided — go ahead and set its date/venue now.`)));
   const fixtureToConfirmDelete = confirmDeleteId ? fixtures.find(f => f.id === confirmDeleteId) : null;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {

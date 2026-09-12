@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { BookOpen, Plus, Trophy } from "./icons.js";
 import { Btn, ConfirmModal, TextField } from "./formUiAtoms.js";
@@ -9,12 +9,15 @@ import {
   crossGroupKnockoutPairs, KNOCKOUT_STAGES, BRACKET_SEED_PAIRS
 } from "../core/appLogic.js";
 
-// A tournament's schedule tab: generate/add group-stage fixtures, propose each knockout round once
-// the previous one is decided (Quarterfinal/Semifinal/Final, or cross-group pairing for a grouped
-// tournament), a freeform "Playoffs" section for a manually-added custom-stage fixture (e.g. the
-// IPL's Qualifier 1/Eliminator/Qualifier 2/Final shape the app doesn't auto-generate), and a champion
-// banner once the final is decided. Every write action is a prop (onUpdateTournament) -- no bare
-// globals, no mount effect. Covered by tests/unit/components/fixturesSection.test.js.
+// A tournament's schedule tab: generate/add group-stage fixtures, propose each knockout round
+// (Quarterfinal/Semifinal/Final, or cross-group pairing for a grouped tournament) -- even before
+// its teams are actually decided, so the organizer can set a stage's date/venue well in advance;
+// see pairsForStage/the auto-fill effect below for how a fixture proposed as TBD gets its real
+// teams filled in, in place, once the round it depends on completes -- a freeform "Playoffs"
+// section for a manually-added custom-stage fixture (e.g. the IPL's Qualifier 1/Eliminator/
+// Qualifier 2/Final shape the app doesn't auto-generate), and a champion banner once the final is
+// decided. Every write action is a prop (onUpdateTournament) -- no bare globals. Covered by
+// tests/unit/components/fixturesSection.test.js.
 
 export function FixturesSection({
   tournament,
@@ -169,35 +172,51 @@ export function FixturesSection({
   // selected in at creation, not anything resembling qualification.
   const groupStageDone = groupFixtures.length > 0 && groupFixtures.every(f => f.matchId && matchById.get(f.matchId) && matchById.get(f.matchId).status === "complete");
   const nextStageIndex = stages.findIndex(s => fixturesForStage(s.label).length === 0);
-  const nextStageReady = nextStageIndex === -1 ? false : nextStageIndex === 0 ? groupStageDone : stageDecided(stages[nextStageIndex - 1].label);
-  async function generateStage(index) {
-    if (!canManage) return;
+  function stageReady(index) {
+    return index === 0 ? groupStageDone : stageDecided(stages[index - 1].label);
+  }
+  // Pairs for one stage, in bracket order, one entry per fixture slot -- [null, null] for a slot
+  // whose teams aren't known yet rather than skipping it, so a stage can be proposed (its fixture
+  // rows created, so date/venue/other details can be filled in) well before the tournament has
+  // actually reached it. Only ever computed against completed data (standings/previous-round
+  // winners), never a guess from a still-in-progress table.
+  function pairsForStage(index) {
     const stage = stages[index];
-    let pairs;
+    if (!stageReady(index)) return Array.from({ length: stage.size / 2 }, () => [null, null]);
     if (index === 0 && groupStandings) {
       // Entry round of a grouped tournament: cross-group pairing (Group A #1 vs Group B #2, etc.)
       // instead of a single overall-standings seed — see crossGroupKnockoutPairs for why.
-      pairs = crossGroupKnockoutPairs(groupStandings, advancePerGroup);
-    } else if (index === 0) {
+      return crossGroupKnockoutPairs(groupStandings, advancePerGroup);
+    }
+    if (index === 0) {
       // Entry round: seed straight off the standings, keeping #1 and #2 apart until the final.
       const top = standings.map(r => r.team).slice(0, stage.size);
-      pairs = (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
-    } else {
-      // Later rounds: teams are just the winners of the previous round, taken in the order those
-      // fixtures were generated (already bracket-consistent), paired up sequentially.
-      const winners = fixturesForStage(stages[index - 1].label).map(f => matchWinner(matchById.get(f.matchId), matchById));
-      pairs = [];
-      for (let k = 0; k < winners.length; k += 2) pairs.push([winners[k], winners[k + 1]]);
+      return (BRACKET_SEED_PAIRS[stage.size] || []).map(([a, b]) => [top[a], top[b]]);
     }
-    const newFixtures = pairs.filter(([a, b]) => a && b).map(([a, b]) => ({
+    // Later rounds: teams are just the winners of the previous round, taken in the order those
+    // fixtures were generated (already bracket-consistent), paired up sequentially.
+    const winners = fixturesForStage(stages[index - 1].label).map(f => matchWinner(matchById.get(f.matchId), matchById));
+    const pairs = [];
+    for (let k = 0; k < winners.length; k += 2) pairs.push([winners[k] || null, winners[k + 1] || null]);
+    return pairs;
+  }
+  // Creates a stage's fixture slots right away, whether or not its teams are already decided --
+  // that's the whole point (reported live: "we should be able to create the fixtures, then the
+  // teams can be populated as soon as the tournament progresses," so the qualifier/semis/final
+  // schedule, venue, etc. can all be set up in advance). A slot with no resolvable team yet is
+  // created with teamA/teamB null (FixtureRow shows "TBD"); the effect below fills those in, in
+  // place, once the data it needs actually exists.
+  async function generateStage(index) {
+    if (!canManage) return;
+    const stage = stages[index];
+    const newFixtures = pairsForStage(index).map(([a, b]) => ({
       id: uid(),
-      teamA: a,
-      teamB: b,
+      teamA: a || null,
+      teamB: b || null,
       date: "",
       matchId: null,
       stage: stage.label
     }));
-    if (!newFixtures.length) return;
     setBusy(true);
     await onUpdateTournament({
       ...tournament,
@@ -205,6 +224,36 @@ export function FixturesSection({
     });
     setBusy(false);
   }
+  // Fills in teamA/teamB on knockout fixtures that were proposed before their teams were known, in
+  // place (same id/date/venue), once the round they depend on is actually decided -- e.g. a Final
+  // fixture created the day the bracket opened gets its two semifinal winners slotted in the moment
+  // both semis are complete, with no action needed from the organizer. Runs every render (cheap: at
+  // most a handful of stages/fixtures) but only ever writes when something is genuinely resolvable
+  // and different from what's already stored, so it settles after one write per stage transition
+  // rather than looping.
+  useEffect(() => {
+    if (!canManage) return;
+    let changed = false;
+    let working = fixtures;
+    stages.forEach((stage, index) => {
+      const stageFixtures = working.filter(f => f.stage === stage.label);
+      if (stageFixtures.length === 0 || !stageFixtures.some(f => !f.teamA || !f.teamB)) return;
+      if (!stageReady(index)) return;
+      const pairs = pairsForStage(index);
+      let slot = 0;
+      working = working.map(f => {
+        if (f.stage !== stage.label) return f;
+        const pair = pairs[slot];
+        slot++;
+        if (!pair || !pair[0] || !pair[1]) return f;
+        if (f.teamA === pair[0] && f.teamB === pair[1]) return f;
+        changed = true;
+        return { ...f, teamA: pair[0], teamB: pair[1] };
+      });
+    });
+    if (changed) onUpdateTournament({ ...tournament, fixtures: working });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament, matches]);
   const finalStage = stages.length ? stages[stages.length - 1] : null;
   const championFixture = finalStage && stageDecided(finalStage.label) ? fixturesForStage(finalStage.label)[0] : null;
   const champion = championFixture ? matchWinner(matchById.get(championFixture.matchId), matchById) : null;
@@ -337,18 +386,18 @@ export function FixturesSection({
   })(), nextStageIndex !== -1 && canManage && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     onClick: () => generateStage(nextStageIndex),
-    disabled: busy || !nextStageReady,
+    disabled: busy,
     style: {
       width: "100%"
     }
-  }, busy ? "Generating\u2026" : `Propose ${stages[nextStageIndex].label}`), !nextStageReady && /*#__PURE__*/React.createElement("div", {
+  }, busy ? "Generating\u2026" : `Propose ${stages[nextStageIndex].label}`), !stageReady(nextStageIndex) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, nextStageIndex === 0 ? groupFixtures.length === 0 ? "Generate or add group fixtures first, then complete them to unlock this." : "Complete every group fixture to unlock this." : `Complete the ${stages[nextStageIndex - 1].label} to unlock this.`)));
+  }, nextStageIndex === 0 ? "Teams will be filled in automatically once the group stage is complete — go ahead and set its date/venue now." : `Teams will be filled in automatically once the ${stages[nextStageIndex - 1].label} is decided — go ahead and set its date/venue now.`)));
   const fixtureToConfirmDelete = confirmDeleteId ? fixtures.find(f => f.id === confirmDeleteId) : null;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {

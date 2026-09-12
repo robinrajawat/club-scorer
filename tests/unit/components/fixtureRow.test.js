@@ -52,6 +52,17 @@ test("FixtureRow: shows the two team names and a 'Score' button when no match ha
   assert.ok(inst.root.findAllByType(Btn).find(b => b.props.children === "Score"));
 });
 
+// A knockout fixture proposed before its round is reached (see fixturesSection.js) has no team on
+// one or both sides yet -- shows "TBD" in place of a name, and "Teams TBD" instead of a clickable
+// Score button, since there's nothing to score.
+test("FixtureRow: with teams not yet known, shows 'TBD' instead of names and 'Teams TBD' instead of a Score button", async () => {
+  const inst = await renderRow({ id: "f1", teamA: null, teamB: null, stage: "Final" });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"TBD"," vs ","TBD"/);
+  assert.match(text, /Teams TBD/);
+  assert.equal(inst.root.findAllByType(Btn).find(b => b.props.children === "Score"), undefined);
+});
+
 test("FixtureRow: with an in-progress or complete match, shows the score/result line instead of 'Score'", async () => {
   const inProgress = await renderRow(
     { id: "f1", teamA: "A", teamB: "B" },
