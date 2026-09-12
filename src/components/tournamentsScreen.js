@@ -365,6 +365,18 @@ export function TournamentsScreen({
     setTournamentRules({
       ...DEFAULT_RULES
     });
+    // Groups are per-tournament, not per-form -- without resetting these, a team manually cycled
+    // to a different group (or a non-default group count/advance-per-group) while creating one
+    // tournament silently carries over into the next one opened in the same app session. Worst
+    // case: groupOverrides is keyed by team NAME, so a club that reuses the same team names across
+    // tournaments (the common case) gets those specific teams re-overridden into whatever group
+    // they were manually moved to last time, even though this is a brand new tournament with no
+    // manual moves of its own yet -- producing a lopsided split (e.g. 5 teams in one group, 1 in
+    // the other) that looks like the auto-split itself is broken.
+    setUseGroups(false);
+    setNumGroups(2);
+    setAdvancePerGroup(2);
+    setGroupOverrides({});
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setOrganizerKey("personal");
     setCreating(true);
