@@ -32031,27 +32031,36 @@ function Modal({
   // scrollTop on close (rather than letting the browser do it) avoids the page silently jumping
   // to the top while the sheet was open.
   useEffect(() => {
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width
-    };
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    const isOutermost = openModalCount === 0;
+    openModalCount++;
+    if (isOutermost) {
+      const body = document.body;
+      savedScrollY = window.scrollY;
+      savedBodyStyle = {
+        position: body.style.position,
+        top: body.style.top,
+        left: body.style.left,
+        right: body.style.right,
+        width: body.style.width
+      };
+      body.style.position = "fixed";
+      body.style.top = `-${savedScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
     return () => {
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      window.scrollTo(0, scrollY);
+      openModalCount--;
+      if (openModalCount === 0) {
+        const body = document.body;
+        body.style.position = savedBodyStyle.position;
+        body.style.top = savedBodyStyle.top;
+        body.style.left = savedBodyStyle.left;
+        body.style.right = savedBodyStyle.right;
+        body.style.width = savedBodyStyle.width;
+        window.scrollTo(0, savedScrollY);
+        savedBodyStyle = null;
+      }
     };
   }, []);
   useEffect(() => {
@@ -35500,7 +35509,18 @@ function FollowTournamentScreen({
   // or an informal one where dates are never set at all) fell through both this filter and
   // completedFixtures above -- present in the snapshot, invisible on screen. Only the date LABEL
   // below is conditional on f.date now; the fixture itself always shows once it has no result.
-  const scheduledFixtures = fixtures.filter(f => !f.result);
+  // Sorted by date/time (earliest first) rather than left in whatever order fixtures happen to be
+  // generated/added in (e.g. all of Group A's matches, then all of Group B's) -- a viewer checking
+  // what's coming up next wants "what's on today, in order," not the schedule grouped by pool. An
+  // undated fixture has no time to sort by, so it sorts after every dated one (ISO "YYYY-MM-DDTHH:MM"
+  // strings compare correctly as plain strings), keeping its position relative to other undated
+  // fixtures stable rather than jumbling them.
+  const scheduledFixtures = fixtures.filter(f => !f.result).sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  });
   const formatSummary = formatSummaryText(data.format);
   // Same "just the top row of the stats table" shortcut TournamentDetailScreen's own Orange/Purple
   // Cap callouts use -- topBatters/topBowlers already arrive from the snapshot sorted and cut to

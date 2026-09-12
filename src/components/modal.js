@@ -8,6 +8,21 @@ import { COLORS } from "./theme.js";
 // (see tests/unit/components/modal.test.js) rather than the ambient-global-only pattern used by
 // components that don't need a real DOM.
 
+// Module-level (not React state) so nested Modal instances share one lock -- several screens open
+// a Modal-based editor that itself opens a ConfirmModal (also a Modal) for its final confirm step
+// (e.g. RulesEditModal -> ConfirmModal). Without this, each Modal's own scroll-lock effect reads
+// window.scrollY independently -- but once the OUTER modal has already pinned body to
+// `position: fixed`, the page has nothing left to scroll, so window.scrollY genuinely reads 0 to
+// the INNER modal, which then overwrites body's saved offset with 0. The result: the background
+// page visibly jumps to scroll position 0 the moment the inner modal opens, and (depending on
+// which modal closes first) can jump again or restore to the wrong position on close -- surfacing
+// as page content/fixed elements visibly shifting around a nested confirm step. Tracking a shared
+// open count means only the first (outermost) Modal to mount actually locks the page, and only the
+// last one to unmount actually restores it, using the one true pre-any-modal scroll position.
+let openModalCount = 0;
+let savedScrollY = 0;
+let savedBodyStyle = null;
+
 export function Modal({
   children,
   onClose
@@ -46,27 +61,36 @@ export function Modal({
   // scrollTop on close (rather than letting the browser do it) avoids the page silently jumping
   // to the top while the sheet was open.
   useEffect(() => {
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width
-    };
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    const isOutermost = openModalCount === 0;
+    openModalCount++;
+    if (isOutermost) {
+      const body = document.body;
+      savedScrollY = window.scrollY;
+      savedBodyStyle = {
+        position: body.style.position,
+        top: body.style.top,
+        left: body.style.left,
+        right: body.style.right,
+        width: body.style.width
+      };
+      body.style.position = "fixed";
+      body.style.top = `-${savedScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
     return () => {
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      window.scrollTo(0, scrollY);
+      openModalCount--;
+      if (openModalCount === 0) {
+        const body = document.body;
+        body.style.position = savedBodyStyle.position;
+        body.style.top = savedBodyStyle.top;
+        body.style.left = savedBodyStyle.left;
+        body.style.right = savedBodyStyle.right;
+        body.style.width = savedBodyStyle.width;
+        window.scrollTo(0, savedScrollY);
+        savedBodyStyle = null;
+      }
     };
   }, []);
   useEffect(() => {

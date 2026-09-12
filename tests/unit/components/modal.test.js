@@ -121,6 +121,61 @@ test("Modal: locks body scroll position while mounted and restores it on unmount
   assert.equal(document.activeElement, opener);
 });
 
+// BUG FIX: several screens open a Modal-based editor that itself opens a ConfirmModal (also a
+// Modal) for its final confirm step (e.g. RulesEditModal -> ConfirmModal, reported live as "editing
+// tournament rules disturbs the bottom navigation bar" -- a nested confirm dialog visibly jumping
+// the background page). Each Modal instance used to lock/restore document.body independently, so
+// the INNER modal's own mount effect read window.scrollY -- which genuinely reads 0 once the OUTER
+// modal has already pinned body to position:fixed (the page has nothing left to scroll) -- and
+// clobbered the outer's saved offset with 0. Guards against that by nesting two real Modals and
+// asserting the background stays pinned at the OUTER's original offset the whole time, with no
+// stray scrollTo(0, 0) restore in between.
+test("Modal: a nested Modal (e.g. a ConfirmModal inside another Modal) doesn't reset the outer modal's scroll-lock offset", () => {
+  // A static scrollY stub (as the test above uses, for a single non-nested Modal) can't reproduce
+  // this bug -- it only shows up because a REAL browser's window.scrollY genuinely reads 0 once
+  // body is already pinned to position:fixed (nothing left to scroll), which is exactly the moment
+  // the inner modal's own mount effect reads it. Mimic that: 0 while pinned, the real offset once
+  // unpinned.
+  let realScrollY = 240;
+  Object.defineProperty(window, "scrollY", {
+    configurable: true,
+    get() { return document.body.style.position === "fixed" ? 0 : realScrollY; }
+  });
+  const scrollToCalls = [];
+  window.scrollTo = (x, y) => { realScrollY = y; scrollToCalls.push([x, y]); };
+  const createNodeMock = element => {
+    if (element.props.role !== "dialog") return null;
+    const node = document.createElement("div");
+    node.setAttribute("tabindex", "-1");
+    document.body.appendChild(node);
+    return node;
+  };
+
+  let outerInst, innerInst;
+  act(() => {
+    outerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "outer"), { createNodeMock });
+  });
+  assert.equal(document.body.style.position, "fixed");
+  assert.equal(document.body.style.top, "-240px");
+
+  act(() => {
+    innerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "inner"), { createNodeMock });
+  });
+  // The bug: this used to become "-0px" here, because the inner modal read window.scrollY (0,
+  // since the page is already pinned) and overwrote the outer's saved "-240px".
+  assert.equal(document.body.style.top, "-240px");
+
+  act(() => { innerInst.unmount(); });
+  // Inner modal closing alone (outer still open) must not touch the lock at all.
+  assert.equal(document.body.style.position, "fixed");
+  assert.equal(document.body.style.top, "-240px");
+  assert.deepEqual(scrollToCalls, []);
+
+  act(() => { outerInst.unmount(); });
+  assert.equal(document.body.style.position, "");
+  assert.deepEqual(scrollToCalls, [[0, 240]]);
+});
+
 test("Modal: tracks window.visualViewport height when the API is present, and unsubscribes on unmount", () => {
   const listeners = {};
   const stubViewport = {
