@@ -151,29 +151,40 @@ test("Modal: a nested Modal (e.g. a ConfirmModal inside another Modal) doesn't r
     return node;
   };
 
+  // openModalCount (modal.js) is module-level, not reset per test -- if an assertion below threw
+  // before both instances unmount, the leaked count would silently break every later test in this
+  // file (each would see a nonzero count and wrongly treat itself as "nested"). try/finally
+  // guarantees both unmount regardless, same as the rest of this file's own pattern.
   let outerInst, innerInst;
-  act(() => {
-    outerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "outer"), { createNodeMock });
-  });
-  assert.equal(document.body.style.position, "fixed");
-  assert.equal(document.body.style.top, "-240px");
+  try {
+    act(() => {
+      outerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "outer"), { createNodeMock });
+    });
+    assert.equal(document.body.style.position, "fixed");
+    assert.equal(document.body.style.top, "-240px");
 
-  act(() => {
-    innerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "inner"), { createNodeMock });
-  });
-  // The bug: this used to become "-0px" here, because the inner modal read window.scrollY (0,
-  // since the page is already pinned) and overwrote the outer's saved "-240px".
-  assert.equal(document.body.style.top, "-240px");
+    act(() => {
+      innerInst = renderer.create(React.createElement(Modal, { onClose: () => {} }, "inner"), { createNodeMock });
+    });
+    // The bug: this used to become "-0px" here, because the inner modal read window.scrollY (0,
+    // since the page is already pinned) and overwrote the outer's saved "-240px".
+    assert.equal(document.body.style.top, "-240px");
 
-  act(() => { innerInst.unmount(); });
-  // Inner modal closing alone (outer still open) must not touch the lock at all.
-  assert.equal(document.body.style.position, "fixed");
-  assert.equal(document.body.style.top, "-240px");
-  assert.deepEqual(scrollToCalls, []);
+    act(() => { innerInst.unmount(); });
+    innerInst = null;
+    // Inner modal closing alone (outer still open) must not touch the lock at all.
+    assert.equal(document.body.style.position, "fixed");
+    assert.equal(document.body.style.top, "-240px");
+    assert.deepEqual(scrollToCalls, []);
 
-  act(() => { outerInst.unmount(); });
-  assert.equal(document.body.style.position, "");
-  assert.deepEqual(scrollToCalls, [[0, 240]]);
+    act(() => { outerInst.unmount(); });
+    outerInst = null;
+    assert.equal(document.body.style.position, "");
+    assert.deepEqual(scrollToCalls, [[0, 240]]);
+  } finally {
+    if (innerInst) act(() => { innerInst.unmount(); });
+    if (outerInst) act(() => { outerInst.unmount(); });
+  }
 });
 
 test("Modal: tracks window.visualViewport height when the API is present, and unsubscribes on unmount", () => {
