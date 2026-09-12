@@ -257,9 +257,18 @@ export function TournamentsScreen({
   const advanceExceedsGroupSize = advancePerGroup > smallestGroupSize;
   const [groupOverrides, setGroupOverrides] = useState({}); // team name -> group index, only for teams manually re-assigned off the auto-split
   const GROUP_LABELS = ["Group A", "Group B", "Group C", "Group D"];
-  // Auto-split (round-robin through the group count, in selection order) unless the person
-  // tapped a team to move it to a different group — new teams added after that still fall into
-  // the auto-split rather than needing every team re-assigned from scratch.
+  // Auto-split into contiguous, evenly-sized blocks in selection order (the first N teams
+  // selected fill Group A, the next N fill Group B, etc. — with any remainder going to the
+  // earliest groups) unless the person tapped a team to move it to a different group. New teams
+  // added after that still fall into the auto-split rather than needing every team re-assigned
+  // from scratch.
+  //
+  // This used to be `selectedTeams.indexOf(team) % numGroups`, an interleaved/round-robin split
+  // (team 0 and group A, team 1 to group B, team 2 back to group A, ...). That silently scattered
+  // a real tournament's pre-announced groups across every group the moment they were selected in
+  // the poster's own block order (all of Group 1's teams, then all of Group 2's) — e.g. 6 teams
+  // into 2 groups came out as {0,2,4} / {1,3,5} instead of the intended {0,1,2} / {3,4,5}, so the
+  // generated round-robin fixtures never matched what was actually announced.
   function teamGroupIndex(team) {
     // If numGroups shrinks after a team was manually cycled to a higher-numbered group (e.g. moved
     // to Group D, then the count drops back to 2), that stored override is now out of range —
@@ -268,7 +277,12 @@ export function TournamentsScreen({
     // match an index that no longer exists).
     const override = groupOverrides[team];
     if (override !== undefined && override < numGroups) return override;
-    return selectedTeams.indexOf(team) % numGroups;
+    const idx = selectedTeams.indexOf(team);
+    const base = Math.floor(selectedTeams.length / numGroups);
+    const extra = selectedTeams.length % numGroups; // first `extra` groups get one extra team
+    const threshold = extra * (base + 1);
+    if (idx < threshold) return Math.floor(idx / (base + 1));
+    return extra + Math.floor((idx - threshold) / base);
   }
   function cycleTeamGroup(team) {
     setGroupOverrides(o => ({

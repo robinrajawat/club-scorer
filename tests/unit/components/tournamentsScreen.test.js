@@ -170,6 +170,52 @@ test("TournamentsScreen: with 4+ teams selected, turning on group split sends gr
   assert.equal(createdWith.advancePerGroup, 2);
 });
 
+// BUG FIX: the auto-split used to be `selectedTeams.indexOf(team) % numGroups`, an
+// interleaved/round-robin split -- 6 teams selected in a real tournament flyer's own group order
+// (Group 1's three teams, then Group 2's three) came out scrambled across both groups instead of
+// landing in the two blocks the flyer actually announced. Guards against that exact scrambling by
+// asserting each group gets the contiguous block of teams it was selected in, matching the Billund
+// Cricket Tournament flyer modeled in tests/unit/tournamentE2E.test.js.
+test("TournamentsScreen: auto-split puts contiguous blocks of selected teams into each group, not an interleaved split", async () => {
+  let createdWith = null;
+  const teamNames = ["Billund", "Bengal Tigers", "Viborg", "Kolding", "IBCC", "Horsens"];
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    teamOptions: teamNames,
+    onCreateTournament: (name, teams, groups, advancePerGroup) => {
+      createdWith = { teams, groups, advancePerGroup };
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cricket Tournament" } }); });
+
+  for (const name of teamNames) {
+    const btn = inst.root.findAllByType("button").find(b => b.props.children === name);
+    act(() => { btn.props.onClick(); });
+  }
+
+  const groupToggle = inst.root.findAllByType("button").find(b => b.props.children === "Off");
+  act(() => { groupToggle.props.onClick(); });
+  // numGroups defaults to 2, advancePerGroup defaults to 2 -- set advancePerGroup to 1 to match
+  // "top team from each group qualifies for the final (no semi final)".
+  const advanceOneBtn = inst.root.findAllByType("button").find(b => b.props.children === 1);
+  act(() => { advanceOneBtn.props.onClick(); });
+
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.deepEqual(createdWith.groups.map(g => g.teams), [
+    ["Billund", "Bengal Tigers", "Viborg"],
+    ["Kolding", "IBCC", "Horsens"]
+  ]);
+  assert.equal(createdWith.advancePerGroup, 1);
+});
+
 test("TournamentsScreen: creating a tournament with no rules customization sends null defaults", async () => {
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
