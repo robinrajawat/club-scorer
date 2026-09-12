@@ -52,3 +52,35 @@ test("WheelPicker: mounts and unmounts cleanly with no real DOM (ref-guarded scr
   }));
   assert.doesNotThrow(() => { inst.unmount(); });
 });
+
+// Real haptic "tick" feedback on a detent change -- feature-detected since only Android Chrome/
+// Firefox actually implement navigator.vibrate; iOS Safari has never exposed it to web content at
+// all (no home-screen-PWA exception either), a platform restriction with no web-side workaround.
+test("WheelPicker: vibrates once per option change when navigator.vibrate is available, and not when it isn't", () => {
+  const calls = [];
+  // Node has a built-in read-only `navigator` global (getter-only, no setter) since Node 21, so a
+  // plain `globalThis.navigator = ...` assignment throws -- redefine the property instead, same
+  // pattern resultScreen.test.js/followScreen.test.js use for the same reason.
+  Object.defineProperty(globalThis, "navigator", { value: { vibrate: ms => calls.push(ms) }, configurable: true, writable: true });
+  try {
+    let value = 1;
+    const inst = renderer.create(React.createElement(WheelPicker, {
+      options: options([1, 2, 3]), value, onChange: v => { value = v; }, ariaLabel: "Hour"
+    }));
+    const buttons = inst.root.findAllByProps({ role: "option" });
+    buttons[2].props.onClick(); // 1 -> 3, a real change
+    assert.deepEqual(calls, [4]);
+  } finally {
+    delete globalThis.navigator;
+  }
+});
+
+
+test("WheelPicker: never throws when navigator.vibrate doesn't exist (e.g. iOS Safari, or Node's own read-only navigator)", () => {
+  let value = 1;
+  const inst = renderer.create(React.createElement(WheelPicker, {
+    options: options([1, 2, 3]), value, onChange: v => { value = v; }, ariaLabel: "Hour"
+  }));
+  const buttons = inst.root.findAllByProps({ role: "option" });
+  assert.doesNotThrow(() => { buttons[2].props.onClick(); });
+});
