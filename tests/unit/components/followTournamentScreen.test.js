@@ -157,6 +157,26 @@ test("FollowTournamentScreen: a fixture with no result and no date still shows u
   assert.match(text, /Riverside 2nd XI/);
 });
 
+// Reported live: a knockout fixture proposed ahead of its round (see fixturesSection.js) showed as
+// a bare "vs" with no indication it was even the Final, and no venue ever showed for any fixture
+// here even when one was set. Each fixture now shows "TBD" for a team not yet known, its stage
+// label when it has one, and a venue link when it has one.
+test("FollowTournamentScreen: a TBD knockout fixture shows 'TBD' team names and its stage label; a fixture with a venue shows a maps link", async () => {
+  const data = snapshotData({
+    fixtures: [
+      { id: "f1", date: "2026-09-20T15:00", teamA: null, teamB: null, stage: "Final", venue: null, venueLat: null, venueLng: null },
+      { id: "f2", date: "2026-09-13T09:30", teamA: "Billund", teamB: "Bengal Tigers", stage: null, venue: "Riverside Oval", venueLat: 1, venueLng: 2 }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"TBD"," vs ","TBD"/);
+  assert.match(text, /"Final"/);
+  assert.match(text, /Riverside Oval/);
+  const mapsLink = inst.root.findAllByType("a").find(a => a.props.href && a.props.href.includes("Riverside"));
+  assert.ok(mapsLink, "the venue renders as a maps link");
+});
+
 // Fixtures used to render in whatever order they're stored in (typically all of one group's
 // matches, then the next group's -- see generateGroupRoundRobinFixtures), not chronological order,
 // so a viewer checking what's on today had to scan the whole list rather than read top to bottom.
