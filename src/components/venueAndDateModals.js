@@ -3,7 +3,6 @@ import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight } from "./icons.js";
 import { TextField, Btn } from "./formUiAtoms.js";
 import { parseFixtureDateTime, buildFixtureIso, pad2 } from "../core/shareAndFormat.js";
-import { WheelPicker } from "./wheelPicker.js";
 
 // Fixture scheduling modals: VenueEditModal (address search with a club-address shortcut, feeding
 // the weather forecast card) and FixtureDateTimeModal (a small custom date/time picker, using
@@ -291,11 +290,17 @@ export function FixtureDateTimeModal({
     if (!day) return;
     onSave(buildFixtureIso(selYear, selMonth, day, hour12, minute, period));
   }
-  // 5-minute increments (used to be just ["00", "15", "30", "45"]) -- a club fixture's actual kickoff
-  // is rarely on the quarter-hour, and the old options forced rounding to the nearest one.
-  const hourOptions = Array.from({ length: 12 }, (_, i) => i + 1).map(h => ({ value: h, label: String(h) }));
-  const minuteOptions = Array.from({ length: 12 }, (_, i) => pad2(i * 5)).map(m => ({ value: m, label: m }));
-  const periodOptions = ["AM", "PM"].map(p => ({ value: p, label: p }));
+  const selectStyle = {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: "'Inter'",
+    fontSize: 13,
+    padding: "8px 6px",
+    borderRadius: 8,
+    border: `1px solid ${COLORS.willow}`,
+    background: COLORS.surface,
+    color: COLORS.ink
+  };
   return /*#__PURE__*/React.createElement(Modal, {
     onClose: onClose
   }, /*#__PURE__*/React.createElement("div", {
@@ -403,29 +408,54 @@ export function FixtureDateTimeModal({
   }, "Time"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 6,
-      marginBottom: 18,
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 10,
-      padding: "0 4px"
+      gap: 8,
+      marginBottom: 18
     }
-  }, /*#__PURE__*/React.createElement(WheelPicker, {
-    options: hourOptions,
+  }, /*#__PURE__*/React.createElement("select", {
     value: hour12,
-    onChange: setHour12,
-    ariaLabel: "Hour"
-  }), /*#__PURE__*/React.createElement(WheelPicker, {
-    options: minuteOptions,
+    onChange: e => setHour12(Number(e.target.value)),
+    "aria-label": "Hour",
+    style: selectStyle
+  }, Array.from({
+    length: 12
+  }, (_, i) => i + 1).map(h => /*#__PURE__*/React.createElement("option", {
+    key: h,
+    value: h
+  }, h))),
+  // 5-minute increments (used to be just ["00", "15", "30", "45"]) -- a club fixture's actual
+  // kickoff is rarely on the quarter-hour, and the old options forced rounding to the nearest one.
+  /*#__PURE__*/React.createElement("select", {
     value: minute,
-    onChange: setMinute,
-    ariaLabel: "Minute"
-  }), /*#__PURE__*/React.createElement(WheelPicker, {
-    options: periodOptions,
-    value: period,
-    onChange: setPeriod,
-    ariaLabel: "AM/PM"
-  })), onClear && /*#__PURE__*/React.createElement("button", {
+    onChange: e => setMinute(e.target.value),
+    "aria-label": "Minute",
+    style: selectStyle
+  }, Array.from({ length: 12 }, (_, i) => pad2(i * 5)).map(m => /*#__PURE__*/React.createElement("option", {
+    key: m,
+    value: m
+  }, m))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${COLORS.willow}`,
+      flex: 1.4
+    }
+  }, ["AM", "PM"].map(p => /*#__PURE__*/React.createElement("button", {
+    key: p,
+    onClick: () => setPeriod(p),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      border: "none",
+      padding: "8px 0",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      background: period === p ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: period === p ? "#fff" : COLORS.inkSoft
+    }
+  }, p)))), onClear && /*#__PURE__*/React.createElement("button", {
     onClick: onClear,
     className: "cs-btn",
     style: {

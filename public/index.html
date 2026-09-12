@@ -25165,11 +25165,17 @@ function FixtureDateTimeModal({
     if (!day) return;
     onSave(buildFixtureIso(selYear, selMonth, day, hour12, minute, period));
   }
-  // 5-minute increments (used to be just ["00", "15", "30", "45"]) -- a club fixture's actual kickoff
-  // is rarely on the quarter-hour, and the old options forced rounding to the nearest one.
-  const hourOptions = Array.from({ length: 12 }, (_, i) => i + 1).map(h => ({ value: h, label: String(h) }));
-  const minuteOptions = Array.from({ length: 12 }, (_, i) => pad2(i * 5)).map(m => ({ value: m, label: m }));
-  const periodOptions = ["AM", "PM"].map(p => ({ value: p, label: p }));
+  const selectStyle = {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: "'Inter'",
+    fontSize: 13,
+    padding: "8px 6px",
+    borderRadius: 8,
+    border: `1px solid ${COLORS.willow}`,
+    background: COLORS.surface,
+    color: COLORS.ink
+  };
   return /*#__PURE__*/React.createElement(Modal, {
     onClose: onClose
   }, /*#__PURE__*/React.createElement("div", {
@@ -25277,29 +25283,54 @@ function FixtureDateTimeModal({
   }, "Time"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 6,
-      marginBottom: 18,
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 10,
-      padding: "0 4px"
+      gap: 8,
+      marginBottom: 18
     }
-  }, /*#__PURE__*/React.createElement(WheelPicker, {
-    options: hourOptions,
+  }, /*#__PURE__*/React.createElement("select", {
     value: hour12,
-    onChange: setHour12,
-    ariaLabel: "Hour"
-  }), /*#__PURE__*/React.createElement(WheelPicker, {
-    options: minuteOptions,
+    onChange: e => setHour12(Number(e.target.value)),
+    "aria-label": "Hour",
+    style: selectStyle
+  }, Array.from({
+    length: 12
+  }, (_, i) => i + 1).map(h => /*#__PURE__*/React.createElement("option", {
+    key: h,
+    value: h
+  }, h))),
+  // 5-minute increments (used to be just ["00", "15", "30", "45"]) -- a club fixture's actual
+  // kickoff is rarely on the quarter-hour, and the old options forced rounding to the nearest one.
+  /*#__PURE__*/React.createElement("select", {
     value: minute,
-    onChange: setMinute,
-    ariaLabel: "Minute"
-  }), /*#__PURE__*/React.createElement(WheelPicker, {
-    options: periodOptions,
-    value: period,
-    onChange: setPeriod,
-    ariaLabel: "AM/PM"
-  })), onClear && /*#__PURE__*/React.createElement("button", {
+    onChange: e => setMinute(e.target.value),
+    "aria-label": "Minute",
+    style: selectStyle
+  }, Array.from({ length: 12 }, (_, i) => pad2(i * 5)).map(m => /*#__PURE__*/React.createElement("option", {
+    key: m,
+    value: m
+  }, m))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${COLORS.willow}`,
+      flex: 1.4
+    }
+  }, ["AM", "PM"].map(p => /*#__PURE__*/React.createElement("button", {
+    key: p,
+    onClick: () => setPeriod(p),
+    className: "cs-btn",
+    style: {
+      flex: 1,
+      border: "none",
+      padding: "8px 0",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      background: period === p ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: period === p ? "#fff" : COLORS.inkSoft
+    }
+  }, p)))), onClear && /*#__PURE__*/React.createElement("button", {
     onClick: onClear,
     className: "cs-btn",
     style: {
@@ -32101,158 +32132,6 @@ function Modal({
   }), children));
 }
 // GENERATED-FN-END: Modal
-// GENERATED-FN-START: WheelPicker
-function WheelPicker({
-  options,
-  value,
-  onChange,
-  ariaLabel,
-  itemHeight = 40,
-  visibleCount = 5
-}) {
-  const containerRef = useRef(null);
-  const itemRefs = useRef([]);
-  const settleTimer = useRef(null);
-  const rafId = useRef(null);
-  const lastVibratedIndex = useRef(null);
-  const padCount = Math.floor(visibleCount / 2);
-  const containerHeight = itemHeight * visibleCount;
-  const selectedIndex = options.findIndex(o => o.value === value);
-
-  // The continuous per-row visual: distance from the center row (in whole "rows", capped at 2)
-  // maps to a scale/opacity/weight falloff, applied straight to each item's DOM node so it updates
-  // every scroll frame with no re-render in the loop.
-  function applyContinuousStyles() {
-    const el = containerRef.current;
-    if (!el) return;
-    const centerContent = el.scrollTop + containerHeight / 2;
-    itemRefs.current.forEach((node, i) => {
-      if (!node) return;
-      const itemCenter = i * itemHeight + itemHeight / 2;
-      const rows = Math.min(Math.abs((itemCenter - centerContent) / itemHeight), 2);
-      node.style.transform = `scale(${1 - rows * 0.22})`;
-      node.style.opacity = String(1 - rows * 0.42);
-      node.style.fontWeight = rows < 0.4 ? "700" : "500";
-      node.style.color = rows < 0.4 ? COLORS.pitch : COLORS.inkSoft;
-    });
-  }
-
-  // Centers the initial value on mount -- later value changes (from tapping an option, or a scroll
-  // settling) already scroll/style themselves as part of that same interaction, so this only needs
-  // to run once.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !el.scrollTo) return;
-    const idx = Math.max(0, selectedIndex);
-    el.scrollTo({ top: idx * itemHeight, behavior: "auto" });
-    applyContinuousStyles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => () => {
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    if (rafId.current && typeof cancelAnimationFrame === "function") cancelAnimationFrame(rafId.current);
-  }, []);
-
-  function vibrateIfChanged(idx) {
-    if (idx === lastVibratedIndex.current) return;
-    lastVibratedIndex.current = idx;
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate(4); // a single short tick, same idea as the native picker's detent click
-    }
-  }
-
-  function selectIndex(idx, smooth) {
-    const opt = options[idx];
-    if (!opt) return;
-    if (opt.value !== value) onChange(opt.value);
-    vibrateIfChanged(idx);
-    const el = containerRef.current;
-    if (el && el.scrollTo) el.scrollTo({ top: idx * itemHeight, behavior: smooth ? "smooth" : "auto" });
-  }
-
-  // Fires on every scroll frame while flicking/dragging: the visual update (applyContinuousStyles)
-  // runs immediately, rAF-throttled, so rows track the finger in real time. Committing the actual
-  // VALUE is still debounced separately -- mid-flick scrollTop doesn't mean anything settled yet,
-  // and CSS scroll-snap itself may keep nudging the final rest position after momentum ends.
-  function handleScroll() {
-    if (rafId.current && typeof cancelAnimationFrame === "function") cancelAnimationFrame(rafId.current);
-    if (typeof requestAnimationFrame === "function") {
-      rafId.current = requestAnimationFrame(applyContinuousStyles);
-    } else {
-      applyContinuousStyles();
-    }
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    settleTimer.current = setTimeout(() => {
-      const el = containerRef.current;
-      if (!el) return;
-      const idx = Math.round(el.scrollTop / itemHeight);
-      selectIndex(idx, false);
-    }, 120);
-  }
-
-  return /*#__PURE__*/React.createElement("div", {
-    style: { position: "relative", height: containerHeight, flex: 1, minWidth: 0 }
-  }, /*#__PURE__*/React.createElement("div", {
-    "aria-hidden": "true",
-    style: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: padCount * itemHeight,
-      height: itemHeight,
-      borderTop: `1.5px solid ${COLORS.willow}`,
-      borderBottom: `1.5px solid ${COLORS.willow}`,
-      pointerEvents: "none"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    ref: containerRef,
-    role: "listbox",
-    "aria-label": ariaLabel,
-    className: "cs-no-scrollbar",
-    onScroll: handleScroll,
-    style: {
-      height: containerHeight,
-      overflowY: "auto",
-      scrollSnapType: "y mandatory",
-      WebkitOverflowScrolling: "touch",
-      overscrollBehavior: "contain"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: { height: padCount * itemHeight }
-  }), options.map((opt, i) => /*#__PURE__*/React.createElement("button", {
-    key: opt.value,
-    ref: el => { itemRefs.current[i] = el; },
-    type: "button",
-    role: "option",
-    "aria-selected": opt.value === value,
-    onClick: () => selectIndex(i, true),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: "100%",
-      height: itemHeight,
-      scrollSnapAlign: "center",
-      border: "none",
-      background: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontSize: 16,
-      // Server-rendered fallback (before the mount effect measures real scroll position and takes
-      // over via direct DOM writes) -- keeps the initial paint from showing every row at full size.
-      fontWeight: opt.value === value ? 700 : 500,
-      color: opt.value === value ? COLORS.pitch : COLORS.inkSoft,
-      opacity: opt.value === value ? 1 : 0.58,
-      transform: opt.value === value ? "scale(1)" : "scale(0.78)",
-      transition: "transform 0.12s ease-out, opacity 0.12s ease-out"
-    }
-  }, opt.label)), /*#__PURE__*/React.createElement("div", {
-    style: { height: padCount * itemHeight }
-  })));
-}
-// GENERATED-FN-END: WheelPicker
 // GENERATED-FN-START: AlertModal
 function AlertModal({
   title,
