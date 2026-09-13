@@ -1933,9 +1933,24 @@ async function syncTournamentConfig(tournament) {
 // every refresh, so a previously-shared link keeps working.
 async function shareTournament(tournament, standings, matches = []) {
   try {
+    // Backfills a viewCode for any already-complete match this owner-triggered "Share"/"Refresh"
+    // can see that still doesn't have one -- saveMatch only ever mints one going forward, at the
+    // moment a match completes (see needsAutoMintedViewCode in packUtils.js), so a match that
+    // completed before that existed, or was never re-saved since, would otherwise stay
+    // non-clickable on the public Results view forever. Routed through the ordinary saveMatch
+    // pipeline (not a direct write here) so it lands in whichever primary store this match
+    // actually lives in, plus the same /liveViews mirror a manual "Follow along" tap would
+    // produce -- reported live as still-broken immediately after that fix shipped, for exactly
+    // the fixtures that had already completed before it did.
+    const matchesWithViewCodes = await Promise.all(matches.map(async m => {
+      if (!needsAutoMintedViewCode(m)) return m;
+      const updated = { ...m, viewCode: genMatchCode() };
+      await saveMatch(updated);
+      return updated;
+    }));
     const code = tournament.shareCode || genMatchCode();
     await db.collection("tournamentViews").doc(code).set({
-      ...formatTournamentViewSnapshot(tournament, standings, matches),
+      ...formatTournamentViewSnapshot(tournament, standings, matchesWithViewCodes),
       sharedAt: Date.now(),
       expiresAt: ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS)
     });
@@ -2262,6 +2277,20 @@ function planMatchSaveEffects(match, result, {
     liveMatchesMirror,
     refreshTournamentStandings: !structuralError && !!match.tournamentId && match.status === "complete"
   };
+}
+// Whether saveMatch should mint a fresh viewCode for this match before writing it. Without this,
+// a completed tournament fixture only ever got a viewCode (and so a clickable scorecard on the
+// public Results view -- see followTournamentScreen.js's onOpenMatch / formatTournamentViewSnapshot
+// in appLogic.js) if someone had separately tapped "Follow along" on that exact match beforehand --
+// reported live as "match completed for the tournament, are not able to get into it to see the
+// scorecard," even right after this feature shipped, because that was still true for every fixture
+// nobody had happened to follow live. Scoped to match.tournamentId so a personal, non-tournament
+// match is never handed a public read-only link it was never asked for, and excludes match.private
+// for the same reason liveMatchesMirror is deleted rather than written for one (see
+// planMatchSaveEffects above) -- a match opted out of public discovery shouldn't gain a bearer code
+// for a read-only view of it either, even though nothing would currently expose that code anyway.
+function needsAutoMintedViewCode(match) {
+  return !!match.tournamentId && match.status === "complete" && !match.viewCode && !match.private;
 }
 // The message flushPendingWrites surfaces (via SyncStatusBanner) when a queued match's background
 // retry finds a newer version already on the server -- there's no human to ask "which version wins"
@@ -2691,6 +2720,13 @@ async function savePrimaryMatch(match) {
 // code than /sharedMatches) is what makes read-only following structurally incapable of granting
 // scoring access.
 async function saveMatch(match) {
+  // A completed tournament fixture needs a viewCode for the public Results view to open its
+  // scorecard through (see needsAutoMintedViewCode's own reasoning in packUtils.js) -- mint one
+  // here, before the primary write, so it's persisted on this very save and the liveViewsMirror
+  // write just below picks it up naturally, the same as if "Follow along" had been tapped by hand.
+  if (needsAutoMintedViewCode(match)) {
+    match = { ...match, viewCode: genMatchCode() };
+  }
   const result = await savePrimaryMatch(match);
   const plan = planMatchSaveEffects(match, result, {
     hasAccount: !!auth.currentUser

@@ -98,6 +98,20 @@ export function planMatchSaveEffects(match, result, {
     refreshTournamentStandings: !structuralError && !!match.tournamentId && match.status === "complete"
   };
 }
+// Whether saveMatch should mint a fresh viewCode for this match before writing it. Without this,
+// a completed tournament fixture only ever got a viewCode (and so a clickable scorecard on the
+// public Results view -- see followTournamentScreen.js's onOpenMatch / formatTournamentViewSnapshot
+// in appLogic.js) if someone had separately tapped "Follow along" on that exact match beforehand --
+// reported live as "match completed for the tournament, are not able to get into it to see the
+// scorecard," even right after this feature shipped, because that was still true for every fixture
+// nobody had happened to follow live. Scoped to match.tournamentId so a personal, non-tournament
+// match is never handed a public read-only link it was never asked for, and excludes match.private
+// for the same reason liveMatchesMirror is deleted rather than written for one (see
+// planMatchSaveEffects above) -- a match opted out of public discovery shouldn't gain a bearer code
+// for a read-only view of it either, even though nothing would currently expose that code anyway.
+export function needsAutoMintedViewCode(match) {
+  return !!match.tournamentId && match.status === "complete" && !match.viewCode && !match.private;
+}
 // The message flushPendingWrites surfaces (via SyncStatusBanner) when a queued match's background
 // retry finds a newer version already on the server -- there's no human to ask "which version wins"
 // from a background timer, so it stays queued until whoever's actually scoring this match reopens

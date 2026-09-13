@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore, planMatchSaveEffects, conflictMessageFor } from "../../src/core/packUtils.js";
+import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore, planMatchSaveEffects, conflictMessageFor, needsAutoMintedViewCode } from "../../src/core/packUtils.js";
 import { newInning, applyBall, ensureBatsman, ensureBowler } from "../../src/core/scoringEngine.js";
 
 test("findEmptyKeyPath finds an injected empty batsmen key, ignores empty string values", () => {
@@ -140,6 +140,19 @@ test("planMatchSaveEffects: standings refresh fires only for a COMPLETE match ta
   assert.equal(planMatchSaveEffects(inProgress, { ok: true }, { hasAccount: false }).refreshTournamentStandings, false);
   assert.equal(planMatchSaveEffects(noTournament, { ok: true }, { hasAccount: false }).refreshTournamentStandings, false);
   assert.equal(planMatchSaveEffects(complete, { ok: false, structuralError: true }, { hasAccount: false }).refreshTournamentStandings, false);
+});
+
+// Reported live, even after the public Results view was made able to open a match's scorecard by
+// viewCode: a completed fixture nobody had separately tapped "Follow along" on still wasn't
+// clickable, since nothing had ever minted it a viewCode. saveMatch now mints one itself right
+// before the primary write whenever this returns true (see its own reasoning in packUtils.js).
+test("needsAutoMintedViewCode: true only for a complete, public tournament match with no viewCode yet", () => {
+  const base = { id: "m1", tournamentId: "t1", status: "complete" };
+  assert.equal(needsAutoMintedViewCode(base), true);
+  assert.equal(needsAutoMintedViewCode({ ...base, viewCode: "V1" }), false, "already has one -- never mint a second");
+  assert.equal(needsAutoMintedViewCode({ ...base, status: "in-progress" }), false, "not complete yet");
+  assert.equal(needsAutoMintedViewCode({ id: "m1", status: "complete" }), false, "no tournamentId -- a personal match is never handed a public link");
+  assert.equal(needsAutoMintedViewCode({ ...base, private: true }), false, "opted out of public discovery -- no bearer code for it either");
 });
 
 test("conflictMessageFor: names the team, falling back to 'This match' when teamA isn't recorded yet", () => {
