@@ -254,6 +254,28 @@ test("FollowTournamentScreen: a completed fixture's result shows under a Results
   assert.match(text, /Fixtures/);
 });
 
+// Reported live as a genuine miss: "match completed for the tournament, are not able to get into
+// it to see the scorecard." A completed fixture's result is only tappable into the full scorecard
+// (via onOpenMatch) when that specific match also carries a viewCode -- most won't, and stay a
+// plain, non-clickable result line, same as before this was added.
+test("FollowTournamentScreen: a completed fixture's result is tappable into the scorecard when its match has a viewCode, plain text when it doesn't", async () => {
+  let openedCode = null;
+  const data = snapshotData({
+    fixtures: [
+      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs", viewCode: "ABCD12" },
+      { id: "f2", date: "2026-05-08T18:00", teamA: "Riverside 2nd XI", teamB: "Riverside 1st XI", result: "Riverside 2nd XI won by 5 wickets", viewCode: null }
+    ]
+  });
+  const inst = await renderScreen("XYZ999", { exists: true, data: () => data }, { onOpenMatch: code => { openedCode = code; } });
+
+  const tappableResult = inst.root.findByProps({ "aria-label": "View scorecard: Riverside 1st XI won by 20 runs" });
+  act(() => { tappableResult.props.onClick(); });
+  assert.equal(openedCode, "ABCD12");
+
+  assert.throws(() => inst.root.findByProps({ "aria-label": "View scorecard: Riverside 2nd XI won by 5 wickets" }));
+  assert.match(JSON.stringify(inst.toJSON()), /Riverside 2nd XI won by 5 wickets/);
+});
+
 test("FollowTournamentScreen: a grouped tournament shows one standings table per group instead of one flat table", async () => {
   const data = snapshotData({
     groups: [

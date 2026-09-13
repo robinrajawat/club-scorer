@@ -5908,7 +5908,16 @@ function formatTournamentViewSnapshot(tournament, standings, matches = []) {
       venue: f.venue || tournament.venue || null,
       venueLat: f.venue ? (f.venueLat != null ? f.venueLat : null) : (tournament.venueLat != null ? tournament.venueLat : null),
       venueLng: f.venue ? (f.venueLng != null ? f.venueLng : null) : (tournament.venueLng != null ? tournament.venueLng : null),
-      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null
+      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null,
+      // A completed fixture's own match, so a spectator can drill into its full scorecard from the
+      // Results section instead of just reading a one-line result -- reported live as a genuine
+      // miss ("match completed for the tournament, are not able to get into it to see the
+      // scorecard"). Deliberately viewCode (the match's own read-only "Follow along" credential,
+      // FollowScreen's own `code` prop), never shareCode (co-scoring/edit access) -- leaking that
+      // publicly would let any spectator score the match. Not every match has one: a viewCode is
+      // only ever minted when the owner explicitly taps "Follow along" for that specific match, so
+      // this stays null for most completed fixtures, same as before this change for them.
+      viewCode: f.matchId && matchById.has(f.matchId) ? (matchById.get(f.matchId).viewCode || null) : null
     })),
     groups: groupStandings ? groupStandings.map(g => ({
       label: g.label,
@@ -35459,7 +35468,8 @@ function PollRespondScreen({
 function FollowTournamentScreen({
   code,
   onExit,
-  reachedInApp = false
+  reachedInApp = false,
+  onOpenMatch
 }) {
   // Plain-language "20 overs · 2 groups, top 1 advance · Semifinal, Final" summary of the
   // snapshot's `format` block -- mirrors the wording tournamentsScreen.js's own New Cup wizard
@@ -35694,7 +35704,32 @@ function FollowTournamentScreen({
         fontWeight: 600,
         textDecoration: "none"
       }
-    }, "📍 ", f.venue)), showResult && f.result && /*#__PURE__*/React.createElement("div", {
+    }, "📍 ", f.venue)), showResult && f.result && (f.viewCode && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onOpenMatch(f.viewCode),
+      className: "cs-btn",
+      "aria-label": `View scorecard: ${f.result}`,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        width: "100%",
+        marginTop: 4,
+        padding: 0,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        textAlign: "left",
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.pitch
+      }
+    }, f.result, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 14,
+      style: { flexShrink: 0, opacity: 0.7 }
+    })) : /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 12,
@@ -35702,7 +35737,7 @@ function FollowTournamentScreen({
         color: COLORS.pitch,
         marginTop: 4
       }
-    }, f.result));
+    }, f.result)));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -41800,7 +41835,11 @@ function CricketScorer() {
     }
     setFollowCode(null);
     setFollowMatchId(null);
-    setScreen(followReturnScreen);
+    // tournamentFollowCode is only ever still set here when this match's follow view was opened
+    // FROM FollowTournamentScreen's own Results section (openTournamentResultMatch below
+    // deliberately leaves it in place, unlike openLiveTournament/exitFollowTournament) -- "Back"
+    // should land on that tournament's follow view, not wherever followReturnScreen points.
+    setScreen(tournamentFollowCode ? "follow-tournament" : followReturnScreen);
   }
   // Tapping a card in Home's recent-match row, the Live tab, or an app-wide search result -- same
   // destination screen as a "?follow=" or "?followMatch=" link (exitFollow above clears both
@@ -41829,6 +41868,16 @@ function CricketScorer() {
     }
     setTournamentFollowCode(null);
     setScreen(followReturnScreen);
+  }
+  // Opens a completed tournament fixture's own read-only match view from FollowTournamentScreen's
+  // own Results section (see that component's onOpenMatch prop) -- reported live as a genuine gap:
+  // "match completed for the tournament, are not able to get into it to see the scorecard."
+  // Deliberately leaves tournamentFollowCode set (unlike openLiveTournament, which always sets a
+  // fresh one) so exitFollow's own check sends "Back"/"Done" from this match straight back to the
+  // tournament's follow view rather than home/live.
+  function openTournamentResultMatch(viewCode) {
+    setFollowCode(viewCode);
+    setScreen("follow");
   }
   function exitPoll() {
     try {
@@ -43441,7 +43490,8 @@ function CricketScorer() {
     // tab's only entry point into this screen) is the one place that ever sets followReturnScreen
     // to "live", so its presence here means this render is reached from inside the app, where that
     // phrasing just reads as a mistake.
-    reachedInApp: followReturnScreen === "live"
+    reachedInApp: followReturnScreen === "live",
+    onOpenMatch: openTournamentResultMatch
   })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "poll-respond",
     direction: navDirection
