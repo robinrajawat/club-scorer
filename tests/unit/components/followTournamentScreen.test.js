@@ -5,14 +5,19 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { afterEach } from "node:test";
+import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { FollowTournamentScreen } from "../../../src/components/followTournamentScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 
+beforeEach(() => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+});
+
 afterEach(() => {
   delete globalThis.db;
+  delete globalThis.Modal;
 });
 
 function dbStub(doc) {
@@ -215,18 +220,24 @@ test("FollowTournamentScreen: shows venue and a format summary line when the sna
 // Reported live as a genuine miss: a spectator had no way to see the tournament's house rules
 // (Free Hit, a non-standard wide/no-ball run value, Super Over, ...) even though the in-app
 // schedule always shows them. Reuses the exact same nonStandardRulesText summary the in-app rules
-// editor's own review step already produces.
-test("FollowTournamentScreen: shows a House rules line when the tournament has non-standard rules, nothing when it doesn't", async () => {
+// editor's own review step already produces. Tucked behind an Info icon (tap to reveal in a Modal)
+// rather than always shown inline -- same pattern followScreen.js's own "Match details" Info icon
+// already uses for a single match's toss/house-rules/umpires info, so a long rules summary doesn't
+// crowd the header by default.
+test("FollowTournamentScreen: an Info icon reveals house rules in a modal when the tournament has non-standard rules; no icon at all when it doesn't", async () => {
   const withRules = snapshotData({ rules: { wideRuns: 2, freeHit: true } });
   const instWithRules = await renderScreen("ABCD12", { exists: true, data: () => withRules });
-  const textWithRules = JSON.stringify(instWithRules.toJSON());
-  assert.match(textWithRules, /House rules:/);
-  assert.match(textWithRules, /2 runs on a wide/);
-  assert.match(textWithRules, /Free Hit enabled/);
+  assert.doesNotMatch(JSON.stringify(instWithRules.toJSON()), /2 runs on a wide/);
+  const infoBtn = instWithRules.root.findByProps({ "aria-label": "House rules" });
+  act(() => { infoBtn.props.onClick(); });
+  const textAfterOpen = JSON.stringify(instWithRules.toJSON());
+  assert.match(textAfterOpen, /House rules/);
+  assert.match(textAfterOpen, /2 runs on a wide/);
+  assert.match(textAfterOpen, /Free Hit enabled/);
 
   const withoutRules = snapshotData({ rules: null });
   const instWithoutRules = await renderScreen("ABCD12", { exists: true, data: () => withoutRules });
-  assert.doesNotMatch(JSON.stringify(instWithoutRules.toJSON()), /House rules:/);
+  assert.throws(() => instWithoutRules.root.findByProps({ "aria-label": "House rules" }));
 });
 
 test("FollowTournamentScreen: a completed fixture's result shows under a Results section, separate from upcoming Fixtures", async () => {

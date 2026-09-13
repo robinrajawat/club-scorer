@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
-import { ChevronLeft } from "./icons.js";
+import { ChevronLeft, Info } from "./icons.js";
 import { StandingsTable } from "./tableAtoms.js";
 import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 
@@ -88,6 +88,7 @@ export function FollowTournamentScreen({
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
   const [error, setError] = useState("");
+  const [showRulesModal, setShowRulesModal] = useState(false);
   useEffect(() => {
     if (!code) {
       setStatus("not-found");
@@ -293,22 +294,36 @@ export function FollowTournamentScreen({
       opacity: 0.85,
       marginTop: 2
     }
-  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString()), formatSummary && /*#__PURE__*/React.createElement("div", {
+  }, data.teams.length, " teams \u00b7 as of ", new Date(data.sharedAt).toLocaleString()), (formatSummary || rulesSummary) && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      opacity: 0.85,
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
       marginTop: 2
     }
-  }, formatSummary), rulesSummary && /*#__PURE__*/React.createElement("div", {
+  }, formatSummary && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
-      opacity: 0.85,
-      marginTop: 2,
-      fontStyle: "italic"
+      opacity: 0.85
     }
-  }, "House rules: ", rulesSummary), data.venue && /*#__PURE__*/React.createElement("a", {
+  }, formatSummary), rulesSummary && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowRulesModal(true),
+    className: "cs-btn",
+    "aria-label": "House rules",
+    style: {
+      background: "none",
+      border: "none",
+      padding: 2,
+      display: "flex",
+      color: COLORS.creamFixed,
+      opacity: 0.85,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Info, {
+    size: 14
+  }))), data.venue && /*#__PURE__*/React.createElement("a", {
     href: buildMapsUrl(data.venue, data.venueLat, data.venueLng),
     target: "_blank",
     rel: "noopener noreferrer",
@@ -474,5 +489,21 @@ export function FollowTournamentScreen({
     }
   }, /*#__PURE__*/React.createElement(Btn, {
     onClick: onExit
-  }, "Go to Club Scorer"))));
+  }, "Go to Club Scorer"))), showRulesModal && /*#__PURE__*/React.createElement(Modal, {
+    onClose: () => setShowRulesModal(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.ink,
+      marginBottom: 10
+    }
+  }, "House rules"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      color: COLORS.inkSoft,
+      lineHeight: 1.7
+    }
+  }, rulesSummary)));
 }
