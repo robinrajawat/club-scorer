@@ -8306,7 +8306,13 @@ function applyBall(inning, event) {
     if (isFour || isSix) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
-      runs: cur.batsmen[cur.strikerName].runs + event.runs,
+      // BUG FIX: this used to credit event.runs (the full total, including any overthrow bonus) to
+      // the striker's own score -- reported live as "overthrow logic needs to be checked, runs can
+      // not go to batsman." An overthrow is a bonus awarded on top of what the batsmen actually
+      // ran, same "not the bat's own doing" reasoning battedRuns already applies to boundaries and
+      // strike rotation just above -- it belongs in the team/innings total (cur.runs, already
+      // incremented with the full event.runs above) but was never the striker's own to begin with.
+      runs: cur.batsmen[cur.strikerName].runs + battedRuns,
       balls: cur.batsmen[cur.strikerName].balls + 1,
       fours: cur.batsmen[cur.strikerName].fours + (isFour ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (isSix ? 1 : 0)
@@ -8362,7 +8368,9 @@ function applyBall(inning, event) {
     if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
-      runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
+      // BUG FIX: same overthrow-vs-actually-run distinction as the "run" branch above -- this used
+      // to credit the full event.runs (overthrow bonus included) to the striker's own score.
+      runs: cur.batsmen[cur.strikerName].runs + battedRuns,
       fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };
@@ -38494,7 +38502,50 @@ function MatchScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm")), showExtra && /*#__PURE__*/React.createElement(Modal, {
+  }, "Confirm"), history.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    // Same reasoning as the "Next batsman" modal's own Undo button just above -- this whole prompt
+    // is a full-screen Modal with no way to reach the bottom scoring bar's own Undo behind it, so
+    // without an escape hatch here, an over ending with the wrong last ball or dismissal left
+    // nowhere to go but forward into picking a bowler. Reported live: "undo doesn't go back
+    // multiple balls back if the over is changed" -- undoing the over's actual last ball (not yet
+    // committed to a bowler pick, since that only happens via confirmNewBowler) needed exactly
+    // this, one tap at a time, the same way it already works everywhere else.
+    onClick: () => {
+      undo();
+      setNewBowlerName("");
+      setJustUndoneNote(true);
+      setTimeout(() => setJustUndoneNote(false), 2500);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "10px 4px 0"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 13
+  }), "Undo"), justUndoneNote && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.turf,
+      padding: "6px 4px 0"
+    }
+  }, "Reverted — the previous ball has been undone.")), showExtra && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowExtra(null)
   }, showExtra === "choose" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -41579,6 +41630,15 @@ function CricketScorer() {
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
       const loaded = await loadMatch(id);
+      // BUG FIX: the pointer refresh just above only ever re-saves the STALE card data Home passed
+      // in, before the real fetch below -- reported live as a match stuck showing "Continue
+      // scoring" on Home long after it was actually completed (elsewhere, by a co-scorer via this
+      // match's shareCode; opening it here correctly went straight to the results screen, since
+      // `loaded` itself was already accurate). Only a shareCode match's local index entry is ever
+      // this device's OWN source of truth for it (see loadIndex/upsertLocalPointer) -- an
+      // account-owned match is refreshed for free every time from the cloud query in loadIndex,
+      // so re-saving its pointer here is a harmless no-op, filtered out there either way.
+      if (loaded) upsertLocalPointer(loaded);
       const m = loaded || (knownMatchIsUsable ? knownMatch : null);
       if (m) {
         setMatch(m);

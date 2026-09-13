@@ -431,6 +431,25 @@ test("applyBall: an overthrow bonus never affects strike rotation -- only the co
   assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "legbye", runs: 2, overthrow: 1 }).strikerName, "P2");
 });
 
+// BUG FIX: reported live as "overthrow logic needs to be checked, runs can not go to batsman" --
+// the striker's own runs tally used to be credited with event.runs (the full total, overthrow
+// bonus included) on both a "run" and a "noball" delivery, even though the exact same overthrow
+// bonus is already excluded from that same batsman's boundary count and from strike-rotation
+// parity, on the reasoning that an overthrow was never physically run or struck by the batsman. An
+// overthrow still counts in full toward the team/innings total either way -- only the striker's
+// PERSONAL score should exclude it.
+test("applyBall: an overthrow bonus counts toward the team total but never toward the striker's own personal runs", () => {
+  const runInn = freshInning(10, ["P1", "P2"]);
+  const afterRun = applyBall(runInn, { kind: "run", runs: 2, overthrow: 1 });
+  assert.equal(afterRun.runs, 2, "team total includes the overthrow bonus");
+  assert.equal(afterRun.batsmen.P1.runs, 1, "striker is credited only the 1 actually-run/struck run, not the 1-run overthrow bonus on top");
+
+  const nbInn = freshInning(10, ["P1", "P2"]);
+  const afterNoball = applyBall(nbInn, { kind: "noball", runs: 2, overthrow: 1 });
+  assert.equal(afterNoball.runs, 1 /* no-ball penalty */ + 2, "team total includes the penalty and the full runs off the bat/overthrow");
+  assert.equal(afterNoball.batsmen.P1.runs, 1, "striker is credited only the 1 run actually off the bat, not the 1-run overthrow bonus");
+});
+
 test("newInning: bigHitRuns defaults to null (rule off) and carries through when set", () => {
   const off = newInning("TeamA", "TeamB", rules, 10);
   assert.equal(off.bigHitRuns, null);

@@ -2525,7 +2525,50 @@ export function MatchScreen({
       width: "100%",
       marginTop: 10
     }
-  }, "Confirm")), showExtra && /*#__PURE__*/React.createElement(Modal, {
+  }, "Confirm"), history.length > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    // Same reasoning as the "Next batsman" modal's own Undo button just above -- this whole prompt
+    // is a full-screen Modal with no way to reach the bottom scoring bar's own Undo behind it, so
+    // without an escape hatch here, an over ending with the wrong last ball or dismissal left
+    // nowhere to go but forward into picking a bowler. Reported live: "undo doesn't go back
+    // multiple balls back if the over is changed" -- undoing the over's actual last ball (not yet
+    // committed to a bowler pick, since that only happens via confirmNewBowler) needed exactly
+    // this, one tap at a time, the same way it already works everywhere else.
+    onClick: () => {
+      undo();
+      setNewBowlerName("");
+      setJustUndoneNote(true);
+      setTimeout(() => setJustUndoneNote(false), 2500);
+    },
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5,
+      cursor: "pointer",
+      padding: "10px 4px 0"
+    }
+  }, /*#__PURE__*/React.createElement(Undo2, {
+    size: 13
+  }), "Undo"), justUndoneNote && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      fontFamily: "'Inter'",
+      fontSize: 11.5,
+      fontWeight: 600,
+      color: COLORS.turf,
+      padding: "6px 4px 0"
+    }
+  }, "Reverted — the previous ball has been undone.")), showExtra && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setShowExtra(null)
   }, showExtra === "choose" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {

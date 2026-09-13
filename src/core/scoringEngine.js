@@ -370,7 +370,13 @@ export function applyBall(inning, event) {
     if (isFour || isSix) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
-      runs: cur.batsmen[cur.strikerName].runs + event.runs,
+      // BUG FIX: this used to credit event.runs (the full total, including any overthrow bonus) to
+      // the striker's own score -- reported live as "overthrow logic needs to be checked, runs can
+      // not go to batsman." An overthrow is a bonus awarded on top of what the batsmen actually
+      // ran, same "not the bat's own doing" reasoning battedRuns already applies to boundaries and
+      // strike rotation just above -- it belongs in the team/innings total (cur.runs, already
+      // incremented with the full event.runs above) but was never the striker's own to begin with.
+      runs: cur.batsmen[cur.strikerName].runs + battedRuns,
       balls: cur.batsmen[cur.strikerName].balls + 1,
       fours: cur.batsmen[cur.strikerName].fours + (isFour ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (isSix ? 1 : 0)
@@ -426,7 +432,9 @@ export function applyBall(inning, event) {
     if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
-      runs: cur.batsmen[cur.strikerName].runs + (event.runs || 0),
+      // BUG FIX: same overthrow-vs-actually-run distinction as the "run" branch above -- this used
+      // to credit the full event.runs (overthrow bonus included) to the striker's own score.
+      runs: cur.batsmen[cur.strikerName].runs + battedRuns,
       fours: cur.batsmen[cur.strikerName].fours + (battedRuns === 4 ? 1 : 0),
       sixes: cur.batsmen[cur.strikerName].sixes + (battedRuns === 6 ? 1 : 0)
     };

@@ -1229,6 +1229,15 @@ export function CricketScorer() {
     try {
       if (knownMatch && knownMatch.shareCode) upsertLocalPointer(knownMatch);
       const loaded = await loadMatch(id);
+      // BUG FIX: the pointer refresh just above only ever re-saves the STALE card data Home passed
+      // in, before the real fetch below -- reported live as a match stuck showing "Continue
+      // scoring" on Home long after it was actually completed (elsewhere, by a co-scorer via this
+      // match's shareCode; opening it here correctly went straight to the results screen, since
+      // `loaded` itself was already accurate). Only a shareCode match's local index entry is ever
+      // this device's OWN source of truth for it (see loadIndex/upsertLocalPointer) -- an
+      // account-owned match is refreshed for free every time from the cloud query in loadIndex,
+      // so re-saving its pointer here is a harmless no-op, filtered out there either way.
+      if (loaded) upsertLocalPointer(loaded);
       const m = loaded || (knownMatchIsUsable ? knownMatch : null);
       if (m) {
         setMatch(m);
