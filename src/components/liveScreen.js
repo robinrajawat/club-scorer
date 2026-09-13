@@ -36,8 +36,25 @@ export function LiveScreen({
   const q = query.trim().toLowerCase();
   const filteredMatches = q ? liveMatches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (tournamentNameForBadge(m.tournamentId) || "").toLowerCase().includes(q)) : liveMatches;
   const filteredTournaments = q ? liveTournaments.filter(t => t.name.toLowerCase().includes(q)) : liveTournaments;
+  // Requested live: a viewer looking for how a just-finished tournament/match ended had to scan
+  // the exact same recency-sorted list as someone checking what's live right now, with no way to
+  // tell the two apart at a glance except opening each one. /liveMatches already retains a
+  // completed match for a few days after it ends (see loadLiveMatches's own comment on why), and
+  // /liveTournaments does the same for a tournament (never deleted on completion, only when the
+  // owner stops sharing or its TTL lapses) -- so "recently finished" was always in this same data,
+  // just not split out. m.status is the match's own real status; a tournament has no single status
+  // field, so `champion` (see renderTournamentRow's own comment) stands in for it here too.
+  const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
+  const finishedMatches = filteredMatches.filter(m => m.status === "complete");
+  const liveNowTournaments = filteredTournaments.filter(t => !t.champion);
+  const finishedTournaments = filteredTournaments.filter(t => t.champion);
 
-  function sectionLabel(dotColor, text) {
+  // `glow` defaults to true (every LIVE section's pulsing-dot halo, keyed to the dot's own color --
+  // red for matches, gold for tournaments) but is turned off for a "Recently Finished" section
+  // (see the Live Now/Recently Finished split below): a halo reads as "this needs your attention
+  // right now," which is exactly wrong for something that's already over. Same muted COLORS.inkSoft
+  // dot + no-glow treatment a completed match's OWN row already uses elsewhere (homeScreen.js).
+  function sectionLabel(dotColor, text, glow = true) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
@@ -52,7 +69,7 @@ export function LiveScreen({
         height: 7,
         borderRadius: "50%",
         background: dotColor,
-        boxShadow: `0 0 0 3px ${dotColor === COLORS.live ? "rgba(230,84,75,0.18)" : "rgba(184,146,74,0.18)"}`,
+        boxShadow: glow ? `0 0 0 3px ${dotColor === COLORS.live ? "rgba(230,84,75,0.18)" : "rgba(184,146,74,0.18)"}` : "none",
         flexShrink: 0
       }
     }), /*#__PURE__*/React.createElement("div", {
@@ -143,6 +160,11 @@ export function LiveScreen({
   }
 
   function renderTournamentRow(t) {
+    // `champion` (null until the tournament actually has a decided result -- see
+    // formatTournamentViewSnapshot in appLogic.js, and shareTournament/refreshTournamentStandingsLive
+    // in index.html, which mirror it onto this same /liveTournaments doc) means the difference
+    // between "browsing to check on a live tournament's standings" and "browsing to see who won" --
+    // shown right here so a viewer gets that answer without tapping in at all.
     return liveRow(t.tournamentId, () => onOpenLiveTournament && onOpenLiveTournament(t.shareCode), /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
@@ -158,10 +180,16 @@ export function LiveScreen({
         fontFamily: "'Inter'",
         fontSize: 12.5,
         fontWeight: 600,
-        color: COLORS.inkSoft,
-        marginTop: 3
+        color: t.champion ? COLORS.gold : COLORS.inkSoft,
+        marginTop: 3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
       }
-    }, t.teamsCount, " team", t.teamsCount === 1 ? "" : "s")));
+    }, t.champion ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Trophy, {
+      size: 12,
+      style: { verticalAlign: "-1.5px", marginRight: 3 }
+    }), t.champion, " won") : `${t.teamsCount} team${t.teamsCount === 1 ? "" : "s"}`)));
   }
 
   const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
@@ -232,7 +260,15 @@ export function LiveScreen({
       fontSize: 20,
       lineHeight: 1
     }
-  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing matches “", query, "”."), filteredMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing matches “", query, "”."),
+  liveNowMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 26 }
-  }, sectionLabel(COLORS.live, `Matches (${filteredMatches.length})`), filteredMatches.map(renderMatchRow)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.gold, `Tournaments (${filteredTournaments.length})`), filteredTournaments.map(renderTournamentRow)));
+  }, sectionLabel(COLORS.live, `Live Matches (${liveNowMatches.length})`), liveNowMatches.map(renderMatchRow)),
+  liveNowTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 26 }
+  }, sectionLabel(COLORS.gold, `Live Tournaments (${liveNowTournaments.length})`), liveNowTournaments.map(renderTournamentRow)),
+  finishedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 26 }
+  }, sectionLabel(COLORS.inkSoft, `Recently Finished Matches (${finishedMatches.length})`, false), finishedMatches.map(renderMatchRow)),
+  finishedTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.inkSoft, `Recently Finished Tournaments (${finishedTournaments.length})`, false), finishedTournaments.map(renderTournamentRow)));
 }
