@@ -1521,7 +1521,11 @@ export function CricketScorer() {
     }
     setFollowCode(null);
     setFollowMatchId(null);
-    setScreen(followReturnScreen);
+    // tournamentFollowCode is only ever still set here when this match's follow view was opened
+    // FROM FollowTournamentScreen's own Results section (openTournamentResultMatch below
+    // deliberately leaves it in place, unlike openLiveTournament/exitFollowTournament) -- "Back"
+    // should land on that tournament's follow view, not wherever followReturnScreen points.
+    setScreen(tournamentFollowCode ? "follow-tournament" : followReturnScreen);
   }
   // Tapping a card in Home's recent-match row, the Live tab, or an app-wide search result -- same
   // destination screen as a "?follow=" or "?followMatch=" link (exitFollow above clears both
@@ -1550,6 +1554,16 @@ export function CricketScorer() {
     }
     setTournamentFollowCode(null);
     setScreen(followReturnScreen);
+  }
+  // Opens a completed tournament fixture's own read-only match view from FollowTournamentScreen's
+  // own Results section (see that component's onOpenMatch prop) -- reported live as a genuine gap:
+  // "match completed for the tournament, are not able to get into it to see the scorecard."
+  // Deliberately leaves tournamentFollowCode set (unlike openLiveTournament, which always sets a
+  // fresh one) so exitFollow's own check sends "Back"/"Done" from this match straight back to the
+  // tournament's follow view rather than home/live.
+  function openTournamentResultMatch(viewCode) {
+    setFollowCode(viewCode);
+    setScreen("follow");
   }
   function exitPoll() {
     try {
@@ -3162,7 +3176,8 @@ export function CricketScorer() {
     // tab's only entry point into this screen) is the one place that ever sets followReturnScreen
     // to "live", so its presence here means this render is reached from inside the app, where that
     // phrasing just reads as a mistake.
-    reachedInApp: followReturnScreen === "live"
+    reachedInApp: followReturnScreen === "live",
+    onOpenMatch: openTournamentResultMatch
   })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "poll-respond",
     direction: navDirection

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
-import { ChevronLeft, Info } from "./icons.js";
+import { ChevronLeft, ChevronRight, Info } from "./icons.js";
 import { StandingsTable } from "./tableAtoms.js";
 import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 
@@ -22,11 +22,18 @@ import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 // groups, and a `result` line on any fixture whose match has completed. All of those are optional
 // (older cached snapshots, or a tournament with no groups/venue, simply omit them), so every
 // section below only renders when the data for it is actually present.
+//
+// A completed fixture's `result` line is only tappable into the full scorecard (via onOpenMatch)
+// when that specific match also carries a `viewCode` -- the match's own read-only "Follow along"
+// credential, only minted when the owner explicitly turned it on for that match. Most completed
+// fixtures won't have one, and stay a plain (non-clickable) result line, same as before this was
+// added.
 
 export function FollowTournamentScreen({
   code,
   onExit,
-  reachedInApp = false
+  reachedInApp = false,
+  onOpenMatch
 }) {
   // Plain-language "20 overs · 2 groups, top 1 advance · Semifinal, Final" summary of the
   // snapshot's `format` block -- mirrors the wording tournamentsScreen.js's own New Cup wizard
@@ -261,7 +268,32 @@ export function FollowTournamentScreen({
         fontWeight: 600,
         textDecoration: "none"
       }
-    }, "📍 ", f.venue)), showResult && f.result && /*#__PURE__*/React.createElement("div", {
+    }, "📍 ", f.venue)), showResult && f.result && (f.viewCode && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => onOpenMatch(f.viewCode),
+      className: "cs-btn",
+      "aria-label": `View scorecard: ${f.result}`,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        width: "100%",
+        marginTop: 4,
+        padding: 0,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        textAlign: "left",
+        fontFamily: "'Inter'",
+        fontSize: 12,
+        fontWeight: 600,
+        color: COLORS.pitch
+      }
+    }, f.result, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 14,
+      style: { flexShrink: 0, opacity: 0.7 }
+    })) : /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontSize: 12,
@@ -269,7 +301,7 @@ export function FollowTournamentScreen({
         color: COLORS.pitch,
         marginTop: 4
       }
-    }, f.result));
+    }, f.result)));
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {

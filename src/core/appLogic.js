@@ -229,7 +229,16 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
       venue: f.venue || tournament.venue || null,
       venueLat: f.venue ? (f.venueLat != null ? f.venueLat : null) : (tournament.venueLat != null ? tournament.venueLat : null),
       venueLng: f.venue ? (f.venueLng != null ? f.venueLng : null) : (tournament.venueLng != null ? tournament.venueLng : null),
-      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null
+      result: f.matchId && matchById.has(f.matchId) ? matchResultText(matchById.get(f.matchId)) : null,
+      // A completed fixture's own match, so a spectator can drill into its full scorecard from the
+      // Results section instead of just reading a one-line result -- reported live as a genuine
+      // miss ("match completed for the tournament, are not able to get into it to see the
+      // scorecard"). Deliberately viewCode (the match's own read-only "Follow along" credential,
+      // FollowScreen's own `code` prop), never shareCode (co-scoring/edit access) -- leaking that
+      // publicly would let any spectator score the match. Not every match has one: a viewCode is
+      // only ever minted when the owner explicitly taps "Follow along" for that specific match, so
+      // this stays null for most completed fixtures, same as before this change for them.
+      viewCode: f.matchId && matchById.has(f.matchId) ? (matchById.get(f.matchId).viewCode || null) : null
     })),
     groups: groupStandings ? groupStandings.map(g => ({
       label: g.label,
