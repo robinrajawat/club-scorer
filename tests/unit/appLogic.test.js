@@ -194,6 +194,20 @@ test("formatTournamentViewSnapshot: carries venue and a format summary through",
   });
 });
 
+// Reported live as a genuine miss: a spectator on the public view had no way to see a tournament's
+// house rules at all (Free Hit, a non-standard wide/no-ball run value, Super Over, ...) even though
+// the in-app schedule and the New Cup wizard's own review step always show them. Carried raw here
+// (not pre-summarized to text, unlike `format`) since nonStandardRulesText lives in
+// shareAndFormat.js, which itself imports from appLogic.js -- summarizing it here would be a
+// circular import, so the caller (FollowTournamentScreen) formats it for display instead.
+test("formatTournamentViewSnapshot: carries a tournament's defaultRules through as `rules`, null when unset", () => {
+  const withRules = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [], defaultRules: { wideRuns: 2, freeHit: true } };
+  assert.deepEqual(formatTournamentViewSnapshot(withRules, []).rules, { wideRuns: 2, freeHit: true });
+
+  const withoutRules = { id: "T1", name: "Summer Cup", teams: ["A", "B"], fixtures: [] };
+  assert.equal(formatTournamentViewSnapshot(withoutRules, []).rules, null);
+});
+
 test("formatTournamentViewSnapshot: a grouped tournament gets a per-group standings breakdown", () => {
   const tournament = {
     id: "T1", name: "Summer Cup", teams: ["A", "B", "C", "D"],

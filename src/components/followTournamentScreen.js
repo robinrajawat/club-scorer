@@ -4,7 +4,7 @@ import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { ChevronLeft } from "./icons.js";
 import { StandingsTable } from "./tableAtoms.js";
-import { buildMapsUrl } from "../core/shareAndFormat.js";
+import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 
 // Read-only public view of a tournament's shared standings/fixtures snapshot, opened either via a
 // "?tournament=CODE" link (see TournamentShareModal, which creates these) or by tapping a card in
@@ -185,6 +185,14 @@ export function FollowTournamentScreen({
     return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
   });
   const formatSummary = formatSummaryText(data.format);
+  // Read-only house rules line -- reported live as a genuine miss: the in-app schedule (and the
+  // review page when creating the tournament) always shows any non-standard rule (Free Hit, a
+  // different wide/no-ball run value, Super Over, ...), but a spectator on this public view had no
+  // way to see them at all. Reuses the exact same nonStandardRulesText summary the in-app "House
+  // rules" editor's own review step already produces -- silent (null) for a tournament using
+  // entirely standard rules, same "nothing non-default, nothing to show" convention as everywhere
+  // else this function is used.
+  const rulesSummary = nonStandardRulesText(data.rules);
   // Same "just the top row of the stats table" shortcut TournamentDetailScreen's own Orange/Purple
   // Cap callouts use -- topBatters/topBowlers already arrive from the snapshot sorted and cut to
   // the top 10 (formatTournamentViewSnapshot, src/core/appLogic.js), so there's no local
@@ -292,7 +300,15 @@ export function FollowTournamentScreen({
       opacity: 0.85,
       marginTop: 2
     }
-  }, formatSummary), data.venue && /*#__PURE__*/React.createElement("a", {
+  }, formatSummary), rulesSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 2,
+      fontStyle: "italic"
+    }
+  }, "House rules: ", rulesSummary), data.venue && /*#__PURE__*/React.createElement("a", {
     href: buildMapsUrl(data.venue, data.venueLat, data.venueLng),
     target: "_blank",
     rel: "noopener noreferrer",

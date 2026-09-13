@@ -1867,6 +1867,7 @@ function tournamentMatchesConfigDoc(tournament, code) {
     groups: tournament.groups || null,
     advancePerGroup: tournament.advancePerGroup || null,
     defaultOvers: tournament.defaultOvers || null,
+    defaultRules: tournament.defaultRules || null,
     fixtures: (tournament.fixtures || []).map(f => ({
       id: f.id,
       teamA: f.teamA,
@@ -2024,7 +2025,8 @@ async function refreshTournamentStandingsLive(tournamentId) {
       venueLng: config.venueLng != null ? config.venueLng : null,
       groups: config.groups || null,
       advancePerGroup: config.advancePerGroup || null,
-      defaultOvers: config.defaultOvers || null
+      defaultOvers: config.defaultOvers || null,
+      defaultRules: config.defaultRules || null
     };
     const standings = computeStandings(tournamentShape, matches);
     const expiresAt = ttlTimestamp(TOURNAMENT_VIEW_TTL_DAYS);
@@ -5885,6 +5887,12 @@ function formatTournamentViewSnapshot(tournament, standings, matches = []) {
       advancePerGroup: tournament.groups ? tournament.advancePerGroup || 2 : null,
       knockoutStages: knockoutStages.length ? knockoutStages : null
     },
+    // Raw, not pre-summarized to text here (unlike `format` above) -- nonStandardRulesText lives in
+    // shareAndFormat.js, which itself imports DEFAULT_RULES/maxWicketsFor from THIS file, so calling
+    // it from here would be a circular import. Left for the caller (FollowTournamentScreen, a
+    // component already free to import shareAndFormat.js directly) to format for display, same as
+    // it already does for `format` via its own formatSummaryText.
+    rules: tournament.defaultRules || null,
     // stage (Quarterfinal/Semifinal/Final, or a custom playoff label) and venue were dropped here
     // for a long time, treated as internal-only detail -- but a spectator looking at "vs" with no
     // teams filled in yet (a knockout fixture proposed ahead of its round, see fixturesSection.js)
@@ -35610,6 +35618,14 @@ function FollowTournamentScreen({
     return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
   });
   const formatSummary = formatSummaryText(data.format);
+  // Read-only house rules line -- reported live as a genuine miss: the in-app schedule (and the
+  // review page when creating the tournament) always shows any non-standard rule (Free Hit, a
+  // different wide/no-ball run value, Super Over, ...), but a spectator on this public view had no
+  // way to see them at all. Reuses the exact same nonStandardRulesText summary the in-app "House
+  // rules" editor's own review step already produces -- silent (null) for a tournament using
+  // entirely standard rules, same "nothing non-default, nothing to show" convention as everywhere
+  // else this function is used.
+  const rulesSummary = nonStandardRulesText(data.rules);
   // Same "just the top row of the stats table" shortcut TournamentDetailScreen's own Orange/Purple
   // Cap callouts use -- topBatters/topBowlers already arrive from the snapshot sorted and cut to
   // the top 10 (formatTournamentViewSnapshot, src/core/appLogic.js), so there's no local
@@ -35717,7 +35733,15 @@ function FollowTournamentScreen({
       opacity: 0.85,
       marginTop: 2
     }
-  }, formatSummary), data.venue && /*#__PURE__*/React.createElement("a", {
+  }, formatSummary), rulesSummary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      opacity: 0.85,
+      marginTop: 2,
+      fontStyle: "italic"
+    }
+  }, "House rules: ", rulesSummary), data.venue && /*#__PURE__*/React.createElement("a", {
     href: buildMapsUrl(data.venue, data.venueLat, data.venueLng),
     target: "_blank",
     rel: "noopener noreferrer",
