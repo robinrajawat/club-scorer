@@ -246,6 +246,11 @@ export function CricketScorer() {
   // below. Exactly one of followCode/followMatchId is ever set at a time; FollowScreen itself
   // treats them as equivalent.
   const [followMatchId, setFollowMatchId] = useState(initialFollowMatchId);
+  // The opened match's own fixture stage ("Group"/"Semifinal"/"Final"/...), only ever set by
+  // openTournamentResultMatch below -- every other way of reaching FollowScreen (a direct link,
+  // Home's "Live now" feed) has no fixture to read a stage from, so this stays null for those,
+  // same as before this existed. Cleared in exitFollow alongside followCode/followMatchId.
+  const [followStage, setFollowStage] = useState(null);
   // Set instead of relying on initialTournamentFollowCode alone when FollowTournamentScreen is
   // reached from the Live tab (a tap) rather than a "?tournament=" link -- see
   // openLiveTournament/exitFollowTournament below. Starts at the URL-driven value so a direct link
@@ -1530,6 +1535,7 @@ export function CricketScorer() {
     }
     setFollowCode(null);
     setFollowMatchId(null);
+    setFollowStage(null);
     // tournamentFollowCode is only ever still set here when this match's follow view was opened
     // FROM FollowTournamentScreen's own Results section (openTournamentResultMatch below
     // deliberately leaves it in place, unlike openLiveTournament/exitFollowTournament) -- "Back"
@@ -1570,8 +1576,9 @@ export function CricketScorer() {
   // Deliberately leaves tournamentFollowCode set (unlike openLiveTournament, which always sets a
   // fresh one) so exitFollow's own check sends "Back"/"Done" from this match straight back to the
   // tournament's follow view rather than home/live.
-  function openTournamentResultMatch(viewCode) {
+  function openTournamentResultMatch(viewCode, stage) {
     setFollowCode(viewCode);
+    setFollowStage(stage || null);
     setScreen("follow");
   }
   function exitPoll() {
@@ -3173,7 +3180,8 @@ export function CricketScorer() {
   }, /*#__PURE__*/React.createElement(FollowScreen, {
     code: followCode,
     matchId: followMatchId,
-    onExit: exitFollow
+    onExit: exitFollow,
+    stage: followStage
   })), screen === "follow-tournament" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow-tournament",
     direction: navDirection

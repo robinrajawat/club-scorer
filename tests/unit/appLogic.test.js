@@ -202,6 +202,49 @@ test("formatTournamentViewSnapshot: a fixture's own venue wins over the tourname
   assert.deepEqual(snapshot.fixtures[1], { id: "F2", teamA: "A", teamB: "B", date: "", stage: null, venue: "Green Park", venueLat: 26.45, venueLng: 80.33, result: null, viewCode: null });
 });
 
+// Requested live once the app saw its first real tournament through to the end: "when the
+// tournament is over I think would be nice to see a card that shows who won... runner up... player
+// of the tournament." champion/runnerUp come from computeTournamentPlacement (already used
+// elsewhere for RecordsScreen); playerOfTournament is the same auto-suggestion
+// TournamentDetailScreen falls back to before an owner hand-picks one -- see the comment on
+// `placement`/`playerOfTournament` in formatTournamentViewSnapshot for why it's always the
+// suggestion here, never the owner's manual override. All three stay null until the tournament
+// actually has a decided result.
+test("formatTournamentViewSnapshot: carries the tournament's champion/runner-up and Player of the Tournament once decided, null before that", () => {
+  const tournament = {
+    id: "T1", name: "Summer Cup", teams: ["A", "B"],
+    fixtures: [{ id: "F1", teamA: "A", teamB: "B", date: "", stage: "Final", matchId: "M1" }]
+  };
+  const inProgressMatch = {
+    id: "M1", tournamentId: "T1", status: "in-progress", oversLimit: 20,
+    innings: [{ battingTeam: "A", bowlingTeam: "B", ballsPerOver: 6, runs: 50, wickets: 2, legalBalls: 60, maxWickets: 10, batsmen: {}, bowlers: {}, battingOrder: [], bowlingOrder: [] }]
+  };
+  const before = formatTournamentViewSnapshot(tournament, [], [inProgressMatch]);
+  assert.equal(before.champion, null);
+  assert.equal(before.runnerUp, null);
+  assert.equal(before.playerOfTournament, null);
+
+  const completeMatch = {
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20,
+    innings: [
+      {
+        battingTeam: "A", bowlingTeam: "B", ballsPerOver: 6, runs: 150, wickets: 3, legalBalls: 120, maxWickets: 10,
+        batsmen: { P1: { runs: 100, balls: 60, out: true } }, bowlers: {},
+        battingOrder: ["P1"], bowlingOrder: ["P2"]
+      },
+      {
+        battingTeam: "B", bowlingTeam: "A", ballsPerOver: 6, runs: 100, wickets: 10, legalBalls: 120, maxWickets: 10,
+        batsmen: {}, bowlers: { P1: { wickets: 5, ballsBowled: 24, runs: 20 } },
+        battingOrder: ["P2"], bowlingOrder: ["P1"]
+      }
+    ]
+  };
+  const after = formatTournamentViewSnapshot(tournament, [], [completeMatch]);
+  assert.equal(after.champion, "A", "team A scored more (150 vs 100)");
+  assert.equal(after.runnerUp, "B");
+  assert.equal(after.playerOfTournament, "P1", "100 runs and 5 wickets is the clear standout");
+});
+
 test("formatTournamentViewSnapshot: carries venue and a format summary through", () => {
   const tournament = {
     id: "T1", name: "Summer Cup", teams: ["A", "B", "C", "D"],

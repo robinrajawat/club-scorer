@@ -138,7 +138,13 @@ test("FollowScreen: a found snapshot shows the two team names and 'Live'", () =>
   assert.match(text, /"Live"/);
 });
 
-test("FollowScreen: a completed match shows the result text instead of 'Live'", () => {
+// BUG FIX: this used to say bare "Final" for any completed match, tournament or not -- broadcast
+// shorthand for "the game's over," but reported live as genuinely confusing in a tournament
+// context, where "Final" already means something specific and different (the championship match):
+// "why is each match tagged with final... it should clearly say it's a group stage match/qualifier/
+// semi/or finale." Says "Match Complete" instead when no stage is known (a non-tournament match, or
+// one reached some other way than FollowTournamentScreen's Results section -- see the next test).
+test("FollowScreen: a completed match shows the result text and 'Match Complete', not the ambiguous 'Final', when no stage is known", () => {
   const captured = {};
   const inst = renderScreen(captured);
   const complete = matchWith([
@@ -147,8 +153,26 @@ test("FollowScreen: a completed match shows the result text instead of 'Live'", 
   ], { status: "complete" });
   act(() => { captured.onNext({ exists: true, data: () => complete }); });
   const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /"Final"/);
+  assert.match(text, /"Match Complete"/);
+  assert.doesNotMatch(text, /"Final"/);
   assert.match(text, /Riverside CC won by 30 runs/);
+});
+
+// Opened from a tournament's public Results section (see openTournamentResultMatch in
+// cricketScorer.js), which knows the fixture's own real stage -- shown here instead of the generic
+// "Match Complete", since it's both more specific and answers exactly what was confusing before.
+test("FollowScreen: shows the fixture's own stage instead of generic wording, when it was opened from a tournament's Results section", () => {
+  const captured = {};
+  const inst = renderScreen(captured, { stage: "Semifinal" });
+  const complete = matchWith([
+    inning({ complete: true, runs: 150 }),
+    inning({ battingTeam: "Oakwood CC", bowlingTeam: "Riverside CC", runs: 120, wickets: 10, complete: true })
+  ], { status: "complete" });
+  act(() => { captured.onNext({ exists: true, data: () => complete }); });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /"Semifinal"/);
+  assert.doesNotMatch(text, /"Match Complete"/);
+  assert.doesNotMatch(text, /"Final"/);
 });
 
 test("FollowScreen: skips the celebration on the very first snapshot, then celebrates a boundary on the next one", () => {

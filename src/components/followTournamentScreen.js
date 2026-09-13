@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { Btn } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
-import { ChevronLeft, ChevronRight, Info } from "./icons.js";
+import { ChevronLeft, ChevronRight, Info, Trophy } from "./icons.js";
 import { StandingsTable } from "./tableAtoms.js";
 import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 
@@ -207,6 +207,12 @@ export function FollowTournamentScreen({
   // recomputation to do here, just picking [0].
   const orangeCap = data.topBatters && data.topBatters[0];
   const purpleCap = data.topBowlers && data.topBowlers[0];
+  // Requested live once the app saw its first real tournament through to the end: a card showing
+  // who won, the runner-up, and Player of the Tournament -- champion/runnerUp/playerOfTournament
+  // all arrive from the snapshot already null until there's an actual decided result
+  // (formatTournamentViewSnapshot, src/core/appLogic.js), same convention as topBatters/topBowlers
+  // just above, so this section simply doesn't render at all before then.
+  const isComplete = !!data.champion;
   // Shared by both the Results and Fixtures sections below -- used to just be a single bare
   // "teamA vs teamB" line with a result/date squeezed underneath, all crammed into one shared card.
   // Reported live: a knockout fixture proposed ahead of its round (see fixturesSection.js) showed
@@ -270,7 +276,7 @@ export function FollowTournamentScreen({
       }
     }, "📍 ", f.venue)), showResult && f.result && (f.viewCode && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: () => onOpenMatch(f.viewCode),
+      onClick: () => onOpenMatch(f.viewCode, f.stage),
       className: "cs-btn",
       "aria-label": `View scorecard: ${f.result}`,
       style: {
@@ -379,7 +385,54 @@ export function FollowTournamentScreen({
       margin: "0 auto",
       padding: 16
     }
-  }, groups ? groups.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
+  }, isComplete && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...sectionCardStyle,
+      background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
+      border: `1.5px solid ${COLORS.gold}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement(Trophy, {
+    size: 16,
+    color: COLORS.gold
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: COLORS.inkSoft
+    }
+  }, "Tournament Champion")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      color: COLORS.pitch,
+      marginBottom: data.runnerUp || data.playerOfTournament ? 10 : 0
+    }
+  }, data.champion), data.runnerUp && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: data.playerOfTournament ? 8 : 0
+    }
+  }, "Runner-up: ", data.runnerUp), data.playerOfTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "Player of the Tournament: ", /*#__PURE__*/React.createElement("span", {
+    style: { fontWeight: 700, color: COLORS.pitch }
+  }, data.playerOfTournament))), groups ? groups.map(g => /*#__PURE__*/React.createElement(React.Fragment, {
     key: g.label
   }, /*#__PURE__*/React.createElement("div", {
     style: {
