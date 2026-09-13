@@ -212,6 +212,23 @@ test("FollowTournamentScreen: shows venue and a format summary line when the sna
   assert.match(text, /20 overs/);
 });
 
+// Reported live as a genuine miss: a spectator had no way to see the tournament's house rules
+// (Free Hit, a non-standard wide/no-ball run value, Super Over, ...) even though the in-app
+// schedule always shows them. Reuses the exact same nonStandardRulesText summary the in-app rules
+// editor's own review step already produces.
+test("FollowTournamentScreen: shows a House rules line when the tournament has non-standard rules, nothing when it doesn't", async () => {
+  const withRules = snapshotData({ rules: { wideRuns: 2, freeHit: true } });
+  const instWithRules = await renderScreen("ABCD12", { exists: true, data: () => withRules });
+  const textWithRules = JSON.stringify(instWithRules.toJSON());
+  assert.match(textWithRules, /House rules:/);
+  assert.match(textWithRules, /2 runs on a wide/);
+  assert.match(textWithRules, /Free Hit enabled/);
+
+  const withoutRules = snapshotData({ rules: null });
+  const instWithoutRules = await renderScreen("ABCD12", { exists: true, data: () => withoutRules });
+  assert.doesNotMatch(JSON.stringify(instWithoutRules.toJSON()), /House rules:/);
+});
+
 test("FollowTournamentScreen: a completed fixture's result shows under a Results section, separate from upcoming Fixtures", async () => {
   const data = snapshotData({
     fixtures: [

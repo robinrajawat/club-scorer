@@ -208,6 +208,12 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
       advancePerGroup: tournament.groups ? tournament.advancePerGroup || 2 : null,
       knockoutStages: knockoutStages.length ? knockoutStages : null
     },
+    // Raw, not pre-summarized to text here (unlike `format` above) -- nonStandardRulesText lives in
+    // shareAndFormat.js, which itself imports DEFAULT_RULES/maxWicketsFor from THIS file, so calling
+    // it from here would be a circular import. Left for the caller (FollowTournamentScreen, a
+    // component already free to import shareAndFormat.js directly) to format for display, same as
+    // it already does for `format` via its own formatSummaryText.
+    rules: tournament.defaultRules || null,
     // stage (Quarterfinal/Semifinal/Final, or a custom playoff label) and venue were dropped here
     // for a long time, treated as internal-only detail -- but a spectator looking at "vs" with no
     // teams filled in yet (a knockout fixture proposed ahead of its round, see fixturesSection.js)
