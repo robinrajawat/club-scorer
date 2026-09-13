@@ -273,6 +273,31 @@ test("HomeScreen: 'In Progress'/'Completed' sections both render and collapse in
   assert.match(text, /Hawks CC/);
 });
 
+// BUG FIX: reported live as "Home page completed doesn't collapse when all matches are completed."
+// showCompleted forces itself open whenever there's nothing else on the page (no in-progress match,
+// no upcoming fixture) -- a sensible DEFAULT so Home doesn't look empty at a glance, but it used to
+// keep re-forcing itself open on every render regardless of what the person actually tapped, so once
+// every match was complete, collapsing this section was a permanent no-op: the very next render
+// found the same "nothing else on the page" condition still true and reopened it.
+test("HomeScreen: 'Completed' can actually be collapsed even when it's the only section on the page", () => {
+  const inst = render({
+    matches: [match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
+  });
+  // Forced open by default here -- nothing else (no in-progress, no upcoming) to separate it from.
+  let text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Hawks CC/);
+
+  const completedToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Completed ("));
+  act(() => { completedToggle.props.onClick(); });
+  text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Hawks CC/, "the explicit tap to collapse must actually stick, not get silently re-forced open");
+
+  // And tapping again reopens it, same as any other fold.
+  act(() => { completedToggle.props.onClick(); });
+  text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Hawks CC/);
+});
+
 test("HomeScreen: searching narrows the matches shown", () => {
   const inst = render({
     // Both completed (not in-progress) so neither shows up a second time in the "Continue

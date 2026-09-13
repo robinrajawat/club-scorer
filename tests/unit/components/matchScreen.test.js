@@ -450,6 +450,43 @@ test("MatchScreen: picking a new bowler pushes its own Undo checkpoint", async (
   assert.equal(ctx.inning.runs, 3, "the already-scored over is untouched -- Undo didn't reach past the bowler pick");
 });
 
+// Reported live: "undo doesn't go back multiple balls back if the over is changed." The "Over
+// complete -- next bowler" modal is a full-screen Modal with no way to reach the bottom scoring
+// bar's own Undo behind it, and (unlike the "Next batsman" modal, which already has exactly this
+// escape hatch) it had no Undo of its own -- so an over ending on a mistaken last ball, discovered
+// only once this modal appeared, had nowhere to go but forward into picking a bowler.
+test("MatchScreen: the 'Over complete' bowler prompt has its own Undo, reaching the just-finished over's last ball", async () => {
+  globalThis.saveMatch = () => Promise.resolve({ ok: true, writeSeq: 1 });
+  const ctx = renderMatch(baseMatch());
+  const singleBtn = () => ctx.inst.root.findAllByType(Btn).find(b => b.props.children === 1);
+  // Bowl the over's first 5 balls -- still in progress, no bowler prompt yet.
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      singleBtn().props.onClick();
+      await new Promise(r => setTimeout(r, 0));
+    });
+  }
+  assert.equal(ctx.inning.runs, 5);
+  assert.equal(ctx.inst.root.findAllByType(PlayerPicker).length, 0, "sanity check -- no bowler prompt yet, over still in progress");
+
+  // The 6th ball completes the over -- this is what should trigger needsNewBowler, with no bowler
+  // picked yet, and it's exactly the ball there'd be no other way to reach once that prompt is up.
+  await act(async () => {
+    singleBtn().props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.runs, 6);
+  assert.ok(ctx.inst.root.findByType(PlayerPicker), "sanity check -- the bowler prompt is up now");
+
+  const undoBtn = ctx.inst.root.findAllByType("button").find(b => hasText(b.props.children, "Undo"));
+  await act(async () => {
+    undoBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(ctx.inning.runs, 5, "the over's actual last ball reverted, not just some bowler pick that was never made");
+  assert.equal(ctx.inning.bowlerName, "X", "the bowler from before the over ended is still intact -- nothing to do with a pick, since none was ever made");
+});
+
 // Same fix, the confirmNewBatsman side: its non-wicket branch (picking a replacement after e.g. a
 // retirement, as opposed to the pendingWicket branch just above it, which already pushes its own
 // history since that commit IS the dismissal itself) had the same missing-checkpoint bug.

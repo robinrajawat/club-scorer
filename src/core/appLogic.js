@@ -16,7 +16,7 @@
 
 import { useRef } from "react";
 import { matchResultText } from "./shareAndFormat.js";
-import { computePlayerStats } from "./statsAndFixtures.js";
+import { computePlayerStats, suggestPlayerOfTournament } from "./statsAndFixtures.js";
 
 export function computeStandings(tournament, allMatches) {
   const byId = new Map(allMatches.map(m => [m.id, m]));
@@ -196,6 +196,19 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
   // own team count stands in for it when there are no groups at all.
   const advancingTeamCount = tournament.groups && tournament.groups.length ? tournament.groups.length * (tournament.advancePerGroup || 2) : tournament.teams.length;
   const knockoutStages = applicableKnockoutStages(advancingTeamCount).map(s => s.label);
+  // Champion/runner-up (computeTournamentPlacement, below in this same file) and Player of the
+  // Tournament (the same auto-suggestion TournamentDetailScreen falls back to before an owner ever
+  // hand-picks one) -- requested live once the app saw its first real tournament through to the
+  // end: "when the tournament is over I think would be nice to see a card that shows who won...
+  // runner up... player of the tournament." null until there's an actual result to show (an
+  // unfinished bracket, or no completed matches yet), same "nothing to show, nothing rendered"
+  // convention as topBatters/topBowlers just below. Deliberately the auto-suggestion, not
+  // tournament.playerOfTournament's own manual override -- that field isn't part of the lighter
+  // tournamentShape refreshTournamentStandingsLive rebuilds this snapshot from, so relying on it
+  // here would make the public card agree with the owner's pick only by accident, depending on
+  // which of the two refresh paths last ran.
+  const placement = computeTournamentPlacement(tournament, matches);
+  const playerOfTournament = completedMatches.length ? suggestPlayerOfTournament(completedMatches) : null;
   return {
     name: tournament.name,
     teams: tournament.teams,
@@ -249,7 +262,10 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
     // FollowTournamentScreen only renders the Orange/Purple Cap callouts and stats tables once at
     // least one completed match has actually contributed a real batting/bowling line.
     topBatters: topBatters.length ? topBatters : null,
-    topBowlers: topBowlers.length ? topBowlers : null
+    topBowlers: topBowlers.length ? topBowlers : null,
+    champion: placement ? placement.champion : null,
+    runnerUp: placement ? placement.runnerUp : null,
+    playerOfTournament: playerOfTournament || null
   };
 }
 // One standings table per group instead of one combined table — reuses computeStandings itself
@@ -506,8 +522,22 @@ export function computeTournamentPlacement(tournament, matches) {
   // Best-known "decided on" date, ISO-validated the same way tournamentDateRangeLabel does —
   // fixture dates are freeform/optional, so this is a best-effort label, not a guarantee. Falls
   // back to the tournament's createdAt (always present) when no fixture date was ever set.
+  //
+  // BUG FIX: this used to reference a module-level ISO_DATETIME_RE with no import of it at all --
+  // worked by accident in the deployed app only because scripts/generate.js splices this whole
+  // module into public/index.html's single shared script scope alongside shareAndFormat.js's own
+  // copy of that same name (see its FUNCTIONS list entry), but threw "ISO_DATETIME_RE is not
+  // defined" the moment this function was actually exercised as an isolated ES module (as
+  // formatTournamentViewSnapshot's own tests now do, having just started calling this function
+  // too). shareAndFormat.js already imports DEFAULT_RULES/maxWicketsFor FROM this file (see the
+  // comment on `rules` in formatTournamentViewSnapshot above), so importing its ISO_DATETIME_RE
+  // back would be the same circular dependency this file already avoids elsewhere -- and a
+  // module-level const of the same name here would instead collide with shareAndFormat.js's own
+  // copy once both get spliced into index.html's shared scope (an actual "already been declared"
+  // syntax error, caught before this ever shipped). Inlined right here instead, sidestepping both.
+  const isoDateTimeRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
   function latestFixtureDate(fx) {
-    const dates = fx.filter(f => ISO_DATETIME_RE.test(f.date || "")).map(f => f.date.slice(0, 10)).sort();
+    const dates = fx.filter(f => isoDateTimeRe.test(f.date || "")).map(f => f.date.slice(0, 10)).sort();
     return dates.length ? dates[dates.length - 1] : null;
   }
   function fixturesForStage(label) {

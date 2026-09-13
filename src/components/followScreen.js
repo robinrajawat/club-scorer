@@ -31,7 +31,13 @@ import { lastBallCommentary } from "../core/scoringEngine.js";
 export function FollowScreen({
   code,
   matchId,
-  onExit
+  onExit,
+  // This match's own fixture stage (e.g. "Group", "Semifinal", "Final"), when known -- only ever
+  // passed by FollowTournamentScreen's Results section (see openTournamentResultMatch in
+  // cricketScorer.js), which is the one caller that actually has a tournament fixture, and so a
+  // real stage, to hand over. Reached any other way (a direct "?follow=" link, Home's own "Live
+  // now" feed), this stays null, same as before this prop existed.
+  stage = null
 }) {
   const [match, setMatch] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | found | not-found | error
@@ -414,7 +420,15 @@ export function FollowScreen({
       textTransform: "uppercase",
       opacity: 0.85
     }
-  }, match.status === "complete" ? "Final" : inningsBreak ? "Innings Break" : "Live"), isStale && /*#__PURE__*/React.createElement("span", {
+  // BUG FIX: this used to say bare "Final" for ANY completed match, tournament or not -- broadcast
+  // shorthand for "the game has ended" (as in a TV score bug), but reported live as genuinely
+  // confusing in a tournament context, where "Final" already means something specific and
+  // different (the championship match): "why is each match tagged with final... it should clearly
+  // say it's a group stage match/qualifier/semi/or finale." Shows the fixture's own actual stage
+  // when it's known (passed in from FollowTournamentScreen's Results section -- see the `stage`
+  // prop above), falling back to unambiguous wording for every other case: a non-tournament match,
+  // or a tournament match reached some other way this prop was never threaded through to.
+  }, match.status === "complete" ? stage || "Match Complete" : inningsBreak ? "Innings Break" : "Live"), isStale && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,

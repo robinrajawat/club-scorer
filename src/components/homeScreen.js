@@ -100,7 +100,9 @@ export function HomeScreen({
   // Collapsed by default -- a season's worth of completed matches otherwise buries the in-progress
   // ones (the matches someone's actually mid-way through and likely opened this screen to resume)
   // under everything already finished. Forced open below whenever there are no in-progress matches
-  // to separate it from, since folding the only content on screen would just look empty.
+  // to separate it from, since folding the only content on screen would just look empty -- but
+  // only as a DEFAULT, before the person has ever actually tapped the fold themselves (see
+  // completedManuallySet/upcomingManuallySet below).
   const [completedExpanded, setCompletedExpanded] = useState(false);
   // In Progress stays open by default -- it's what someone most likely opened this screen to
   // resume. Upcoming and Completed both default closed: Upcoming is planning-ahead information,
@@ -109,6 +111,16 @@ export function HomeScreen({
   // view. All three still get the same fold affordance either way, so nothing here is one-way.
   const [inProgressExpanded, setInProgressExpanded] = useState(true);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
+  // BUG FIX: showCompleted/showUpcoming below used to force themselves back open on every render
+  // whenever nothing else was on the page, with no way to tell "the smart default" apart from "the
+  // person deliberately tapped this closed" -- so once every match in a tournament was complete
+  // (leaving nothing else on Home), collapsing Completed was pointless: the very next render forced
+  // it straight back open, since the only-content-on-screen condition was still true. Reported live
+  // as "Home page completed doesn't collapse when all matches are completed." Once a fold has
+  // actually been tapped once, its own state is the only thing that decides it from then on --
+  // these track that a manual choice happened at all, not what the choice was.
+  const [completedManuallySet, setCompletedManuallySet] = useState(false);
+  const [upcomingManuallySet, setUpcomingManuallySet] = useState(false);
   // Merges what used to be separate destinations (a "Search players" screen, plus Cups/Clubs/
   // Federations/Help each living behind their own tap) into one search box: type once, see
   // matches, players, tournaments/series, clubs, federations, and FAQ entries all filtered by the
@@ -1098,12 +1110,13 @@ function renderMatchCard(m, i, {
     }, "Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
       label: "Searching live & recent matches…"
     }) : filteredRecentMatches.map(renderRecentMatchRow)));
-    const showCompleted = completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
+    const showCompleted = completedManuallySet ? completedExpanded : completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
     // Same "don't fold the only thing on the page" rule as showCompleted above, mirrored: if
     // Upcoming is literally the only section with anything in it (no in-progress match to resume,
     // no completed history either), force it open rather than handing back a Home screen that
     // looks empty at a glance just because collapsed-by-default is now the norm for this section.
-    const showUpcoming = upcomingExpanded || inProgressMatches.length === 0 && completedMatches.length === 0 && sortedUpcomingFixtures.length > 0;
+    // Same completedManuallySet reasoning applies here too, via upcomingManuallySet.
+    const showUpcoming = upcomingManuallySet ? upcomingExpanded : upcomingExpanded || inProgressMatches.length === 0 && completedMatches.length === 0 && sortedUpcomingFixtures.length > 0;
     return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && (completedMatches.length > 0 || sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: () => setInProgressExpanded(e => !e),
@@ -1140,7 +1153,14 @@ function renderMatchCard(m, i, {
       }
     }, /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: () => setUpcomingExpanded(e => !e),
+      onClick: () => {
+        // Flips whatever's actually ON SCREEN right now (showUpcoming), not the raw upcomingExpanded
+        // state -- before the first manual tap, those two can disagree (showUpcoming forced open by
+        // the "nothing else on the page" default while upcomingExpanded is still its false initial
+        // value), and toggling the raw value in that case would leave the visible state unchanged.
+        setUpcomingManuallySet(true);
+        setUpcomingExpanded(!showUpcoming);
+      },
       className: "cs-btn",
       "aria-expanded": showUpcoming,
       style: {
@@ -1205,7 +1225,13 @@ function renderMatchCard(m, i, {
       }
     }, /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: () => setCompletedExpanded(e => !e),
+      onClick: () => {
+        // Same reasoning as the Upcoming toggle above -- flips what's actually shown (showCompleted),
+        // not the raw completedExpanded state, so the very first tap (while it's only open because
+        // of the "nothing else on the page" default) genuinely collapses it instead of no-op'ing.
+        setCompletedManuallySet(true);
+        setCompletedExpanded(!showCompleted);
+      },
       className: "cs-btn",
       "aria-expanded": showCompleted,
       style: {

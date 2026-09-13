@@ -260,17 +260,21 @@ test("FollowTournamentScreen: a completed fixture's result shows under a Results
 // plain, non-clickable result line, same as before this was added.
 test("FollowTournamentScreen: a completed fixture's result is tappable into the scorecard when its match has a viewCode, plain text when it doesn't", async () => {
   let openedCode = null;
+  let openedStage = null;
   const data = snapshotData({
     fixtures: [
-      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs", viewCode: "ABCD12" },
+      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs", viewCode: "ABCD12", stage: "Semifinal" },
       { id: "f2", date: "2026-05-08T18:00", teamA: "Riverside 2nd XI", teamB: "Riverside 1st XI", result: "Riverside 2nd XI won by 5 wickets", viewCode: null }
     ]
   });
-  const inst = await renderScreen("XYZ999", { exists: true, data: () => data }, { onOpenMatch: code => { openedCode = code; } });
+  const inst = await renderScreen("XYZ999", { exists: true, data: () => data }, { onOpenMatch: (code, stage) => { openedCode = code; openedStage = stage; } });
 
   const tappableResult = inst.root.findByProps({ "aria-label": "View scorecard: Riverside 1st XI won by 20 runs" });
   act(() => { tappableResult.props.onClick(); });
   assert.equal(openedCode, "ABCD12");
+  // The fixture's own stage rides along too, so FollowScreen can show it instead of generic
+  // wording once opened -- see followScreen.test.js's own coverage of that display.
+  assert.equal(openedStage, "Semifinal");
 
   assert.throws(() => inst.root.findByProps({ "aria-label": "View scorecard: Riverside 2nd XI won by 5 wickets" }));
   assert.match(JSON.stringify(inst.toJSON()), /Riverside 2nd XI won by 5 wickets/);
@@ -319,4 +323,26 @@ test("FollowTournamentScreen: no Orange/Purple Cap or Stats section when the sna
   assert.doesNotMatch(text, /Orange Cap/);
   assert.doesNotMatch(text, /Purple Cap/);
   assert.doesNotMatch(text, /Stats/);
+});
+
+// Requested live once the app saw its first real tournament through to the end: "when the
+// tournament is over I think would be nice to see a card that shows who won... runner up... player
+// of the tournament." champion/runnerUp/playerOfTournament all arrive from the snapshot already
+// null before there's a decided result (formatTournamentViewSnapshot, src/core/appLogic.js), so the
+// whole card is gated on data.champion alone -- no separate "is it complete" check needed here.
+test("FollowTournamentScreen: shows a Tournament Champion card with the runner-up and Player of the Tournament once decided", async () => {
+  const data = snapshotData({ champion: "Riverside 1st XI", runnerUp: "Riverside 2nd XI", playerOfTournament: "A. Sharma" });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Tournament Champion/);
+  assert.match(text, /Runner-up: /);
+  assert.match(text, /Player of the Tournament: /);
+  assert.match(text, /A\. Sharma/);
+});
+
+test("FollowTournamentScreen: no Tournament Champion card before there's a decided result", async () => {
+  const data = snapshotData(); // no champion at all -- tournament still in progress
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Tournament Champion/);
 });
