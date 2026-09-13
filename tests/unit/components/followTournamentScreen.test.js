@@ -346,3 +346,26 @@ test("FollowTournamentScreen: no Tournament Champion card before there's a decid
   const text = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(text, /Tournament Champion/);
 });
+
+// Requested live: "orange/purple cap card can also go after the champion card" -- both are
+// end-of-tournament summary callouts, so they should read together at the top of the page rather
+// than the cap card sitting all the way down past the whole standings table. Checked by ACTUAL
+// render order (string index), not just presence -- a naive text-presence check wouldn't catch a
+// regression back to the old position.
+test("FollowTournamentScreen: the Orange/Purple Cap card renders right after the Tournament Champion card, ahead of standings", async () => {
+  const data = snapshotData({
+    champion: "Riverside 1st XI", runnerUp: "Riverside 2nd XI", playerOfTournament: "A. Sharma",
+    topBatters: [{ name: "A. Sharma", runs: 210, battingInnings: 4, battingAvg: 70, strikeRate: 130 }],
+    topBowlers: [{ name: "D. Singh", wickets: 9, runsConceded: 120, bowlingAvg: 13.3, economy: 5.2 }]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  const championIdx = text.indexOf("Tournament Champion");
+  const capIdx = text.indexOf("Orange Cap");
+  // A value unique to the standings table itself (its NRR column) -- team names alone would
+  // collide with the champion/runner-up text already rendered earlier on the page.
+  const standingsIdx = text.indexOf("0.512");
+  assert.ok(championIdx >= 0 && capIdx >= 0 && standingsIdx >= 0, "sanity check -- all three sections actually rendered");
+  assert.ok(championIdx < capIdx, "the cap card comes after the champion card");
+  assert.ok(capIdx < standingsIdx, "the cap card comes before standings, not after");
+});
