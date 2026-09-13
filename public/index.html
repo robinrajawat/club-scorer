@@ -1931,23 +1931,27 @@ async function syncTournamentConfig(tournament) {
 // tournamentMatchesConfigDoc above. Reuses the tournament's own code once one exists (persisted
 // onto the tournament doc via the caller's onUpdateTournament) rather than minting a new one on
 // every refresh, so a previously-shared link keeps working.
+// Mints and persists a viewCode for every match here that still needs one (see
+// needsAutoMintedViewCode in packUtils.js), routing each mint through the ordinary saveMatch
+// pipeline so it lands in whichever primary store the match actually lives in, plus the same
+// /liveViews mirror a manual "Follow along" tap would produce. Shared by shareTournament (the
+// owner's manual Share/Refresh) and refreshTournamentStandingsLive (the automatic path below) so a
+// completed tournament match's scorecard becomes reachable from the public Results view the same
+// way either way, with no manual step -- reported live: requiring a manual Share tap at all
+// "doesn't make any sense... whoever is following the live page, this information should be
+// visible." Safe to call from either path: a match that already has a viewCode (or isn't
+// tournament-tagged/complete/public) is untouched.
+async function backfillMatchViewCodes(matches) {
+  return Promise.all(matches.map(async m => {
+    if (!needsAutoMintedViewCode(m)) return m;
+    const updated = { ...m, viewCode: genMatchCode() };
+    await saveMatch(updated);
+    return updated;
+  }));
+}
 async function shareTournament(tournament, standings, matches = []) {
   try {
-    // Backfills a viewCode for any already-complete match this owner-triggered "Share"/"Refresh"
-    // can see that still doesn't have one -- saveMatch only ever mints one going forward, at the
-    // moment a match completes (see needsAutoMintedViewCode in packUtils.js), so a match that
-    // completed before that existed, or was never re-saved since, would otherwise stay
-    // non-clickable on the public Results view forever. Routed through the ordinary saveMatch
-    // pipeline (not a direct write here) so it lands in whichever primary store this match
-    // actually lives in, plus the same /liveViews mirror a manual "Follow along" tap would
-    // produce -- reported live as still-broken immediately after that fix shipped, for exactly
-    // the fixtures that had already completed before it did.
-    const matchesWithViewCodes = await Promise.all(matches.map(async m => {
-      if (!needsAutoMintedViewCode(m)) return m;
-      const updated = { ...m, viewCode: genMatchCode() };
-      await saveMatch(updated);
-      return updated;
-    }));
+    const matchesWithViewCodes = await backfillMatchViewCodes(matches);
     const code = tournament.shareCode || genMatchCode();
     await db.collection("tournamentViews").doc(code).set({
       ...formatTournamentViewSnapshot(tournament, standings, matchesWithViewCodes),
@@ -2009,15 +2013,18 @@ async function stopSharingTournament(tournamentId, code) {
 }
 // Best-effort, fire-and-forget auto-refresh of a shared tournament's /tournamentViews/{code}
 // snapshot — called from saveMatch whenever ANY client, owner or a guest scoring via a match's
-// own share code, saves a completed match tagged with a tournamentId. Unlike shareTournament (the
-// manual "hit refresh" path, still needed to mint the very first share code and still the only
-// path that can see a signed-in owner's own privately-scored matches under /users/{uid}/matches),
-// this reads ONLY public data — see firestore.rules for why both collections below are open:
-// the /tournamentMatches/{tournamentId} config doc (teams + fixtures, kept in sync by
-// shareTournament) and its /entries pointer index, resolved through /sharedMatches. That means it
-// can only ever "see" matches that went through a match share code — a tournament run entirely by
-// its owner scoring privately (never handing out a match code) stays only as live as the owner's
-// own device refreshing it manually or completing a match itself. A silent no-op, not an error, if
+// own share code, saves a completed match tagged with a tournamentId. Used to only ever be able to
+// "see" matches that went through a match share code (via /tournamentMatches/{tournamentId}'s
+// public /entries pointer index, resolved through /sharedMatches) -- a tournament run entirely by
+// its owner scoring privately (never handing out a match code) stayed only as live as the owner's
+// own device manually hitting Share/Refresh, reported live as not making sense: "whoever is
+// following the live page, this information should be visible" with no manual step. Now sources
+// matches through loadTournamentMatches instead -- the exact same query shareTournament's own
+// caller (TournamentDetailScreen) already uses, which also picks up the CURRENT client's own
+// signed-in account's matches for this tournament, not just share-coded ones. For a guest with no
+// account this is a no-op difference (loadTournamentMatches falls back to the same share-coded
+// subset); for the owner's own device completing its own match, this is what makes the public view
+// update automatically, the same as a manual Share/Refresh would. A silent no-op, not an error, if
 // the tournament was never shared (no config doc, or no shareCode on it) or has since been marked
 // private — cheap to call unconditionally from saveMatch since that first read short-circuits.
 async function refreshTournamentStandingsLive(tournamentId) {
@@ -2026,10 +2033,7 @@ async function refreshTournamentStandingsLive(tournamentId) {
     if (!configDoc.exists) return;
     const config = configDoc.data();
     if (!config.shareCode || config.private) return;
-    const entriesSnap = await db.collection("tournamentMatches").doc(tournamentId).collection("entries").get();
-    const shareCodes = [...new Set(entriesSnap.docs.map(d => d.data().shareCode).filter(Boolean))];
-    const matchDocs = await Promise.all(shareCodes.map(code => db.collection("sharedMatches").doc(code).get()));
-    const matches = matchDocs.filter(d => d.exists).map(d => unpackMatchFromFirestore(d.data()));
+    const matches = await backfillMatchViewCodes(await loadTournamentMatches(tournamentId));
     const tournamentShape = {
       id: tournamentId,
       name: config.name,
