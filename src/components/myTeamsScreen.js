@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronDown, ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
+import { ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { FabButton } from "./screenAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
@@ -24,7 +24,6 @@ export function MyTeamsScreen({
   onDeleteTeam,
   showTabBar = false
 }) {
-  const [teamsExpanded, setTeamsExpanded] = useState(true);
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
   // comment for why this is one flag across both screens rather than two separate ones.
   const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
@@ -167,26 +166,7 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14,
     strokeWidth: 2.5
-  }), "New"), teams.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setTeamsExpanded(e => !e),
-    className: "cs-btn",
-    "aria-label": teamsExpanded ? "Hide your teams" : "Show your teams",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 6,
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement(ChevronDown, {
-    size: 15,
-    style: {
-      transform: teamsExpanded ? "rotate(180deg)" : "none",
-      transition: "transform 0.15s"
-    }
-  })))), (teamsExpanded || teams.length === 0) && /*#__PURE__*/React.createElement("div", {
+  }), "New"))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: teams.length > 0 ? 10 : 14,
       ...(teams.length === 0 ? { flex: 1, display: "flex", flexDirection: "column" } : {})
