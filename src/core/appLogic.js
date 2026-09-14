@@ -246,12 +246,15 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
       // A completed fixture's own match, so a spectator can drill into its full scorecard from the
       // Results section instead of just reading a one-line result -- reported live as a genuine
       // miss ("match completed for the tournament, are not able to get into it to see the
-      // scorecard"). Deliberately viewCode (the match's own read-only "Follow along" credential,
-      // FollowScreen's own `code` prop), never shareCode (co-scoring/edit access) -- leaking that
-      // publicly would let any spectator score the match. Not every match has one: a viewCode is
-      // only ever minted when the owner explicitly taps "Follow along" for that specific match, so
-      // this stays null for most completed fixtures, same as before this change for them.
-      viewCode: f.matchId && matchById.has(f.matchId) ? (matchById.get(f.matchId).viewCode || null) : null
+      // scorecard"). Deliberately the match's own plain id, not a bearer code (there used to be a
+      // separate viewCode minted for this, requiring "Follow along" to have been tapped first) --
+      // this is public, already-listable /liveMatches data (see FollowScreen's own matchId prop,
+      // the same path Home's "Live now" feed already opens matches through), and never shareCode
+      // (co-scoring/edit access), so nothing this exposes is more sensitive than the plain-text
+      // result line right next to it. A tournament match's own /liveMatches retention is
+      // TOURNAMENT_VIEW_TTL_DAYS, not the ordinary few-day window (see writeTournamentRecent in
+      // packUtils.js), so this stays resolvable for as long as this snapshot itself does.
+      matchId: f.matchId || null
     })),
     groups: groupStandings ? groupStandings.map(g => ({
       label: g.label,

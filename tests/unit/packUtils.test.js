@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore, planMatchSaveEffects, conflictMessageFor, needsAutoMintedViewCode } from "../../src/core/packUtils.js";
+import { packMatchForFirestore, findEmptyKeyPath, unpackMatchFromFirestore, planMatchSaveEffects, conflictMessageFor } from "../../src/core/packUtils.js";
 import { newInning, applyBall, ensureBatsman, ensureBowler } from "../../src/core/scoringEngine.js";
 
 test("findEmptyKeyPath finds an injected empty batsmen key, ignores empty string values", () => {
@@ -142,17 +142,21 @@ test("planMatchSaveEffects: standings refresh fires only for a COMPLETE match ta
   assert.equal(planMatchSaveEffects(complete, { ok: false, structuralError: true }, { hasAccount: false }).refreshTournamentStandings, false);
 });
 
-// Reported live, even after the public Results view was made able to open a match's scorecard by
-// viewCode: a completed fixture nobody had separately tapped "Follow along" on still wasn't
-// clickable, since nothing had ever minted it a viewCode. saveMatch now mints one itself right
-// before the primary write whenever this returns true (see its own reasoning in packUtils.js).
-test("needsAutoMintedViewCode: true only for a complete, public tournament match with no viewCode yet", () => {
-  const base = { id: "m1", tournamentId: "t1", status: "complete" };
-  assert.equal(needsAutoMintedViewCode(base), true);
-  assert.equal(needsAutoMintedViewCode({ ...base, viewCode: "V1" }), false, "already has one -- never mint a second");
-  assert.equal(needsAutoMintedViewCode({ ...base, status: "in-progress" }), false, "not complete yet");
-  assert.equal(needsAutoMintedViewCode({ id: "m1", status: "complete" }), false, "no tournamentId -- a personal match is never handed a public link");
-  assert.equal(needsAutoMintedViewCode({ ...base, private: true }), false, "opted out of public discovery -- no bearer code for it either");
+// Replaces the earlier viewCode-minting mechanism: rather than a separate bearer code that had to
+// be minted (and, before that, manually requested via "Follow along") before a tournament match's
+// scorecard was reachable, the public Results view now opens a completed fixture by its own plain
+// matchId -- already-public /liveMatches data, same as Home's "Live now" feed always used. That
+// only works for as long as /liveMatches actually keeps the match, so a completed TOURNAMENT match
+// gets its own longer-lived tier ("writeTournamentRecent") instead of the ordinary few-day
+// "writeRecent" one -- see saveMatch's own TTL mapping in index.html (TOURNAMENT_VIEW_TTL_DAYS,
+// matching the tournament snapshot's own retention, not RECENT_MATCH_RETENTION_DAYS).
+test("planMatchSaveEffects: a completed tournament match gets the longer writeTournamentRecent tier, an ordinary one just writeRecent", () => {
+  const tournamentMatch = { id: "m1", tournamentId: "t1", status: "complete" };
+  const ordinaryMatch = { id: "m1", status: "complete" };
+  assert.equal(planMatchSaveEffects(tournamentMatch, { ok: true }, { hasAccount: true }).liveMatchesMirror, "writeTournamentRecent");
+  assert.equal(planMatchSaveEffects(ordinaryMatch, { ok: true }, { hasAccount: true }).liveMatchesMirror, "writeRecent");
+  // Still in progress -- neither tier applies yet, tournament or not.
+  assert.equal(planMatchSaveEffects({ ...tournamentMatch, status: "in-progress" }, { ok: true }, { hasAccount: true }).liveMatchesMirror, "writeLiveFeed");
 });
 
 test("conflictMessageFor: names the team, falling back to 'This match' when teamA isn't recorded yet", () => {

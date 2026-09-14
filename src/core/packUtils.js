@@ -83,7 +83,17 @@ export function planMatchSaveEffects(match, result, {
     // differently, rather than leaving a stale doc to age out on its own TTL.
     liveMatchesMirror = "delete";
   } else if (hasAccount || !!match.shareCode) {
-    liveMatchesMirror = match.status === "complete" ? "writeRecent" : "writeLiveFeed";
+    // A completed TOURNAMENT match gets a longer /liveMatches retention than an ordinary one --
+    // "writeTournamentRecent" instead of "writeRecent" -- so its scorecard stays open at its own
+    // plain matchId for as long as the tournament's own public page does (see
+    // TOURNAMENT_VIEW_TTL_DAYS in index.html), not just the ordinary few-day "recent" window.
+    // Without this, a tournament Results link built from matchId (see formatTournamentViewSnapshot
+    // in appLogic.js) would work for a few days and then go dead for the rest of the tournament
+    // page's own much longer lifetime -- reported live as exactly this class of bug already, once,
+    // for the viewCode mechanism this replaces: "this shouldn't be necessary... why unnecessarily
+    // complicate it" was the call to drop the separate bearer-code link in favor of this simpler,
+    // already-open matchId, so this is what actually makes that safe to do.
+    liveMatchesMirror = match.status === "complete" ? match.tournamentId ? "writeTournamentRecent" : "writeRecent" : "writeLiveFeed";
   } else {
     // A pure local-only match (no account, no shareCode) never reaches this collection at all --
     // "Continue without an account" promises matches stay on this device only.
@@ -97,20 +107,6 @@ export function planMatchSaveEffects(match, result, {
     liveMatchesMirror,
     refreshTournamentStandings: !structuralError && !!match.tournamentId && match.status === "complete"
   };
-}
-// Whether saveMatch should mint a fresh viewCode for this match before writing it. Without this,
-// a completed tournament fixture only ever got a viewCode (and so a clickable scorecard on the
-// public Results view -- see followTournamentScreen.js's onOpenMatch / formatTournamentViewSnapshot
-// in appLogic.js) if someone had separately tapped "Follow along" on that exact match beforehand --
-// reported live as "match completed for the tournament, are not able to get into it to see the
-// scorecard," even right after this feature shipped, because that was still true for every fixture
-// nobody had happened to follow live. Scoped to match.tournamentId so a personal, non-tournament
-// match is never handed a public read-only link it was never asked for, and excludes match.private
-// for the same reason liveMatchesMirror is deleted rather than written for one (see
-// planMatchSaveEffects above) -- a match opted out of public discovery shouldn't gain a bearer code
-// for a read-only view of it either, even though nothing would currently expose that code anyway.
-export function needsAutoMintedViewCode(match) {
-  return !!match.tournamentId && match.status === "complete" && !match.viewCode && !match.private;
 }
 // The message flushPendingWrites surfaces (via SyncStatusBanner) when a queued match's background
 // retry finds a newer version already on the server -- there's no human to ask "which version wins"

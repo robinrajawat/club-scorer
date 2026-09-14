@@ -1931,29 +1931,10 @@ async function syncTournamentConfig(tournament) {
 // tournamentMatchesConfigDoc above. Reuses the tournament's own code once one exists (persisted
 // onto the tournament doc via the caller's onUpdateTournament) rather than minting a new one on
 // every refresh, so a previously-shared link keeps working.
-// Mints and persists a viewCode for every match here that still needs one (see
-// needsAutoMintedViewCode in packUtils.js), routing each mint through the ordinary saveMatch
-// pipeline so it lands in whichever primary store the match actually lives in, plus the same
-// /liveViews mirror a manual "Follow along" tap would produce. Shared by shareTournament (the
-// owner's manual Share/Refresh) and refreshTournamentStandingsLive (the automatic path below) so a
-// completed tournament match's scorecard becomes reachable from the public Results view the same
-// way either way, with no manual step -- reported live: requiring a manual Share tap at all
-// "doesn't make any sense... whoever is following the live page, this information should be
-// visible." Safe to call from either path: a match that already has a viewCode (or isn't
-// tournament-tagged/complete/public) is untouched.
-async function backfillMatchViewCodes(matches) {
-  return Promise.all(matches.map(async m => {
-    if (!needsAutoMintedViewCode(m)) return m;
-    const updated = { ...m, viewCode: genMatchCode() };
-    await saveMatch(updated);
-    return updated;
-  }));
-}
 async function shareTournament(tournament, standings, matches = []) {
   try {
-    const matchesWithViewCodes = await backfillMatchViewCodes(matches);
     const code = tournament.shareCode || genMatchCode();
-    const snapshot = formatTournamentViewSnapshot(tournament, standings, matchesWithViewCodes);
+    const snapshot = formatTournamentViewSnapshot(tournament, standings, matches);
     await db.collection("tournamentViews").doc(code).set({
       ...snapshot,
       sharedAt: Date.now(),
@@ -2037,7 +2018,7 @@ async function refreshTournamentStandingsLive(tournamentId) {
     if (!configDoc.exists) return;
     const config = configDoc.data();
     if (!config.shareCode || config.private) return;
-    const matches = await backfillMatchViewCodes(await loadTournamentMatches(tournamentId));
+    const matches = await loadTournamentMatches(tournamentId);
     const tournamentShape = {
       id: tournamentId,
       name: config.name,
@@ -2274,7 +2255,17 @@ function planMatchSaveEffects(match, result, {
     // differently, rather than leaving a stale doc to age out on its own TTL.
     liveMatchesMirror = "delete";
   } else if (hasAccount || !!match.shareCode) {
-    liveMatchesMirror = match.status === "complete" ? "writeRecent" : "writeLiveFeed";
+    // A completed TOURNAMENT match gets a longer /liveMatches retention than an ordinary one --
+    // "writeTournamentRecent" instead of "writeRecent" -- so its scorecard stays open at its own
+    // plain matchId for as long as the tournament's own public page does (see
+    // TOURNAMENT_VIEW_TTL_DAYS in index.html), not just the ordinary few-day "recent" window.
+    // Without this, a tournament Results link built from matchId (see formatTournamentViewSnapshot
+    // in appLogic.js) would work for a few days and then go dead for the rest of the tournament
+    // page's own much longer lifetime -- reported live as exactly this class of bug already, once,
+    // for the viewCode mechanism this replaces: "this shouldn't be necessary... why unnecessarily
+    // complicate it" was the call to drop the separate bearer-code link in favor of this simpler,
+    // already-open matchId, so this is what actually makes that safe to do.
+    liveMatchesMirror = match.status === "complete" ? match.tournamentId ? "writeTournamentRecent" : "writeRecent" : "writeLiveFeed";
   } else {
     // A pure local-only match (no account, no shareCode) never reaches this collection at all --
     // "Continue without an account" promises matches stay on this device only.
@@ -2288,20 +2279,6 @@ function planMatchSaveEffects(match, result, {
     liveMatchesMirror,
     refreshTournamentStandings: !structuralError && !!match.tournamentId && match.status === "complete"
   };
-}
-// Whether saveMatch should mint a fresh viewCode for this match before writing it. Without this,
-// a completed tournament fixture only ever got a viewCode (and so a clickable scorecard on the
-// public Results view -- see followTournamentScreen.js's onOpenMatch / formatTournamentViewSnapshot
-// in appLogic.js) if someone had separately tapped "Follow along" on that exact match beforehand --
-// reported live as "match completed for the tournament, are not able to get into it to see the
-// scorecard," even right after this feature shipped, because that was still true for every fixture
-// nobody had happened to follow live. Scoped to match.tournamentId so a personal, non-tournament
-// match is never handed a public read-only link it was never asked for, and excludes match.private
-// for the same reason liveMatchesMirror is deleted rather than written for one (see
-// planMatchSaveEffects above) -- a match opted out of public discovery shouldn't gain a bearer code
-// for a read-only view of it either, even though nothing would currently expose that code anyway.
-function needsAutoMintedViewCode(match) {
-  return !!match.tournamentId && match.status === "complete" && !match.viewCode && !match.private;
 }
 // The message flushPendingWrites surfaces (via SyncStatusBanner) when a queued match's background
 // retry finds a newer version already on the server -- there's no human to ask "which version wins"
@@ -2731,13 +2708,6 @@ async function savePrimaryMatch(match) {
 // code than /sharedMatches) is what makes read-only following structurally incapable of granting
 // scoring access.
 async function saveMatch(match) {
-  // A completed tournament fixture needs a viewCode for the public Results view to open its
-  // scorecard through (see needsAutoMintedViewCode's own reasoning in packUtils.js) -- mint one
-  // here, before the primary write, so it's persisted on this very save and the liveViewsMirror
-  // write just below picks it up naturally, the same as if "Follow along" had been tapped by hand.
-  if (needsAutoMintedViewCode(match)) {
-    match = { ...match, viewCode: genMatchCode() };
-  }
   const result = await savePrimaryMatch(match);
   const plan = planMatchSaveEffects(match, result, {
     hasAccount: !!auth.currentUser
@@ -2761,8 +2731,10 @@ async function saveMatch(match) {
       console.error("[saveMatch] live-view mirror write failed \u2014 code:", e.code, "message:", e.message);
     }
   }
-  if (plan.liveMatchesMirror === "writeRecent" || plan.liveMatchesMirror === "writeLiveFeed") {
-    const ttlDays = plan.liveMatchesMirror === "writeRecent" ? RECENT_MATCH_RETENTION_DAYS : LIVE_MATCH_FEED_TTL_DAYS;
+  if (plan.liveMatchesMirror === "writeRecent" || plan.liveMatchesMirror === "writeTournamentRecent" || plan.liveMatchesMirror === "writeLiveFeed") {
+    // A tournament match's own completed-retention is TOURNAMENT_VIEW_TTL_DAYS, not the ordinary
+    // RECENT_MATCH_RETENTION_DAYS -- see planMatchSaveEffects' own comment on writeTournamentRecent.
+    const ttlDays = plan.liveMatchesMirror === "writeTournamentRecent" ? TOURNAMENT_VIEW_TTL_DAYS : plan.liveMatchesMirror === "writeRecent" ? RECENT_MATCH_RETENTION_DAYS : LIVE_MATCH_FEED_TTL_DAYS;
     try {
       await db.collection("liveMatches").doc(match.id).set(packMatchForFirestore({
         ...match,
@@ -5972,12 +5944,15 @@ function formatTournamentViewSnapshot(tournament, standings, matches = []) {
       // A completed fixture's own match, so a spectator can drill into its full scorecard from the
       // Results section instead of just reading a one-line result -- reported live as a genuine
       // miss ("match completed for the tournament, are not able to get into it to see the
-      // scorecard"). Deliberately viewCode (the match's own read-only "Follow along" credential,
-      // FollowScreen's own `code` prop), never shareCode (co-scoring/edit access) -- leaking that
-      // publicly would let any spectator score the match. Not every match has one: a viewCode is
-      // only ever minted when the owner explicitly taps "Follow along" for that specific match, so
-      // this stays null for most completed fixtures, same as before this change for them.
-      viewCode: f.matchId && matchById.has(f.matchId) ? (matchById.get(f.matchId).viewCode || null) : null
+      // scorecard"). Deliberately the match's own plain id, not a bearer code (there used to be a
+      // separate viewCode minted for this, requiring "Follow along" to have been tapped first) --
+      // this is public, already-listable /liveMatches data (see FollowScreen's own matchId prop,
+      // the same path Home's "Live now" feed already opens matches through), and never shareCode
+      // (co-scoring/edit access), so nothing this exposes is more sensitive than the plain-text
+      // result line right next to it. A tournament match's own /liveMatches retention is
+      // TOURNAMENT_VIEW_TTL_DAYS, not the ordinary few-day window (see writeTournamentRecent in
+      // packUtils.js), so this stays resolvable for as long as this snapshot itself does.
+      matchId: f.matchId || null
     })),
     groups: groupStandings ? groupStandings.map(g => ({
       label: g.label,
@@ -35935,9 +35910,9 @@ function FollowTournamentScreen({
         fontWeight: 600,
         textDecoration: "none"
       }
-    }, "📍 ", f.venue)), showResult && f.result && (f.viewCode && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
+    }, "📍 ", f.venue)), showResult && f.result && (f.matchId && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: () => onOpenMatch(f.viewCode, f.stage),
+      onClick: () => onOpenMatch(f.matchId, f.stage),
       className: "cs-btn",
       "aria-label": `View scorecard: ${f.result}`,
       style: {
@@ -42148,12 +42123,14 @@ function CricketScorer() {
   }
   // Opens a completed tournament fixture's own read-only match view from FollowTournamentScreen's
   // own Results section (see that component's onOpenMatch prop) -- reported live as a genuine gap:
-  // "match completed for the tournament, are not able to get into it to see the scorecard."
-  // Deliberately leaves tournamentFollowCode set (unlike openLiveTournament, which always sets a
-  // fresh one) so exitFollow's own check sends "Back"/"Done" from this match straight back to the
-  // tournament's follow view rather than home/live.
-  function openTournamentResultMatch(viewCode, stage) {
-    setFollowCode(viewCode);
+  // "match completed for the tournament, are not able to get into it to see the scorecard." By
+  // matchId, not a bearer code -- FollowScreen's matchId prop already reads the match straight from
+  // the open, already-listable /liveMatches collection, the same path Home's "Live now" feed uses,
+  // so no code ever needed minting for this. Deliberately leaves tournamentFollowCode set (unlike
+  // openLiveTournament, which always sets a fresh one) so exitFollow's own check sends "Back"/"Done"
+  // from this match straight back to the tournament's follow view rather than home/live.
+  function openTournamentResultMatch(matchId, stage) {
+    setFollowMatchId(matchId);
     setFollowStage(stage || null);
     setScreen("follow");
   }

@@ -23,11 +23,13 @@ import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 // (older cached snapshots, or a tournament with no groups/venue, simply omit them), so every
 // section below only renders when the data for it is actually present.
 //
-// A completed fixture's `result` line is only tappable into the full scorecard (via onOpenMatch)
-// when that specific match also carries a `viewCode` -- the match's own read-only "Follow along"
-// credential, only minted when the owner explicitly turned it on for that match. Most completed
-// fixtures won't have one, and stay a plain (non-clickable) result line, same as before this was
-// added.
+// A completed fixture's `result` line is tappable into the full scorecard (via onOpenMatch,
+// passed the match's own plain `matchId`) whenever that match is known at all -- deliberately no
+// bearer code here: /liveMatches (what FollowScreen's matchId prop reads) is already public,
+// already-listable data, the same one Home's "Live now" feed has always opened matches through, so
+// gating this one specific path behind a separately-minted credential was unneeded complexity, not
+// an actual privacy boundary. A fixture with no matchId at all (never linked to a match) is the
+// only case that stays plain, non-clickable text.
 
 export function FollowTournamentScreen({
   code,
@@ -338,9 +340,9 @@ export function FollowTournamentScreen({
         fontWeight: 600,
         textDecoration: "none"
       }
-    }, "📍 ", f.venue)), showResult && f.result && (f.viewCode && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
+    }, "📍 ", f.venue)), showResult && f.result && (f.matchId && onOpenMatch ? /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: () => onOpenMatch(f.viewCode, f.stage),
+      onClick: () => onOpenMatch(f.matchId, f.stage),
       className: "cs-btn",
       "aria-label": `View scorecard: ${f.result}`,
       style: {
