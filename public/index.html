@@ -14911,7 +14911,7 @@ function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, watcherMode && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -14941,7 +14941,7 @@ function LiveScreen({
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Club Scorer")), watcherMode && /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
@@ -25680,6 +25680,7 @@ function FollowScreen({
   }), linkCopied ? "Copied!" : "Share"), /*#__PURE__*/React.createElement("button", {
     onClick: onExit,
     className: "cs-btn",
+    "aria-label": "Back",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
@@ -25689,9 +25690,14 @@ function FollowScreen({
       fontWeight: 600,
       fontSize: 13,
       cursor: "pointer",
-      padding: "6px 10px"
+      padding: "6px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 3
     }
-  }, "Exit"))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 14
+  }), "Back"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,

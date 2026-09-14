@@ -3,7 +3,7 @@ import { COLORS } from "./theme.js";
 import { LoadingBallIllustration } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
-import { Share, Check, Info } from "./icons.js";
+import { Share, Check, Info, ChevronLeft } from "./icons.js";
 import { unpackMatchFromFirestore } from "../core/packUtils.js";
 import { buildMatchRecapDraft } from "../core/matchRecap.js";
 import { matchResultText, matchScoreLine, buildFollowUrl, buildFollowMatchUrl, tossText, nonStandardRulesText, umpiresText } from "../core/shareAndFormat.js";
@@ -466,6 +466,7 @@ export function FollowScreen({
   }), linkCopied ? "Copied!" : "Share"), /*#__PURE__*/React.createElement("button", {
     onClick: onExit,
     className: "cs-btn",
+    "aria-label": "Back",
     style: {
       background: "rgba(242,236,217,0.14)",
       border: "1px solid rgba(242,236,217,0.35)",
@@ -475,9 +476,14 @@ export function FollowScreen({
       fontWeight: 600,
       fontSize: 13,
       cursor: "pointer",
-      padding: "6px 10px"
+      padding: "6px 10px",
+      display: "flex",
+      alignItems: "center",
+      gap: 3
     }
-  }, "Exit"))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 14
+  }), "Back"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
