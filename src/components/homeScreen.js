@@ -979,7 +979,13 @@ function renderMatchCard(m, i, {
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it searches every team roster and club Player Pool you have access to, plus the cross-club public directory (a fresh fetch, so pick that chip on purpose rather than every search reaching out for it)."), (q || searchScope !== "all") && /*#__PURE__*/React.createElement("div", {
+  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it searches every team roster and club Player Pool you have access to, plus the cross-club public directory (a fresh fetch, so pick that chip on purpose rather than every search reaching out for it)."),
+  // These used to render only once query or scope already moved off the default ("All" with an
+  // empty box) -- reported live: "you cannot even see the pills, what you are searching." That
+  // hid the one thing that tells someone what's even searchable (Matches/Teams/Players/Cups/
+  // Clubs/Federations/Help) behind having already typed something, a chicken-and-egg trap. Always
+  // visible now, same as the segment/tab pills everywhere else in the app.
+  /*#__PURE__*/React.createElement("div", {
     className: "cs-no-scrollbar",
     style: {
       display: "flex",

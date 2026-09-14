@@ -416,6 +416,17 @@ test("HomeScreen: the 'Cups' search chip lists matching tournaments and opens on
   assert.equal(opened.id, "t1");
 });
 
+// Reported live: "you cannot even see the pills, what you are searching" -- they used to render
+// only once query or scope already moved off the empty default, a chicken-and-egg trap that hid
+// the one thing telling someone what's even searchable.
+test("HomeScreen: the search scope chips (All/Matches/Teams/...) are visible immediately, with no query typed yet", () => {
+  const inst = render();
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Matches/);
+  assert.match(json, /Teams/);
+  assert.match(json, /Cups/);
+});
+
 test("HomeScreen: the 'Clubs' search chip lists matching clubs and opens one via onOpenClub", () => {
   let openedId = null;
   const inst = render({

@@ -4,18 +4,20 @@ import { AppMark } from "./illustrations.js";
 import { GoogleGLogo } from "./icons.js";
 import { TextField, Btn } from "./formUiAtoms.js";
 
-// The sign-in screen, reached only by someone who deliberately asked for it (the "Sign in to
-// score a match" link on Live, or Home's own Account entry) -- NOT what a cold, signed-out visit
-// lands on by default any more. It used to be exactly that default, and before that briefly had
-// its own "I'm watching"/"I'm scoring" choice screen in front of it; both were reported as the
-// same underlying problem from two different angles -- "most people who opened the app just to
-// follow a tournament never realized they needed to find the Live tab at all, having landed on
-// what read as a sign-in wall first" (the original sign-in default), and then, once that choice
-// screen shipped, "Scorer and watcher views has to be blended in a sense" -- an upfront "who are
-// you" question was still one tap of friction nobody watching a match actually wanted. A cold
-// visit now lands straight on Live instead (see cricketScorer.js's own screen-init comment); onWatch
-// here is the Back arrow's way of returning there without signing in, not a first-screen choice
-// card. Covered by tests/unit/components/welcomeScreen.test.js.
+// The one, single sign-in screen -- reached only by someone who deliberately asked for it
+// (AuthBar's "Sign in", wherever it appears: watcherMode's Live header or Home's own header for a
+// signed-out guest) -- NOT what a cold, signed-out visit lands on by default any more. It used to
+// be exactly that default, and before that briefly had its own "I'm watching"/"I'm scoring" choice
+// screen in front of it, and AccountScreen used to carry a second, near-duplicate sign-in prompt
+// of its own for the exact same case; all three were reported as the same underlying problem from
+// different angles -- "most people who opened the app just to follow a tournament never realized
+// they needed to find the Live tab at all, having landed on what read as a sign-in wall first"
+// (the original sign-in default), "Scorer and watcher views has to be blended in a sense" (the
+// choice screen was its own friction), and "instead sign in on top can lead to old signin landing
+// page" (one canonical destination, not two). A cold visit now lands straight on Live instead (see
+// cricketScorer.js's own screen-init comment); onBack here returns wherever this was actually
+// opened from (settingsReturnScreen in cricketScorer.js -- Live for a watcher, Home for a guest),
+// not a first-screen choice card. Covered by tests/unit/components/welcomeScreen.test.js.
 //
 // `signUpEmail`, `signInEmail`, `sendPasswordReset` are bare-global Firebase Auth wrappers (not
 // extracted), called only from the email-submit handler -- never during render or a mount effect,
@@ -24,7 +26,7 @@ import { TextField, Btn } from "./formUiAtoms.js";
 export function WelcomeScreen({
   onSignIn,
   onSkip,
-  onWatch
+  onBack
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -115,7 +117,7 @@ export function WelcomeScreen({
       marginTop: 5
     }
   }, "Ball-by-ball scoring for friendly games")), /*#__PURE__*/React.createElement("button", {
-    onClick: onWatch,
+    onClick: onBack,
     className: "cs-btn",
     style: {
       display: "flex",

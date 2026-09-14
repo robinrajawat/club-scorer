@@ -1,8 +1,9 @@
-// The sign-in screen (src/components/welcomeScreen.js), reached only when someone deliberately
-// asks for it (Live's "Sign in to score a match" link) -- not what a cold, signed-out visit lands
-// on any more (see cricketScorer.test.js for that). `signUpEmail`/`signInEmail`/
-// `sendPasswordReset` are bare-global Firebase Auth wrappers, called only from the email-submit
-// handler -- never during render or a mount effect -- so each test just stubs the one it needs.
+// The one, single sign-in screen (src/components/welcomeScreen.js), reached only when someone
+// deliberately asks for it (AuthBar's "Sign in", from watcherMode's Live header or Home's own
+// header) -- not what a cold, signed-out visit lands on any more (see cricketScorer.test.js for
+// that). `signUpEmail`/`signInEmail`/`sendPasswordReset` are bare-global Firebase Auth wrappers,
+// called only from the email-submit handler -- never during render or a mount effect -- so each
+// test just stubs the one it needs.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -19,7 +20,7 @@ afterEach(() => {
 });
 
 function baseProps(overrides = {}) {
-  return { onSignIn: () => Promise.resolve({}), onSkip: () => {}, onWatch: () => {}, ...overrides };
+  return { onSignIn: () => Promise.resolve({}), onSkip: () => {}, onBack: () => {}, ...overrides };
 }
 
 function hasText(node, str) {
@@ -38,12 +39,12 @@ test("WelcomeScreen: renders sign-in content directly -- no intent choice in fro
   assert.match(JSON.stringify(inst.toJSON()), /Sign in with Google/);
 });
 
-test("WelcomeScreen: the Back arrow calls onWatch (returns to Live with no sign-in), not internal state", () => {
-  let watched = false;
-  const inst = render({ onWatch: () => { watched = true; } });
+test("WelcomeScreen: the Back arrow calls onBack (returns wherever this was opened from), not internal state", () => {
+  let backed = false;
+  const inst = render({ onBack: () => { backed = true; } });
   const backBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Back"));
   act(() => { backBtn.props.onClick(); });
-  assert.equal(watched, true);
+  assert.equal(backed, true);
 });
 
 test("WelcomeScreen: clicking 'Sign in with Google' calls onSignIn", async () => {
