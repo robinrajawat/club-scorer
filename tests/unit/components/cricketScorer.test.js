@@ -44,6 +44,7 @@ import { TournamentDetailScreen } from "../../../src/components/tournamentDetail
 import { SetupScreen } from "../../../src/components/setupScreen.js";
 import { AccountScreen } from "../../../src/components/accountScreen.js";
 import { FollowScreen } from "../../../src/components/followScreen.js";
+import { LiveScreen } from "../../../src/components/liveScreen.js";
 import { MatchScreen } from "../../../src/components/matchScreen.js";
 import { AlertModal } from "../../../src/components/formUiAtoms.js";
 import { TeamsScreen } from "../../../src/components/teamsScreen.js";
@@ -231,6 +232,32 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
   });
   await signIn(inst);
   assert.ok(inst.root.findByType(HomeScreen));
+});
+
+// Reported live: most spectators who opened the app just to follow a tournament never realized
+// they needed to find the Live tab, having landed on what read as a sign-in wall first.
+// WelcomeScreen's "I'm watching" choice (onWatch) now drops straight onto Live -- with no TabBar,
+// since a watcher who never signed in has nowhere else to go -- and its own escape hatch there
+// leads back to WelcomeScreen's sign-in content, not just its own intent choice.
+test("CricketScorer: 'I'm watching' from WelcomeScreen goes straight to Live with no tab bar", async () => {
+  const inst = await render();
+  await flush();
+  const welcome = inst.root.findByType(WelcomeScreen);
+  act(() => { welcome.props.onWatch(); });
+  const live = inst.root.findByType(LiveScreen);
+  assert.equal(live.props.watcherMode, true);
+  assert.equal(inst.root.findAllByType(TabBar).length, 0);
+});
+
+test("CricketScorer: exiting watcher mode from Live returns to WelcomeScreen, sign-in wall and all", async () => {
+  const inst = await render();
+  await flush();
+  const welcome = inst.root.findByType(WelcomeScreen);
+  act(() => { welcome.props.onWatch(); });
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onExitWatcherMode(); });
+  assert.ok(inst.root.findByType(WelcomeScreen));
+  assert.throws(() => inst.root.findByType(LiveScreen));
 });
 
 test("CricketScorer: Home's 'New Match' navigates to SetupScreen", async () => {

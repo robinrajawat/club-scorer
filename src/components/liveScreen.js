@@ -7,14 +7,24 @@ import { matchScoreLine } from "../core/shareAndFormat.js";
 import { TAB_BAR_HEIGHT } from "./tabBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
-// /liveTournaments), kept as separate sections rather than one interleaved list since they lead
-// to genuinely different destinations: a match card opens the live scoring/scorecard screen, a
-// tournament card opens FollowTournamentScreen's read-only standings snapshot -- a tournament
-// here is for watching a table, not scoring. A search box filters both feeds client-side (already
-// fully loaded in memory, same as everywhere else this pattern's used) by team name, tournament
-// name, or the tournament badge a match shows -- same persistent-inline-box placement as Home's
-// own search, not a toggled/FAB affordance, so the one "search" idiom in this app looks and
-// behaves the same everywhere it appears. Covered by tests/unit/components/liveScreen.test.js.
+// /liveTournaments). A match card opens the live scoring/scorecard screen, a tournament card
+// opens FollowTournamentScreen's read-only standings snapshot -- a tournament here is for
+// watching a table, not scoring.
+//
+// Structured as two independent axes rather than one flat, recency-sorted scroll: WHAT (Matches /
+// Tournaments -- different destinations, so never interleaved) and WHEN (Live / Results, or Live /
+// Recently Finished for tournaments -- since a finished tournament showing under a section
+// literally called "Live" read as a labeling bug, reported live, even once it was split out into
+// its own clearly-headed section: "finished living inside live is misleading"). Live is always
+// the view you land on; switching to Results/Recently Finished is a deliberate tap, not something
+// you scroll past. A search box filters both feeds client-side (already fully loaded in memory,
+// same as everywhere else this pattern's used) by team name, tournament name, or the tournament
+// badge a match shows, narrowing whichever tab is currently open -- same persistent-inline-box
+// placement as Home's own search. `watcherMode` (set when a signed-out visitor tapped "I'm
+// watching" on WelcomeScreen -- see cricketScorer.js's handleWatch/exitWatcherMode) hides the
+// TabBar (passed in via showTabBar, not handled here) and adds a single low-key way back to
+// sign-in at the bottom of the screen, rather than stranding a watcher with no path to scoring.
+// Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
   liveMatches = [],
   onOpenLiveMatch,
@@ -22,9 +32,15 @@ export function LiveScreen({
   onOpenLiveTournament,
   tournamentNameById = {},
   showTabBar = false,
-  loading = false
+  loading = false,
+  watcherMode = false,
+  onExitWatcherMode
 }) {
   const [query, setQuery] = useState("");
+  const [view, setView] = useState("matches"); // matches | tournaments
+  const [matchTab, setMatchTab] = useState("live"); // live | results
+  const [tourneyTab, setTourneyTab] = useState("live"); // live | finished
+
   // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
   // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
   // neither just gets no badge at all.
@@ -36,52 +52,85 @@ export function LiveScreen({
   const q = query.trim().toLowerCase();
   const filteredMatches = q ? liveMatches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (tournamentNameForBadge(m.tournamentId) || "").toLowerCase().includes(q)) : liveMatches;
   const filteredTournaments = q ? liveTournaments.filter(t => t.name.toLowerCase().includes(q)) : liveTournaments;
-  // Requested live: a viewer looking for how a just-finished tournament/match ended had to scan
-  // the exact same recency-sorted list as someone checking what's live right now, with no way to
-  // tell the two apart at a glance except opening each one. /liveMatches already retains a
-  // completed match for a few days after it ends (see loadLiveMatches's own comment on why), and
-  // /liveTournaments does the same for a tournament (never deleted on completion, only when the
-  // owner stops sharing or its TTL lapses) -- so "recently finished" was always in this same data,
-  // just not split out. m.status is the match's own real status; a tournament has no single status
-  // field, so `champion` (see renderTournamentRow's own comment) stands in for it here too.
+  // m.status is the match's own real status; a tournament has no single status field, so
+  // `champion` (see renderTournamentRow's own comment) stands in for it here too.
   const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
   const finishedMatches = filteredMatches.filter(m => m.status === "complete");
   const liveNowTournaments = filteredTournaments.filter(t => !t.champion);
   const finishedTournaments = filteredTournaments.filter(t => t.champion);
 
-  // `glow` defaults to true (every LIVE section's pulsing-dot halo, keyed to the dot's own color --
-  // red for matches, gold for tournaments) but is turned off for a "Recently Finished" section
-  // (see the Live Now/Recently Finished split below): a halo reads as "this needs your attention
-  // right now," which is exactly wrong for something that's already over. Same muted COLORS.inkSoft
-  // dot + no-glow treatment a completed match's OWN row already uses elsewhere (homeScreen.js).
-  function sectionLabel(dotColor, text, glow = true) {
+  function segmentedControl(options, active, onSelect) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 10
+        gap: 8,
+        background: COLORS.creamDark,
+        padding: 4,
+        borderRadius: 12,
+        marginBottom: 18
       }
-    }, /*#__PURE__*/React.createElement("span", {
-      "aria-hidden": "true",
+    }, options.map(opt => /*#__PURE__*/React.createElement("button", {
+      key: opt.key,
+      type: "button",
+      onClick: () => onSelect(opt.key),
+      className: "cs-btn",
+      "aria-pressed": active === opt.key,
       style: {
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        background: dotColor,
-        boxShadow: glow ? `0 0 0 3px ${dotColor === COLORS.live ? "rgba(230,84,75,0.18)" : "rgba(184,146,74,0.18)"}` : "none",
-        flexShrink: 0
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
+        flex: 1,
+        border: "none",
+        borderRadius: 9,
+        padding: "9px 0",
+        cursor: "pointer",
         fontFamily: "'Inter'",
-        fontSize: 11.5,
+        fontSize: 13,
         fontWeight: 700,
-        letterSpacing: 1.2,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase"
+        background: active === opt.key ? COLORS.surface : "transparent",
+        color: active === opt.key ? COLORS.pitch : COLORS.inkSoft,
+        boxShadow: active === opt.key ? "0 1px 3px rgba(42,36,32,0.08)" : "none"
       }
-    }, text));
+    }, opt.label)));
+  }
+
+  // A pill-row sub-selector (Live/Results, Live/Recently Finished) -- distinct from the segmented
+  // control above (that one swaps WHAT you're browsing; this one swaps WHEN). `accentColor` is the
+  // active pill's own color (red for matches' Live, gold for tournaments' Live) -- Results/
+  // Recently Finished always uses the same muted ink-soft tone regardless, since "this is over"
+  // isn't a state that should compete visually with "this is live right now."
+  function tabPills(options, active, onSelect) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        marginBottom: 18
+      }
+    }, options.map(opt => {
+      const isActive = active === opt.key;
+      const color = isActive ? opt.accentColor || COLORS.pitch : COLORS.inkSoft;
+      return /*#__PURE__*/React.createElement("button", {
+        key: opt.key,
+        type: "button",
+        onClick: () => onSelect(opt.key),
+        className: "cs-btn",
+        "aria-pressed": isActive,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          border: `1.5px solid ${isActive ? color : COLORS.cardDivider}`,
+          borderRadius: 20,
+          padding: "7px 14px",
+          cursor: "pointer",
+          fontFamily: "'Inter'",
+          fontSize: 12.5,
+          fontWeight: 700,
+          background: isActive ? color : COLORS.surface,
+          color: isActive ? COLORS.creamFixed : COLORS.inkSoft
+        }
+      }, opt.dot && /*#__PURE__*/React.createElement("span", {
+        "aria-hidden": "true",
+        style: { width: 6, height: 6, borderRadius: "50%", background: isActive ? COLORS.creamFixed : COLORS.live }
+      }), opt.label);
+    }));
   }
 
   function liveRow(key, onClick, content) {
@@ -195,6 +244,14 @@ export function LiveScreen({
   const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
   const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0;
 
+  const isMatches = view === "matches";
+  const currentList = isMatches ? matchTab === "live" ? liveNowMatches : finishedMatches : tourneyTab === "live" ? liveNowTournaments : finishedTournaments;
+  const currentRenderer = isMatches ? renderMatchRow : renderTournamentRow;
+  // Shown only when the search itself found something (filteredEmpty already covers "nothing at
+  // all"), but the specific tab currently open happens to have none of it -- e.g. a search that
+  // only matches a finished match, while sitting on the Live tab.
+  const emptyForTab = !filteredEmpty && currentList.length === 0 ? isMatches ? matchTab === "live" ? "No live matches right now." : "No results yet." : tourneyTab === "live" ? "No live tournaments right now." : "No tournaments have finished yet." : null;
+
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingTop: 20,
@@ -227,48 +284,78 @@ export function LiveScreen({
     label: "Loading…",
     size: 22,
     style: { justifyContent: "center" }
-  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative",
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: query,
-    onChange: setQuery,
-    placeholder: "Search live matches & tournaments…",
-    style: { paddingRight: 38 }
-  }), query ? /*#__PURE__*/React.createElement("button", {
+  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "relative",
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement(TextField, {
+      value: query,
+      onChange: setQuery,
+      placeholder: "Search live matches & tournaments…",
+      style: { paddingRight: 38 }
+    }), query ? /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setQuery(""),
+      "aria-label": "Clear search",
+      className: "cs-btn",
+      style: {
+        position: "absolute",
+        right: 8,
+        top: "50%",
+        transform: "translateY(-50%)",
+        width: 26,
+        height: 26,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        color: COLORS.inkSoft,
+        borderRadius: "50%",
+        fontSize: 20,
+        lineHeight: 1
+      }
+    }, "×") : null),
+    filteredEmpty ? /*#__PURE__*/React.createElement(EmptyState, null, "Nothing matches “", query, "”.") : /*#__PURE__*/React.createElement(React.Fragment, null,
+      segmentedControl([
+        { key: "matches", label: "Matches" },
+        { key: "tournaments", label: "Tournaments" }
+      ], view, setView),
+      isMatches ? tabPills([
+        { key: "live", label: `Live (${liveNowMatches.length})`, dot: true, accentColor: COLORS.live },
+        { key: "results", label: `Results (${finishedMatches.length})`, accentColor: COLORS.inkSoft }
+      ], matchTab, setMatchTab) : tabPills([
+        { key: "live", label: `Live (${liveNowTournaments.length})`, accentColor: COLORS.gold },
+        { key: "finished", label: `Recently Finished (${finishedTournaments.length})`, accentColor: COLORS.inkSoft }
+      ], tourneyTab, setTourneyTab),
+      emptyForTab ? /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontFamily: "'Inter'",
+          fontSize: 13,
+          color: COLORS.inkSoft,
+          textAlign: "center",
+          padding: "24px 0"
+        }
+      }, emptyForTab) : currentList.map(currentRenderer)
+    )
+  ), watcherMode && /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => setQuery(""),
-    "aria-label": "Clear search",
+    onClick: onExitWatcherMode,
     className: "cs-btn",
     style: {
-      position: "absolute",
-      right: 8,
-      top: "50%",
-      transform: "translateY(-50%)",
-      width: 26,
-      height: 26,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      marginTop: 24,
+      alignSelf: "center",
       background: "none",
       border: "none",
       cursor: "pointer",
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
       color: COLORS.inkSoft,
-      borderRadius: "50%",
-      fontSize: 20,
-      lineHeight: 1
+      textDecoration: "underline"
     }
-  }, "\u00d7") : null), !rawEmpty && filteredEmpty && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing matches “", query, "”."),
-  liveNowMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 26 }
-  }, sectionLabel(COLORS.live, `Live Matches (${liveNowMatches.length})`), liveNowMatches.map(renderMatchRow)),
-  liveNowTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 26 }
-  }, sectionLabel(COLORS.gold, `Live Tournaments (${liveNowTournaments.length})`), liveNowTournaments.map(renderTournamentRow)),
-  finishedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 26 }
-  }, sectionLabel(COLORS.inkSoft, `Recently Finished Matches (${finishedMatches.length})`, false), finishedMatches.map(renderMatchRow)),
-  finishedTournaments.length > 0 && /*#__PURE__*/React.createElement("div", null, sectionLabel(COLORS.inkSoft, `Recently Finished Tournaments (${finishedTournaments.length})`, false), finishedTournaments.map(renderTournamentRow)));
+  }, "Sign in to score a match"));
 }

@@ -240,6 +240,14 @@ export function CricketScorer() {
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
+  // Set only by WelcomeScreen's "I'm watching" choice (handleWatch below) -- lands straight on
+  // "live" with no sign-in step at all, and suppresses the full Home/Live/Cups/Clubs tab bar down
+  // to nothing (see the TabBar render below): Cups and Clubs are organizer concepts a spectator
+  // with no account has no use for, and Home has nothing to show someone with no matches of their
+  // own. Reported live: most people who opened the app just to follow a tournament never realized
+  // they needed to find the Live tab at all, having landed on what read as a sign-in wall first --
+  // this is the other half of that fix, once they're actually past the entry screen.
+  const [watcherMode, setWatcherMode] = useState(false);
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
   // the Live tab, search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch
@@ -1559,6 +1567,19 @@ export function CricketScorer() {
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
+  // WelcomeScreen's "I'm watching" choice -- see watcherMode's own comment above for why this
+  // skips sign-in entirely and lands straight on Live.
+  function handleWatch() {
+    setWatcherMode(true);
+    setScreen("live");
+  }
+  // The one way back out of watcher mode -- a spectator who decides they actually want to score
+  // something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs) reappears once
+  // they're past sign-in, same as anyone else arriving at "login" normally.
+  function exitWatcherMode() {
+    setWatcherMode(false);
+    setScreen("login");
+  }
   function exitFollowTournament() {
     try {
       const url = new URL(window.location.href);
@@ -2768,7 +2789,8 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
     onSignIn: handleSignInGoogle,
-    onSkip: () => setScreen(initialShortcutAction === "new-match" ? "setup" : "home")
+    onSkip: () => setScreen(initialShortcutAction === "new-match" ? "setup" : "home"),
+    onWatch: handleWatch
   })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "home",
     direction: navDirection
@@ -2858,7 +2880,9 @@ export function CricketScorer() {
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
-    showTabBar: true
+    showTabBar: !watcherMode,
+    watcherMode: watcherMode,
+    onExitWatcherMode: exitWatcherMode
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -3254,7 +3278,7 @@ export function CricketScorer() {
     title: alertModal.title,
     message: alertModal.message,
     onClose: () => setAlertModal(null)
-  }), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
+  }), TAB_BAR_SCREENS.includes(screen) && !watcherMode && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
     onSelect: selectTab,
     homeBadgeCount: inboxBadgeCount

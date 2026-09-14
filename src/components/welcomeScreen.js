@@ -4,8 +4,13 @@ import { AppMark } from "./illustrations.js";
 import { GoogleGLogo } from "./icons.js";
 import { TextField, Btn } from "./formUiAtoms.js";
 
-// Signed-out landing screen: "Sign in with Google", email sign-in/sign-up/reset, or "Continue
-// without an account". Covered by tests/unit/components/welcomeScreen.test.js.
+// Signed-out landing screen. Opens on an intent choice -- "I'm watching" (onWatch, straight to
+// the Live tab, no sign-in screen at all) or "I'm scoring" (reveals the sign-in content this
+// screen always used to show unconditionally: Google, email sign-in/sign-up/reset, or "Continue
+// without an account") -- rather than presenting sign-in as the default and "watching" as an
+// undiscoverable escape hatch. Reported live: most people who opened the app just to follow a
+// tournament never realized they needed to find the Live tab at all, having landed on what read as
+// a sign-in wall first. Covered by tests/unit/components/welcomeScreen.test.js.
 //
 // `signUpEmail`, `signInEmail`, `sendPasswordReset` are bare-global Firebase Auth wrappers (not
 // extracted), called only from the email-submit handler -- never during render or a mount effect,
@@ -13,8 +18,10 @@ import { TextField, Btn } from "./formUiAtoms.js";
 
 export function WelcomeScreen({
   onSignIn,
-  onSkip
+  onSkip,
+  onWatch
 }) {
+  const [intent, setIntent] = useState(null); // null | 'watching' | 'scoring'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [emailMode, setEmailMode] = useState(null); // null | 'signin' | 'signup' | 'reset'
@@ -103,7 +110,82 @@ export function WelcomeScreen({
       color: COLORS.inkSoft,
       marginTop: 5
     }
-  }, "Ball-by-ball scoring for friendly games")), error && /*#__PURE__*/React.createElement("div", {
+  }, "Ball-by-ball scoring for friendly games")), intent === null && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    onClick: onWatch,
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: `1.5px solid ${COLORS.pitch}`,
+      borderRadius: 12,
+      padding: "16px 18px",
+      marginBottom: 12,
+      cursor: "pointer",
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch
+    }
+  }, "I'm watching"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginTop: 3
+    }
+  }, "See live scores & results — no account needed")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setIntent("scoring"),
+    className: "cs-btn",
+    style: {
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      background: "none",
+      border: `1.5px solid ${COLORS.creamDark}`,
+      borderRadius: 12,
+      padding: "16px 18px",
+      marginBottom: 4,
+      cursor: "pointer",
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.ink
+    }
+  }, "I'm scoring"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginTop: 3
+    }
+  }, "Run the scoreboard for your own match"))), intent === "scoring" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setIntent(null),
+    className: "cs-btn",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      cursor: "pointer",
+      padding: "4px 2px",
+      marginBottom: 14,
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      fontWeight: 600
+    }
+  }, "← Back"), error && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(139,30,30,0.08)",
       border: `1.5px solid rgba(139,30,30,0.25)`,
@@ -334,5 +416,5 @@ export function WelcomeScreen({
       marginTop: 4,
       lineHeight: 1.5
     }
-  }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
+  }, "Matches and teams stay on this device only. You can sign in anytime from Account.")));
 }
