@@ -1,7 +1,7 @@
 import React from "react";
 import { COLORS } from "./theme.js";
 import { Plus, Share } from "./icons.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // Small presentational components used across setup/list screens: a labeled form-field wrapper,
 // the "add to home screen" install hint banner, and a floating "+" action button. Field and
@@ -121,7 +121,7 @@ export function FabButton({
       right: 16,
       maxWidth: 560,
       margin: "0 auto",
-      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + ${TAB_BAR_SAFE_BOTTOM})`,
       display: "flex",
       justifyContent: "flex-end",
       pointerEvents: "none",

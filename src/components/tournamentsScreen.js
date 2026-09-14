@@ -9,7 +9,7 @@ import { VenueEditModal } from "./venueAndDateModals.js";
 import { isClubOwner, tournamentStatus, tournamentDateRangeLabel } from "../core/miscHelpers.js";
 import { knockoutStagesPreview, DEFAULT_RULES } from "../core/appLogic.js";
 import { nonStandardRulesText, buildMapsUrl } from "../core/shareAndFormat.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The "Cups" list: one merged list of every tournament/series this account has access to --
 // personal, plus every club/federation you belong to -- each row tagged with its organizer, no
@@ -781,7 +781,7 @@ export function TournamentsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets the empty-state box below (flex: 1 on itself) center in whatever space is actually

@@ -17766,7 +17766,6 @@ function WelcomeScreen({
   onSkip,
   onWatch
 }) {
-  const [intent, setIntent] = useState(null); // null | 'watching' | 'scoring'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [emailMode, setEmailMode] = useState(null); // null | 'signin' | 'signup' | 'reset'
@@ -17855,66 +17854,8 @@ function WelcomeScreen({
       color: COLORS.inkSoft,
       marginTop: 5
     }
-  }, "Ball-by-ball scoring for friendly games")), intent === null && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+  }, "Ball-by-ball scoring for friendly games")), /*#__PURE__*/React.createElement("button", {
     onClick: onWatch,
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: `1.5px solid ${COLORS.pitch}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      marginBottom: 12,
-      cursor: "pointer",
-      touchAction: "manipulation",
-      WebkitTapHighlightColor: "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.pitch
-    }
-  }, "I'm watching"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginTop: 3
-    }
-  }, "See live scores & results — no account needed")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setIntent("scoring"),
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: `1.5px solid ${COLORS.creamDark}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      marginBottom: 4,
-      cursor: "pointer",
-      touchAction: "manipulation",
-      WebkitTapHighlightColor: "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.ink
-    }
-  }, "I'm scoring"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginTop: 3
-    }
-  }, "Run the scoreboard for your own match"))), intent === "scoring" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setIntent(null),
     className: "cs-btn",
     style: {
       display: "flex",
@@ -18161,7 +18102,7 @@ function WelcomeScreen({
       marginTop: 4,
       lineHeight: 1.5
     }
-  }, "Matches and teams stay on this device only. You can sign in anytime from Account.")));
+  }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
 }
 // GENERATED-FN-END: WelcomeScreen
 // "Today" / "Yesterday" / "Sat, 14 Jun" (plus year if not this year) — used on the saved-matches
@@ -19543,7 +19484,7 @@ function renderMatchCard(m, i, {
       // last bit of scrollable content here doesn't render partially hidden underneath it -- same
       // fixed-bar-overlap bug class as MatchScreen's scoring pad (see docs/history.md's "This
       // Over" writeup), just avoided from the start here since TabBar's height never changes.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -20448,6 +20389,17 @@ function LiveScreen({
   const [matchTab, setMatchTab] = useState("live"); // live | results
   const [tourneyTab, setTourneyTab] = useState("live"); // live | finished
 
+  // See this file's own top comment -- flips a segment's default pill away from Live, once, the
+  // first time real data settles in with nothing currently live in it. Guarded by a ref (not
+  // state) so it can never fire a second time and fight a choice made after that.
+  const autoTabPicked = useRef(false);
+  useEffect(() => {
+    if (loading || autoTabPicked.current) return;
+    autoTabPicked.current = true;
+    if (liveMatches.length > 0 && !liveMatches.some(m => m.status !== "complete")) setMatchTab("results");
+    if (liveTournaments.length > 0 && !liveTournaments.some(t => !t.champion)) setTourneyTab("finished");
+  }, [loading, liveMatches, liveTournaments]);
+
   // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
   // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
   // neither just gets no badge at all.
@@ -20666,7 +20618,7 @@ function LiveScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the
@@ -20675,14 +20627,7 @@ function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 24,
-      color: COLORS.pitch,
-      marginBottom: 20
-    }
-  }, "Live"), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
@@ -20794,14 +20739,27 @@ const BOTTOM_GAP = 0;
 // GENERATED-FN-END: TABS
 // GENERATED-FN-START: TAB_BAR_HEIGHT
 const TAB_BAR_HEIGHT = PILL_HEIGHT + BOTTOM_GAP;
+
+// Reported live: the pill "looks good when I am using PWA otherwise it touches the browser's
+// search bar" -- installed-PWA devices with a home-indicator report a real env(safe-area-inset-
+// bottom), which is what gave the pill its floating clearance; a plain browser tab reports 0 for
+// that same env(), so bottom: 0 sat the pill flush against the true edge of the viewport, right
+// where Chrome/Safari's own bottom URL/search bar lives. `max()` guarantees a floating look either
+// way -- real safe-area insets (already bigger than 12px on every current home-indicator device)
+// pass through untouched, a plain browser tab's 0 is floored to 12px -- with no display-mode
+// detection needed. Exported so every screen that reserves bottom padding to clear this bar (see
+// TAB_BAR_HEIGHT's own usages) adds the same floor, not just the bar itself.
 // GENERATED-FN-END: TAB_BAR_HEIGHT
+// GENERATED-FN-START: TAB_BAR_SAFE_BOTTOM
+const TAB_BAR_SAFE_BOTTOM = "max(env(safe-area-inset-bottom), 12px)";
+// GENERATED-FN-END: TAB_BAR_SAFE_BOTTOM
 // GENERATED-FN-START: TabBar
 function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
   return /*#__PURE__*/React.createElement("nav", {
     "aria-label": "Primary",
     style: {
       position: "fixed",
-      bottom: `calc(${BOTTOM_GAP}px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${BOTTOM_GAP}px + ${TAB_BAR_SAFE_BOTTOM})`,
       left: 16,
       right: 16,
       maxWidth: 560,
@@ -20928,7 +20886,7 @@ function MyTeamsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1, further down) center in whatever space is actually left under
@@ -23436,7 +23394,7 @@ function FabButton({
       right: 16,
       maxWidth: 560,
       margin: "0 auto",
-      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + ${TAB_BAR_SAFE_BOTTOM})`,
       display: "flex",
       justifyContent: "flex-end",
       pointerEvents: "none",
@@ -24602,7 +24560,7 @@ function TournamentsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets the empty-state box below (flex: 1 on itself) center in whatever space is actually
@@ -29472,7 +29430,7 @@ function TeamsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -40944,15 +40902,23 @@ function CricketScorer() {
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
-  // Set only by WelcomeScreen's "I'm watching" choice (handleWatch below) -- lands straight on
-  // "live" with no sign-in step at all, and suppresses the full Home/Live/Cups/Clubs tab bar down
-  // to nothing (see the TabBar render below): Cups and Clubs are organizer concepts a spectator
-  // with no account has no use for, and Home has nothing to show someone with no matches of their
-  // own. Reported live: most people who opened the app just to follow a tournament never realized
-  // they needed to find the Live tab at all, having landed on what read as a sign-in wall first --
-  // this is the other half of that fix, once they're actually past the entry screen.
-  const [watcherMode, setWatcherMode] = useState(false);
+  // A plain cold visit (no special URL param below) now lands straight on "live" with watcherMode
+  // on -- no sign-in step, no upfront "who are you" choice screen either (that shipped once, then
+  // got dropped: "Scorer and watcher views has to be blended in a sense," since asking a spectator
+  // to declare an intent before showing them anything was still friction nobody watching a match
+  // actually wanted). Reported live, the underlying complaint both times: most people who opened
+  // the app just to follow a tournament never realized they needed to find the Live tab at all,
+  // having landed on what read as a sign-in wall first. WelcomeScreen is still there -- reached by
+  // watcherMode's own "Sign in to score a match" link (exitWatcherMode below) -- just not the
+  // default landing any more.
+  const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode && !initialPollCode;
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
+  // Suppresses the full Home/Live/Cups/Clubs tab bar down to nothing (see the TabBar render
+  // below) for as long as it's on: Cups and Clubs are organizer concepts a spectator with no
+  // account has no use for, and Home has nothing to show someone with no matches of their own.
+  // True from mount for the default cold landing above; also set/cleared directly by
+  // handleWatch/exitWatcherMode once someone's actually navigating between Live and sign-in.
+  const [watcherMode, setWatcherMode] = useState(isDefaultColdLanding);
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
   // the Live tab, search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch
@@ -41668,7 +41634,8 @@ function CricketScorer() {
   // exact case that shortcut exists for. Only ever fires once: initialShortcutAction is a ref
   // (frozen at mount from the URL), not state, so it can't re-trigger on a later sign-out/in.
   useEffect(() => {
-    if (user && screen === "login") {
+    if (user && (screen === "login" || watcherMode)) {
+      setWatcherMode(false);
       setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
     }
   }, [user]);
@@ -42272,15 +42239,15 @@ function CricketScorer() {
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
-  // WelcomeScreen's "I'm watching" choice -- see watcherMode's own comment above for why this
-  // skips sign-in entirely and lands straight on Live.
+  // WelcomeScreen's own Back arrow -- returns to Live with no sign-in step, same destination a
+  // cold visit lands on directly now (see watcherMode's own comment above).
   function handleWatch() {
     setWatcherMode(true);
     setScreen("live");
   }
-  // The one way back out of watcher mode -- a spectator who decides they actually want to score
-  // something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs) reappears once
-  // they're past sign-in, same as anyone else arriving at "login" normally.
+  // The one way into WelcomeScreen from watcher mode -- a spectator who decides they actually
+  // want to score something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs)
+  // reappears once they're past sign-in, same as anyone else arriving at "login" normally.
   function exitWatcherMode() {
     setWatcherMode(false);
     setScreen("login");

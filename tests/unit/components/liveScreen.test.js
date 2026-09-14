@@ -17,6 +17,16 @@ function hasText(node, str) {
   return false;
 }
 
+// Exact-match version of hasText -- used to check for the *absence* of a standalone "Live" text
+// node (the page's own former title) without also tripping on "Live (5)"/"Live matches..." text
+// that legitimately still exists elsewhere on the screen.
+function hasExactText(node, str) {
+  if (typeof node === "string") return node === str;
+  if (Array.isArray(node)) return node.some(n => hasExactText(n, str));
+  if (node && typeof node === "object" && "children" in node) return hasExactText(node.children, str);
+  return false;
+}
+
 function findButton(inst, text) {
   return inst.root.findAllByType("button").find(b => hasText(b.props.children, text));
 }
@@ -38,8 +48,13 @@ function liveMatch(overrides = {}) {
   };
 }
 
+// Wrapped in act() so the mount-time smart-default effect (see liveScreen.js's own top comment)
+// has already flushed by the time a test makes its first assertion, same as any other effect a
+// test needs settled before reading rendered output.
 function render(props) {
-  return renderer.create(React.createElement(LiveScreen, { ...props }));
+  let inst;
+  act(() => { inst = renderer.create(React.createElement(LiveScreen, { ...props })); });
+  return inst;
 }
 
 test("LiveScreen: shows an empty state and no tabs at all when both feeds are empty", () => {
@@ -118,6 +133,52 @@ test("LiveScreen: Results is a separate tab from Live, switched by tapping, not 
   json = JSON.stringify(inst.toJSON());
   assert.match(json, /Riverside CC/, "switching back to Live shows it again");
   assert.doesNotMatch(json, /Hawks CC/);
+});
+
+test("LiveScreen: no standalone 'Live' page title above the segmented control -- a page branded 'Live' holding a Results tab was the more literal version of the same mislabeling complaint", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
+  assert.equal(hasExactText(inst.toJSON(), "Live"), false);
+});
+
+// Reported live: "Live can not be the entry point for general results/fixtures... if the match/
+// tournament is not ongoing or upcoming." Landing on an empty Live tab when a segment has data but
+// none of it is currently live reads exactly like that -- the smart default below picks the tab
+// that actually has something in it, once, the first time real data settles.
+test("LiveScreen: Matches defaults to Results instead of an empty Live tab when nothing in it is currently live", () => {
+  const finished = liveMatch({
+    id: "done1", teamA: "Hawks CC", teamB: "Eagles CC", status: "complete",
+    innings: [
+      { battingTeam: "Hawks CC", bowlingTeam: "Eagles CC", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10, battingOrder: ["P1"], bowlingOrder: ["P2"] },
+      { battingTeam: "Eagles CC", bowlingTeam: "Hawks CC", runs: 100, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10, battingOrder: ["P2"], bowlingOrder: ["P1"] }
+    ]
+  });
+  const inst = render({ liveMatches: [finished] });
+  assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], true);
+  assert.equal(findButton(inst, "Live (0)").props["aria-pressed"], false);
+  assert.match(JSON.stringify(inst.toJSON()), /Hawks CC/, "the finished match's own row shows without an extra tap");
+});
+
+test("LiveScreen: Tournaments defaults to Recently Finished when nothing in it is currently live", () => {
+  const inst = render({
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 6, champion: "Riverside CC" }]
+  });
+  clickButton(inst, "Tournaments");
+  assert.equal(findButton(inst, "Recently Finished (1)").props["aria-pressed"], true);
+  assert.equal(findButton(inst, "Live (0)").props["aria-pressed"], false);
+});
+
+test("LiveScreen: the smart default waits for loading to settle, and never overrides a tab already chosen", () => {
+  const finished = liveMatch({ id: "done1", status: "complete" });
+  const inst = render({ liveMatches: [], loading: true });
+  // Still loading, nothing to react to yet -- Live stays the (only) shown state.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Results/);
+
+  act(() => { inst.update(React.createElement(LiveScreen, { liveMatches: [finished], loading: false })); });
+  assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], true, "picks Results once loading settles with nothing live");
+
+  act(() => { findButton(inst, "Live (0)").props.onClick(); });
+  act(() => { inst.update(React.createElement(LiveScreen, { liveMatches: [finished, liveMatch({ id: "live1" })], loading: false })); });
+  assert.equal(findButton(inst, "Live (1)").props["aria-pressed"], true, "a later live match doesn't yank someone back off a tab they already chose");
 });
 
 test("LiveScreen: a match's tournament badge falls back to liveTournaments' name when it's not this account's own", () => {

@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Trophy } from "./icons.js";
 import { TextField } from "./formUiAtoms.js";
 import { EmptyState, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
 // /liveTournaments). A match card opens the live scoring/scorecard screen, a tournament card
@@ -15,15 +15,35 @@ import { TAB_BAR_HEIGHT } from "./tabBar.js";
 // Tournaments -- different destinations, so never interleaved) and WHEN (Live / Results, or Live /
 // Recently Finished for tournaments -- since a finished tournament showing under a section
 // literally called "Live" read as a labeling bug, reported live, even once it was split out into
-// its own clearly-headed section: "finished living inside live is misleading"). Live is always
-// the view you land on; switching to Results/Recently Finished is a deliberate tap, not something
-// you scroll past. A search box filters both feeds client-side (already fully loaded in memory,
-// same as everywhere else this pattern's used) by team name, tournament name, or the tournament
-// badge a match shows, narrowing whichever tab is currently open -- same persistent-inline-box
-// placement as Home's own search. `watcherMode` (set when a signed-out visitor tapped "I'm
-// watching" on WelcomeScreen -- see cricketScorer.js's handleWatch/exitWatcherMode) hides the
-// TabBar (passed in via showTabBar, not handled here) and adds a single low-key way back to
-// sign-in at the bottom of the screen, rather than stranding a watcher with no path to scoring.
+// its own clearly-headed section: "finished living inside live is misleading"). There's no page
+// title repeating "Live" above these either, for the same reason -- this screen's own former big
+// "Live" header, sitting directly above a "Results"/"Recently Finished" tab, was the more literal
+// version of the same complaint: a page branded "Live" containing content that plainly isn't.
+// Live/Results and Live/Recently Finished are peers here, not a page identity with an escape
+// hatch; only the persistent bottom-nav tab is still named "Live" (a nav label, not a claim about
+// what's inside).
+//
+// Which pill is selected first still defaults to Live, but only when that's actually true: the
+// one-time effect below (autoTabPicked) flips a segment's default to Results/Recently Finished
+// instead, the first time real data settles in with nothing currently live -- reported live,
+// "Live can not be the entry point for general results/fixtures... if the match/tournament is not
+// ongoing or upcoming." It only runs once per mount, so a live match starting or finishing later
+// in the same session never yanks the tab out from under whichever one someone's actually looking
+// at.
+//
+// A search box filters both feeds client-side (already fully loaded in memory, same as everywhere
+// else this pattern's used) by team name, tournament name, or the tournament badge a match shows,
+// narrowing whichever tab is currently open -- same persistent-inline-box placement as Home's own
+// search. `watcherMode` (set for a signed-out visitor arriving with no account -- see
+// cricketScorer.js's handleWatch/exitWatcherMode) hides the TabBar (passed in via showTabBar, not
+// handled here) and adds a single low-key way back to sign-in at the bottom of the screen, rather
+// than stranding a watcher with no path to scoring.
+//
+// No app-wide Fixtures (upcoming, not-yet-started) view: there's no data source for one today,
+// only tournament-scoped fixtures (already in FollowTournamentScreen's own Fixtures/Standings/
+// Stats, reached by opening a specific tournament from the Tournaments segment below) -- a
+// deliberate scope cut, not an oversight.
+//
 // Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
   liveMatches = [],
@@ -40,6 +60,17 @@ export function LiveScreen({
   const [view, setView] = useState("matches"); // matches | tournaments
   const [matchTab, setMatchTab] = useState("live"); // live | results
   const [tourneyTab, setTourneyTab] = useState("live"); // live | finished
+
+  // See this file's own top comment -- flips a segment's default pill away from Live, once, the
+  // first time real data settles in with nothing currently live in it. Guarded by a ref (not
+  // state) so it can never fire a second time and fight a choice made after that.
+  const autoTabPicked = useRef(false);
+  useEffect(() => {
+    if (loading || autoTabPicked.current) return;
+    autoTabPicked.current = true;
+    if (liveMatches.length > 0 && !liveMatches.some(m => m.status !== "complete")) setMatchTab("results");
+    if (liveTournaments.length > 0 && !liveTournaments.some(t => !t.champion)) setTourneyTab("finished");
+  }, [loading, liveMatches, liveTournaments]);
 
   // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
   // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
@@ -259,7 +290,7 @@ export function LiveScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the
@@ -268,14 +299,7 @@ export function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 24,
-      color: COLORS.pitch,
-      marginBottom: 20
-    }
-  }, "Live"), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"

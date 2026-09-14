@@ -5,11 +5,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
-import { TabBar, TABS } from "../../../src/components/tabBar.js";
+import { TabBar, TABS, TAB_BAR_SAFE_BOTTOM } from "../../../src/components/tabBar.js";
 
 function render(props) {
   return renderer.create(React.createElement(TabBar, props));
 }
+
+// Reported live: the pill "looks good when I am using PWA otherwise it touches the browser's
+// search bar" -- a plain browser tab reports 0 for env(safe-area-inset-bottom), which used to put
+// the pill flush against the real bottom edge. See TAB_BAR_SAFE_BOTTOM's own comment.
+test("TabBar: floats at least 12px clear of the bottom edge even with no safe-area inset (plain browser tab, not installed PWA)", () => {
+  const inst = render({ active: "home", onSelect: () => {} });
+  const nav = inst.root.findByType("nav");
+  assert.equal(nav.props.style.bottom, `calc(0px + ${TAB_BAR_SAFE_BOTTOM})`);
+  assert.equal(TAB_BAR_SAFE_BOTTOM, "max(env(safe-area-inset-bottom), 12px)");
+});
 
 test("TabBar: renders all four tabs with their labels", () => {
   const inst = render({ active: "home", onSelect: () => {} });

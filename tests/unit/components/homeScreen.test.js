@@ -180,7 +180,7 @@ test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTa
   const withoutBar = render().toJSON();
   const withBar = render({ showTabBar: true }).toJSON();
   assert.equal(withoutBar.props.style.paddingBottom, 40);
-  assert.match(String(withBar.props.style.paddingBottom), new RegExp(`calc\\(${TAB_BAR_HEIGHT}px \\+ 40px \\+ env\\(safe-area-inset-bottom\\)\\)`));
+  assert.match(String(withBar.props.style.paddingBottom), new RegExp(`calc\\(${TAB_BAR_HEIGHT}px \\+ 40px \\+ max\\(env\\(safe-area-inset-bottom\\), 12px\\)\\)`));
 });
 
 // BUG FIX: someone who chose "Continue without an account" (user: null) used to see no greeting
