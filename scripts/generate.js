@@ -96,6 +96,7 @@ const FUNCTIONS = [
   { name: "tournamentStatus", file: "src/core/miscHelpers.js" },
   { name: "tournamentDateRangeLabel", file: "src/core/miscHelpers.js" },
   { name: "TEAM_COLOR_PRESETS", file: "src/core/miscHelpers.js" },
+  { name: "TEAM_COLOR_NAMES", file: "src/core/miscHelpers.js" },
   { name: "playerInitials", file: "src/core/miscHelpers.js" },
   { name: "playerAvatarColor", file: "src/core/miscHelpers.js" },
   { name: "parseOverLabel", file: "src/core/miscHelpers.js" },

@@ -147,6 +147,7 @@ test("TeamEditScreen: picking a jersey color preset updates the payload; presets
 
   const swatch = inst.root.findByProps({ "aria-label": "Jersey color #1b3a6b" });
   act(() => { swatch.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Navy/, "names the selected preset so it's not just a color to recognize");
   act(() => { btn(inst, "Save Team").props.onClick(); });
   assert.equal(saved.color, "#1b3a6b");
   assert.throws(() => inst.root.findByProps({ "aria-label": "Custom jersey color" }));

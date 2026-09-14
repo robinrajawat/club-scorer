@@ -5,7 +5,7 @@ import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { uid } from "../core/statsAndFixtures.js";
-import { TEAM_COLOR_PRESETS } from "../core/miscHelpers.js";
+import { TEAM_COLOR_PRESETS, TEAM_COLOR_NAMES } from "../core/miscHelpers.js";
 
 // Create/edit a team's roster: name, jersey color, add/remove/reorder players,
 // captain/vice-captain/keeper toggles. Every write that reaches storage (onSave/onDelete) is a
@@ -204,7 +204,16 @@ export function TeamEditScreen({
       stroke: COLORS.creamDark,
       strokeWidth: 1
     }
-  }))), color && /*#__PURE__*/React.createElement("button", {
+  }))), color && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+    // Falls back to the raw hex for a color with no preset name -- an old, pre-simplification
+    // custom color a team already had saved (see the comment on the swatch list above).
+  }, TEAM_COLOR_NAMES[color] || color), color && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setColor(""),
     style: {
