@@ -158,6 +158,96 @@ test("LiveScreen: Matches defaults to Results instead of an empty Live tab when 
   assert.match(JSON.stringify(inst.toJSON()), /Hawks CC/, "the finished match's own row shows without an extra tap");
 });
 
+// Requested live: "Watcher lands on a screen where he can see the live matches/tournaments as
+// well as the completed ones... fixtures/standing/point tables/stats." Every publicly-live
+// tournament's own upcoming fixtures (liveTournaments[].upcomingFixtures -- see
+// pickUpcomingFixtures in appLogic.js) get flattened here into one app-wide, nearest-first list.
+test("LiveScreen: Matches' Fixtures pill flattens every tournament's own upcoming fixtures, nearest first, and opens the tournament on tap", () => {
+  let openedCode = null;
+  const inst = render({
+    liveMatches: [liveMatch()],
+    liveTournaments: [
+      { tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 4, upcomingFixtures: [
+        { id: "f1", teamA: "Hawks CC", teamB: "Eagles CC", date: "2026-09-20T11:00" }
+      ] },
+      { tournamentId: "t2", name: "Winter League", shareCode: "CODE2", teamsCount: 6, upcomingFixtures: [
+        { id: "f1", teamA: "Falcons CC", teamB: "Owls CC", date: "2026-09-12T15:00" }
+      ] }
+    ],
+    onOpenLiveTournament: code => { openedCode = code; }
+  });
+  clickButton(inst, "Fixtures (2)");
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Falcons CC/);
+  assert.match(json, /Hawks CC/);
+  assert.match(json, /Winter League/);
+  // Nearest-first across tournaments: Winter League's fixture (Sep 12) before Summer Cup's (Sep 20).
+  assert.ok(json.indexOf("Falcons CC") < json.indexOf("Hawks CC"), "the sooner fixture, from a different tournament, sorts first");
+
+  const card = findButton(inst, "Falcons CC");
+  act(() => { card.props.onClick(); });
+  assert.equal(openedCode, "CODE2", "tapping a fixture opens ITS tournament (no scorecard exists yet)");
+});
+
+// Reported live: "Live can not be the entry point for general results/fixtures... if the match/
+// tournament is not ongoing or upcoming in a few days" -- Fixtures reads as more "live-adjacent"
+// than a stale old result, so it outranks Results in the smart default (but never outranks an
+// actually-live match).
+test("LiveScreen: Matches defaults to Fixtures (not Results) when nothing's live but something's upcoming", () => {
+  const finished = liveMatch({ id: "done1", status: "complete" });
+  const inst = render({
+    liveMatches: [finished],
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 4, upcomingFixtures: [
+      { id: "f1", teamA: "Hawks CC", teamB: "Eagles CC", date: "2026-09-20T11:00" }
+    ] }]
+  });
+  assert.equal(findButton(inst, "Fixtures (1)").props["aria-pressed"], true);
+  assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], false);
+  assert.equal(findButton(inst, "Live (0)").props["aria-pressed"], false);
+});
+
+test("LiveScreen: a fixture also matches search by team or tournament name", () => {
+  const inst = render({
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 4, upcomingFixtures: [
+      { id: "f1", teamA: "Hawks CC", teamB: "Eagles CC", date: "2026-09-20T11:00" }
+    ] }]
+  });
+  const search = inst.root.findByType("input");
+  act(() => { search.props.onChange({ target: { value: "hawks" } }); });
+  assert.equal(findButton(inst, "Fixtures (1)").props["aria-pressed"], true);
+  act(() => { search.props.onChange({ target: { value: "summer cup" } }); });
+  assert.match(JSON.stringify(inst.toJSON()), /Fixtures \(1\)/);
+});
+
+// Reported live: "the landing page looks too simple, no branding, no greetings" once WelcomeScreen
+// stopped being the default landing screen, plus "no way to reopen the landing page... click on
+// the brand should bring it to landing page." watcherMode gets its own brand header that resets
+// the screen's own state on tap -- there's nowhere else to navigate to.
+test("LiveScreen: watcherMode shows a brand header with a greeting; tapping it resets search and tab state", () => {
+  const inst = render({
+    watcherMode: true,
+    liveMatches: [liveMatch({ id: "done1", status: "complete" })]
+  });
+  assert.match(JSON.stringify(inst.toJSON()), /Club Scorer/);
+  assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)/);
+
+  clickButton(inst, "Results (1)");
+  const search = inst.root.findByType("input");
+  act(() => { search.props.onChange({ target: { value: "nonexistent" } }); });
+  assert.match(JSON.stringify(inst.toJSON()), /Nothing matches/);
+
+  const brandBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Club Scorer"));
+  act(() => { brandBtn.props.onClick(); });
+  const json = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(json, /Nothing matches/, "search was cleared");
+  assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], true, "re-picks the same smart default, not hardcoded back to Live");
+});
+
+test("LiveScreen: no brand header outside watcher mode", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Club Scorer/);
+});
+
 test("LiveScreen: Tournaments defaults to Recently Finished when nothing in it is currently live", () => {
   const inst = render({
     liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 6, champion: "Riverside CC" }]

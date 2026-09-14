@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Trophy } from "./icons.js";
 import { TextField } from "./formUiAtoms.js";
-import { EmptyState, LoadingNote } from "./illustrations.js";
-import { matchScoreLine } from "../core/shareAndFormat.js";
+import { EmptyState, LoadingNote, AppMark } from "./illustrations.js";
+import { matchScoreLine, formatFixtureDateTime } from "../core/shareAndFormat.js";
+import { greetingPrefix } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
@@ -37,12 +38,27 @@ import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 // search. `watcherMode` (set for a signed-out visitor arriving with no account -- see
 // cricketScorer.js's handleWatch/exitWatcherMode) hides the TabBar (passed in via showTabBar, not
 // handled here) and adds a single low-key way back to sign-in at the bottom of the screen, rather
-// than stranding a watcher with no path to scoring.
+// than stranding a watcher with no path to scoring. watcherMode also gets its own small brand
+// header (AppMark + "Club Scorer" + a time-of-day greeting) above everything else -- reported
+// live, "the landing page looks too simple, no branding, no greetings" once WelcomeScreen (which
+// used to carry that identity) stopped being the default landing screen. Tapping it doesn't
+// navigate anywhere (a watcher's landing already IS this screen) -- it resets the search and
+// re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring it back to the
+// landing page" asked for.
 //
-// No app-wide Fixtures (upcoming, not-yet-started) view: there's no data source for one today,
-// only tournament-scoped fixtures (already in FollowTournamentScreen's own Fixtures/Standings/
-// Stats, reached by opening a specific tournament from the Tournaments segment below) -- a
-// deliberate scope cut, not an oversight.
+// Matches' third pill, Fixtures, is every publicly-live tournament's own upcoming, unplayed
+// fixtures (liveTournaments[].upcomingFixtures -- see pickUpcomingFixtures in appLogic.js and its
+// mirror-write in index.html's shareTournament/refreshTournamentStandingsLive), flattened across
+// every tournament and re-sorted nearest-first -- there's still no per-match "upcoming" concept
+// outside a tournament (a standalone match is only ever created the moment someone starts
+// scoring it), so this only ever surfaces tournament fixtures, same as FollowTournamentScreen's
+// own Fixtures section for one specific tournament. Tapping a fixture opens its tournament (no
+// scorecard exists yet to open instead) via the same onOpenLiveTournament prop tournament rows
+// use.
+//
+// The smart Live default (autoTabPicked, above) now prefers Fixtures over Results when nothing's
+// currently live but something IS coming up -- "starting soon" reads as more "live-adjacent" than
+// a stale old result does.
 //
 // Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
@@ -58,8 +74,42 @@ export function LiveScreen({
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("matches"); // matches | tournaments
-  const [matchTab, setMatchTab] = useState("live"); // live | results
+  const [matchTab, setMatchTab] = useState("live"); // live | fixtures | results
   const [tourneyTab, setTourneyTab] = useState("live"); // live | finished
+
+  // Every publicly-live tournament's own upcoming fixtures, flattened into one app-wide,
+  // nearest-first list (each tournament's own slice already arrives pre-sorted -- see
+  // pickUpcomingFixtures's own comment -- but interleaving multiple tournaments needs a re-sort).
+  // `_key` disambiguates fixture ids that are only ever unique within their own tournament, not
+  // globally, once flattened together here.
+  const allFixtures = liveTournaments.flatMap(t => (t.upcomingFixtures || []).map(f => ({
+    ...f,
+    _key: `${t.tournamentId}:${f.id}`,
+    tournamentId: t.tournamentId,
+    tournamentShareCode: t.shareCode,
+    tournamentName: t.name
+  }))).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+
+  // Live > Fixtures > Results, in that order of how "live-adjacent" each one reads -- reused by
+  // both the auto-pick effect below and the brand header's own tap-to-reset.
+  function pickDefaultMatchTab() {
+    if (liveMatches.some(m => m.status !== "complete")) return "live";
+    if (allFixtures.length > 0) return "fixtures";
+    return "results";
+  }
+  function pickDefaultTourneyTab() {
+    return liveTournaments.some(t => !t.champion) ? "live" : "finished";
+  }
+  // Reported live: "no way to reopen the landing page... perhaps click on the brand should bring
+  // it to landing page" -- watcherMode's own brand header (below) is that tap target. There's
+  // nowhere else to navigate to (a watcher's landing IS this screen), so this clears the search
+  // and re-runs the same smart-default picks fresh, rather than navigating anywhere.
+  function resetToLanding() {
+    setQuery("");
+    setView("matches");
+    setMatchTab(pickDefaultMatchTab());
+    setTourneyTab(pickDefaultTourneyTab());
+  }
 
   // See this file's own top comment -- flips a segment's default pill away from Live, once, the
   // first time real data settles in with nothing currently live in it. Guarded by a ref (not
@@ -68,9 +118,9 @@ export function LiveScreen({
   useEffect(() => {
     if (loading || autoTabPicked.current) return;
     autoTabPicked.current = true;
-    if (liveMatches.length > 0 && !liveMatches.some(m => m.status !== "complete")) setMatchTab("results");
-    if (liveTournaments.length > 0 && !liveTournaments.some(t => !t.champion)) setTourneyTab("finished");
-  }, [loading, liveMatches, liveTournaments]);
+    setMatchTab(pickDefaultMatchTab());
+    setTourneyTab(pickDefaultTourneyTab());
+  }, [loading, liveMatches, liveTournaments, allFixtures]);
 
   // tournamentNameById only knows this account's own tournaments, liveTournaments (the public
   // mirror) fills the gap for anyone else's non-private one, and a match whose tournament is
@@ -83,6 +133,7 @@ export function LiveScreen({
   const q = query.trim().toLowerCase();
   const filteredMatches = q ? liveMatches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (tournamentNameForBadge(m.tournamentId) || "").toLowerCase().includes(q)) : liveMatches;
   const filteredTournaments = q ? liveTournaments.filter(t => t.name.toLowerCase().includes(q)) : liveTournaments;
+  const filteredFixtures = q ? allFixtures.filter(f => f.teamA.toLowerCase().includes(q) || f.teamB.toLowerCase().includes(q) || f.tournamentName.toLowerCase().includes(q)) : allFixtures;
   // m.status is the match's own real status; a tournament has no single status field, so
   // `champion` (see renderTournamentRow's own comment) stands in for it here too.
   const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
@@ -239,6 +290,57 @@ export function LiveScreen({
     }, matchScoreLine(m))));
   }
 
+  // No scorecard exists yet for an unplayed fixture -- opens its tournament instead (the same
+  // destination a tournament row's own tap uses), where the fixture already shows in
+  // FollowTournamentScreen's own Fixtures section with full context (venue, stage, the rest of
+  // the schedule).
+  function renderFixtureRow(f) {
+    const when = formatFixtureDateTime(f.date || "");
+    return liveRow(f._key, () => onOpenLiveTournament && onOpenLiveTournament(f.tournamentShareCode), /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "'Inter'",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+        color: COLORS.gold,
+        marginBottom: 3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement(Trophy, {
+      size: 10,
+      style: { flexShrink: 0 }
+    }), f.tournamentName), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontWeight: 700,
+        fontSize: 14,
+        color: COLORS.ink,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, f.teamA, " ", /*#__PURE__*/React.createElement("span", {
+      style: { color: COLORS.inkSoft, fontWeight: 500 }
+    }, "vs"), " ", f.teamB), when && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: COLORS.inkSoft,
+        marginTop: 3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, when)));
+  }
+
   function renderTournamentRow(t) {
     // `champion` (null until the tournament actually has a decided result -- see
     // formatTournamentViewSnapshot in appLogic.js, and shareTournament/refreshTournamentStandingsLive
@@ -273,15 +375,15 @@ export function LiveScreen({
   }
 
   const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
-  const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0;
+  const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0 && filteredFixtures.length === 0;
 
   const isMatches = view === "matches";
-  const currentList = isMatches ? matchTab === "live" ? liveNowMatches : finishedMatches : tourneyTab === "live" ? liveNowTournaments : finishedTournaments;
-  const currentRenderer = isMatches ? renderMatchRow : renderTournamentRow;
+  const currentList = isMatches ? matchTab === "live" ? liveNowMatches : matchTab === "fixtures" ? filteredFixtures : finishedMatches : tourneyTab === "live" ? liveNowTournaments : finishedTournaments;
+  const currentRenderer = isMatches ? matchTab === "fixtures" ? renderFixtureRow : renderMatchRow : renderTournamentRow;
   // Shown only when the search itself found something (filteredEmpty already covers "nothing at
   // all"), but the specific tab currently open happens to have none of it -- e.g. a search that
   // only matches a finished match, while sitting on the Live tab.
-  const emptyForTab = !filteredEmpty && currentList.length === 0 ? isMatches ? matchTab === "live" ? "No live matches right now." : "No results yet." : tourneyTab === "live" ? "No live tournaments right now." : "No tournaments have finished yet." : null;
+  const emptyForTab = !filteredEmpty && currentList.length === 0 ? isMatches ? matchTab === "live" ? "No live matches right now." : matchTab === "fixtures" ? "No upcoming fixtures right now." : "No results yet." : tourneyTab === "live" ? "No live tournaments right now." : "No tournaments have finished yet." : null;
 
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -299,7 +401,39 @@ export function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, watcherMode && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: resetToLanding,
+    className: "cs-btn",
+    "aria-label": "Club Scorer — back to the top",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      background: "none",
+      border: "none",
+      padding: 0,
+      marginBottom: 20,
+      cursor: "pointer",
+      textAlign: "left",
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement(AppMark, {
+    size: 36
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 18,
+      color: COLORS.pitch
+    }
+  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      marginTop: 1
+    }
+  }, `${greetingPrefix()} — live scores, fixtures & results`))), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
@@ -317,7 +451,7 @@ export function LiveScreen({
     }, /*#__PURE__*/React.createElement(TextField, {
       value: query,
       onChange: setQuery,
-      placeholder: "Search live matches & tournaments…",
+      placeholder: "Search live matches, fixtures & tournaments…",
       style: { paddingRight: 38 }
     }), query ? /*#__PURE__*/React.createElement("button", {
       type: "button",
@@ -350,6 +484,7 @@ export function LiveScreen({
       ], view, setView),
       isMatches ? tabPills([
         { key: "live", label: `Live (${liveNowMatches.length})`, dot: true, accentColor: COLORS.live },
+        { key: "fixtures", label: `Fixtures (${filteredFixtures.length})`, accentColor: COLORS.gold },
         { key: "results", label: `Results (${finishedMatches.length})`, accentColor: COLORS.inkSoft }
       ], matchTab, setMatchTab) : tabPills([
         { key: "live", label: `Live (${liveNowTournaments.length})`, accentColor: COLORS.gold },

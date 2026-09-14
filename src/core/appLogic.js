@@ -271,6 +271,33 @@ export function formatTournamentViewSnapshot(tournament, standings, matches = []
     playerOfTournament: playerOfTournament || null
   };
 }
+// The lean subset of a tournament's own fixtures worth mirroring onto its public /liveTournaments
+// card (see shareTournament/refreshTournamentStandingsLive in index.html) -- an app-wide Live
+// screen has no per-tournament page to drill into for "what's coming up," and there was no data
+// source at all for that until now: "Watcher lands on a screen where he can see the live matches/
+// tournaments as well as the completed ones... fixtures/standing/point tables/stats," and
+// separately, "Live can not be the entry point for general results/fixtures... if the match/
+// tournament is not ongoing or upcoming in a few days." Deliberately NOT the full fixtures array
+// mirrored here (that already lives in full at /tournamentViews/{code}, one Firestore read away
+// once a spectator actually opens the tournament) -- every /liveTournaments doc is fetched by
+// every visitor's Live screen on every load, so bloating each one with a whole tournament's bracket
+// would cost real bandwidth for a list nobody's browsing yet. Unplayed only (no matchId -- a played
+// fixture belongs in Results, not here) and dated only (an unscheduled knockout fixture, proposed
+// ahead of its round with no date yet, has nothing to sort it by and would only ever clutter this
+// list) -- same nearest-first sort HomeScreen's own upcoming-fixture search already uses for a
+// signed-in owner's own tournaments, capped per tournament so one big bracket can't crowd out
+// every other tournament's own next fixture in the flattened, app-wide list LiveScreen builds from
+// this across every publicly live tournament.
+export function pickUpcomingFixtures(fixtures, limit = 5) {
+  return (fixtures || []).filter(f => !f.matchId && f.date).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0).slice(0, limit).map(f => ({
+    id: f.id,
+    teamA: f.teamA,
+    teamB: f.teamB,
+    date: f.date,
+    stage: f.stage || null,
+    venue: f.venue || null
+  }));
+}
 // One standings table per group instead of one combined table — reuses computeStandings itself
 // rather than re-deriving the points/NRR math, by handing it a "tournament" scoped to just that
 // group's teams (same real tournament id, so match-tagging still resolves correctly). Any
