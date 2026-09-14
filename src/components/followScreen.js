@@ -11,7 +11,7 @@ import { lastBallCommentary } from "../core/scoringEngine.js";
 
 // Public, no-auth *live* match-following page -- reached either via a "?live=CODE" link (see
 // ShareMenu, which creates these; subscribes to db.collection("liveViews").doc(code)) or, now, by
-// tapping a card in the Home screen's "Live now" feed (see loadLiveMatches in index.html), which
+// tapping a card in the Live tab's Matches segment (see loadLiveMatches in index.html), which
 // passes a matchId instead and subscribes to db.collection("liveMatches").doc(matchId) -- a
 // different collection but the exact same packMatchForFirestore document shape, so every render
 // path below is identical regardless of which one supplied the match. Exactly one of code/matchId

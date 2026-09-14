@@ -2959,20 +2959,23 @@ async function deleteMatch(id) {
   clearPendingWrite(id);
   clearUndoHistory(id);
 }
-// Realtime feed for the Home screen's "Live now" section — every currently-in-progress match
-// mirrored into /liveMatches by saveMatch, most recently updated first. Returns an unsubscribe
+// Realtime feed for the Live tab's Matches segment — every currently-in-progress AND
+// recently-completed match mirrored into /liveMatches by saveMatch (see RECENT_MATCH_RETENTION_DAYS/
+// writeTournamentRecent in packUtils.js), most recently updated first. Returns an unsubscribe
 // function, same shape as every other onSnapshot listener in this file (see FollowScreen). A
 // permission-denied here almost certainly means the rules paste for /liveMatches hasn't happened
 // yet on this project — surfaced as an empty list rather than a thrown error, since a missing
-// Live feed shouldn't block the rest of Home from rendering.
-// /liveMatches now also holds recently-completed matches (see RECENT_MATCH_RETENTION_DAYS), which
-// this feed deliberately filters back out client-side rather than adding a `where("status", ...)`
-// clause — that would need a new composite index (status + orderBy(updatedAt)), on top of the
-// rules paste this collection already requires. The Home screen's "Live now" strip stays exactly
-// what its name says; fetchLiveAndRecentMatches below is where completed matches surface instead.
+// Live feed shouldn't block the rest of the app from rendering.
+// Used to filter completed matches back out client-side, from back when this fed only Home's own
+// "Live now" strip (which wanted in-progress matches only). That strip no longer reads this state
+// at all -- LiveScreen's own Matches segment (Live vs Results pills, see its own
+// liveNowMatches/finishedMatches split) is the only consumer now, and it needs BOTH: filtering
+// completed matches out here meant the Results pill could never show anything, ever, regardless of
+// what actually finished. updatedAt desc already gives Results its own most-recent-first order for
+// free, no separate sort needed there.
 function loadLiveMatches(callback) {
   return db.collection("liveMatches").orderBy("updatedAt", "desc").limit(30).onSnapshot(snap => {
-    callback(snap.docs.map(d => unpackMatchFromFirestore(d.data())).filter(m => m.status !== "complete"));
+    callback(snap.docs.map(d => unpackMatchFromFirestore(d.data())));
   }, e => {
     console.error("[loadLiveMatches] snapshot error — code:", e.code, "message:", e.message);
     callback([]);
@@ -20413,7 +20416,16 @@ function LiveScreen({
   showTabBar = false,
   loading = false,
   watcherMode = false,
-  onExitWatcherMode
+  onExitWatcherMode,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("matches"); // matches | tournaments
@@ -20443,24 +20455,47 @@ function LiveScreen({
   function pickDefaultTourneyTab() {
     return liveTournaments.some(t => !t.champion) ? "live" : "finished";
   }
+  // Which segment (Matches vs Tournaments) to land on isn't hardcoded to Matches either -- same
+  // smart-default idea, one level up: whichever segment actually has the most "live-adjacent"
+  // content wins, ranked live match > upcoming fixture > live tournament > finished match >
+  // finished tournament. Reported live: a tournament that finished YESTERDAY sat one tap away
+  // under Tournaments while a default-selected, entirely empty Matches segment greeted a
+  // first-time visitor instead -- optimizing WHEN within a segment but never asking WHICH segment
+  // was the same mistake the original Live-pill default was built to fix.
+  //
+  // Fixtures outranks "live tournament" deliberately: `!t.champion` is also true for a tournament
+  // that simply hasn't started yet (zero matches played, nothing decided) -- there's no separate
+  // "genuinely in progress" signal on the lean /liveTournaments mirror to tell that apart from one
+  // that's actually mid-bracket. A concrete upcoming fixture (an opponent, a date) is more useful
+  // to land on than a bare tournament card with only a team count, so it wins the tie.
+  function pickDefaultView() {
+    if (liveMatches.some(m => m.status !== "complete")) return "matches";
+    if (allFixtures.length > 0) return "matches";
+    if (liveTournaments.some(t => !t.champion)) return "tournaments";
+    if (liveMatches.some(m => m.status === "complete")) return "matches";
+    if (liveTournaments.some(t => t.champion)) return "tournaments";
+    return "matches";
+  }
   // Reported live: "no way to reopen the landing page... perhaps click on the brand should bring
   // it to landing page" -- watcherMode's own brand header (below) is that tap target. There's
   // nowhere else to navigate to (a watcher's landing IS this screen), so this clears the search
   // and re-runs the same smart-default picks fresh, rather than navigating anywhere.
   function resetToLanding() {
     setQuery("");
-    setView("matches");
+    setView(pickDefaultView());
     setMatchTab(pickDefaultMatchTab());
     setTourneyTab(pickDefaultTourneyTab());
   }
 
-  // See this file's own top comment -- flips a segment's default pill away from Live, once, the
-  // first time real data settles in with nothing currently live in it. Guarded by a ref (not
-  // state) so it can never fire a second time and fight a choice made after that.
+  // See this file's own top comment -- flips a segment's default pill (and, now, the segment
+  // itself) away from Live/Matches, once, the first time real data settles in with nothing
+  // currently live. Guarded by a ref (not state) so it can never fire a second time and fight a
+  // choice made after that.
   const autoTabPicked = useRef(false);
   useEffect(() => {
     if (loading || autoTabPicked.current) return;
     autoTabPicked.current = true;
+    setView(pickDefaultView());
     setMatchTab(pickDefaultMatchTab());
     setTourneyTab(pickDefaultTourneyTab());
   }, [loading, liveMatches, liveTournaments, allFixtures]);
@@ -20744,7 +20779,14 @@ function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, watcherMode && /*#__PURE__*/React.createElement("button", {
+  }, watcherMode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: resetToLanding,
     className: "cs-btn",
@@ -20752,31 +20794,39 @@ function LiveScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 10,
+      gap: 8,
       background: "none",
       border: "none",
       padding: 0,
-      marginBottom: 20,
       cursor: "pointer",
-      textAlign: "left",
-      width: "100%"
+      textAlign: "left"
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
-    size: 36
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    size: 26
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
+      fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    profile: profile,
+    onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme
+  })), watcherMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 1
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch,
+      marginBottom: 20
     }
-  }, `${greetingPrefix()} — live scores, fixtures & results`))), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, `${greetingPrefix()} — live scores, fixtures & results`), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
@@ -36111,6 +36161,60 @@ function FollowTournamentScreen({
   // (formatTournamentViewSnapshot, src/core/appLogic.js), same convention as topBatters/topBowlers
   // just above, so this section simply doesn't render at all before then.
   const isComplete = !!data.champion;
+  // Shared by the Stats section's two lists (Most runs/Most wickets) below. Requested live:
+  // "perhaps a highlight to top 3, something to enhance the readability" -- ten visually identical
+  // rows made the list something you had to actually read line by line rather than scan. A small
+  // rank badge (filled gold for 1-3, a plain muted number past that) and bolder text/value for the
+  // top 3 gives it a shape at a glance, without repeating the Orange/Purple Cap callout above this
+  // list (rank #1 here) -- that's its own separate, more prominent card; this is just the list
+  // underneath it reading better past the top spot too.
+  function renderStatRow(p, index, valueKey) {
+    const rank = index + 1;
+    const isTop3 = rank <= 3;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.name,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.ink,
+        padding: "6px 0",
+        borderTop: `1px solid ${COLORS.creamDark}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        flexShrink: 0,
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 700,
+        background: isTop3 ? COLORS.gold : "transparent",
+        color: isTop3 ? COLORS.creamFixed : COLORS.inkSoft
+      }
+    }, rank), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        fontWeight: isTop3 ? 700 : 400,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, p.name), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontWeight: 700,
+        color: isTop3 ? COLORS.gold : COLORS.ink
+      }
+    }, p[valueKey]));
+  }
   // Shared by both the Results and Fixtures sections below -- used to just be a single bare
   // "teamA vs teamB" line with a result/date squeezed underneath, all crammed into one shared card.
   // Reported live: a knockout fixture proposed ahead of its round (see fixturesSection.js) showed
@@ -36368,22 +36472,7 @@ function FollowTournamentScreen({
       color: COLORS.inkSoft,
       marginBottom: 4
     }
-  }, "Most runs"), data.topBatters.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.name,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      padding: "5px 0",
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, p.runs)))), data.topBowlers && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "Most runs"), data.topBatters.map((p, i) => renderStatRow(p, i, "runs"))), data.topBowlers && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -36391,22 +36480,7 @@ function FollowTournamentScreen({
       color: COLORS.inkSoft,
       marginBottom: 4
     }
-  }, "Most wickets"), data.topBowlers.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.name,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      padding: "5px 0",
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, p.wickets))))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
+  }, "Most wickets"), data.topBowlers.map((p, i) => renderStatRow(p, i, "wickets")))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginTop: 20
@@ -41091,6 +41165,13 @@ function CricketScorer() {
   // "?follow="/"?tournament=" link opens the screen directly with no prior screen to return to, so
   // the "home" default is correct there too.
   const [followReturnScreen, setFollowReturnScreen] = useState("home");
+  // Same idea as followReturnScreen, for Account/Help/Feedback/About -- these used to be reachable
+  // only from Home's own AuthBar, so their own onBack always just went straight back to "home".
+  // Now watcherMode's Live screen carries its own AuthBar too (see its own comment: "if we don't
+  // show account icon/menu then you don't present any app level information? like about, support,
+  // help"), so a watcher opening one of these needs Back to return to Live, not get dumped onto a
+  // Home screen a signed-out watcher was never meant to see at all.
+  const [settingsReturnScreen, setSettingsReturnScreen] = useState("home");
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -41137,8 +41218,8 @@ function CricketScorer() {
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
-  const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
-  const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
+  const [liveMatches, setLiveMatches] = useState([]); // Live tab's Matches segment -- every in-progress AND recently-completed match, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
+  const [liveTournaments, setLiveTournaments] = useState([]); // Live tab's Tournaments segment -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
   // Whether each feed's first snapshot has arrived yet -- lets LiveScreen tell "still loading" apart
   // from "confirmed, genuinely nothing live right now" instead of flashing the empty state for the
   // brief window before onSnapshot's first callback fires (see the two useEffects just below).
@@ -42402,6 +42483,26 @@ function CricketScorer() {
     setWatcherMode(false);
     setScreen("login");
   }
+  // Account/Help/Feedback/About -- shared between HomeScreen's own AuthBar and watcherMode Live's
+  // (see its own comment). settingsReturnScreen captures wherever this was actually opened from,
+  // so each one's own onBack (below) returns there instead of always dumping back onto Home.
+  function openAccount() {
+    setSettingsReturnScreen(screen);
+    setScreen("account");
+  }
+  function openHelp(q) {
+    setHelpInitialQuery(q || "");
+    setSettingsReturnScreen(screen);
+    setScreen("help");
+  }
+  function openFeedback() {
+    setSettingsReturnScreen(screen);
+    setScreen("feedback");
+  }
+  function openAbout() {
+    setSettingsReturnScreen(screen);
+    setScreen("about");
+  }
   function exitFollowTournament() {
     try {
       const url = new URL(window.location.href);
@@ -43633,15 +43734,12 @@ function CricketScorer() {
     },
     user: user,
     profile: profile,
-    onOpenAccount: () => setScreen("account"),
+    onOpenAccount: openAccount,
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenHelp: (q) => {
-      setHelpInitialQuery(q || "");
-      setScreen("help");
-    },
-    onOpenFeedback: () => setScreen("feedback"),
-    onOpenAbout: () => setScreen("about"),
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
     onSignOut: signOutUser,
     themePref: themePref,
     onSetTheme: handleSetTheme,
@@ -43704,7 +43802,16 @@ function CricketScorer() {
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     showTabBar: !watcherMode,
     watcherMode: watcherMode,
-    onExitWatcherMode: exitWatcherMode
+    onExitWatcherMode: exitWatcherMode,
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -43940,7 +44047,7 @@ function CricketScorer() {
     onExportData: handleExportData,
     onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     redirectError: authError,
     linkStatus: linkStatus,
     onClearLinkStatus: () => setLinkStatus("")
@@ -43948,7 +44055,7 @@ function CricketScorer() {
     navKey: "help",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HelpScreen, {
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     initialQuery: helpInitialQuery,
     onReplayTour: () => {
       setShowTour(true);
@@ -43958,7 +44065,7 @@ function CricketScorer() {
     navKey: "feedback",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FeedbackScreen, {
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     userEmail: user && user.email
   })), screen === "feedback-inbox" && isAdmin && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "feedback-inbox",
@@ -43974,7 +44081,7 @@ function CricketScorer() {
     navKey: "about",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(AboutScreen, {
-    onBack: () => setScreen("home")
+    onBack: () => setScreen(settingsReturnScreen)
   })), screen === "inbox" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "inbox",
     direction: navDirection

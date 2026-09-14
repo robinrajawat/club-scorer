@@ -279,6 +279,60 @@ export function FollowTournamentScreen({
   // (formatTournamentViewSnapshot, src/core/appLogic.js), same convention as topBatters/topBowlers
   // just above, so this section simply doesn't render at all before then.
   const isComplete = !!data.champion;
+  // Shared by the Stats section's two lists (Most runs/Most wickets) below. Requested live:
+  // "perhaps a highlight to top 3, something to enhance the readability" -- ten visually identical
+  // rows made the list something you had to actually read line by line rather than scan. A small
+  // rank badge (filled gold for 1-3, a plain muted number past that) and bolder text/value for the
+  // top 3 gives it a shape at a glance, without repeating the Orange/Purple Cap callout above this
+  // list (rank #1 here) -- that's its own separate, more prominent card; this is just the list
+  // underneath it reading better past the top spot too.
+  function renderStatRow(p, index, valueKey) {
+    const rank = index + 1;
+    const isTop3 = rank <= 3;
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.name,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        fontFamily: "'Inter'",
+        fontSize: 13,
+        color: COLORS.ink,
+        padding: "6px 0",
+        borderTop: `1px solid ${COLORS.creamDark}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        flexShrink: 0,
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 700,
+        background: isTop3 ? COLORS.gold : "transparent",
+        color: isTop3 ? COLORS.creamFixed : COLORS.inkSoft
+      }
+    }, rank), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        fontWeight: isTop3 ? 700 : 400,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, p.name), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontWeight: 700,
+        color: isTop3 ? COLORS.gold : COLORS.ink
+      }
+    }, p[valueKey]));
+  }
   // Shared by both the Results and Fixtures sections below -- used to just be a single bare
   // "teamA vs teamB" line with a result/date squeezed underneath, all crammed into one shared card.
   // Reported live: a knockout fixture proposed ahead of its round (see fixturesSection.js) showed
@@ -536,22 +590,7 @@ export function FollowTournamentScreen({
       color: COLORS.inkSoft,
       marginBottom: 4
     }
-  }, "Most runs"), data.topBatters.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.name,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      padding: "5px 0",
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, p.runs)))), data.topBowlers && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "Most runs"), data.topBatters.map((p, i) => renderStatRow(p, i, "runs"))), data.topBowlers && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -559,22 +598,7 @@ export function FollowTournamentScreen({
       color: COLORS.inkSoft,
       marginBottom: 4
     }
-  }, "Most wickets"), data.topBowlers.map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.name,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      padding: "5px 0",
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("span", null, p.name), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 600
-    }
-  }, p.wickets))))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
+  }, "Most wickets"), data.topBowlers.map((p, i) => renderStatRow(p, i, "wickets")))), !reachedInApp && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginTop: 20

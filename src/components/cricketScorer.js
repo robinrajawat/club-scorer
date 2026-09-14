@@ -278,6 +278,13 @@ export function CricketScorer() {
   // "?follow="/"?tournament=" link opens the screen directly with no prior screen to return to, so
   // the "home" default is correct there too.
   const [followReturnScreen, setFollowReturnScreen] = useState("home");
+  // Same idea as followReturnScreen, for Account/Help/Feedback/About -- these used to be reachable
+  // only from Home's own AuthBar, so their own onBack always just went straight back to "home".
+  // Now watcherMode's Live screen carries its own AuthBar too (see its own comment: "if we don't
+  // show account icon/menu then you don't present any app level information? like about, support,
+  // help"), so a watcher opening one of these needs Back to return to Live, not get dumped onto a
+  // Home screen a signed-out watcher was never meant to see at all.
+  const [settingsReturnScreen, setSettingsReturnScreen] = useState("home");
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
   const [match, setMatch] = useState(null);
@@ -324,8 +331,8 @@ export function CricketScorer() {
   const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
   const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
-  const [liveMatches, setLiveMatches] = useState([]); // Home screen's "Live now" feed -- every match currently in progress, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
-  const [liveTournaments, setLiveTournaments] = useState([]); // Home screen's "Live tournaments" feed -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
+  const [liveMatches, setLiveMatches] = useState([]); // Live tab's Matches segment -- every in-progress AND recently-completed match, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
+  const [liveTournaments, setLiveTournaments] = useState([]); // Live tab's Tournaments segment -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
   // Whether each feed's first snapshot has arrived yet -- lets LiveScreen tell "still loading" apart
   // from "confirmed, genuinely nothing live right now" instead of flashing the empty state for the
   // brief window before onSnapshot's first callback fires (see the two useEffects just below).
@@ -1589,6 +1596,26 @@ export function CricketScorer() {
     setWatcherMode(false);
     setScreen("login");
   }
+  // Account/Help/Feedback/About -- shared between HomeScreen's own AuthBar and watcherMode Live's
+  // (see its own comment). settingsReturnScreen captures wherever this was actually opened from,
+  // so each one's own onBack (below) returns there instead of always dumping back onto Home.
+  function openAccount() {
+    setSettingsReturnScreen(screen);
+    setScreen("account");
+  }
+  function openHelp(q) {
+    setHelpInitialQuery(q || "");
+    setSettingsReturnScreen(screen);
+    setScreen("help");
+  }
+  function openFeedback() {
+    setSettingsReturnScreen(screen);
+    setScreen("feedback");
+  }
+  function openAbout() {
+    setSettingsReturnScreen(screen);
+    setScreen("about");
+  }
   function exitFollowTournament() {
     try {
       const url = new URL(window.location.href);
@@ -2820,15 +2847,12 @@ export function CricketScorer() {
     },
     user: user,
     profile: profile,
-    onOpenAccount: () => setScreen("account"),
+    onOpenAccount: openAccount,
     onOpenInbox: () => setScreen("inbox"),
     onOpenSharedLinks: () => setScreen("shared-links"),
-    onOpenHelp: (q) => {
-      setHelpInitialQuery(q || "");
-      setScreen("help");
-    },
-    onOpenFeedback: () => setScreen("feedback"),
-    onOpenAbout: () => setScreen("about"),
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
     onSignOut: signOutUser,
     themePref: themePref,
     onSetTheme: handleSetTheme,
@@ -2891,7 +2915,16 @@ export function CricketScorer() {
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     showTabBar: !watcherMode,
     watcherMode: watcherMode,
-    onExitWatcherMode: exitWatcherMode
+    onExitWatcherMode: exitWatcherMode,
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme
   })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
@@ -3127,7 +3160,7 @@ export function CricketScorer() {
     onExportData: handleExportData,
     onImportData: handleImportData,
     onDeleteAccount: handleDeleteAccount,
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     redirectError: authError,
     linkStatus: linkStatus,
     onClearLinkStatus: () => setLinkStatus("")
@@ -3135,7 +3168,7 @@ export function CricketScorer() {
     navKey: "help",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(HelpScreen, {
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     initialQuery: helpInitialQuery,
     onReplayTour: () => {
       setShowTour(true);
@@ -3145,7 +3178,7 @@ export function CricketScorer() {
     navKey: "feedback",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FeedbackScreen, {
-    onBack: () => setScreen("home"),
+    onBack: () => setScreen(settingsReturnScreen),
     userEmail: user && user.email
   })), screen === "feedback-inbox" && isAdmin && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "feedback-inbox",
@@ -3161,7 +3194,7 @@ export function CricketScorer() {
     navKey: "about",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(AboutScreen, {
-    onBack: () => setScreen("home")
+    onBack: () => setScreen(settingsReturnScreen)
   })), screen === "inbox" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "inbox",
     direction: navDirection

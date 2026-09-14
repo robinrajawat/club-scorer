@@ -271,6 +271,52 @@ test("LiveScreen: the smart default waits for loading to settle, and never overr
   assert.equal(findButton(inst, "Live (1)").props["aria-pressed"], true, "a later live match doesn't yank someone back off a tab they already chose");
 });
 
+// Reported live: a tournament that finished YESTERDAY sat one tap away under Tournaments while an
+// entirely empty Matches segment greeted a first-time visitor instead. The segment-level smart
+// default (pickDefaultView) fixes the WHICH-segment question the within-segment default never
+// asked.
+test("LiveScreen: lands on Tournaments (not empty Matches) when a tournament just finished and Matches has nothing at all", () => {
+  const inst = render({
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 6, champion: "Riverside CC" }]
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Tournaments/);
+  assert.match(json, /Recently Finished \(1\)/);
+  assert.equal(findButton(inst, "Recently Finished (1)").props["aria-pressed"], true);
+  assert.match(json, /Summer Cup/, "the finished tournament's own row shows without an extra tap");
+});
+
+test("LiveScreen: an upcoming fixture outranks a merely-undecided (not yet started) tournament for the segment default", () => {
+  const inst = render({
+    liveTournaments: [{ tournamentId: "t1", name: "Summer Cup", shareCode: "CODE1", teamsCount: 4, upcomingFixtures: [
+      { id: "f1", teamA: "Hawks CC", teamB: "Eagles CC", date: "2026-09-20T11:00" }
+    ] }]
+  });
+  // Lands on Matches/Fixtures, not Tournaments/Live -- a concrete fixture (which still shows its
+  // own tournament badge, "Summer Cup") beats a bare, not-yet-decided tournament card with only a
+  // team count.
+  assert.equal(findButton(inst, "Matches").props["aria-pressed"], true);
+  assert.equal(findButton(inst, "Fixtures (1)").props["aria-pressed"], true);
+  assert.match(JSON.stringify(inst.toJSON()), /Hawks CC/);
+});
+
+// Reported live: "if we don't show account icon/menu then you don't present any app level
+// information? like about, support, help." watcherMode carries the same AuthBar HomeScreen's own
+// header uses -- AuthBar itself already handles a signed-out `user` (a "Sign in" pill instead of
+// an avatar), so no LiveScreen-specific sign-in affordance is needed here beyond wiring it through.
+test("LiveScreen: watcherMode shows the account menu (AuthBar), offering sign-in since there's no user", () => {
+  const inst = render({ watcherMode: true, liveMatches: [liveMatch()] });
+  const menuBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Account menu");
+  assert.ok(menuBtn, "AuthBar's own trigger button is present");
+  assert.match(JSON.stringify(inst.toJSON()), /Sign in/);
+});
+
+test("LiveScreen: no account menu outside watcher mode", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
+  const menuBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Account menu");
+  assert.equal(menuBtn, undefined);
+});
+
 test("LiveScreen: a match's tournament badge falls back to liveTournaments' name when it's not this account's own", () => {
   const inst = render({
     liveMatches: [liveMatch({ tournamentId: "t1" })],
@@ -282,7 +328,10 @@ test("LiveScreen: a match's tournament badge falls back to liveTournaments' name
 test("LiveScreen: switching to the Tournaments segment lists every live tournament (uncapped) with its team count, and opens it on tap", () => {
   let openedCode = null;
   const tournaments = [1, 2, 3, 4].map(n => ({ tournamentId: `t${n}`, name: `Cup ${n}`, shareCode: `CODE${n}`, teamsCount: n }));
+  // A live match keeps Matches the smart-picked default segment here -- this test is about manual
+  // switching, not the segment-level smart default (covered on its own elsewhere).
   const inst = render({
+    liveMatches: [liveMatch()],
     liveTournaments: tournaments,
     onOpenLiveTournament: code => { openedCode = code; }
   });

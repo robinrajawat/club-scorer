@@ -43,6 +43,7 @@ import { TournamentsScreen } from "../../../src/components/tournamentsScreen.js"
 import { TournamentDetailScreen } from "../../../src/components/tournamentDetailScreen.js";
 import { SetupScreen } from "../../../src/components/setupScreen.js";
 import { AccountScreen } from "../../../src/components/accountScreen.js";
+import { HelpScreen, AboutScreen } from "../../../src/components/infoScreens.js";
 import { FollowScreen } from "../../../src/components/followScreen.js";
 import { LiveScreen } from "../../../src/components/liveScreen.js";
 import { MatchScreen } from "../../../src/components/matchScreen.js";
@@ -261,6 +262,36 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
   });
   await signIn(inst);
   assert.ok(inst.root.findByType(HomeScreen));
+});
+
+// Reported live: "if we don't show account icon/menu then you don't present any app level
+// information? like about, support, help." watcherMode's Live screen carries the same AuthBar
+// (Account/Help/Feedback/About) HomeScreen's own header uses. Each one's own Back used to be
+// hardcoded to "home" -- fine when AuthBar only ever lived on Home, wrong for a true watcher who
+// was never there. settingsReturnScreen fixes that: Back returns to wherever it was actually
+// opened from.
+test("CricketScorer: opening Help from watcher Live returns to Live, not Home", async () => {
+  const inst = await render();
+  await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onOpenHelp(); });
+  const help = inst.root.findByType(HelpScreen);
+  act(() => { help.props.onBack(); });
+  const liveAgain = inst.root.findByType(LiveScreen);
+  assert.equal(liveAgain.props.watcherMode, true);
+  assert.equal(inst.root.findAllByType(TabBar).length, 0);
+  assert.throws(() => inst.root.findByType(HelpScreen));
+});
+
+test("CricketScorer: opening About from watcher Live returns to Live too", async () => {
+  const inst = await render();
+  await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onOpenAbout(); });
+  const about = inst.root.findByType(AboutScreen);
+  act(() => { about.props.onBack(); });
+  assert.ok(inst.root.findByType(LiveScreen));
+  assert.throws(() => inst.root.findByType(AboutScreen));
 });
 
 // A returning session whose sign-in resolves asynchronously (the render() harness's own
