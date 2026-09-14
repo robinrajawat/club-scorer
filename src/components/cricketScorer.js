@@ -1142,11 +1142,12 @@ export function CricketScorer() {
       // from within a tournament -- either way, at most one of the two is ever set.
       clubId: setup.clubId || null,
       federationId: setup.federationId || null,
-      // Opt-out from the Home screen's Live now feed / app-wide search, derived straight from the
-      // organizer above rather than a separate manual choice -- a personal match is always private,
-      // a club/federation one always public. Gates the /liveMatches mirror write in saveMatch -- a
-      // private match is never written there at all, live or after completion.
-      private: !setup.clubId && !setup.federationId,
+      // Opt-out from the Live tab's Matches segment / app-wide search -- its own explicit choice
+      // on SetupScreen now, independent of Organizer (used to be derived: personal always private,
+      // club/federation always public, with no visible control for anyone who had no clubs to pick
+      // from at all). Gates the /liveMatches mirror write in saveMatch -- a private match is never
+      // written there at all, live or after completion.
+      private: !!setup.private,
       rules: setup.rules || DEFAULT_RULES,
       toss: setup.toss || null,
       playerOfMatch: null,

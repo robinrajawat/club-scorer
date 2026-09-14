@@ -365,7 +365,12 @@ test("TournamentsScreen: no venue set sends null, not an empty object, to onCrea
   assert.equal(createdWith, null);
 });
 
-test("TournamentsScreen: a personal tournament (the default Organizer) is created private -- no manual Visibility choice any more", async () => {
+// Reported live: visibility used to be derived from Organizer (personal always private, club/
+// federation always public), which meant a personal tournament -- created by anyone with no club
+// to organize it under -- was silently private with no visible way to change that. Visibility is
+// now its own explicit, always-shown choice, defaulting to Public ("anyone who is interested can
+// just follow the game"), independent of Organizer.
+test("TournamentsScreen: a personal tournament defaults to Public now, via its own Visibility choice independent of Organizer", async () => {
   let isPrivateArg = "unset";
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
     onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) => {
@@ -379,6 +384,36 @@ test("TournamentsScreen: a personal tournament (the default Organizer) is create
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  assert.ok(visibilityChoice, "shown even though there's no Organizer picker (no clubs)");
+  assert.equal(visibilityChoice.props.value, "public");
+  clickNav(inst, "Next"); // details -> rules
+  clickNav(inst, "Review"); // rules -> review
+
+  const createBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Create");
+  await act(async () => {
+    createBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(isPrivateArg, false);
+});
+
+test("TournamentsScreen: switching Visibility to Private flows through to onCreateTournament", async () => {
+  let isPrivateArg = "unset";
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateTournament: (name, teams, groups, advancePerGroup, defaultOvers, defaultRules, venueInfo, isPrivate) => {
+      isPrivateArg = isPrivate;
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New Tournament" }).props.onClick(); });
+  act(() => { inst.root.findByType("input").props.onChange({ target: { value: "Billund Cup" } }); });
+  const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
+  act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
+  act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  act(() => { visibilityChoice.props.onChange("private"); });
   clickNav(inst, "Next"); // details -> rules
   clickNav(inst, "Review"); // rules -> review
 
@@ -390,7 +425,7 @@ test("TournamentsScreen: a personal tournament (the default Organizer) is create
   assert.equal(isPrivateArg, true);
 });
 
-test("TournamentsScreen: no Visibility toggle on the review page when the Organizer is a club or federation -- those are always public", () => {
+test("TournamentsScreen: the Visibility choice is shown even when the Organizer is a club or federation -- not tied to Organizer any more", () => {
   // Deliberately a different name than either team option, so its own Organizer-picker button
   // (also labeled with the club's name) can't be confused with a team-selection chip below it.
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
@@ -402,9 +437,9 @@ test("TournamentsScreen: no Visibility toggle on the review page when the Organi
   const teamButtons = inst.root.findAllByType("button").filter(b => b.props.children === "Riverside CC" || b.props.children === "Oakwood CC");
   act(() => { teamButtons.find(b => b.props.children === "Riverside CC").props.onClick(); });
   act(() => { teamButtons.find(b => b.props.children === "Oakwood CC").props.onClick(); });
-  clickNav(inst, "Next"); // details -> rules
-  clickNav(inst, "Review"); // rules -> review
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  assert.ok(visibilityChoice);
+  assert.equal(visibilityChoice.props.value, "public");
 });
 
 test("TournamentsScreen: customizing tournament rules copies overs/wide/no-ball/free-hit/squad-size into onCreateTournament", async () => {

@@ -68,9 +68,8 @@ export function SetupScreen({
   // same composite-key RuleChoice pattern as TournamentsScreen's own Organizer picker. Only shown
   // (and only meaningful) when there's no presetTournament: a fixture started from within a
   // tournament always inherits ITS organizer instead (see presetTournament._clubId/_federationId
-  // below) -- there's no separate choice to make there. Visibility used to be its own manual
-  // toggle on this screen; it's now derived straight from this instead (personal stays private,
-  // club/federation is always public), so there's one less decision per match, not two.
+  // below) -- there's no separate choice to make there. Purely about who manages it now --
+  // visibility is its own separate choice just below, not derived from this.
   const [organizerKey, setOrganizerKey] = useState("personal");
   const ownableClubs = clubs.filter(c => isClubOwner(c, currentUid));
   const organizerOptions = [{
@@ -85,7 +84,15 @@ export function SetupScreen({
   }))];
   const matchClubId = organizerKey.startsWith("club:") ? organizerKey.slice(5) : null;
   const matchFederationId = organizerKey.startsWith("federation:") ? organizerKey.slice("federation:".length) : null;
-  const isPrivate = presetTournament ? !!presetTournament.private : organizerKey === "personal";
+  // Whether this match can be found in the Live tab / app-wide search -- its own explicit choice,
+  // always visible, independent of Organizer. Used to be derived straight from Organizer (personal
+  // always private, club/federation always public) with no visible control at all for anyone who
+  // had no clubs to pick from -- meaning most matches ended up silently private with no way to
+  // change that. Defaults to public, matching "anyone who is interested can just follow the game."
+  // A fixture started from within a tournament still just inherits the tournament's own choice --
+  // one visibility per tournament, not one per fixture.
+  const [manualPrivate, setManualPrivate] = useState(false);
+  const isPrivate = presetTournament ? !!presetTournament.private : manualPrivate;
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
   // own default venue (see TournamentsScreen's own venue picker) doesn't carry verified coordinates
@@ -1759,6 +1766,22 @@ export function SetupScreen({
     value: organizerKey,
     onChange: setOrganizerKey,
     options: organizerOptions
+  })), currentPage === "review" && !presetTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease 0.04s backwards"
+    }
+  }, /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: manualPrivate ? "private" : "public",
+    onChange: v => setManualPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -1767,7 +1790,7 @@ export function SetupScreen({
       lineHeight: 1.5,
       marginTop: 8
     }
-  }, isPrivate ? "Personal \u2014 this match won't appear in the Home screen's Live now feed or app-wide search. A share or view code you generate yourself still works exactly as before." : "Club/federation \u2014 while in progress and for a few days after it ends, this match can be found by anyone using the app in the Live now feed and app-wide search.")), /*#__PURE__*/React.createElement("div", {
+  }, manualPrivate ? "Private \u2014 this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public \u2014 while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -1834,7 +1857,8 @@ export function SetupScreen({
         tournamentId: presetTournament ? presetTournament.id : null,
         fixtureId: presetTournament ? presetTournament.fixtureId || null : null,
         clubId: presetTournament ? presetTournament._clubId || null : matchClubId,
-        federationId: presetTournament ? presetTournament._federationId || null : matchFederationId
+        federationId: presetTournament ? presetTournament._federationId || null : matchFederationId,
+        private: isPrivate
       });
     }
   }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));

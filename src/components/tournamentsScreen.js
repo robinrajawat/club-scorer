@@ -212,6 +212,9 @@ export function TournamentsScreen({
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  // See isPrivate's own comment further down -- the create-tournament form's explicit Visibility
+  // choice, independent of Organizer.
+  const [manualPrivate, setManualPrivate] = useState(false);
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -320,11 +323,12 @@ export function TournamentsScreen({
   // flat options list) can drive both onSelectSource and onSelectFederationSource from one picker,
   // reset to "personal" by openCreate/openCreateSeries below.
   const organizerKey = activeFederationId ? `federation:${activeFederationId}` : activeClubId ? `club:${activeClubId}` : "personal";
-  // Visibility used to be its own manual toggle on this form -- removed in favor of deriving it
-  // straight from who's organizing: a personal tournament stays private (nobody else's business),
-  // a club/federation one is always public (membership there is already owner/co-owner governed,
-  // same reasoning ClubPanel/FederationsPanel already apply). One less decision to make per create.
-  const isPrivate = organizerKey === "personal";
+  // Whether this tournament can be found in the Live tab / app-wide search -- its own explicit
+  // choice again, independent of Organizer. Used to be derived straight from Organizer (personal
+  // always private, club/federation always public) -- meaning a personal tournament, created by
+  // anyone with no club to organize it under, was silently private with no visible control at all.
+  // Defaults to public, matching "anyone who is interested can just follow the game."
+  const isPrivate = manualPrivate;
   function setOrganizerKey(key) {
     if (key === "personal") {
       onSelectSource(null);
@@ -379,6 +383,7 @@ export function TournamentsScreen({
     setGroupOverrides({});
     setCurrentPage(CREATE_TOURNAMENT_PAGE_ORDER[0]);
     setOrganizerKey("personal");
+    setManualPrivate(false);
     setCreating(true);
   }
   const currentPageIndex = CREATE_TOURNAMENT_PAGE_ORDER.indexOf(currentPage);
@@ -995,6 +1000,17 @@ export function TournamentsScreen({
     value: organizerKey,
     onChange: setOrganizerKey,
     options: organizerOptions
+  }), currentPage === "details" && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: manualPrivate ? "private" : "public",
+    onChange: v => setManualPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
   }), currentPage === "details" && totalTeamOptions < 2 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -1344,7 +1360,7 @@ export function TournamentsScreen({
       lineHeight: 1.8,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules)), /*#__PURE__*/React.createElement("div", null, isPrivate ? "Private \u2014 personal tournaments don't appear in the Live now feed or app-wide search." : "Public \u2014 discoverable in the Live now feed and app-wide search while it's live and for a few days after.")), error && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("strong", null, name.trim() || "Untitled tournament")), /*#__PURE__*/React.createElement("div", null, selectedTeams.length, " teams: ", selectedTeams.join(", ")), /*#__PURE__*/React.createElement("div", null, useGroups ? `${numGroups} groups, top ${advancePerGroup} from each advance (${numGroups * advancePerGroup} teams) \u2192 ${knockoutStagesPreview(numGroups * advancePerGroup)}.` : `One round-robin table \u2192 ${knockoutStagesPreview(selectedTeams.length)}.`), defaultOvers && /*#__PURE__*/React.createElement("div", null, defaultOvers, "-over innings by default"), nonStandardRulesText(tournamentRules) && /*#__PURE__*/React.createElement("div", null, "House rules: ", nonStandardRulesText(tournamentRules)), /*#__PURE__*/React.createElement("div", null, isPrivate ? "Private \u2014 this tournament won't appear in the Live tab or app-wide search." : "Public \u2014 discoverable in the Live tab and app-wide search while it's live and for a few days after.")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
