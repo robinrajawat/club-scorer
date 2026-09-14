@@ -19543,7 +19543,7 @@ function renderMatchCard(m, i, {
       // last bit of scrollable content here doesn't render partially hidden underneath it -- same
       // fixed-bar-overlap bug class as MatchScreen's scoring pad (see docs/history.md's "This
       // Over" writeup), just avoided from the start here since TabBar's height never changes.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
@@ -20666,7 +20666,7 @@ function LiveScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the
@@ -20794,14 +20794,27 @@ const BOTTOM_GAP = 0;
 // GENERATED-FN-END: TABS
 // GENERATED-FN-START: TAB_BAR_HEIGHT
 const TAB_BAR_HEIGHT = PILL_HEIGHT + BOTTOM_GAP;
+
+// Reported live: the pill "looks good when I am using PWA otherwise it touches the browser's
+// search bar" -- installed-PWA devices with a home-indicator report a real env(safe-area-inset-
+// bottom), which is what gave the pill its floating clearance; a plain browser tab reports 0 for
+// that same env(), so bottom: 0 sat the pill flush against the true edge of the viewport, right
+// where Chrome/Safari's own bottom URL/search bar lives. `max()` guarantees a floating look either
+// way -- real safe-area insets (already bigger than 12px on every current home-indicator device)
+// pass through untouched, a plain browser tab's 0 is floored to 12px -- with no display-mode
+// detection needed. Exported so every screen that reserves bottom padding to clear this bar (see
+// TAB_BAR_HEIGHT's own usages) adds the same floor, not just the bar itself.
 // GENERATED-FN-END: TAB_BAR_HEIGHT
+// GENERATED-FN-START: TAB_BAR_SAFE_BOTTOM
+const TAB_BAR_SAFE_BOTTOM = "max(env(safe-area-inset-bottom), 12px)";
+// GENERATED-FN-END: TAB_BAR_SAFE_BOTTOM
 // GENERATED-FN-START: TabBar
 function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
   return /*#__PURE__*/React.createElement("nav", {
     "aria-label": "Primary",
     style: {
       position: "fixed",
-      bottom: `calc(${BOTTOM_GAP}px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${BOTTOM_GAP}px + ${TAB_BAR_SAFE_BOTTOM})`,
       left: 16,
       right: 16,
       maxWidth: 560,
@@ -20928,7 +20941,7 @@ function MyTeamsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1, further down) center in whatever space is actually left under
@@ -23436,7 +23449,7 @@ function FabButton({
       right: 16,
       maxWidth: 560,
       margin: "0 auto",
-      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${TAB_BAR_HEIGHT}px + 16px + ${TAB_BAR_SAFE_BOTTOM})`,
       display: "flex",
       justifyContent: "flex-end",
       pointerEvents: "none",
@@ -24602,7 +24615,7 @@ function TournamentsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets the empty-state box below (flex: 1 on itself) center in whatever space is actually
@@ -29472,7 +29485,7 @@ function TeamsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }

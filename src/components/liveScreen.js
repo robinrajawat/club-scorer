@@ -4,7 +4,7 @@ import { ChevronRight, Trophy } from "./icons.js";
 import { TextField } from "./formUiAtoms.js";
 import { EmptyState, LoadingNote } from "./illustrations.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
 // /liveTournaments). A match card opens the live scoring/scorecard screen, a tournament card
@@ -259,7 +259,7 @@ export function LiveScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + env(safe-area-inset-bottom))` : 60,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 60px + ${TAB_BAR_SAFE_BOTTOM})` : 60,
       maxWidth: 560,
       margin: "0 auto",
       // Lets EmptyState (flex: 1 on itself) center in whatever space is actually left under the

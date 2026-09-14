@@ -8,7 +8,7 @@ import { ClubPanel } from "./clubPanel.js";
 import { FederationsPanel } from "./federationsPanel.js";
 import { FabButton } from "./screenAtoms.js";
 import { isClubOwner, parseBulkPlayers } from "../core/miscHelpers.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The "Clubs" screen: a Clubs/Federations tab (rendering ClubPanel/FederationsPanel respectively),
 // plus, once a club is active, its player pool (a club-wide roster to draw team lineups from --
@@ -140,7 +140,7 @@ export function TeamsScreen({
       paddingRight: 16,
       // See the matching comment in homeScreen.js's own root style -- reserves clearance under
       // the fixed TabBar when it's showing.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }

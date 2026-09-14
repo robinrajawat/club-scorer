@@ -41,12 +41,23 @@ const BOTTOM_GAP = 0;
 // exact bug class history already hit once with the scoring pad.
 export const TAB_BAR_HEIGHT = PILL_HEIGHT + BOTTOM_GAP;
 
+// Reported live: the pill "looks good when I am using PWA otherwise it touches the browser's
+// search bar" -- installed-PWA devices with a home-indicator report a real env(safe-area-inset-
+// bottom), which is what gave the pill its floating clearance; a plain browser tab reports 0 for
+// that same env(), so bottom: 0 sat the pill flush against the true edge of the viewport, right
+// where Chrome/Safari's own bottom URL/search bar lives. `max()` guarantees a floating look either
+// way -- real safe-area insets (already bigger than 12px on every current home-indicator device)
+// pass through untouched, a plain browser tab's 0 is floored to 12px -- with no display-mode
+// detection needed. Exported so every screen that reserves bottom padding to clear this bar (see
+// TAB_BAR_HEIGHT's own usages) adds the same floor, not just the bar itself.
+export const TAB_BAR_SAFE_BOTTOM = "max(env(safe-area-inset-bottom), 12px)";
+
 export function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
   return /*#__PURE__*/React.createElement("nav", {
     "aria-label": "Primary",
     style: {
       position: "fixed",
-      bottom: `calc(${BOTTOM_GAP}px + env(safe-area-inset-bottom))`,
+      bottom: `calc(${BOTTOM_GAP}px + ${TAB_BAR_SAFE_BOTTOM})`,
       left: 16,
       right: 16,
       maxWidth: 560,

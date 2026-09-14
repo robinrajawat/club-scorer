@@ -290,6 +290,7 @@ const FUNCTIONS = [
   { name: "LiveScreen", file: "src/components/liveScreen.js" },
   { name: "TABS", file: "src/components/tabBar.js" },
   { name: "TAB_BAR_HEIGHT", file: "src/components/tabBar.js" },
+  { name: "TAB_BAR_SAFE_BOTTOM", file: "src/components/tabBar.js" },
   { name: "TabBar", file: "src/components/tabBar.js" },
   { name: "SETUP_PAGE_LABELS", file: "src/components/setupScreen.js" },
   { name: "SetupScreen", file: "src/components/setupScreen.js" },

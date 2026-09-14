@@ -15,7 +15,7 @@ import { HELP_SECTIONS } from "./infoScreens.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
 import { relativeDayLabel, greetingPrefix } from "../core/miscHelpers.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
-import { TAB_BAR_HEIGHT } from "./tabBar.js";
+import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // The app's landing screen once signed in (or skipped sign-in): a "Continue scoring" hero for any
 // match this account has in progress, a "Next up" teaser for the nearest scheduled tournament
@@ -633,7 +633,7 @@ function renderMatchCard(m, i, {
       // last bit of scrollable content here doesn't render partially hidden underneath it -- same
       // fixed-bar-overlap bug class as MatchScreen's scoring pad (see docs/history.md's "This
       // Over" writeup), just avoided from the start here since TabBar's height never changes.
-      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + env(safe-area-inset-bottom))` : 40,
+      paddingBottom: showTabBar ? `calc(${TAB_BAR_HEIGHT}px + 40px + ${TAB_BAR_SAFE_BOTTOM})` : 40,
       maxWidth: 560,
       margin: "0 auto"
     }
