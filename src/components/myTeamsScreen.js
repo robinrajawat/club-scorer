@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
+import { ChevronDown, ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
@@ -242,14 +242,17 @@ export function MyTeamsScreen({
       alignItems: "center",
       gap: 7
     }
-  }, t.color && /*#__PURE__*/React.createElement("span", {
-    "aria-hidden": "true",
+  // A crest, not a plain dot -- "shield" reads correctly here (heraldry, a team's own colors),
+  // unlike as a stand-in for "a group of people" (rejected for the Teams tab itself, kept Users
+  // there). `fill`/`stroke` are CSS properties, not the SVG presentation attributes Icon hardcodes
+  // (see icons.js), so setting them in `style` overrides the shared outline-icon default to give a
+  // solid, team-colored crest instead of just another stroke-only icon.
+  }, t.color && /*#__PURE__*/React.createElement(Shield, {
+    size: 15,
     style: {
-      width: 11,
-      height: 11,
-      borderRadius: "50%",
-      background: t.color,
-      border: `1px solid ${COLORS.creamDark}`,
+      fill: t.color,
+      stroke: COLORS.creamDark,
+      strokeWidth: 1,
       flexShrink: 0
     }
   }), /*#__PURE__*/React.createElement("div", {

@@ -9,6 +9,7 @@ import React from "react";
 import renderer from "react-test-renderer";
 import { MyTeamsScreen } from "../../../src/components/myTeamsScreen.js";
 import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
+import { Shield } from "../../../src/components/icons.js";
 
 function team(overrides = {}) {
   return { id: "t1", name: "Riverside 1st XI", players: [], ...overrides };
@@ -62,6 +63,19 @@ test("MyTeamsScreen: a team row shows captain/vice-captain/keeper pills when set
   assert.ok(text.includes("C · A. Sharma"));
   assert.ok(text.includes("VC · B. Kumar"));
   assert.ok(text.includes("WK · C. Patel"));
+});
+
+test("MyTeamsScreen: a team's jersey color shows as a shield crest next to its name; no shield when unset", () => {
+  const withColor = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team({ color: "#1b3a6b" })], matches: [], onNewTeam: () => {}
+  }));
+  const shield = withColor.root.findByType(Shield);
+  assert.equal(shield.props.style.fill, "#1b3a6b");
+
+  const noColor = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onNewTeam: () => {}
+  }));
+  assert.throws(() => noColor.root.findByType(Shield));
 });
 
 test("MyTeamsScreen: shows a loading state while teamsLoading is true, without crashing", () => {
