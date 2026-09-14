@@ -221,11 +221,12 @@ test("LiveScreen: a fixture also matches search by team or tournament name", () 
 
 // Reported live: "the landing page looks too simple, no branding, no greetings" once WelcomeScreen
 // stopped being the default landing screen, plus "no way to reopen the landing page... click on
-// the brand should bring it to landing page." watcherMode gets its own brand header that resets
-// the screen's own state on tap -- there's nowhere else to navigate to.
-test("LiveScreen: watcherMode shows a brand header with a greeting; tapping it resets search and tab state", () => {
+// the brand should bring it to landing page." The brand header shows unconditionally -- Live is a
+// real landing page (see cricketScorer.js's own fix keeping a returning signed-in visitor here
+// instead of bouncing to Home), not a separate stripped-down "watcher" shell -- and resets the
+// screen's own state on tap, since there's nowhere else to navigate to.
+test("LiveScreen: brand header with a greeting shows unconditionally; tapping it resets search and tab state", () => {
   const inst = render({
-    watcherMode: true,
     liveMatches: [liveMatch({ id: "done1", status: "complete" })]
   });
   assert.match(JSON.stringify(inst.toJSON()), /Club Scorer/);
@@ -241,17 +242,6 @@ test("LiveScreen: watcherMode shows a brand header with a greeting; tapping it r
   const json = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(json, /Nothing matches/, "search was cleared");
   assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], true, "re-picks the same smart default, not hardcoded back to Live");
-});
-
-// IMPROVEMENT: Live is a real landing page now, not just a watcher's (see cricketScorer.js's own
-// fix keeping a returning signed-in visitor here instead of bouncing to Home) -- so the small brand
-// mark every other main tab carries stays visible here too, regardless of watcherMode. Only the
-// watcher-specific AuthBar and greeting (a signed-in visitor already has both from Home, one tab
-// away) stay gated to watcherMode.
-test("LiveScreen: the brand mark shows outside watcher mode too, but not the watcher-only greeting/AuthBar", () => {
-  const inst = render({ liveMatches: [liveMatch()] });
-  assert.match(JSON.stringify(inst.toJSON()), /Club Scorer/);
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)/);
 });
 
 test("LiveScreen: Tournaments defaults to Recently Finished when nothing in it is currently live", () => {
@@ -307,20 +297,15 @@ test("LiveScreen: an upcoming fixture outranks a merely-undecided (not yet start
 });
 
 // Reported live: "if we don't show account icon/menu then you don't present any app level
-// information? like about, support, help." watcherMode carries the same AuthBar HomeScreen's own
-// header uses -- AuthBar itself already handles a signed-out `user` (a "Sign in" pill instead of
-// an avatar), so no LiveScreen-specific sign-in affordance is needed here beyond wiring it through.
-test("LiveScreen: watcherMode shows the account menu (AuthBar), offering sign-in since there's no user", () => {
-  const inst = render({ watcherMode: true, liveMatches: [liveMatch()] });
+// information? like about, support, help." Live carries the same AuthBar HomeScreen's own header
+// uses, unconditionally -- AuthBar itself already handles a signed-out `user` (a "Sign in" pill
+// instead of an avatar), so no LiveScreen-specific sign-in affordance is needed here beyond wiring
+// it through.
+test("LiveScreen: shows the account menu (AuthBar), offering sign-in since there's no user", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
   const menuBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Account menu");
   assert.ok(menuBtn, "AuthBar's own trigger button is present");
   assert.match(JSON.stringify(inst.toJSON()), /Sign in/);
-});
-
-test("LiveScreen: no account menu outside watcher mode", () => {
-  const inst = render({ liveMatches: [liveMatch()] });
-  const menuBtn = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Account menu");
-  assert.equal(menuBtn, undefined);
 });
 
 test("LiveScreen: a match's tournament badge falls back to liveTournaments' name when it's not this account's own", () => {
@@ -429,8 +414,8 @@ test("LiveScreen: a match also matches by its tournament badge name", () => {
 // "Sign in to score a match" link used to sit at the bottom of the screen too, redundant once
 // AuthBar's own "Sign in" (see the account-menu tests above) does the exact same thing. One way
 // back to sign-in now, not two.
-test("LiveScreen: no separate 'sign in to score a match' link, in or out of watcher mode -- AuthBar is the only way back", () => {
-  const inst = render({ watcherMode: true, liveMatches: [liveMatch()] });
+test("LiveScreen: no separate 'sign in to score a match' link -- AuthBar is the only way back", () => {
+  const inst = render({ liveMatches: [liveMatch()] });
   assert.equal(findButton(inst, "Sign in to score a match"), undefined);
 });
 

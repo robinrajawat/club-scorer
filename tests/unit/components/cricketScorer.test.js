@@ -227,20 +227,22 @@ afterEach(() => {
   delete globalThis.saveClubTournament;
 });
 
-// Reported live, twice over: first as "most spectators who opened the app just to follow a
+// Reported live, three times over: first as "most spectators who opened the app just to follow a
 // tournament never realized they needed to find the Live tab, having landed on what read as a
 // sign-in wall first" (when WelcomeScreen's sign-in content was the default landing), then again
 // once a fix for that shipped an "I'm watching"/"I'm scoring" choice screen in front of it --
 // "Scorer and watcher views has to be blended in a sense," since an upfront "who are you" question
-// was still friction nobody watching a match actually wanted. A cold, signed-out visit now skips
-// both: straight to Live, watcherMode on, no TabBar (nothing else for an account-less spectator to
-// navigate to), no WelcomeScreen at all until they ask for it.
-test("CricketScorer: a signed-out cold visit lands straight on Live in watcher mode, no tab bar, no sign-in wall", async () => {
+// was still friction nobody watching a match actually wanted -- and again once the fix for THAT
+// still hid the tab bar for a cold, signed-out visit, which read as its own separate "watcher page"
+// rather than the same app shell: "why landing page still feel disconnected... seems like we are
+// still having a separate watcher page." A cold, signed-out visit now skips all three: straight to
+// Live, full tab bar and header chrome exactly like a signed-in visitor gets, no WelcomeScreen at
+// all until they ask for it (via Live's own AuthBar).
+test("CricketScorer: a signed-out cold visit lands straight on Live, with the full tab bar, no sign-in wall", async () => {
   const inst = await render();
   await flush();
-  const live = inst.root.findByType(LiveScreen);
-  assert.equal(live.props.watcherMode, true);
-  assert.equal(inst.root.findAllByType(TabBar).length, 0);
+  assert.ok(inst.root.findByType(LiveScreen));
+  assert.equal(inst.root.findAllByType(TabBar).length, 1);
   assert.throws(() => inst.root.findByType(WelcomeScreen));
 });
 
@@ -256,8 +258,8 @@ test("CricketScorer: a ?follow=CODE URL routes straight to FollowScreen with tha
 // LiveScreen's onOpenAccount and HomeScreen's own) -- not landed on directly, see the cold-landing
 // test above, and no longer via a separate standalone link either (that was dropped: "instead sign
 // in on top can lead to old signin landing page" -- one canonical way in). WelcomeScreen's own Back
-// arrow is the round trip back to watcher Live, via settingsReturnScreen.
-test("CricketScorer: Live's AuthBar 'Sign in' opens WelcomeScreen; its Back arrow returns to watcher Live", async () => {
+// arrow is the round trip back to Live, via settingsReturnScreen.
+test("CricketScorer: Live's AuthBar 'Sign in' opens WelcomeScreen; its Back arrow returns to Live", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);
@@ -266,8 +268,7 @@ test("CricketScorer: Live's AuthBar 'Sign in' opens WelcomeScreen; its Back arro
   assert.throws(() => inst.root.findByType(LiveScreen));
 
   act(() => { welcome.props.onBack(); });
-  const liveAgain = inst.root.findByType(LiveScreen);
-  assert.equal(liveAgain.props.watcherMode, true);
+  assert.ok(inst.root.findByType(LiveScreen));
   assert.throws(() => inst.root.findByType(WelcomeScreen));
 });
 
@@ -286,25 +287,24 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
 });
 
 // Reported live: "if we don't show account icon/menu then you don't present any app level
-// information? like about, support, help." watcherMode's Live screen carries the same AuthBar
+// information? like about, support, help." Live's own header carries the same AuthBar
 // (Account/Help/Feedback/About) HomeScreen's own header uses. Each one's own Back used to be
-// hardcoded to "home" -- fine when AuthBar only ever lived on Home, wrong for a true watcher who
-// was never there. settingsReturnScreen fixes that: Back returns to wherever it was actually
+// hardcoded to "home" -- fine when AuthBar only ever lived on Home, wrong for someone who reached
+// it from Live instead. settingsReturnScreen fixes that: Back returns to wherever it was actually
 // opened from.
-test("CricketScorer: opening Help from watcher Live returns to Live, not Home", async () => {
+test("CricketScorer: opening Help from Live returns to Live, not Home", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);
   act(() => { live.props.onOpenHelp(); });
   const help = inst.root.findByType(HelpScreen);
   act(() => { help.props.onBack(); });
-  const liveAgain = inst.root.findByType(LiveScreen);
-  assert.equal(liveAgain.props.watcherMode, true);
-  assert.equal(inst.root.findAllByType(TabBar).length, 0);
+  assert.ok(inst.root.findByType(LiveScreen));
+  assert.equal(inst.root.findAllByType(TabBar).length, 1);
   assert.throws(() => inst.root.findByType(HelpScreen));
 });
 
-test("CricketScorer: opening About from watcher Live returns to Live too", async () => {
+test("CricketScorer: opening About from Live returns to Live too", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);
@@ -321,24 +321,20 @@ test("CricketScorer: opening About from watcher Live returns to Live too", async
 // restore resolved -- undermining the whole point of Live being the default landing page (see the
 // cold-visit test above) for anyone who was already signed in. Only an EXPLICIT sign-in via the
 // "login" screen (openAccount, WelcomeScreen) should land on Home now; a session that resolves
-// signed-in while still on the untouched watcher-default landing should just drop the watcher-only
-// chrome and stay right there on Live.
-test("CricketScorer: a session that resolves signed-in while still on the watcher default stays on Live, watcherMode cleared", async () => {
+// signed-in while still on the untouched cold-landing default should just stay right there on Live.
+test("CricketScorer: a session that resolves signed-in while still on the cold-landing default stays on Live", async () => {
   const inst = await render();
   await flush();
   assert.ok(inst.root.findByType(LiveScreen));
   await signInRaw(inst);
-  const live = inst.root.findByType(LiveScreen);
-  assert.equal(live.props.watcherMode, false);
+  assert.ok(inst.root.findByType(LiveScreen));
   assert.equal(inst.root.findAllByType(HomeScreen).length, 0);
 });
 
-// A watcher who opens sign-in (AuthBar) then backs out with "Continue without an account" instead
-// of actually signing in -- watcherMode is left untouched all the way through the WelcomeScreen
-// detour (see openAccount's own comment), so this is the one place besides a real sign-in that
-// must clear it: otherwise Home would render with the watcher-stripped TabBar hidden, for someone
-// who just explicitly chose full guest access.
-test("CricketScorer: a watcher who 'Continue without an account's out of sign-in lands on Home with the full tab bar, not still watcher-restricted", async () => {
+// A signed-out visitor who opens sign-in (AuthBar) from Live, then backs out with "Continue
+// without an account" instead of actually signing in, lands on Home with the same full tab bar
+// Live itself already had.
+test("CricketScorer: 'Continue without an account' out of sign-in lands on Home with the full tab bar", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);

@@ -1,6 +1,6 @@
 import React from "react";
 import { COLORS } from "./theme.js";
-import { House, Radio, Trophy, Shield } from "./icons.js";
+import { House, Radio, Trophy, Users } from "./icons.js";
 
 // Four root destinations: Home (your own stuff), Live (everyone else's live matches/tournaments),
 // Cups (every tournament/series you've created), and Teams (every roster you've created --
@@ -14,7 +14,7 @@ export const TABS = [
   { screen: "home", label: "Home", Icon: House },
   { screen: "live", label: "Live", Icon: Radio },
   { screen: "tournaments", label: "Cups", Icon: Trophy },
-  { screen: "teams", label: "Teams", Icon: Shield }
+  { screen: "teams", label: "Teams", Icon: Users }
 ];
 
 // Height of the pill itself (safe-area padding aside) -- unlike MatchScreen's scoring pad, this

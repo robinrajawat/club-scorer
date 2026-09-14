@@ -237,16 +237,19 @@ export function CricketScorer() {
   // actually wanted). Reported live, the underlying complaint both times: most people who opened
   // the app just to follow a tournament never realized they needed to find the Live tab at all,
   // having landed on what read as a sign-in wall first. WelcomeScreen is still there -- reached by
-  // watcherMode's own AuthBar, "Sign in" (openAccount below) -- just not the default landing any
-  // more.
+  // Live's own AuthBar, "Sign in" (openAccount below) -- just not the default landing any more.
   const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | auth-action
-  // Suppresses the full Home/Live/Cups/Clubs tab bar down to nothing (see the TabBar render
-  // below) for as long as it's on: Cups and Clubs are organizer concepts a spectator with no
-  // account has no use for, and Home has nothing to show someone with no matches of their own.
-  // True from mount for the default cold landing above; left untouched (never explicitly cleared)
-  // by a trip through WelcomeScreen to sign in -- see openAccount's own comment -- and only
-  // actually cleared once the broadened auth-redirect effect below fires on a real sign-in.
+  // Tracks whether this session arrived cold and anonymous (no account yet, no deep link) --
+  // purely internal bookkeeping now, not a UI mode: the tab bar and every screen's own header
+  // render exactly the same regardless (see the TabBar render below and LiveScreen's own header,
+  // both unconditional -- a signed-out visitor gets the full app shell, same as a signed-in one,
+  // rather than a stripped-down separate experience). What it still does: distinguishes a session
+  // silently resolving to signed-in on its own (stay put, see the auth-redirect effect below) from
+  // an explicit "Sign in" interaction (redirect to Home/Setup). True from mount for the default
+  // cold landing above; left untouched (never explicitly cleared) by a trip through WelcomeScreen
+  // to sign in -- see openAccount's own comment -- and only actually cleared once the auth-redirect
+  // effect below fires on a real sign-in, or "Continue without an account" is chosen.
   const [watcherMode, setWatcherMode] = useState(isDefaultColdLanding);
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
@@ -272,10 +275,9 @@ export function CricketScorer() {
   const [followReturnScreen, setFollowReturnScreen] = useState("home");
   // Same idea as followReturnScreen, for Account/Help/Feedback/About -- these used to be reachable
   // only from Home's own AuthBar, so their own onBack always just went straight back to "home".
-  // Now watcherMode's Live screen carries its own AuthBar too (see its own comment: "if we don't
-  // show account icon/menu then you don't present any app level information? like about, support,
-  // help"), so a watcher opening one of these needs Back to return to Live, not get dumped onto a
-  // Home screen a signed-out watcher was never meant to see at all.
+  // Live's header carries its own AuthBar too (see its own comment: "if we don't show account
+  // icon/menu then you don't present any app level information? like about, support, help"), so
+  // opening one of these from Live needs Back to return to Live, not get dumped onto Home.
   const [settingsReturnScreen, setSettingsReturnScreen] = useState("home");
   const [navDirection, setNavDirection] = useState("forward");
   const [matches, setMatches] = useState([]);
@@ -1379,8 +1381,8 @@ export function CricketScorer() {
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
-  // Account/Help/Feedback/About -- shared between HomeScreen's own AuthBar and watcherMode Live's
-  // (see its own comment). settingsReturnScreen captures wherever this was actually opened from,
+  // Account/Help/Feedback/About -- shared between HomeScreen's own AuthBar and Live's own (see its
+  // own comment). settingsReturnScreen captures wherever this was actually opened from,
   // so each one's own onBack (below) returns there instead of always dumping back onto Home.
   //
   // "Sign in" for a signed-out visitor -- whether that's a watcher or a guest on Home who chose
@@ -1389,8 +1391,8 @@ export function CricketScorer() {
   // old signin landing page" -- one canonical sign-in screen, reached the same way from anywhere,
   // rather than two different ones depending on which "Sign in" you happened to tap. watcherMode
   // itself is left untouched here (not cleared) -- WelcomeScreen's own Back (settingsReturnScreen)
-  // returns to "live" exactly as it was, watcher UI and all, if that's where this came from; for a
-  // signed-in-adjacent Home guest, watcherMode was never true to begin with.
+  // returns to "live" exactly as it was if that's where this came from; for a Home guest, watcherMode
+  // was never true to begin with.
   function openAccount() {
     setSettingsReturnScreen(screen);
     setScreen(user ? "account" : "login");
@@ -1993,11 +1995,11 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
     onSignIn: handleSignInGoogle,
-    // Clears watcherMode too, not just navigates -- if this was reached from watcherMode's own
-    // AuthBar (a watcher who opened sign-in, then chose to skip it), "Continue without an account"
-    // is the moment they actually leave the watcher-restricted experience for full Home/Cups/Clubs
-    // access, same as a real sign-in does via the auth-redirect effect above. Harmless no-op
-    // otherwise, since watcherMode is already false whenever this is reached any other way.
+    // Clears watcherMode too, not just navigates -- same internal bookkeeping cleanup a real
+    // sign-in does via the auth-redirect effect above, once someone's explicitly chosen a path
+    // (signed in, or "Continue without an account") rather than still sitting on the undecided
+    // cold-landing default. Harmless no-op otherwise, since watcherMode is already false whenever
+    // this is reached any other way.
     onSkip: () => {
       setWatcherMode(false);
       setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
@@ -2060,8 +2062,7 @@ export function CricketScorer() {
     onOpenLiveTournament: openLiveTournament,
     tournamentNameById: tournamentNameById,
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
-    showTabBar: !watcherMode,
-    watcherMode: watcherMode,
+    showTabBar: true,
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
@@ -2312,7 +2313,7 @@ export function CricketScorer() {
     title: alertModal.title,
     message: alertModal.message,
     onClose: () => setAlertModal(null)
-  }), TAB_BAR_SCREENS.includes(screen) && !watcherMode && /*#__PURE__*/React.createElement(TabBar, {
+  }), TAB_BAR_SCREENS.includes(screen) && /*#__PURE__*/React.createElement(TabBar, {
     active: screen,
     onSelect: selectTab,
     homeBadgeCount: inboxBadgeCount
