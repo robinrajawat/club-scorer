@@ -1,8 +1,8 @@
 // Upcoming fixture card (src/components/upcomingFixtureCard.js). References Modal as a bare,
 // unimported global for its own "which team?" picker, so tests stub globalThis.Modal without
-// pulling in jsdom. loadFixturePollSummary/fetchFixtureWeather are bare-global Firestore/network
-// calls that run from mount-time useEffects, so every test stubs them and wraps the initial render
-// in act() -- same pattern as AvailabilityPollModal/BetaTestersScreen.
+// pulling in jsdom. fetchFixtureWeather is a bare-global network call that runs from a mount-time
+// useEffect, so every test stubs it and wraps the initial render in act() -- same pattern as
+// BetaTestersScreen.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -21,16 +21,12 @@ function hasText(node, str) {
 
 beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
   globalThis.fetchFixtureWeather = () => Promise.resolve(null);
 });
 
 afterEach(() => {
   delete globalThis.Modal;
-  delete globalThis.loadFixturePollSummary;
   delete globalThis.fetchFixtureWeather;
-  delete globalThis.loadTeamPolls;
-  delete globalThis.loadPollByCode;
 });
 
 const tournament = { id: "tour1", name: "Summer Cup", venue: null };
@@ -104,39 +100,6 @@ test("UpcomingFixtureCard: shows the venue as a Maps link, or an 'Add venue' but
 
   const withoutVenue = await renderCard({ id: "f1", teamA: "A", teamB: "B" }, { onEditVenue: () => {} });
   assert.match(JSON.stringify(withoutVenue.toJSON()), /Add venue/);
-});
-
-test("UpcomingFixtureCard: 'Send availability poll' button only appears when a team resolves to one this person manages", async () => {
-  const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const clubTeamsById = { c1: [{ id: "team1", name: "Riverside CC" }] };
-  const withMatch = await renderCard(
-    { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC" },
-    { clubs, clubTeamsById }
-  );
-  assert.ok(withMatch.root.findByProps({ "aria-label": "Send availability poll" }));
-
-  const withoutMatch = await renderCard({ id: "f1", teamA: "Nobody CC", teamB: "Nobody Else CC" }, { clubs, clubTeamsById });
-  assert.throws(() => withoutMatch.root.findByProps({ "aria-label": "Send availability poll" }));
-});
-
-test("UpcomingFixtureCard: sending a poll checks for an existing one first via the (stubbed) loadTeamPolls", async () => {
-  const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const clubTeamsById = { c1: [{ id: "team1", name: "Riverside CC" }] };
-  globalThis.loadTeamPolls = () => Promise.resolve([{ code: "EXIST1", fixtureId: "f1", expiresAt: null }]);
-  // AvailabilityPollModal's own mount effect, once it opens with this initialCode, calls
-  // loadTeamPolls again (for its list view) and loadPollByCode (to jump straight to results).
-  globalThis.loadPollByCode = () => Promise.resolve({ code: "EXIST1", question: "Free Saturday?", responses: {} });
-  const inst = await renderCard(
-    { id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC" },
-    { clubs, clubTeamsById }
-  );
-  const pollBtn = inst.root.findByProps({ "aria-label": "Send availability poll" });
-  await act(async () => {
-    pollBtn.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
-  });
-  // AvailabilityPollModal opened straight to the existing poll's results (initialCode set).
-  assert.match(JSON.stringify(inst.toJSON()), /data-stub-modal/);
 });
 
 test("UpcomingFixtureCard: 'Start match' calls onStartFixture, hidden without it", async () => {

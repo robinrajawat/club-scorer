@@ -10,7 +10,7 @@ import { friendlyEmailAuthError } from "../core/miscHelpers.js";
 //
 // `auth` (the Firebase Auth SDK instance, a bare global, not extracted) is called directly from a
 // mount-time useEffect, not just a handler, so every test stubs it -- same pattern as
-// AvailabilityPollModal/BetaTestersScreen's own Firestore stubs. `sendPasswordReset` (also a bare
+// BetaTestersScreen's own Firestore stubs. `sendPasswordReset` (also a bare
 // global, not extracted) is only ever called from the "resend" button's onClick handler.
 
 export function AuthActionScreen({

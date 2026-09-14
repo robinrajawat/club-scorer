@@ -8,8 +8,8 @@ import {
   icsEscape, icsLocalDateTime, buildTournamentICS, buildFixtureICS,
   csvCell, toCSV, multiSectionCSV, safeFilenamePart,
   nonStandardRulesText, wideNoballLastOverExceptionLabel, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
-  buildShareText, buildFixtureShareText, pollExpiryDateLabel, buildMapsUrl, resolvePollTeams,
-  buildPollUrl, buildPollShareText, buildFollowUrl, buildLiveShareText
+  buildShareText, buildFixtureShareText, buildMapsUrl,
+  buildFollowUrl, buildLiveShareText
 } from "../../src/core/shareAndFormat.js";
 import { DEFAULT_RULES } from "../../src/core/appLogic.js";
 
@@ -319,36 +319,14 @@ test("buildFixtureShareText: includes tournament name, formatted date, and venue
   assert.match(text, /The Green/);
 });
 
-test("pollExpiryDateLabel: null with no createdAt, otherwise a date label 120 days out", () => {
-  assert.equal(pollExpiryDateLabel(null), null);
-  assert.equal(typeof pollExpiryDateLabel(Date.now()), "string");
-});
-
 test("buildMapsUrl: prefers venue text, falls back to lat/lng, then an empty query", () => {
   assert.match(buildMapsUrl("The Green", 51.5, -0.1), /query=The%20Green/);
   assert.match(buildMapsUrl(null, 51.5, -0.1), /query=51.5,-0.1/);
   assert.match(buildMapsUrl(null, null, null), /query=$/);
 });
 
-test("resolvePollTeams: matches a fixture's two team names against every club's rosters, case-insensitively", () => {
-  const clubs = [{ id: "c1" }, { id: "c2" }];
-  const clubTeamsById = {
-    c1: [{ id: "t1", name: "Eagles" }],
-    c2: [{ id: "t2", name: "hawks" }]
-  };
-  const matches = resolvePollTeams("EAGLES", "Falcons", clubs, clubTeamsById);
-  assert.equal(matches.length, 1);
-  assert.equal(matches[0].team.name, "Eagles");
-});
-
-test("buildPollUrl/buildFollowUrl: fall back to a relative link when window isn't available (as in Node)", () => {
-  assert.equal(buildPollUrl("ABC123"), "?poll=ABC123");
+test("buildFollowUrl: falls back to a relative link when window isn't available (as in Node)", () => {
   assert.equal(buildFollowUrl("XYZ789"), "?follow=XYZ789");
-});
-
-test("buildPollShareText: question, optional fixture date, then the poll link", () => {
-  assert.equal(buildPollShareText("Who's in?", null, "CODE"), "Who's in?\n?poll=CODE");
-  assert.equal(buildPollShareText("Who's in?", "Sat 14 Jun", "CODE"), "Who's in?\nSat 14 Jun\n?poll=CODE");
 });
 
 test("buildLiveShareText: shows a live prompt while in progress, the result once complete, always the link", () => {

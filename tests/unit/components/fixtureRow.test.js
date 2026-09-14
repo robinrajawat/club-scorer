@@ -1,8 +1,6 @@
 // Single tournament fixture row (src/components/fixtureRow.js). References Modal as a bare,
 // unimported global for its own "which team?" picker, so tests stub globalThis.Modal without
-// pulling in jsdom. loadFixturePollSummary is a bare-global Firestore call that runs from a
-// mount-time useEffect, so every test stubs it and wraps the initial render in act() -- same
-// pattern as UpcomingFixtureCard/AvailabilityPollModal/BetaTestersScreen.
+// pulling in jsdom.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -21,13 +19,10 @@ function hasText(node, str) {
 
 beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  globalThis.loadFixturePollSummary = () => Promise.resolve([]);
 });
 
 afterEach(() => {
   delete globalThis.Modal;
-  delete globalThis.loadFixturePollSummary;
-  delete globalThis.loadTeamPolls;
 });
 
 const tournament = { id: "tour1", name: "Summer Cup", venue: null };
@@ -110,16 +105,6 @@ test("FixtureRow: scheduling via the date picker calls onUpdateDate with a built
   act(() => { dayButtons[0].props.onClick(); });
   act(() => { saveBtn.props.onClick(); });
   assert.ok(updatedIso);
-});
-
-test("FixtureRow: 'Send availability poll' only appears when a team resolves to one this person manages", async () => {
-  const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const clubTeamsById = { c1: [{ id: "team1", name: "Riverside CC" }] };
-  const withMatch = await renderRow({ id: "f1", teamA: "Riverside CC", teamB: "Oakwood CC" }, { clubs, clubTeamsById });
-  assert.ok(withMatch.root.findByProps({ "aria-label": "Send availability poll" }));
-
-  const withoutMatch = await renderRow({ id: "f1", teamA: "Nobody CC", teamB: "Nobody Else CC" }, { clubs, clubTeamsById });
-  assert.throws(() => withoutMatch.root.findByProps({ "aria-label": "Send availability poll" }));
 });
 
 test("FixtureRow: shows the venue as a Maps link, or an 'Add venue' button when onEditVenue is given and there's none", async () => {

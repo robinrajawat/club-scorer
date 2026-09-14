@@ -10,7 +10,6 @@ import { TabBar } from "./tabBar.js";
 import { FirstLaunchTour } from "./miscModals.js";
 import { SetupScreen } from "./setupScreen.js";
 import { MatchScreen } from "./matchScreen.js";
-import { TeamsScreen } from "./teamsScreen.js";
 import { TeamEditScreen } from "./teamEditScreen.js";
 import { MyTeamsScreen } from "./myTeamsScreen.js";
 import { AccountScreen } from "./accountScreen.js";
@@ -22,14 +21,13 @@ import { SeriesDetailScreen } from "./seriesDetailScreen.js";
 import { RecordsScreen } from "./recordsScreen.js";
 import { FollowScreen } from "./followScreen.js";
 import { FollowTournamentScreen } from "./followTournamentScreen.js";
-import { PollRespondScreen } from "./pollRespondScreen.js";
 import { HelpScreen, AboutScreen, FeedbackScreen, SharedLinksScreen, BetaTestersScreen } from "./infoScreens.js";
 import { FeedbackInboxScreen } from "./feedbackInboxScreen.js";
 import { PrintReport } from "./scorecard.js";
 import { AlertModal } from "./formUiAtoms.js";
 import {
   isFeedbackAdmin, getAuthActionFromUrl, getFollowCodeFromUrl, getFollowMatchIdFromUrl, getTournamentFollowCodeFromUrl,
-  getPollCodeFromUrl, getShortcutActionFromUrl, accountExistsLinkInfo, genMatchCode, isClubOwner,
+  getShortcutActionFromUrl, accountExistsLinkInfo, genMatchCode, isClubOwner,
   isFederationOwner
 } from "../core/miscHelpers.js";
 import {
@@ -205,7 +203,6 @@ export const SCREEN_DEPTH = {
   account: 1,
   follow: 1,
   "follow-tournament": 1,
-  "poll-respond": 1,
   tournaments: 1,
   players: 1,
   live: 1,
@@ -219,13 +216,10 @@ export const SCREEN_DEPTH = {
 // bar only renders while `screen` is one of these, hidden everywhere else (mid-match scoring,
 // setup wizard, edit/detail screens reached by drilling in further) since it would just compete
 // with those screens' own fixed-position UI (MatchScreen's scoring pad chief among them) or with
-// their own single-purpose back button. "teams" here is the Clubs tab (TeamsScreen -- Clubs/
-// Federations browsing, plus a selected club's own roster once manageClubTeamsOpen is set). A
-// club's/federation's own tournaments are reached through Cups instead, not through this tab.
-// "my-teams" (personal teams, via
-// MyTeamsScreen) is deliberately NOT in this list any more -- it's reached from Home instead of
-// its own tab (see onOpenMyTeams), so it renders with no tab bar, same as "records"/"team-edit"/
-// every other drill-in screen -- see tabBar.js's own TABS list for the reasoning.
+// their own single-purpose back button. "teams" here is the Teams tab (MyTeamsScreen, every roster
+// you've created). "my-teams" is the same MyTeamsScreen reached instead from a Home shortcut, so it
+// renders with no tab bar, same as "records"/"team-edit"/every other drill-in screen -- see
+// tabBar.js's own TABS list for the reasoning.
 export const TAB_BAR_SCREENS = ["home", "live", "tournaments", "teams"];
 
 export function CricketScorer() {
@@ -237,7 +231,6 @@ export function CricketScorer() {
   // viewer who found a match that way can still forward the exact thing they're watching.
   const initialFollowMatchId = useRef(getFollowMatchIdFromUrl()).current;
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
-  const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
   // A plain cold visit (no special URL param below) now lands straight on "live" with watcherMode
   // on -- no sign-in step, no upfront "who are you" choice screen either (that shipped once, then
@@ -248,8 +241,8 @@ export function CricketScorer() {
   // having landed on what read as a sign-in wall first. WelcomeScreen is still there -- reached by
   // watcherMode's own AuthBar, "Sign in" (openAccount below) -- just not the default landing any
   // more.
-  const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode && !initialPollCode;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
+  const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode;
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | auth-action
   // Suppresses the full Home/Live/Cups/Clubs tab bar down to nothing (see the TabBar render
   // below) for as long as it's on: Cups and Clubs are organizer concepts a spectator with no
   // account has no use for, and Home has nothing to show someone with no matches of their own.
@@ -310,27 +303,12 @@ export function CricketScorer() {
   // TIMING half of a fix for, without ever getting the visual half.
   const [teamsLoading, setTeamsLoading] = useState(true);
   const [clubs, setClubs] = useState([]);
-  // Single "which club" selector for the Clubs tab -- used to be two separate ones (this one for
-  // Teams' own roster-source selector, another for which club's admin panel is expanded) back
-  // when Teams was its own tab with its own personal-vs-club choice. Now that personal teams live
-  // on Home instead, there's only one remaining question ("which club am I looking at"), so the
-  // two collapsed into this single selector.
-  const [activeClubAdminId, setActiveClubAdminId] = useState(null);
-  const [teamsTab, setTeamsTab] = useState("clubs"); // clubs | federations
-  // Whether the Clubs tab is showing activeClubAdminId's own team-roster editor (MyTeamsScreen,
-  // the same component the "Teams" tab uses for personal teams) instead of the club admin panel
-  // itself -- entered via TeamsScreen's "Manage teams" button or by opening a club team from
-  // Home. Screen stays "teams" throughout (see TAB_BAR_SCREENS/TabBar below), so the bottom tab
-  // never flips away from Clubs to manage a club's own roster, unlike before this existed.
-  const [manageClubTeamsOpen, setManageClubTeamsOpen] = useState(false);
   // Seeds the Help screen's own search box when someone taps a Help result from Home's global
   // search -- so the same query carries over instead of landing on an unfiltered FAQ list they'd
   // have to re-type into.
   const [helpInitialQuery, setHelpInitialQuery] = useState("");
   const [clubTeamsById, setClubTeamsById] = useState({}); // clubId -> team[]
   const [federationsById, setFederationsById] = useState({}); // federationId -> {id, name, ...}
-  const [myFederationRequests, setMyFederationRequests] = useState([]); // federationRequests rows touching a club/federation I own or co-own
-  const [myCoOwnerInvites, setMyCoOwnerInvites] = useState([]); // coOwnerInvites rows I sent (club/federation I own or co-own) or that are addressed to my own email
   const [myActivity, setMyActivity] = useState([]); // activity notification rows addressed to me -- see /activity in firestore.rules
   const [liveMatches, setLiveMatches] = useState([]); // Live tab's Matches segment -- every in-progress AND recently-completed match, from /liveMatches (see loadLiveMatches in index.html), unrelated to sign-in state
   const [liveTournaments, setLiveTournaments] = useState([]); // Live tab's Tournaments segment -- every publicly-shared, non-private tournament, from /liveTournaments (see loadLiveTournaments in index.html), unrelated to sign-in state
@@ -339,7 +317,6 @@ export function CricketScorer() {
   // brief window before onSnapshot's first callback fires (see the two useEffects just below).
   const [liveMatchesLoaded, setLiveMatchesLoaded] = useState(false);
   const [liveTournamentsLoaded, setLiveTournamentsLoaded] = useState(false);
-  const [pendingPollItems, setPendingPollItems] = useState([]); // active polls, across every team I have access to, still missing at least one response -- feeds both the Inbox screen and its badge count
   const [tournaments, setTournaments] = useState([]);
   const [clubTournamentsById, setClubTournamentsById] = useState({}); // clubId -> tournament[], existing club-organized tournaments only -- every new tournament is created personal now
   // Federation-hosted tournaments, keyed the same way as clubTournamentsById -- only for
@@ -357,9 +334,7 @@ export function CricketScorer() {
   const [foreignTournamentNames, setForeignTournamentNames] = useState({});
   const [viewingTournament, setViewingTournament] = useState(null);
   const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
-  // Shared by the Record Book entry points on both TournamentsScreen (club/federation source
-  // chips) and TeamsScreen (ClubPanel/FederationsPanel per-club, per-federation buttons) — same
-  // destination screen either way, just a different jumping-off point.
+  // Shared by every Record Book entry point, whichever screen it's opened from.
   function handleOpenRecords(sourceType, sourceId, sourceName) {
     setViewingRecordsSource({
       type: sourceType,
@@ -369,22 +344,6 @@ export function CricketScorer() {
     setScreen("records");
   }
   const [themePref, setThemePrefState] = useState(loadThemePref);
-  const [pinnedClubIds, setPinnedClubIds] = useState(() => loadPinnedIds("pinned-clubs"));
-  const [pinnedFederationIds, setPinnedFederationIds] = useState(() => loadPinnedIds("pinned-federations"));
-  function handleTogglePinClub(clubId) {
-    setPinnedClubIds(prev => {
-      const next = prev.includes(clubId) ? prev.filter(id => id !== clubId) : [...prev, clubId];
-      savePinnedIds("pinned-clubs", next);
-      return next;
-    });
-  }
-  function handleTogglePinFederation(federationId) {
-    setPinnedFederationIds(prev => {
-      const next = prev.includes(federationId) ? prev.filter(id => id !== federationId) : [...prev, federationId];
-      savePinnedIds("pinned-federations", next);
-      return next;
-    });
-  }
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
   // (see isIOSSafari/isStandalone/hasSeenInstallHint) -- gated separately from showTour below (in
@@ -399,10 +358,9 @@ export function CricketScorer() {
   // later, unrelated entry into the players screen doesn't reopen a stale profile.
   const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
-  // Prefills a new team's name/roster when team-edit is opened via "Create team" from a Player
-  // Pool group (see handleCreateTeamFromPool) instead of the usual empty new-team state. Cleared
-  // after save and by every other route into team-edit, so a stale seed never leaks into an
-  // unrelated "New Team" tap afterward.
+  // Prefills a new team's name/roster when team-edit is opened with a seed in hand, instead of the
+  // usual empty new-team state. Cleared after save and by every other route into team-edit, so a
+  // stale seed never leaks into an unrelated "New Team" tap afterward.
   const [presetTeamSeed, setPresetTeamSeed] = useState(null);
   // Which screen to return to after saving/cancelling out of team-edit -- entering from Home
   // (a personal team) should land back on Home, entering from the Teams tab (personal or a
@@ -620,10 +578,7 @@ export function CricketScorer() {
       }
     }
   }
-  // TabBar's onSelect. "teams" (the Clubs tab) needs no reset -- its own former entry point
-  // (onOpenClubs) never reset activeClubAdminId either, and a club team opened from Home now
-  // deliberately lands here WITH activeClubAdminId/manageClubTeamsOpen already set, which this
-  // must not clobber.
+  // TabBar's onSelect.
   function selectTab(next) {
     setScreen(next);
   }
@@ -707,43 +662,9 @@ export function CricketScorer() {
     setClubsLoading(false);
     return clubList;
   }
-  // Owner/co-owner-of ids feed both the federationRequests query below and the notification
-  // badge — memoized as plain values (not useMemo) since `clubs`/`federationsById` already only
-  // change on an actual data refresh.
-  const myOwnedClubIds = clubs.filter(c => isClubOwner(c, user && user.uid)).map(c => c.id);
+  // Federations this user owns/co-owns -- feeds the federation-tournament preload effect below and
+  // TournamentsScreen's own `myFederations` prop (read-only display now, see tournamentsScreen.js).
   const myOwnedFederationIds = Object.values(federationsById).filter(f => f && user && (f.createdBy === user.uid || (f.coOwnerUids || []).includes(user.uid))).map(f => f.id);
-  async function refreshMyFederationRequests() {
-    const rows = await loadMyFederationRequests();
-    setMyFederationRequests(rows);
-  }
-  // Feeds the Inbox screen's requests section, and half of its combined badge count (see
-  // pendingPollItems below for the other half). Unlike before, doesn't depend on
-  // myOwnedClubIds/myOwnedFederationIds -- loadMyFederationRequests now queries by fromUid/
-  // toOwnerUids on the request itself (see its comment), not by which entities I currently own.
-  useEffect(() => {
-    if (!user) {
-      setMyFederationRequests([]);
-      return;
-    }
-    refreshMyFederationRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-  async function refreshMyCoOwnerInvites() {
-    const rows = await loadMyCoOwnerInvites();
-    setMyCoOwnerInvites(rows);
-  }
-  // Feeds the Inbox screen's co-owner-invites section and the other half of its badge count,
-  // alongside federationRequestsNeedingAction below. Unlike the federationRequests effect above,
-  // this doesn't depend on myOwnedClubIds/myOwnedFederationIds at all — loadMyCoOwnerInvites now
-  // queries by my own uid/email only (see its comment), not by which entities I own.
-  useEffect(() => {
-    if (!user) {
-      setMyCoOwnerInvites([]);
-      return;
-    }
-    refreshMyCoOwnerInvites();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
   async function refreshMyActivity() {
     const rows = await loadMyActivity();
     setMyActivity(rows);
@@ -769,12 +690,11 @@ export function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.filter(item => !ids.includes(item.id)));
   }
-  // My own profile is always discoverable by name now, same reasoning as ClubPanel's/
-  // FederationsPanel's own identical comment -- this is a name-lookup convenience for inviting
-  // someone to a club/federation, not a data-access gate (firestore.rules keeps write access
-  // pinned to the caller's own identity regardless of this). No user-facing toggle for it any
-  // more; publishes to /userDirectory once per sign-in if not already there, self-healing anyone
-  // who opted out (or never opted in) before this simplification.
+  // My own profile is always discoverable by name now -- a name-lookup convenience, not a
+  // data-access gate (firestore.rules keeps write access pinned to the caller's own identity
+  // regardless of this). No user-facing toggle for it any more; publishes to /userDirectory once
+  // per sign-in if not already there, self-healing anyone who opted out (or never opted in) before
+  // this simplification.
   useEffect(() => {
     if (!user) return;
     loadMyProfileVisibility().then(isPublic => {
@@ -782,50 +702,15 @@ export function CricketScorer() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-  // A request "needs my attention" if: it's pending and I'm the receiving side, or it's an
-  // accepted club_to_federation request and I'm the requesting club's owner (I still need to
-  // finish the join — see completeAcceptedFederationRequest).
-  const federationRequestsNeedingAction = myFederationRequests.filter(r => {
-    if (r.direction === "club_to_federation") {
-      if (r.status === "pending") return myOwnedFederationIds.includes(r.federationId);
-      if (r.status === "accepted") return myOwnedClubIds.includes(r.clubId);
-      return false;
-    }
-    if (r.direction === "federation_to_club") {
-      return r.status === "pending" && myOwnedClubIds.includes(r.clubId);
-    }
-    return false;
-  });
-  // A co-owner invite "needs my attention" only on the recipient side -- a still-pending invite
-  // addressed to my own signed-in email. An outgoing one I sent needs no action from me until
-  // someone else responds, same asymmetry as federationRequestsNeedingAction above.
-  const myEmailLower = (user && user.email || "").toLowerCase();
-  const coOwnerInvitesNeedingAction = myCoOwnerInvites.filter(inv => inv.status === "pending" && inv.email === myEmailLower);
   // Activity notifications never require an action the way an invite/request does -- they're
   // informational -- so "needs my attention" here just means unread.
   const unreadActivityCount = myActivity.filter(item => !item.read).length;
   // Feeds both HomeScreen's own bell icon and TabBar's Home-tab badge (see selectTab/TabBar
-  // below) -- computed once here so the two can't drift apart from being computed twice.
-  const inboxBadgeCount = federationRequestsNeedingAction.length + coOwnerInvitesNeedingAction.length + pendingPollItems.length + unreadActivityCount;
-  async function refreshPendingPollItems() {
-    const items = await loadPendingPollItems(clubs, clubTeamsById);
-    setPendingPollItems(items);
-  }
-  // Reloads whenever clubs/teams change (sign-in, team roster edits, a new poll sent) — feeds the
-  // Inbox screen's polls section, and the other half of its combined badge count alongside
-  // federationRequestsNeedingAction above.
-  useEffect(() => {
-    if (!user || clubs.length === 0) {
-      setPendingPollItems([]);
-      return;
-    }
-    refreshPendingPollItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, clubs, clubTeamsById]);
-  // Loads tournaments for every federation this user owns/co-owns -- same trigger condition as
-  // the federationRequests effect just above (the ownership set changing). Only fetches ids not
-  // already in federationTournamentsById, so re-renders and screen switches don't refetch
-  // everything that's already loaded.
+  // below).
+  const inboxBadgeCount = unreadActivityCount;
+  // Loads tournaments for every federation this user owns/co-owns. Only fetches ids not already in
+  // federationTournamentsById, so re-renders and screen switches don't refetch everything that's
+  // already loaded.
   useEffect(() => {
     const missing = myOwnedFederationIds.filter(id => !(id in federationTournamentsById));
     if (missing.length === 0) return;
@@ -866,7 +751,6 @@ export function CricketScorer() {
       setAuthChecked(true);
       if (initialLoadDone.current) {
         // account state changed after first load (sign in/out) — re-fetch from the right source
-        setActiveClubAdminId(null); // clubs are signed-in-only; drop out of one if signing out
         Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
           setMatches(idx);
           setTeams(teamList);
@@ -991,7 +875,6 @@ export function CricketScorer() {
     setTeams(await loadTeams());
     setClubs([]);
     setClubTeamsById({});
-    setActiveClubAdminId(null);
     setScreen("home");
   }
   async function handleSaveRules(r) {
@@ -1575,16 +1458,6 @@ export function CricketScorer() {
     setFollowStage(stage || null);
     setScreen("follow");
   }
-  function exitPoll() {
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("poll");
-      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-    } catch (e) {
-      /* noop — worst case the param stays in the address bar */
-    }
-    setScreen("home");
-  }
   // Keeps backActionRef pointed at whatever "Back" does for the screen on display right now —
   // deliberately mirrors each screen's own onBack/onCancel/onExit prop below (see the render at
   // the bottom of this component) rather than introducing a second source of truth for where
@@ -1613,8 +1486,6 @@ export function CricketScorer() {
           return exitFollow;
         case "follow-tournament":
           return exitFollowTournament;
-        case "poll-respond":
-          return exitPoll;
         case "team-edit":
           return () => setScreen("teams");
         case "inbox":
@@ -1705,550 +1576,20 @@ export function CricketScorer() {
     });
     return () => document.removeEventListener("wheel", onWheel);
   }, []);
-  // Opened from a Player Pool group in TeamsScreen ("Create team" next to a team tag like "U15")
-  // -- jumps straight into team-edit for a brand-new team pre-filled with that tag's name and
-  // everyone in it, instead of the usual empty roster. clubId comes from the caller (always the
-  // pool's own club) rather than ambient activeClubAdminId, same reasoning as handleSaveTeam
-  // above.
-  function handleCreateTeamFromPool(clubId, tagName, poolPlayers) {
-    setActiveClubAdminId(clubId);
-    setEditingTeam(null);
-    setPresetTeamSeed({
-      name: tagName,
-      players: poolPlayers
-    });
-    setTeamEditReturnScreen("teams");
-    setScreen("team-edit");
-  }
-  // clubId is passed explicitly (rather than read from ambient activeClubId) so this is correct
-  // no matter where it's called from -- the Teams tab passes its own activeClubId, Home always
-  // passes null (personal). Relying on ambient state here would silently misfile a save under
-  // whatever club happened to be last selected elsewhere in the app.
-  async function handleSaveTeam(team, clubId) {
-    if (clubId) {
-      const result = await saveClubTeam(clubId, team);
-      if (result.ok) {
-        setClubTeamsById(prev => ({
-          ...prev,
-          [clubId]: [...(prev[clubId] || []).filter(t => t.id !== team.id), team].sort((a, b) => a.name.localeCompare(b.name))
-        }));
-      }
-    } else {
-      const updated = teams.filter(t => t.id !== team.id);
-      updated.push(team);
-      updated.sort((a, b) => a.name.localeCompare(b.name));
-      setTeams(updated);
-      await saveTeams(updated);
-    }
+  async function handleSaveTeam(team) {
+    const updated = teams.filter(t => t.id !== team.id);
+    updated.push(team);
+    updated.sort((a, b) => a.name.localeCompare(b.name));
+    setTeams(updated);
+    await saveTeams(updated);
     setScreen(teamEditReturnScreen);
     setEditingTeam(null);
     setPresetTeamSeed(null);
   }
-  async function handleDeleteTeam(id, clubId) {
-    if (clubId) {
-      await deleteClubTeam(clubId, id);
-      setClubTeamsById(prev => ({
-        ...prev,
-        [clubId]: (prev[clubId] || []).filter(t => t.id !== id)
-      }));
-    } else {
-      const updated = teams.filter(t => t.id !== id);
-      setTeams(updated);
-      await saveTeams(updated);
-    }
-  }
-  async function handleCreateClub(name) {
-    const result = await createClub(name);
-    if (result.ok) {
-      setClubs(cs => [...cs, result.club]);
-      setClubTeamsById(prev => ({
-        ...prev,
-        [result.club.id]: []
-      }));
-    }
-    return result;
-  }
-  // Beta tools (see AccountScreen): generate/wipe a realistic set of clubs (one per country,
-  // named after its board), teams, players, and a shared federation, so beta testers have
-  // something to try new features against right away. refreshClubs() re-syncs
-  // clubTeamsById/federationsById after either call, since both add or remove clubs and teams.
-  async function handleGenerateDummyData() {
-    const result = await generateDummyData();
-    await refreshClubs(); // even a partial/failed run may have created clubs worth showing
-    return result;
-  }
-  async function handleWipeDummyData() {
-    const result = await wipeDummyData();
-    await refreshClubs();
-    return result;
-  }
-  function mirrorPendingInvite(setClubsOrFeds, id, code, entry) {
-    setClubsOrFeds(prev => prev.map ? prev.map(c => c.id === id ? {
-      ...c,
-      pendingInvites: { ...(c.pendingInvites || {}),
-        [code]: entry
-      }
-    } : c) : { ...prev,
-      [id]: { ...(prev[id] || {}),
-        pendingInvites: { ...((prev[id] || {}).pendingInvites || {}),
-          [code]: entry
-        }
-      }
-    });
-  }
-  // Sends a member invite -- unified with co-owner invites (same coOwnerInvites doc shape, role:
-  // "member" instead of "coOwner"; see inviteCoOwner in index.html), so a member invite no longer
-  // mints a bearer code to copy and send out-of-band: it shows up in the recipient's Inbox
-  // automatically, the same as a co-owner invite. Appends locally for the same reason
-  // handleInviteCoOwner below does -- shows up in the sender's own pending-invites list
-  // immediately, without waiting on the next refreshMyCoOwnerInvites().
-  async function handleInviteClubMember(clubId, email) {
-    const result = await inviteCoOwner("club", clubId, email, "member");
-    if (result.ok) {
-      setMyCoOwnerInvites(prev => [...prev, result.invite]);
-    }
-    return result;
-  }
-  // Unified co-owner invite for both clubs and federations -- see inviteCoOwner in index.html.
-  // Appends the new invite locally so it shows up in the sender's own "pending co-owner invites"
-  // list immediately, without waiting on the next refreshMyCoOwnerInvites().
-  async function handleInviteCoOwner(scope, entityId, email) {
-    const result = await inviteCoOwner(scope, entityId, email);
-    if (result.ok) {
-      setMyCoOwnerInvites(prev => [...prev, result.invite]);
-    }
-    return result;
-  }
-  // Recipient accepting/declining a co-owner or member invite -- see respondCoOwnerInvite in
-  // index.html. On accept, mirrors the resulting grant onto local clubs/federationsById state so
-  // it shows up without waiting for a full refreshClubs().
-  //
-  // BUG FIX: this used to patch the club/federation already in local state via
-  // cs.map(c => c.id === result.entityId ? {...} : c) -- a no-op for the common case of accepting
-  // an invite to somewhere you had NO prior access to (the whole point of an invite), since
-  // .map() only updates an element that's already present, it never adds a new one. The club (or
-  // federation) -- and, for a club, its teams, since nothing ever called loadClubTeams for an id
-  // that was never in clubTeamsById -- would silently stay invisible for the rest of the session,
-  // fixed only by a full reload (which reruns refreshClubs() from scratch and picks it up
-  // correctly, since the underlying Firestore write was always correct -- this was purely a local
-  // state bug). Fixed by using the real, freshly-fetched entity respondCoOwnerInvite now returns
-  // (result.entity) and inserting/replacing it wholesale, the same "filter out any stale copy,
-  // concat the real one" shape handleJoinClub already uses correctly for the equivalent
-  // code-based join -- plus loading its teams explicitly, same as that function does too.
-  async function handleRespondCoOwnerInvite(inviteId, accept) {
-    const result = await respondCoOwnerInvite(inviteId, accept);
-    if (result.ok && accept && result.entity) {
-      if (result.scope === "club") {
-        setClubs(cs => [...cs.filter(c => c.id !== result.entityId), result.entity]);
-        const teamList = await loadClubTeams(result.entityId);
-        setClubTeamsById(prev => ({ ...prev,
-          [result.entityId]: teamList
-        }));
-      } else if (result.scope === "federation") {
-        setFederationsById(prev => ({ ...prev,
-          [result.entityId]: result.entity
-        }));
-      }
-    }
-    if (result.ok) {
-      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
-        ...inv,
-        status: accept ? "accepted" : "declined"
-      } : inv));
-    }
-    return result;
-  }
-  async function handleCancelCoOwnerInvite(inviteId) {
-    const result = await cancelCoOwnerInvite(inviteId);
-    if (result.ok) {
-      setMyCoOwnerInvites(prev => prev.map(inv => inv.id === inviteId ? {
-        ...inv,
-        status: "cancelled"
-      } : inv));
-    }
-    return result;
-  }
-  async function handleDeleteCoOwnerInvite(inviteId) {
-    const result = await deleteCoOwnerInvite(inviteId);
-    if (result.ok) {
-      setMyCoOwnerInvites(prev => prev.filter(inv => inv.id !== inviteId));
-    }
-    return result;
-  }
-  async function handleRevokeClubInvite(clubId, code) {
-    const result = await revokeClubInvite(clubId, code);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => {
-        if (c.id !== clubId) return c;
-        const pendingInvites = { ...(c.pendingInvites || {})
-        };
-        delete pendingInvites[code];
-        return { ...c,
-          pendingInvites
-        };
-      }));
-    }
-    return result;
-  }
-  async function handleJoinClub(code) {
-    const result = await joinClubWithCode(code);
-    if (result.ok) {
-      setClubs(cs => [...cs.filter(c => c.id !== result.club.id), result.club]);
-      const teamList = await loadClubTeams(result.club.id);
-      setClubTeamsById(prev => ({
-        ...prev,
-        [result.club.id]: teamList
-      }));
-    }
-    return result;
-  }
-  async function handleLeaveClub(clubId) {
-    await leaveClub(clubId);
-    setClubs(cs => cs.filter(c => c.id !== clubId));
-    setClubTeamsById(prev => {
-      const next = { ...prev
-      };
-      delete next[clubId];
-      return next;
-    });
-    if (activeClubAdminId === clubId) setActiveClubAdminId(null);
-  }
-  async function handleDeleteClub(clubId) {
-    const result = await deleteClub(clubId);
-    if (result.ok) {
-      setClubs(cs => cs.filter(c => c.id !== clubId));
-      setClubTeamsById(prev => {
-        const next = { ...prev
-        };
-        delete next[clubId];
-        return next;
-      });
-      if (activeClubAdminId === clubId) setActiveClubAdminId(null);
-    }
-    return result;
-  }
-  async function handleRenameClub(clubId, name) {
-    const trimmed = (name || "").trim();
-    const result = await renameClub(clubId, trimmed);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        name: trimmed
-      } : c));
-    }
-    return result;
-  }
-  async function handleUpdateClubDescription(clubId, description) {
-    const trimmed = (description || "").trim();
-    const result = await updateClubDescription(clubId, trimmed);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        description: trimmed
-      } : c));
-    }
-    return result;
-  }
-  async function handleUpdateClubAddress(clubId, address, lat, lng) {
-    const trimmed = (address || "").trim();
-    const result = await updateClubAddress(clubId, trimmed, lat, lng);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        address: trimmed,
-        addressLat: lat != null ? lat : null,
-        addressLng: lng != null ? lng : null
-      } : c));
-    }
-    return result;
-  }
-  async function handleUploadClubLogo(clubId, file) {
-    const result = await uploadClubLogo(clubId, file);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        logoURL: result.logoURL
-      } : c));
-    }
-    return result;
-  }
-  async function handleRemoveClubLogo(clubId) {
-    const result = await removeClubLogo(clubId);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => {
-        if (c.id !== clubId) return c;
-        const next = {
-          ...c
-        };
-        delete next.logoURL;
-        return next;
-      }));
-    }
-    return result;
-  }
-  async function handleAddUmpire(clubId, name) {
-    const trimmed = (name || "").trim();
-    const result = await addClubUmpire(clubId, trimmed);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        // arrayUnion already de-duped on the Firestore side; mirror that here too, or adding the
-        // same name twice would show a local-only duplicate until the next real fetch.
-        umpires: (c.umpires || []).includes(trimmed) ? c.umpires : [...(c.umpires || []), trimmed]
-      } : c));
-    }
-    return result;
-  }
-  async function handleRemoveUmpire(clubId, name) {
-    const result = await removeClubUmpire(clubId, name);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        umpires: (c.umpires || []).filter(u => u !== name)
-      } : c));
-    }
-    return result;
-  }
-  async function handleAddPoolPlayers(clubId, players) {
-    const result = await addPoolPlayers(clubId, players);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        // Mirror arrayUnion's own de-dup here too (same reasoning as handleAddUmpire above), so
-        // re-submitting an unchanged bulk paste doesn't show local-only duplicates.
-        playerPool: [...(c.playerPool || []), ...result.added.filter(p => !(c.playerPool || []).some(x => x.id === p.id))]
-      } : c));
-    }
-    return result;
-  }
-  async function handleUpdatePoolPlayer(clubId, playerId, updates) {
-    const result = await updatePoolPlayer(clubId, playerId, updates);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        playerPool: (c.playerPool || []).map(p => p.id === playerId ? {
-          ...p,
-          ...updates
-        } : p)
-      } : c));
-    }
-    return result;
-  }
-  async function handleRemovePoolPlayer(clubId, playerId) {
-    const result = await removePoolPlayer(clubId, playerId);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        playerPool: (c.playerPool || []).filter(p => p.id !== playerId)
-      } : c));
-    }
-    return result;
-  }
-  async function handleCreateFederation(name) {
-    const result = await createFederation(name);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [result.federation.id]: result.federation
-      }));
-    }
-    return result;
-  }
-  async function handleJoinFederation(clubId, code) {
-    const result = await joinFederationWithCode(clubId, code);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [result.federation.id]: result.federation
-      }));
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        federationIds: [...(c.federationIds || []).filter(id => id !== result.federation.id), result.federation.id]
-      } : c));
-    }
-    return result;
-  }
-  async function handleLeaveFederation(clubId, federationId) {
-    const result = await leaveFederation(clubId, federationId);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        federationIds: (c.federationIds || []).filter(id => id !== federationId)
-      } : c));
-    }
-    return result;
-  }
-  async function handleSetClubVisibility(clubId, isPublic) {
-    const result = await setClubVisibility(clubId, isPublic);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        visibility: isPublic ? "public" : "private"
-      } : c));
-    }
-    return result;
-  }
-  async function handleSetFederationVisibility(federationId, isPublic) {
-    const result = await setFederationVisibility(federationId, isPublic);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [federationId]: { ...(prev[federationId] || {}),
-          visibility: isPublic ? "public" : "private"
-        }
-      }));
-    }
-    return result;
-  }
-  async function handleRequestFederationAffiliation(direction, clubId, federationId) {
-    const result = await requestFederationAffiliation(direction, clubId, federationId);
-    if (result.ok) refreshMyFederationRequests();
-    return result;
-  }
-  async function handleRespondFederationRequest(requestId, accept) {
-    const result = await respondFederationRequest(requestId, accept);
-    if (result.ok) {
-      if (accept && result.clubId && result.federationId) {
-        // federation_to_club acceptance already wrote federationIds server-side above — mirror
-        // that locally so it shows up without waiting for the next full refreshClubs().
-        setClubs(cs => cs.map(c => c.id === result.clubId ? {
-          ...c,
-          federationIds: [...(c.federationIds || []).filter(id => id !== result.federationId), result.federationId]
-        } : c));
-      }
-      refreshMyFederationRequests();
-    }
-    return result;
-  }
-  async function handleCancelFederationRequest(requestId) {
-    const result = await cancelFederationRequest(requestId);
-    if (result.ok) refreshMyFederationRequests();
-    return result;
-  }
-  async function handleCompleteAcceptedFederationRequest(requestId, clubId, federationId) {
-    const result = await completeAcceptedFederationRequest(requestId, clubId, federationId);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        federationIds: [...(c.federationIds || []).filter(id => id !== federationId), federationId]
-      } : c));
-      refreshMyFederationRequests();
-    }
-    return result;
-  }
-  async function handleRemoveMember(clubId, uid) {
-    const result = await removeClubMember(clubId, uid);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => {
-        if (c.id !== clubId) return c;
-        const memberNames = { ...(c.memberNames || {})
-        };
-        delete memberNames[uid];
-        return {
-          ...c,
-          memberUids: (c.memberUids || []).filter(u => u !== uid),
-          coOwnerUids: (c.coOwnerUids || []).filter(u => u !== uid),
-          memberNames
-        };
-      }));
-    }
-    return result;
-  }
-  async function handleRefreshMyMemberName(clubId) {
-    const name = await refreshMyMemberName(clubId);
-    if (name && user) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        memberNames: { ...(c.memberNames || {}),
-          [user.uid]: name
-        }
-      } : c));
-    }
-  }
-  async function handleRemoveClubCoOwner(clubId, uid) {
-    const result = await removeClubCoOwner(clubId, uid);
-    if (result.ok) {
-      setClubs(cs => cs.map(c => c.id === clubId ? {
-        ...c,
-        coOwnerUids: (c.coOwnerUids || []).filter(u => u !== uid)
-      } : c));
-    }
-    return result;
-  }
-  async function handleRenameFederation(federationId, name) {
-    const trimmed = (name || "").trim();
-    const result = await renameFederation(federationId, trimmed);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [federationId]: { ...(prev[federationId] || {}),
-          name: trimmed
-        }
-      }));
-    }
-    return result;
-  }
-  async function handleUpdateFederationDescription(federationId, description) {
-    const trimmed = (description || "").trim();
-    const result = await updateFederationDescription(federationId, trimmed);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [federationId]: { ...(prev[federationId] || {}),
-          description: trimmed
-        }
-      }));
-    }
-    return result;
-  }
-  async function handleInviteFederation(federationId, email) {
-    const result = await inviteFederationByEmail(federationId, email);
-    if (result.ok) {
-      mirrorPendingInvite(setFederationsById, federationId, result.code, {
-        kind: "club",
-        email: email.trim().toLowerCase(),
-        createdAt: result.createdAt
-      });
-    }
-    return result;
-  }
-  async function handleRemoveFederationCoOwner(federationId, uid) {
-    const result = await removeFederationCoOwner(federationId, uid);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [federationId]: { ...(prev[federationId] || {}),
-          coOwnerUids: ((prev[federationId] || {}).coOwnerUids || []).filter(u => u !== uid)
-        }
-      }));
-    }
-    return result;
-  }
-  async function handleKickClubFromFederation(federationId, clubId) {
-    const result = await kickClubFromFederation(federationId, clubId);
-    if (result.ok) {
-      setFederationsById(prev => ({
-        ...prev,
-        [federationId]: { ...(prev[federationId] || {}),
-          kickedClubIds: [...((prev[federationId] || {}).kickedClubIds || []).filter(id => id !== clubId), clubId],
-          affiliatedClubIds: ((prev[federationId] || {}).affiliatedClubIds || []).filter(id => id !== clubId)
-        }
-      }));
-    }
-    return result;
-  }
-  // Only reachable once a federation has no affiliated clubs left (see FederationsPanel, which
-  // hides the button otherwise, and firestore.rules, which enforces it regardless).
-  async function handleDeleteFederation(federationId) {
-    const result = await deleteFederation(federationId);
-    if (result.ok) {
-      setFederationsById(prev => {
-        const next = { ...prev };
-        delete next[federationId];
-        return next;
-      });
-    }
-    return result;
+  async function handleDeleteTeam(id) {
+    const updated = teams.filter(t => t.id !== id);
+    setTeams(updated);
+    await saveTeams(updated);
   }
   // The Cups tab always shows this merged view — personal tournaments plus every club's and every
   // owned federation's, each tagged with its organizer (see TournamentsScreen's own per-row tag) —
@@ -2577,20 +1918,12 @@ export function CricketScorer() {
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   // Merged, source-tagged team list (mirrors allTournamentsFlat below): personal teams plus every
   // club's. Only ever consumed by Home now (its own team search, and to tell onOpenTeam whether a
-  // tapped team is personal or a specific club's) -- the Teams tab itself used to show this same
-  // merged list with "My Teams"/per-club chips narrowing it down, back before a club's roster
-  // moved into managing that club directly (see manageClubTeamsOpen); Teams is personal-only now.
+  // tapped team is personal or a specific club's).
   const allTeamsFlat = [...teams.map(t => ({ ...t,
     _clubId: null
   })), ...Object.entries(clubTeamsById).flatMap(([cid, list]) => (list || []).map(t => ({ ...t,
     _clubId: cid
   })))].sort((a, b) => a.name.localeCompare(b.name));
-  // Feeds the Clubs tab's nested team-roster view (manageClubTeamsOpen) once a club is selected --
-  // activeClubAdminId is always set together with that flag (see onManageTeams/Home's onOpenTeam),
-  // so the allTeamsFlat fallback below is only ever a defensive default, never actually reached.
-  const teamsForTeamsScreen = activeClubAdminId ? (clubTeamsById[activeClubAdminId] || []).map(t => ({ ...t,
-    _clubId: activeClubAdminId
-  })) : allTeamsFlat;
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
@@ -2705,16 +2038,6 @@ export function CricketScorer() {
     onNew: () => setScreen("setup"),
     onOpen: openMatch,
     onDelete: handleDelete,
-    onOpenClub: clubId => {
-      setActiveClubAdminId(clubId);
-      setTeamsTab("clubs");
-      setScreen("teams");
-    },
-    onOpenFederation: () => {
-      setActiveClubAdminId(null);
-      setTeamsTab("federations");
-      setScreen("teams");
-    },
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
@@ -2747,16 +2070,7 @@ export function CricketScorer() {
     federationsById: federationsById,
     clubTeamsById: clubTeamsById,
     teams: allTeamsFlat,
-    onOpenTeam: t => {
-      if (t._clubId) {
-        setActiveClubAdminId(t._clubId);
-        setTeamsTab("clubs");
-        setManageClubTeamsOpen(true);
-        setScreen("teams");
-      } else {
-        setScreen("my-teams");
-      }
-    },
+    onOpenTeam: () => setScreen("my-teams"),
     onOpenMyTeams: () => setScreen("my-teams"),
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
@@ -2803,7 +2117,6 @@ export function CricketScorer() {
     teams: allTeamsForSetup,
     rules: rules,
     presetTournament: presetTournament,
-    clubUmpires: (activeClubAdminId && (clubs.find(c => c.id === activeClubAdminId) || {}).umpires) || [],
     clubs: clubs
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
@@ -2822,8 +2135,6 @@ export function CricketScorer() {
     teams: teams,
     teamsLoading: teamsLoading,
     matches: matches,
-    clubs: clubs,
-    currentUid: user && user.uid,
     onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
@@ -2837,19 +2148,15 @@ export function CricketScorer() {
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
-    onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
+    onDeleteTeam: id => handleDeleteTeam(id, null),
     showTabBar: false
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
     direction: navDirection
-  }, manageClubTeamsOpen ? /*#__PURE__*/React.createElement(MyTeamsScreen, {
-    teams: teamsForTeamsScreen,
+  }, /*#__PURE__*/React.createElement(MyTeamsScreen, {
+    teams: teams,
     teamsLoading: teamsLoading,
     matches: matches,
-    clubs: clubs,
-    activeClubId: activeClubAdminId,
-    onBack: () => setManageClubTeamsOpen(false),
-    currentUid: user && user.uid,
     onNewTeam: () => {
       setEditingTeam(null);
       setPresetTeamSeed(null);
@@ -2857,71 +2164,12 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onEditTeam: t => {
-      setActiveClubAdminId(t._clubId || null);
       setEditingTeam(t);
       setPresetTeamSeed(null);
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
-    onDeleteTeam: (id, clubId) => handleDeleteTeam(id, clubId),
-    showTabBar: true
-  }) : /*#__PURE__*/React.createElement(TeamsScreen, {
-    onManageTeams: () => setManageClubTeamsOpen(true),
-    clubs: clubs,
-    clubTeamsById: clubTeamsById,
-    activeClubId: activeClubAdminId,
-    currentUid: user && user.uid,
-    pinnedClubIds: pinnedClubIds,
-    onTogglePinClub: handleTogglePinClub,
-    tab: teamsTab,
-    onTabChange: setTeamsTab,
-    activeClubAdminId: activeClubAdminId,
-    onSelectClubAdmin: setActiveClubAdminId,
-    onCreateClub: handleCreateClub,
-    onJoinClub: handleJoinClub,
-    onInviteClubMember: handleInviteClubMember,
-    onInviteClubCoOwner: (clubId, email) => handleInviteCoOwner("club", clubId, email),
-    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
-    coOwnerInvites: myCoOwnerInvites,
-    onRevokeClubInvite: handleRevokeClubInvite,
-    onLeaveClub: handleLeaveClub,
-    onDeleteClub: handleDeleteClub,
-    onRenameClub: handleRenameClub,
-    onUpdateClubDescription: handleUpdateClubDescription,
-    onUpdateClubAddress: handleUpdateClubAddress,
-    onUploadClubLogo: handleUploadClubLogo,
-    onRemoveClubLogo: handleRemoveClubLogo,
-    onSetClubVisibility: handleSetClubVisibility,
-    onRemoveClubMember: handleRemoveMember,
-    onRemoveClubCoOwner: handleRemoveClubCoOwner,
-    onRefreshMyMemberName: handleRefreshMyMemberName,
-    federationsById: federationsById,
-    onCreateFederation: handleCreateFederation,
-    onSearchPublicFederations: searchPublicFederations,
-    onSearchPublicClubs: searchPublicClubs,
-    onSearchPublicUsers: searchPublicUsers,
-    onRequestFederationAffiliation: handleRequestFederationAffiliation,
-    onSetFederationVisibility: handleSetFederationVisibility,
-    onLeaveFederation: handleLeaveFederation,
-    onRenameFederation: handleRenameFederation,
-    onUpdateFederationDescription: handleUpdateFederationDescription,
-    onKickClubFromFederation: handleKickClubFromFederation,
-    onDeleteFederation: handleDeleteFederation,
-    onLoadFederationTeams: loadFederationTeams,
-    onLoadFederationMembers: loadFederationMembers,
-    federationRequests: myFederationRequests,
-    onCancelFederationRequest: handleCancelFederationRequest,
-    onInviteFederationCoOwnerByEmail: (federationId, email) => handleInviteCoOwner("federation", federationId, email),
-    onRemoveFederationCoOwner: handleRemoveFederationCoOwner,
-    clubsLoading: clubsLoading,
-    federationsLoading: federationsLoading,
-    onOpenRecords: handleOpenRecords,
-    onAddUmpire: handleAddUmpire,
-    onRemoveUmpire: handleRemoveUmpire,
-    onAddPoolPlayers: handleAddPoolPlayers,
-    onUpdatePoolPlayer: handleUpdatePoolPlayer,
-    onRemovePoolPlayer: handleRemovePoolPlayer,
-    onCreateTeamFromPool: handleCreateTeamFromPool,
+    onDeleteTeam: id => handleDeleteTeam(id, null),
     showTabBar: true
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
@@ -2992,14 +2240,7 @@ export function CricketScorer() {
     // exits randomly": these used to skip past Account straight to Home.
     onOpenFeedbackInbox: () => setScreen("feedback-inbox"),
     onOpenBetaTesters: () => setScreen("beta-testers"),
-    onOpenClub: clubId => {
-      setActiveClubAdminId(clubId);
-      setTeamsTab("clubs");
-      setScreen("teams");
-    },
     isBetaTester: isBetaTester,
-    onGenerateDummyData: handleGenerateDummyData,
-    onWipeDummyData: handleWipeDummyData,
     clubs: clubs,
     federationsById: federationsById,
     onSignIn: handleSignInGoogle,
@@ -3047,23 +2288,9 @@ export function CricketScorer() {
     navKey: "inbox",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(InboxScreen, {
-    requests: myFederationRequests,
-    clubs: clubs,
-    federationsById: federationsById,
-    currentUid: user && user.uid,
-    currentEmail: user && user.email,
-    onRespond: handleRespondFederationRequest,
-    onCancel: handleCancelFederationRequest,
-    onCompleteJoin: handleCompleteAcceptedFederationRequest,
-    coOwnerInvites: myCoOwnerInvites,
-    onRespondCoOwnerInvite: handleRespondCoOwnerInvite,
-    onCancelCoOwnerInvite: handleCancelCoOwnerInvite,
-    onDeleteCoOwnerInvite: handleDeleteCoOwnerInvite,
     activity: myActivity,
     onMarkActivityRead: handleMarkActivityRead,
     onDeleteActivity: handleDeleteActivity,
-    pollItems: pendingPollItems,
-    onPollsChanged: refreshPendingPollItems,
     onBack: () => setScreen("home")
   })), screen === "shared-links" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "shared-links",
@@ -3111,28 +2338,20 @@ export function CricketScorer() {
     // phrasing just reads as a mistake.
     reachedInApp: followReturnScreen === "live",
     onOpenMatch: openTournamentResultMatch
-  })), screen === "poll-respond" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "poll-respond",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(PollRespondScreen, {
-    code: initialPollCode,
-    onExit: exitPoll
   })), screen === "team-edit" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "team-edit",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
-    clubId: activeClubAdminId,
     clubs: clubs,
     onPublishPlayer: publishPlayer,
     onUnpublishPlayer: unpublishPlayer,
     onUpdatePlayerInfo: updatePlayerInfo,
     onLoadPublicPlayers: loadPublicPlayers,
-    onAddPoolPlayers: handleAddPoolPlayers,
     presetTeamSeed: presetTeamSeed,
-    onSave: team => handleSaveTeam(team, activeClubAdminId),
+    onSave: team => handleSaveTeam(team, null),
     onCancel: () => setScreen(teamEditReturnScreen),
-    onDelete: editingTeam ? () => handleDeleteTeam(editingTeam.id, activeClubAdminId).then(() => setScreen(teamEditReturnScreen)) : undefined
+    onDelete: editingTeam ? () => handleDeleteTeam(editingTeam.id, null).then(() => setScreen(teamEditReturnScreen)) : undefined
   }))), screen === "match" && match && /*#__PURE__*/React.createElement(PrintReport, {
     match: match
   }), matchLoading && /*#__PURE__*/React.createElement("div", {

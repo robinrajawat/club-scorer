@@ -190,8 +190,9 @@ export function TeamEditScreen({
     const c = clubs.find(x => x.id === p.homeClubId);
     return c ? c.name : "another club";
   }
-  // This team's own club's player pool (see the Player Pool section of ClubPanel) -- already
-  // present on the clubs prop, unlike publicPlayers above which needs its own async load.
+  // This team's own club's player pool -- already present on the clubs prop, unlike publicPlayers
+  // above which needs its own async load. clubId is always null now that club management is gone
+  // (see docs/simplification-plan.md), so this is permanently empty in practice.
   const clubPool = clubId ? ((clubs.find(c => c.id === clubId) || {}).playerPool || []).filter(p => p.status !== "inactive") : [];
   // Roster rows show whether they're already reusable club-wide (via the pool) or a one-off typed
   // just for this team -- match by name only, same loose join addPoolPlayersToRoster/addPlayer's
@@ -248,7 +249,7 @@ export function TeamEditScreen({
   const [addError, setAddError] = useState("");
   // Typing a brand-new name into the roster only ever added them to THIS team -- there was no way
   // to also get them into the club's reusable pool without leaving team editing entirely, adding
-  // them from ClubPanel's own Player Pool section, then coming back. Defaults on for a club team
+  // them from the club's own Player Pool screen, then coming back. Defaults on for a club team
   // (opt-out, not opt-in) since the whole point of a pool is that most new names typed while
   // building a roster are genuinely new club members worth having reusable for future teams too,
   // not one-off placeholders. Irrelevant for a personal team (no clubId, no pool to add to).

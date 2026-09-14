@@ -51,7 +51,6 @@ export function HomeScreen({
   onOpen,
   onDelete,
   onOpenClub,
-  onOpenFederation,
   user,
   profile,
   onOpenAccount,
@@ -263,9 +262,6 @@ export function HomeScreen({
   // itself shows -- see allTeamsFlat -- so a search here finds a team no matter which club it
   // belongs to, not just personal ones.
   const filteredTeamsList = q ? teams.filter(t => t.name.toLowerCase().includes(q)) : [];
-  const filteredClubsList = q ? clubs.filter(c => c.name.toLowerCase().includes(q)) : [];
-  const allFederations = Object.values(federationsById);
-  const filteredFederationsList = q ? allFederations.filter(f => f.name.toLowerCase().includes(q)) : [];
   // Matches against both the question and the answer text, same reasoning as HelpScreen's own
   // search -- kept each entry tagged with its section title so a result out of context ("Set at
   // match creation, under Customize") still makes sense on its own.
@@ -514,9 +510,6 @@ function renderMatchCard(m, i, {
     const club = t._clubId ? clubs.find(c => c.id === t._clubId) : null;
     return searchResultRow(t.id, () => onOpenTeam(t), t.name, club ? club.name : "Personal");
   }
-  function renderClubRow(c) {
-    return searchResultRow(c.id, () => onOpenClub(c.id), c.name, "Club");
-  }
   // Shared row shape for all three player sources (public directory, a club's pool, a team's
   // roster) -- same avatar-plus-two-line look regardless of source, only the click target and the
   // context subtitle differ, so a mixed set of matches still reads as one consistent list.
@@ -582,9 +575,6 @@ function renderMatchCard(m, i, {
   function renderRosterPlayerRow(p, idx) {
     const club = p._team._clubId ? clubs.find(c => c.id === p._team._clubId) : null;
     return renderPlayerRow(`roster:${p._team.id}:${idx}`, () => onOpenTeam(p._team), p, [roleLabel(p.role), `${club ? club.name : "Personal"} · ${p._team.name}`].filter(Boolean).join(" · "));
-  }
-  function renderFederationRow(f) {
-    return searchResultRow(f.id, () => onOpenFederation(), f.name, "Federation");
   }
   function renderHelpRow(e) {
     return searchResultRow(e.q, () => onOpenHelp(query), e.q, e.section);
@@ -1010,12 +1000,6 @@ function renderMatchCard(m, i, {
     key: "cups",
     label: "Cups"
   }, {
-    key: "clubs",
-    label: "Clubs"
-  }, {
-    key: "federations",
-    label: "Federations"
-  }, {
     key: "help",
     label: "Help"
   }].map(t => /*#__PURE__*/React.createElement("button", {
@@ -1333,37 +1317,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredTeamsList.map(renderTeamRow))), searchScope === "clubs" && /*#__PURE__*/React.createElement("div", null, filteredClubsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, q ? "No clubs match that search." : "Type to search your clubs.") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredClubsList.map(renderClubRow))), searchScope === "federations" && /*#__PURE__*/React.createElement("div", null, filteredFederationsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, q ? "No federations match that search." : "Type to search your federations.") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredFederationsList.map(renderFederationRow))), searchScope === "help" && /*#__PURE__*/React.createElement("div", null, filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, filteredTeamsList.map(renderTeamRow))), searchScope === "help" && /*#__PURE__*/React.createElement("div", null, filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -1378,7 +1332,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && myRosterPlayers.length === 0 && myPoolPlayers.length === 0 && filteredClubsList.length === 0 && filteredFederationsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && myRosterPlayers.length === 0 && myPoolPlayers.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "30vh"
   }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1442,27 +1396,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, myRosterPlayers.slice(0, ALL_SCOPE_CAP).map((p, i) => renderRosterPlayerRow(p, i)), myPoolPlayers.slice(0, Math.max(0, ALL_SCOPE_CAP - myRosterPlayers.length)).map(renderPoolPlayerRow)), myRosterPlayers.length + myPoolPlayers.length > ALL_SCOPE_CAP && seeAllLink("players", myRosterPlayers.length + myPoolPlayers.length)), filteredClubsList.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Clubs"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredClubsList.slice(0, ALL_SCOPE_CAP).map(renderClubRow)), filteredClubsList.length > ALL_SCOPE_CAP && seeAllLink("clubs", filteredClubsList.length)), filteredFederationsList.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Federations"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredFederationsList.slice(0, ALL_SCOPE_CAP).map(renderFederationRow)), filteredFederationsList.length > ALL_SCOPE_CAP && seeAllLink("federations", filteredFederationsList.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, myRosterPlayers.slice(0, ALL_SCOPE_CAP).map((p, i) => renderRosterPlayerRow(p, i)), myPoolPlayers.slice(0, Math.max(0, ALL_SCOPE_CAP - myRosterPlayers.length)).map(renderPoolPlayerRow)), myRosterPlayers.length + myPoolPlayers.length > ALL_SCOPE_CAP && seeAllLink("players", myRosterPlayers.length + myPoolPlayers.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }

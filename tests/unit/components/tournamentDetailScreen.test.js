@@ -140,40 +140,29 @@ test("TournamentDetailScreen: no Visibility toggle when canManage is false", asy
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
 });
 
-test("TournamentDetailScreen: a club/federation tournament (isPersonal false) has no Visibility toggle either -- it's always public", async () => {
+test("TournamentDetailScreen: a club/federation tournament (isPersonal false) has no Visibility toggle either", async () => {
   const inst = await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
-    isPersonal: false, onToggleVisibility: () => Promise.resolve({ ok: true })
+    isPersonal: false
   });
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Visibility/);
 });
 
-test("TournamentDetailScreen: a club/federation tournament still marked private from before this simplification self-heals to public on open", async () => {
-  let toggledWith = null;
-  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], {
-    isPersonal: false, onToggleVisibility: t => { toggledWith = t; return Promise.resolve({ ok: true }); }
-  });
-  assert.equal(toggledWith.id, "t1");
-});
-
-test("TournamentDetailScreen: does not self-heal a personal tournament that's already private, or a club/federation one that's already public", async () => {
+// BUG FIX: this screen used to silently force a tournament's `private` flag to match who
+// organized it (personal always private, club/federation always public) every time its owner
+// opened it -- a leftover from before Visibility became its own explicit, independent choice at
+// creation time (see docs/simplification-plan.md's Phase 1). That meant a personal tournament
+// deliberately set Public, or a club/federation one deliberately set Private, silently flipped
+// back the moment its detail screen was opened. Visibility is never touched here any more --
+// onToggleVisibility is unused plumbing now, kept for a possible future manual toggle button.
+test("TournamentDetailScreen: never auto-toggles visibility based on organizer -- an explicitly-set private personal tournament, or a public club one, stays exactly as set", async () => {
   let called = false;
-  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], {
-    isPersonal: true, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
-  });
-  assert.equal(called, false);
+  const onToggleVisibility = () => { called = true; return Promise.resolve({ ok: true }); };
 
-  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
-    isPersonal: false, onToggleVisibility: () => { called = true; return Promise.resolve({ ok: true }); }
-  });
+  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], { isPersonal: true, onToggleVisibility });
+  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], { isPersonal: false, onToggleVisibility });
+  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], { isPersonal: true, onToggleVisibility });
+  await renderScreen(tournamentFixture({ private: true }), [completedMatch()], { isPersonal: false, onToggleVisibility });
   assert.equal(called, false);
-});
-
-test("TournamentDetailScreen: a personal tournament still marked public from before this simplification self-heals to private on open", async () => {
-  let toggledWith = null;
-  await renderScreen(tournamentFixture({ private: false }), [completedMatch()], {
-    isPersonal: true, onToggleVisibility: t => { toggledWith = t; return Promise.resolve({ ok: true }); }
-  });
-  assert.equal(toggledWith.id, "t1");
 });
 
 test("TournamentDetailScreen: shows the venue as a Maps link with an edit affordance once set", async () => {

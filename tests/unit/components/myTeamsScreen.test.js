@@ -1,36 +1,18 @@
-// "My Teams" screen (src/components/myTeamsScreen.js). Every write action is a prop, not a bare
-// global, so this needs no Firestore stubbing. AvailabilityPollModal (used for "send poll") still
-// references Modal as a bare global internally -- stubbed here only in the test that opens it.
+// "Teams" screen (src/components/myTeamsScreen.js). Every write action is a prop, not a bare
+// global, so this needs no Firestore stubbing. Every team is just the account's own now -- no club
+// wrapper, no per-team "poll availability" action, no owner/member permission split (see
+// docs/simplification-plan.md).
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
-import renderer, { act } from "react-test-renderer";
+import renderer from "react-test-renderer";
 import { MyTeamsScreen } from "../../../src/components/myTeamsScreen.js";
 import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
 
 function team(overrides = {}) {
   return { id: "t1", name: "Riverside 1st XI", players: [], ...overrides };
 }
-
-// Reached from a plain "My Teams" link on Home now, not its own bottom tab -- the tab used to
-// make "these are YOUR personal teams" obvious just by which tab you were on, so that has to be
-// said explicitly now instead. Only shown for the personal case, not when nested inside a club.
-test("MyTeamsScreen: personal teams are labeled 'My Teams' with an explanatory line; a club's own roster isn't", () => {
-  const personal = renderer.create(React.createElement(MyTeamsScreen, {
-    teams: [team()], matches: [], onNewTeam: () => {}
-  })).toJSON();
-  const personalText = JSON.stringify(personal);
-  assert.match(personalText, /My Teams/);
-  assert.match(personalText, /not tied to any club/);
-
-  const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const nested = renderer.create(React.createElement(MyTeamsScreen, {
-    teams: [team({ _clubId: "c1" })], clubs, matches: [], activeClubId: "c1", onBack: () => {}, onNewTeam: () => {}
-  })).toJSON();
-  const nestedText = JSON.stringify(nested);
-  assert.doesNotMatch(nestedText, /not tied to any club/);
-});
 
 test("MyTeamsScreen: lists teams, wires onEditTeam/onDeleteTeam/onNewTeam", () => {
   let edited = null;
@@ -89,56 +71,25 @@ test("MyTeamsScreen: shows a loading state while teamsLoading is true, without c
   assert.doesNotThrow(() => inst.toJSON());
 });
 
-test("MyTeamsScreen: shows a back button with the active club's name when onBack and activeClubId are given, none otherwise", () => {
-  const clubs = [{ id: "c1", name: "Riverside CC" }];
-  const teams = [team({ id: "t2", name: "Seconds", _clubId: "c1" })];
+test("MyTeamsScreen: shows a Back button only when onBack is given (a drill-in from Home), none when it's the Teams tab itself", () => {
   let backCalled = false;
-  const nestedInst = renderer.create(React.createElement(MyTeamsScreen, {
-    teams, clubs, matches: [], activeClubId: "c1", onBack: () => { backCalled = true; }, onNewTeam: () => {}
+  const withBack = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onBack: () => { backCalled = true; }, onNewTeam: () => {}
   }));
-  const text = JSON.stringify(nestedInst.toJSON());
-  assert.match(text, /Riverside CC/);
-  const backBtn = nestedInst.root.findByProps({ "aria-label": "Back" });
+  const backBtn = withBack.root.findByProps({ "aria-label": "Back" });
   backBtn.props.onClick();
   assert.equal(backCalled, true);
 
-  const standaloneInst = renderer.create(React.createElement(MyTeamsScreen, {
+  const asTab = renderer.create(React.createElement(MyTeamsScreen, {
     teams: [team()], matches: [], onNewTeam: () => {}
   }));
-  assert.throws(() => standaloneInst.root.findByProps({ "aria-label": "Back" }));
+  assert.throws(() => asTab.root.findByProps({ "aria-label": "Back" }));
 });
 
-test("MyTeamsScreen: a club team is only editable by that club's owner", () => {
-  const clubs = [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }];
-  const teams = [team({ id: "t2", name: "Seconds", _clubId: "c1" })];
-  const asOwner = renderer.create(React.createElement(MyTeamsScreen, {
-    teams, clubs, matches: [], currentUid: "owner1", onBack: () => {}, onNewTeam: () => {}, onEditTeam: () => {}
+test("MyTeamsScreen: every team is editable -- no owner/member permission split any more", () => {
+  const teams = [team({ id: "t2", name: "Seconds" })];
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams, matches: [], onBack: () => {}, onNewTeam: () => {}, onEditTeam: () => {}
   }));
-  assert.ok(asOwner.root.findByProps({ "aria-label": `Edit ${teams[0].name}` }));
-
-  const asMember = renderer.create(React.createElement(MyTeamsScreen, {
-    teams, clubs, matches: [], currentUid: "someoneElse", onBack: () => {}, onNewTeam: () => {}, onEditTeam: () => {}
-  }));
-  assert.throws(() => asMember.root.findByProps({ "aria-label": `Edit ${teams[0].name}` }));
-});
-
-test("MyTeamsScreen: 'poll availability' opens AvailabilityPollModal for a club team", async () => {
-  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  globalThis.loadTeamPolls = () => Promise.resolve([]);
-  try {
-    const clubs = [{ id: "c1", name: "Riverside CC", ownerUid: "owner1" }];
-    const teams = [team({ id: "t2", name: "Seconds", _clubId: "c1" })];
-    const inst = renderer.create(React.createElement(MyTeamsScreen, {
-      teams, clubs, matches: [], currentUid: "owner1", onBack: () => {}, onNewTeam: () => {}
-    }));
-    const pollBtn = inst.root.findByProps({ "aria-label": `Poll availability for ${teams[0].name}` });
-    await act(async () => {
-      pollBtn.props.onClick();
-      await new Promise(r => setTimeout(r, 0));
-    });
-    assert.match(JSON.stringify(inst.toJSON()), /Availability/);
-  } finally {
-    delete globalThis.Modal;
-    delete globalThis.loadTeamPolls;
-  }
+  assert.ok(inst.root.findByProps({ "aria-label": `Edit ${teams[0].name}` }));
 });

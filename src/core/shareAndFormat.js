@@ -289,16 +289,6 @@ export function buildFixtureShareText(tournamentName, fixture, venue) {
   return lines.join("\n");
 }
 
-export function pollExpiryDateLabel(createdAt) {
-  if (!createdAt) return null;
-  const d = new Date(createdAt + POLL_TTL_DAYS * 24 * 60 * 60 * 1000);
-  return d.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-}
-
 export function buildMapsUrl(venue, lat, lng) {
   if (venue) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`;
@@ -307,42 +297,6 @@ export function buildMapsUrl(venue, lat, lng) {
     return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   }
   return `https://www.google.com/maps/search/?api=1&query=`;
-}
-
-export function resolvePollTeams(nameA, nameB, clubs, clubTeamsById) {
-  const a = (nameA || "").toLowerCase();
-  const b = (nameB || "").toLowerCase();
-  const out = [];
-  (clubs || []).forEach(club => {
-    (clubTeamsById[club.id] || []).forEach(team => {
-      if (team.name && (team.name.toLowerCase() === a || team.name.toLowerCase() === b)) {
-        out.push({
-          team,
-          club
-        });
-      }
-    });
-  });
-  return out;
-}
-
-export function buildPollUrl(code) {
-  try {
-    const {
-      origin,
-      pathname
-    } = window.location;
-    return `${origin}${pathname}?poll=${code}`;
-  } catch (e) {
-    return `?poll=${code}`;
-  }
-}
-
-export function buildPollShareText(question, fixtureDate, code) {
-  const lines = [question];
-  if (fixtureDate) lines.push(fixtureDate);
-  lines.push(buildPollUrl(code));
-  return lines.join("\n");
 }
 
 export function buildFollowUrl(code) {

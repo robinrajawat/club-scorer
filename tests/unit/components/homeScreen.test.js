@@ -427,19 +427,12 @@ test("HomeScreen: the search scope chips (All/Matches/Teams/...) are visible imm
   assert.match(json, /Cups/);
 });
 
-test("HomeScreen: the 'Clubs' search chip lists matching clubs and opens one via onOpenClub", () => {
-  let openedId = null;
-  const inst = render({
-    clubs: [{ id: "c1", name: "Riverside CC" }],
-    onOpenClub: id => { openedId = id; }
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  act(() => { search.props.onChange({ target: { value: "Riverside" } }); });
-  const clubsChip = inst.root.findAllByType("button").find(b => b.props.children === "Clubs");
-  act(() => { clubsChip.props.onClick(); });
-  const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
-  resultRow.props.onClick();
-  assert.equal(openedId, "c1");
+// The "Clubs"/"Federations" search scope chips went away alongside club/federation management --
+// see docs/simplification-plan.md.
+test("HomeScreen: there are no 'Clubs' or 'Federations' search chips any more", () => {
+  const inst = render();
+  assert.equal(inst.root.findAllByType("button").find(b => b.props.children === "Clubs"), undefined);
+  assert.equal(inst.root.findAllByType("button").find(b => b.props.children === "Federations"), undefined);
 });
 
 test("HomeScreen: picking the 'Players' search chip lazily loads the public player directory once", async () => {

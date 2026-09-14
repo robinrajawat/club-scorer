@@ -1,18 +1,12 @@
 import React from "react";
 import { COLORS } from "./theme.js";
-import { House, Radio, Shield, Trophy } from "./icons.js";
+import { House, Radio, Trophy, Users } from "./icons.js";
 
-// The app's real product is club/federation-organized cricket -- personal (no club) matches, teams
-// and cups are a lightweight addon layered on top, not a coequal peer. That's why there are four
-// root destinations, not five: Home (your own stuff -- personal matches, teams, and cups all live
-// here now, reached via links rather than their own tabs), Live (everyone else's live matches/
-// tournaments), Cups (club/federation tournaments -- personal ones no longer merge in here, see
-// TournamentsScreen's own comment) and Clubs (TeamsScreen: Clubs/Federations browsing, and, once a
-// club is selected, that club's own team roster AND tournaments -- see manageClubTeamsOpen/
-// manageClubCupsOpen/manageFederationCupsOpen in cricketScorer.js). There used to be a fifth tab,
-// "Teams" (screen "my-teams"), for personal team management specifically -- removed once personal
-// stopped needing its own peer-level nav slot; MyTeamsScreen itself is unchanged, just reached from
-// Home instead (see onOpenMyTeams).
+// Four root destinations: Home (your own stuff), Live (everyone else's live matches/tournaments),
+// Cups (every tournament/series you've created), and Teams (every roster you've created --
+// MyTeamsScreen directly, no club wrapper around it; see docs/simplification-plan.md for why club/
+// federation management was removed and this tab now points straight at personal teams instead of
+// a Clubs/Federations browser).
 // `screen` is CricketScorer's own app-level screen key, reused directly rather than inventing a
 // separate "tab" concept -- TAB_BAR_SCREENS (see cricketScorer.js) is the single source of truth
 // for which screens show this bar at all.
@@ -20,7 +14,7 @@ export const TABS = [
   { screen: "home", label: "Home", Icon: House },
   { screen: "live", label: "Live", Icon: Radio },
   { screen: "tournaments", label: "Cups", Icon: Trophy },
-  { screen: "teams", label: "Clubs", Icon: Shield }
+  { screen: "teams", label: "Teams", Icon: Users }
 ];
 
 // Height of the pill itself (safe-area padding aside) -- unlike MatchScreen's scoring pad, this

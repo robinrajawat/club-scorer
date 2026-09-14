@@ -1,23 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, Hand, Pencil, Users } from "./icons.js";
+import { CalendarClock, Pencil } from "./icons.js";
 import { Btn } from "./formUiAtoms.js";
-import { FixturePollSummary } from "./scoreboardAtoms.js";
 import { FixtureDateTimeModal, VenueEditModal } from "./venueAndDateModals.js";
-import { AvailabilityPollModal } from "./availabilityPollModal.js";
-import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildMapsUrl, resolvePollTeams, matchResultText, matchScoreLine } from "../core/shareAndFormat.js";
-import { expiresAtMillis } from "../core/miscHelpers.js";
+import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildMapsUrl, matchResultText, matchScoreLine } from "../core/shareAndFormat.js";
 
 // A single fixture row for the tournament fixtures list (a sibling of UpcomingFixtureCard, which
 // covers the Home screen's own upcoming-fixtures view) -- schedule/reschedule, edit venue, remove,
-// score, or send an availability poll for one fixture, with a result/score line for a fixture
-// that's already been played. References Modal as a bare, unimported global (same pattern as
-// ConfirmModal/playerModals.js) for its own "which team?" picker, so tests can stub
+// or score, with a result/score line for a fixture that's already been played. References Modal as
+// a bare, unimported global (same pattern as ConfirmModal/playerModals.js), so tests can stub
 // `globalThis.Modal` without pulling in jsdom. Covered by tests/unit/components/fixtureRow.test.js.
-//
-// `loadFixturePollSummary` (a bare-global Firestore call, not extracted) runs from a mount-time
-// useEffect, same stubbing pattern as UpcomingFixtureCard/AvailabilityPollModal/BetaTestersScreen.
-// `loadTeamPolls` and `downloadTextFile` are only ever called from onClick handlers.
+// `downloadTextFile` is only ever called from an onClick handler.
 
 export function FixtureRow({
   fixture,
@@ -27,15 +20,14 @@ export function FixtureRow({
   onUpdateDate,
   onDelete,
   onEditVenue,
-  clubs = [],
-  clubTeamsById = {}
+  clubs = []
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
   // A knockout fixture proposed ahead of the round it depends on (see fixturesSection.js's
   // pairsForStage/the auto-fill effect) starts with no team on one or both sides -- everything
   // about scheduling it (date, venue, calendar export) still works, but there's nothing to score
-  // yet and no team roster to match for an availability poll.
+  // yet.
   const teamsKnown = !!(fixture.teamA && fixture.teamB);
   const displayTeamA = fixture.teamA || "TBD";
   const displayTeamB = fixture.teamB || "TBD";
@@ -47,38 +39,6 @@ export function FixtureRow({
   const venue = fixture.venue || tournament.venue;
   const venueLat = fixture.venue ? fixture.venueLat : tournament.venueLat;
   const venueLng = fixture.venue ? fixture.venueLng : tournament.venueLng;
-  const fixtureDateStr = isIsoDate ? rawDate.split("T")[0] : null;
-  const [pollModalOpen, setPollModalOpen] = useState(false);
-  const [pollCheckBusy, setPollCheckBusy] = useState(false);
-  const [existingPollCode, setExistingPollCode] = useState(null);
-  const [pollTeamPickerOpen, setPollTeamPickerOpen] = useState(false);
-  const [selectedPollTeam, setSelectedPollTeam] = useState(null); // {team, club}, once resolved or picked
-  // Same as UpcomingFixtureCard -- quietly finds nothing (no "Send poll" button) for a fixture
-  // where neither side corresponds to a roster-tracked team.
-  const matchingPollTeams = resolvePollTeams(fixture.teamA, fixture.teamB, clubs, clubTeamsById);
-  const [pollSummary, setPollSummary] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    loadFixturePollSummary(fixture.id, matchingPollTeams).then(result => {
-      if (!cancelled) setPollSummary(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [fixture.id, matchingPollTeams.map(e => e.team.id).join(",")]);
-  async function openPollFor(club, team) {
-    if (pollCheckBusy) return;
-    setSelectedPollTeam({
-      club,
-      team
-    });
-    setPollCheckBusy(true);
-    const pointers = await loadTeamPolls(club.id, team.id);
-    const existing = pointers.find(p => p.fixtureId === fixture.id && (expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now()));
-    setPollCheckBusy(false);
-    setExistingPollCode(existing ? existing.code : null);
-    setPollModalOpen(true);
-  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
@@ -247,37 +207,6 @@ export function FixtureRow({
       setPickerOpen(false);
     } : null,
     onClose: () => setPickerOpen(false)
-  })), /*#__PURE__*/React.createElement(FixturePollSummary, {
-    items: pollSummary
-  }), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      if (pollCheckBusy) return;
-      if (matchingPollTeams.length > 1) {
-        setPollTeamPickerOpen(true);
-        return;
-      }
-      openPollFor(matchingPollTeams[0].club, matchingPollTeams[0].team);
-    },
-    className: "cs-btn",
-    disabled: pollCheckBusy,
-    "aria-label": "Send availability poll",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 30,
-      height: 30,
-      flexShrink: 0,
-      background: COLORS.creamDark,
-      border: "none",
-      borderRadius: 8,
-      cursor: pollCheckBusy ? "default" : "pointer",
-      opacity: pollCheckBusy ? 0.6 : 1,
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Hand, {
-    size: 14
   })), fixture.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => downloadTextFile(`${displayTeamA}-vs-${displayTeamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS({ ...fixture, teamA: displayTeamA, teamB: displayTeamB }, tournament.name, venue, venueLat, venueLng)),
@@ -338,96 +267,5 @@ export function FixtureRow({
     clubs: clubs,
     onSave: (newVenue, newLat, newLng) => onEditVenue(newVenue, newLat, newLng),
     onClose: () => setVenueModalOpen(false)
-  }), pollTeamPickerOpen && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setPollTeamPickerOpen(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Which team?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 16
-    }
-  }, `Both ${fixture.teamA} and ${fixture.teamB} are teams you manage \u2014 who's this poll for?`), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, matchingPollTeams.map((entry, idx) => /*#__PURE__*/React.createElement("button", {
-    key: entry.team.id,
-    type: "button",
-    onClick: () => {
-      setPollTeamPickerOpen(false);
-      openPollFor(entry.club, entry.team);
-    },
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 12,
-      padding: "10px 12px",
-      cursor: "pointer",
-      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 28,
-      height: 28,
-      borderRadius: "50%",
-      background: "rgba(74,124,46,0.1)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 13,
-    style: {
-      color: COLORS.turf
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13.5,
-      color: COLORS.ink
-    }
-  }, entry.team.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft
-    }
-  }, entry.club.name)))))), pollModalOpen && selectedPollTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: selectedPollTeam.club.id,
-    clubName: selectedPollTeam.club.name,
-    team: selectedPollTeam.team,
-    initialCode: existingPollCode || undefined,
-    fixtureContext: existingPollCode ? undefined : {
-      tournamentId: tournament.id,
-      fixtureId: fixture.id,
-      question: `Available for ${fixture.teamA} vs ${fixture.teamB}?`,
-      fixtureDate: fixtureDateStr || ""
-    },
-    onClose: () => {
-      setPollModalOpen(false);
-      loadFixturePollSummary(fixture.id, matchingPollTeams).then(setPollSummary);
-    }
   }));
 }

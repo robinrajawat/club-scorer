@@ -23,16 +23,16 @@ export const TOUR_SLIDES = [{
   body: "Runs, wides, no-balls, every dismissal type \u2014 sign-in is optional, and it keeps working with no signal once it's loaded."
 }, {
   icon: House,
-  title: "Home, Live, Cups, Teams, Clubs",
-  body: "Five tabs at the bottom get you everywhere: Home for your own matches, Live for everyone else's live scores and tournaments, Cups for tournaments and series, Teams for rosters, and Clubs for browsing clubs and federations."
+  title: "Home, Live, Cups, Teams",
+  body: "Four tabs at the bottom get you everywhere: Home for your own matches, Live for everyone else's live scores and tournaments, Cups for tournaments and series, and Teams for rosters."
 }, {
   icon: Share,
   title: "Share your score two ways",
   body: "A score code gives full scoring access \u2014 for a teammate co-scoring alongside you. A view code is read-only, for anyone just following along. They're never interchangeable."
 }, {
   icon: Users,
-  title: "Clubs, federations, and borrowed players",
-  body: "Save a team's roster once and reuse it. A club can affiliate with a federation to play other clubs' teams, and you can borrow a player from another club's public directory without retyping their details."
+  title: "Build a roster once, reuse it",
+  body: "Save a team's roster once \u2014 batting order, jersey numbers, captain and keeper \u2014 and pick it straight off the list for every match or tournament after that."
 }, {
   icon: Trophy,
   title: "Tournaments or a simple series",

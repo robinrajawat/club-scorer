@@ -179,7 +179,7 @@ export function WelcomeScreen({
       lineHeight: 1.5,
       margin: "10px 0 20px"
     }
-  }, "Sync your matches and teams across devices, join clubs, and share live scores."), /*#__PURE__*/React.createElement("div", {
+  }, "Sync your matches and teams across devices, and share live scores."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",

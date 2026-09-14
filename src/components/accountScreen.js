@@ -27,8 +27,6 @@ export function AccountScreen({
   onOpenBetaTesters,
   onOpenClub,
   isBetaTester = false,
-  onGenerateDummyData,
-  onWipeDummyData,
   clubs = [],
   federationsById = {},
   onSignIn,
@@ -51,9 +49,6 @@ export function AccountScreen({
   const [importResult, setImportResult] = useState(null);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState(null);
-  const [dummyBusy, setDummyBusy] = useState(false);
-  const [dummyStatus, setDummyStatus] = useState("");
-  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [betaRequestBusy, setBetaRequestBusy] = useState(false);
   const [betaRequestSent, setBetaRequestSent] = useState(false);
@@ -282,26 +277,6 @@ export function AccountScreen({
     setBusy(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
-  }
-  async function handleGenerateDummy() {
-    setDummyBusy(true);
-    setDummyStatus("");
-    const result = await onGenerateDummyData();
-    setDummyBusy(false);
-    if (result && result.ok) {
-      const warning = result.partialWipeFailures ? ` (${result.partialWipeFailures} club${result.partialWipeFailures === 1 ? "" : "s"} from a previous run couldn't be cleared \u2014 try Wipe again.)` : "";
-      setDummyStatus(`Dummy data generated \u2014 ${result.clubIds.length} boards, each with a senior XI and a "B" side, affiliated with ICC.${warning}`);
-    } else {
-      setDummyStatus((result && result.error) || "Couldn't generate dummy data.");
-    }
-  }
-  async function handleWipeDummy() {
-    setShowWipeConfirm(false);
-    setDummyBusy(true);
-    setDummyStatus("");
-    const result = await onWipeDummyData();
-    setDummyBusy(false);
-    setDummyStatus(result && !result.ok ? `Removed what it could, but ${result.failedCount} club${result.failedCount === 1 ? "" : "s"} wouldn't delete \u2014 try again.` : "Dummy data removed.");
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -728,71 +703,7 @@ export function AccountScreen({
       color: COLORS.ball,
       marginTop: 8
     }
-  }, betaRequestError)), isBetaTester && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "Beta tools"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginBottom: 10,
-      lineHeight: 1.5
-    }
-  }, "Fill your account with a club per country (named after its board), real international teams and players, and a shared ICC federation to try new features against."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleGenerateDummy,
-    disabled: dummyBusy,
-    variant: "default",
-    style: {
-      flex: 1,
-      minWidth: 160
-    }
-  }, dummyBusy ? "\u2026" : "Generate dummy data"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowWipeConfirm(true),
-    disabled: dummyBusy,
-    variant: "danger",
-    style: {
-      flex: 1,
-      minWidth: 160
-    }
-  }, "Wipe dummy data")), dummyStatus && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginTop: 8,
-      lineHeight: 1.5
-    }
-  }, dummyStatus), showWipeConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Wipe dummy data?",
-    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (reused next time) but ends up empty \u2014 you can delete it yourself from Home \u2192 Clubs if you don't want to keep it.",
-    confirmLabel: "Wipe",
-    variant: "danger",
-    busy: dummyBusy,
-    onConfirm: handleWipeDummy,
-    onCancel: () => setShowWipeConfirm(false)
-  }))) : /*#__PURE__*/React.createElement("div", {
+  }, betaRequestError))) : /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
