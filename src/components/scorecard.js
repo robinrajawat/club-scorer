@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Info, Table2 } from "./icons.js";
 import { RoleBadge } from "./scoringUiAtoms.js";
@@ -379,11 +379,25 @@ export function MatchStatsPanel({
   const showLiveSummary = showOvers && liveInn && liveInn.battingOrder && liveInn.battingOrder.length > 0 && !liveInn.complete;
   // Folded by default on the Follow screen -- a follower's first priority is the summary card
   // above, not a full stats table. Left open by default in the scorer's own Scorecard overlay,
-  // since tapping that button was already an explicit request to see it.
-  const [scorecardOpen, setScorecardOpen] = useState(!showOvers);
+  // since tapping that button was already an explicit request to see it. Also open by default (on
+  // Follow too) once the match is already complete on mount -- the live summary card above has
+  // nothing left to show once it's over, so folding the one thing that DOES still have something
+  // to say would just add a needless extra tap to a screen someone opened specifically for results.
+  const [scorecardOpen, setScorecardOpen] = useState(!showOvers || match.status === "complete");
   // Same reasoning as the scorecard fold -- charts are a deeper dive than a follower's first
-  // glance needs, closed by default there and open by default in the scorer's own overlay.
-  const [chartsOpen, setChartsOpen] = useState(!showOvers);
+  // glance needs, closed by default there and open by default in the scorer's own overlay (or once
+  // the match is already complete on mount).
+  const [chartsOpen, setChartsOpen] = useState(!showOvers || match.status === "complete");
+  // Covers the match completing WHILE someone's already watching (not just already-complete on
+  // mount, which the initial state above handles) -- auto-opens both once the result lands, same
+  // "nothing live left to prioritize" reasoning. One-directional on purpose: never auto-closes
+  // either fold, so a manual collapse after this fires is never silently undone.
+  useEffect(() => {
+    if (match.status === "complete") {
+      setScorecardOpen(true);
+      setChartsOpen(true);
+    }
+  }, [match.status]);
   const cardStyle = {
     background: COLORS.surface,
     borderRadius: 16,

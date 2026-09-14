@@ -161,11 +161,30 @@ async function flush() {
   await act(async () => { await new Promise(r => setTimeout(r, 0)); });
 }
 
-function signIn(inst, user = { uid: "u1", email: "robin@x.com", displayName: "Robin", providerData: [] }) {
+// Raw auth-callback fire, no follow-up navigation -- what the app itself does the moment a session
+// resolves (silently restored, or freshly completed), before anyone taps anything. Most tests below
+// want a signed-in Home screen as scaffolding for something else entirely and don't care which path
+// got them there, so they use signIn() below instead; this one is for tests that specifically care
+// what happens right at that moment (e.g. the watcher-default landing staying on Live).
+function signInRaw(inst, user = { uid: "u1", email: "robin@x.com", displayName: "Robin", providerData: [] }) {
   return act(async () => {
     authCallback(user);
     await new Promise(r => setTimeout(r, 0));
   });
+}
+
+// Signs in and lands on Home, same as every test below expects -- since a session resolving from
+// the watcher-default landing now stays on Live (see signInRaw's own comment and the dedicated test
+// for that), this taps through the tab bar to Home afterward for tests that just want a signed-in
+// Home screen to test something unrelated. A no-op tap if it's already there (e.g. reached via the
+// explicit WelcomeScreen sign-in flow, which still lands on Home directly).
+async function signIn(inst, user = { uid: "u1", email: "robin@x.com", displayName: "Robin", providerData: [] }) {
+  await signInRaw(inst, user);
+  if (inst.root.findAllByType(HomeScreen).length > 0) return;
+  const tabBar = inst.root.findAllByType(TabBar);
+  if (tabBar.length > 0) {
+    act(() => { tabBar[0].props.onSelect("home"); });
+  }
 }
 
 beforeEach(() => {
@@ -296,17 +315,22 @@ test("CricketScorer: opening About from watcher Live returns to Live too", async
   assert.throws(() => inst.root.findByType(AboutScreen));
 });
 
-// A returning session whose sign-in resolves asynchronously (the render() harness's own
+// BUG FIX: a returning session whose sign-in resolves asynchronously (the render() harness's own
 // onAuthStateChanged stub fires null first, same as a real cold load before Firebase's local
-// session restore settles) -- covers the broadened redirect effect that now fires for the
-// watcher-default landing, not just WelcomeScreen's own "login" screen.
-test("CricketScorer: a session that resolves signed-in while still on the watcher default lands on Home, watcherMode cleared", async () => {
+// session restore settles) used to get yanked off Live and onto Home the moment that silent
+// restore resolved -- undermining the whole point of Live being the default landing page (see the
+// cold-visit test above) for anyone who was already signed in. Only an EXPLICIT sign-in via the
+// "login" screen (openAccount, WelcomeScreen) should land on Home now; a session that resolves
+// signed-in while still on the untouched watcher-default landing should just drop the watcher-only
+// chrome and stay right there on Live.
+test("CricketScorer: a session that resolves signed-in while still on the watcher default stays on Live, watcherMode cleared", async () => {
   const inst = await render();
   await flush();
   assert.ok(inst.root.findByType(LiveScreen));
-  await signIn(inst);
-  assert.ok(inst.root.findByType(HomeScreen));
-  assert.equal(inst.root.findAllByType(LiveScreen).length, 0);
+  await signInRaw(inst);
+  const live = inst.root.findByType(LiveScreen);
+  assert.equal(live.props.watcherMode, false);
+  assert.equal(inst.root.findAllByType(HomeScreen).length, 0);
 });
 
 // A watcher who opens sign-in (AuthBar) then backs out with "Continue without an account" instead

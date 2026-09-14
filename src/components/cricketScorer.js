@@ -755,16 +755,27 @@ export function CricketScorer() {
     });
     return unsubAuth;
   }, []);
-  // Once someone signs in from the welcome screen (or already had a session restored), move
-  // straight past it into Home rather than leaving them stuck looking at a sign-in button. If the
-  // app was opened via the "New match" home-screen shortcut, land straight on Setup instead —
-  // same destination as tapping Home's own "New" button, just skipping the extra tap for the
-  // exact case that shortcut exists for. Only ever fires once: initialShortcutAction is a ref
-  // (frozen at mount from the URL), not state, so it can't re-trigger on a later sign-out/in.
+  // Once someone signs in from the welcome screen, move straight past it into Home rather than
+  // leaving them stuck looking at a sign-in button. If the app was opened via the "New match"
+  // home-screen shortcut, land straight on Setup instead — same destination as tapping Home's own
+  // "New" button, just skipping the extra tap for the exact case that shortcut exists for.
+  //
+  // BUG FIX: this used to fire for watcherMode too whenever `user` went truthy for ANY reason --
+  // including Firebase Auth silently RESTORING an already-signed-in session on a cold reload, not
+  // just an explicit "Sign in" tap. Since a cold visit lands on "live" with watcherMode on by
+  // design (see isDefaultColdLanding above -- Live is meant to be the default landing page), that
+  // silent restore was yanking every returning signed-in visitor off Live and onto Home the moment
+  // their session resolved, often before they'd even seen Live render. Only screen === "login" (a
+  // real, explicit sign-in interaction -- the only way to reach that screen from watcherMode, see
+  // openAccount) still redirects to Home/Setup; watcherMode resolving to signed-in on its own just
+  // drops the watcher-only chrome and lets them keep browsing Live right where they landed.
   useEffect(() => {
-    if (user && (screen === "login" || watcherMode)) {
+    if (!user) return;
+    if (screen === "login") {
       setWatcherMode(false);
       setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
+    } else if (watcherMode) {
+      setWatcherMode(false);
     }
   }, [user]);
   // Feedback Inbox and Beta Testers are the two screens gated by a boolean (isAdmin) rather than
