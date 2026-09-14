@@ -196,21 +196,13 @@ function walkToReview(inst) {
   act(() => { btn(inst, "Review").props.onClick(); });
 }
 
-// Visibility used to be its own manual toggle on the review page -- now there's no toggle at all,
-// only an Organizer picker (hidden entirely when this account owns no club/federation, same as
-// TournamentsScreen's own create form), and privacy is derived downstream from whichever of
-// clubId/federationId this match ends up carrying.
-test("SetupScreen: with no club/federation owned, there's no Organizer picker and the match carries no clubId/federationId", () => {
-  let started = null;
-  const inst = render({ onStart: m => { started = m; } });
-  walkToReview(inst);
-  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
-  act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.clubId, null);
-  assert.equal(started.federationId, null);
-});
-
-test("SetupScreen: picking an owned club as Organizer on the review page passes its id through to onStart as clubId", () => {
+// Visibility used to be its own manual toggle on the review page, alongside an Organizer picker
+// (personal/club/federation) that decided who a standalone match was organized under. The
+// Organizer picker is gone entirely now (part of simplifying to Teams/Matches/Tournaments -- see
+// docs/simplification-plan.md) -- every standalone match is just the account's own, regardless of
+// which clubs it owns, and privacy is its own explicit Visibility choice, not derived from who
+// organizes it.
+test("SetupScreen: a standalone match always carries no clubId/federationId, even for an account that owns a club -- no Organizer picker any more", () => {
   let started = null;
   const inst = render({
     onStart: m => { started = m; },
@@ -218,11 +210,9 @@ test("SetupScreen: picking an owned club as Organizer on the review page passes 
     currentUid: "owner1"
   });
   walkToReview(inst);
-  const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
-  assert.ok(organizerChoice, "owning a club should surface the Organizer picker");
-  act(() => { organizerChoice.props.onChange("club:c1"); });
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
   act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.clubId, "c1");
+  assert.equal(started.clubId, null);
   assert.equal(started.federationId, null);
 });
 
