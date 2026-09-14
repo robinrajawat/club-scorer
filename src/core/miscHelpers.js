@@ -430,17 +430,6 @@ export function getTournamentFollowCodeFromUrl() {
   }
 }
 
-export function getPollCodeFromUrl() {
-  try {
-    const raw = new URLSearchParams(window.location.search).get("poll");
-    if (!raw) return null;
-    const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    return cleaned || null;
-  } catch (e) {
-    return null;
-  }
-}
-
 export function getShortcutActionFromUrl() {
   try {
     const raw = new URLSearchParams(window.location.search).get("action");

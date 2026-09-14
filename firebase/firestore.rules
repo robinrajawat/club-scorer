@@ -20,14 +20,8 @@ rules_version = '2';
 // account membership rather than a bearer code, because unlike a single match you actually want
 // to know (and be able to revoke) who's in a club.
 // Federations add a fifth, much thinner tier on top of clubs: a club can opt into a federation
-// (e.g. "DCF") the same way a person joins a club, but a federation grants no membership,
-// matches, or roster access of its own — only a read-only name directory (federations/{id}/teams)
-// that says "this club has a team called X", so a tournament organizer in one member club can
-// pick another member club's team without ever seeing that club's private data.
-// Players add a sixth tier, thinner still: a directory entry for one real person, keyed by email,
-// that any club's owner/co-owner can publish (make public/borrowable) or a roster can simply
-// reference by email without publishing anything at all. See the /players/{playerEmail} rule
-// below for the full reasoning.
+// (e.g. "DCF") the same way a person joins a club, but a federation grants no membership, matches,
+// or roster access of its own.
 //
 // ---- The permission model in one paragraph ----
 // Clubs and federations each have exactly one privileged tier: "owner", which covers both the
@@ -203,44 +197,6 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Availability polls — same open-by-code, bearer-capability trust model as /sharedMatches:
-    // a teammate responding needs no account, only the link (see createAvailabilityPoll/
-    // submitPollResponse in index.html). What's different from /sharedMatches is WHO can create
-    // one in the first place: that's restricted to the team's club owner/co-owner, checked here
-    // by following clubId on the new doc back to the real club and reusing isClubOwner (defined
-    // below, for the /clubs rules) — Firestore evaluates rules top-to-bottom in one file, but a
-    // function can be called before its own match block appears textually, so this is fine.
-    //
-    // `list` stays denied for the same reason as /sharedMatches — a poll code is meant to be a
-    // capability you already have, not one more document in an enumerable collection. Finding
-    // "every poll for team X" is instead served by the separate, membership-gated pointer index
-    // at /clubs/{clubId}/teams/{teamId}/polls/{code} below, same shape as /tournamentMatches
-    // above serves the equivalent need for shared matches.
-    //
-    // Responding is scoped to touching ONLY the `responses` map — every other field on the poll
-    // (question, fixtureDate, clubId, teamId, createdAt, createdByUid) must stay exactly as it
-    // was. This does not stop one respondent from overwriting another's already-submitted answer
-    // if they know the poll link, the same coarse "the link is the credential" trust boundary
-    // /sharedMatches already accepts for something with far higher stakes (full scoring access).
-    // ---------------------------------------------------------------------
-    match /availabilityPolls/{code} {
-      allow get: if true;
-      allow list: if false;
-      allow create: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data)
-        && request.resource.data.responses == {};
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responses'])
-        && request.resource.data.clubId == resource.data.clubId
-        && request.resource.data.teamId == resource.data.teamId
-        && request.resource.data.question == resource.data.question
-        && request.resource.data.fixtureDate == resource.data.fixtureDate
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.createdByUid == resource.data.createdByUid;
-      allow delete: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data);
-    }
-
-    // ---------------------------------------------------------------------
     // Clubs — shared team rosters gated by Google-account membership, not a bearer code.
     // Owner and co-owner are functionally identical throughout — every helper below treats them
     // as one tier by checking both ownerUid and coOwnerUids.
@@ -320,35 +276,6 @@ service cloud.firestore {
           request.resource.data.get('coOwnerUids', []) == resource.data.get('coOwnerUids', [])
         )
         ||
-        // (B) Self-redeeming a club invite addressed to MY signed-in email — see
-        // joinClubWithCode/inviteClubMemberByEmail/inviteClubCoOwnerByEmail in index.html. The
-        // invite code names exactly this club, this exact email, and hasn't expired. Depending on
-        // the code's own `role` field the redeemer lands in memberUids only, or in memberUids AND
-        // coOwnerUids — nothing else about the doc may change in the same write. expiresAt is a
-        // real Timestamp (see ttlTimestamp in index.html), compared directly against request.time
-        // — also a Timestamp — rather than converting either side to millis.
-        (
-          !(request.auth.uid in resource.data.memberUids) &&
-          request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.name == resource.data.name &&
-          'joinCodeUsed' in request.resource.data &&
-          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.clubId == clubId &&
-          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.expiresAt > request.time &&
-          get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.email == request.auth.token.email.lower() &&
-          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
-          (
-            (
-              get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.role == "coOwner" &&
-              request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid])
-            )
-            ||
-            (
-              get(/databases/$(database)/documents/clubJoinCodes/$(request.resource.data.joinCodeUsed)).data.role != "coOwner" &&
-              request.resource.data.get('coOwnerUids', []) == resource.data.get('coOwnerUids', [])
-            )
-          )
-        )
-        ||
         // (C) Self-leave. Anyone but the owner can remove only themselves — also drops
         // themselves from coOwnerUids, if they were one.
         (
@@ -381,56 +308,6 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberNames']) &&
           request.resource.data.memberNames.diff(resource.data.get('memberNames', {})).affectedKeys().hasOnly([request.auth.uid])
         )
-        ||
-        // (F) Self-redeeming a PENDING /coOwnerInvites doc addressed to MY signed-in email, role
-        // "coOwner" (missing role on an old invite from before this field existed also counts as
-        // "coOwner" — that was the only role that ever existed then) — the unified invite flow
-        // (see inviteCoOwner/respondCoOwnerInvite in index.html and the /coOwnerInvites rules
-        // below; replaces minting new coOwner-role /clubJoinCodes, though any already issued
-        // before this shipped still redeem via branch (B) until they're used or expire). Adds me
-        // to BOTH memberUids and coOwnerUids in one write — co-owner implies membership, so
-        // coOwnerUids alone would leave me unable to even read the club (see the read rule above)
-        // — while the actual /coOwnerInvites doc itself is flipped to "accepted" by a SEPARATE
-        // write to that collection, governed by its own rules, not this one. Doesn't re-check the
-        // invite's status here (unlike branch (B)'s code check) because the client deliberately
-        // does this club write BEFORE that one, precisely so this get() still sees the invite as
-        // it was minted — checking scope/entityId/email/expiry here is enough, since reusing an
-        // already-accepted invite can only ever re-grant access to the same one email it was
-        // already addressed to, never escalate to anyone else. See (G) below for role "member".
-        (
-          !(request.auth.uid in resource.data.memberUids) &&
-          request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.name == resource.data.name &&
-          'coOwnerInviteAccepted' in request.resource.data &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'club' &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.get('role', 'coOwner') == 'coOwner' &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == clubId &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time &&
-          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
-          request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid])
-        )
-        ||
-        // (G) Same self-redeeming flow as (F), for role "member" — grants ONLY memberUids, never
-        // coOwnerUids. This is the low-friction replacement for clubJoinCodes' role:"member" invite
-        // (see the top of this file's permission-model paragraph): the owner just needs an email,
-        // no code to copy/send, and it still requires the recipient to explicitly accept via their
-        // own Inbox (see respondCoOwnerInvite in index.html) — deliberately kept as one invite
-        // pattern for every role rather than adding a no-accept-needed path, even though a plain
-        // member grants far less than a co-owner.
-        (
-          !(request.auth.uid in resource.data.memberUids) &&
-          request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.name == resource.data.name &&
-          'coOwnerInviteAccepted' in request.resource.data &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'club' &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.get('role', 'coOwner') == 'member' &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == clubId &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time &&
-          request.resource.data.memberUids == resource.data.memberUids.concat([request.auth.uid]) &&
-          request.resource.data.get('coOwnerUids', []) == resource.data.get('coOwnerUids', [])
-        )
       );
 
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
@@ -445,125 +322,11 @@ service cloud.firestore {
         && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
     }
 
-    // Pointer index for "every availability poll for this team" (loadTeamPolls in index.html) —
-    // same shape and same reasoning as /tournamentMatches/{tournamentId}/entries above: the real
-    // poll (question, fixtureDate, responses) lives in the open-by-code /availabilityPolls/{code}
-    // collection, which can't be queried/listed; this lightweight pointer ({code, question,
-    // fixtureDate, createdAt}, no responses) is what a captain's "past polls" list actually reads,
-    // gated by ordinary club membership like the rest of a club's data rather than by a code.
-    match /clubs/{clubId}/teams/{teamId}/polls/{code} {
-      allow read: if request.auth != null
-        && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
-      allow write: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
-    }
-
     match /clubs/{clubId}/tournaments/{tournamentId} {
       allow read: if request.auth != null
         && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberUids;
       allow write: if request.auth != null
         && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
-    }
-
-    // ---------------------------------------------------------------------
-    // Players — a directory entry for a real person, keyed by their (lowercased) email so the
-    // same person resolves to the same doc no matter which club adds them: e.g. two clubs each
-    // adding "alex@x.com" to a roster share one Player, rather than becoming two unrelated
-    // people. A roster entry with no email is just a plain name, exactly as before this
-    // collection existed — nothing here is required.
-    //
-    // homeClubId is whichever club FIRST published this player (made them public/borrowable) and
-    // is the only club whose owner/co-owner can edit or unpublish them; it's immutable afterward,
-    // same reasoning as ownerUid on a club. linkedUid is set once, automatically, the moment
-    // someone signs in with this exact email (see linkPlayerIfMatch in index.html) — it can only
-    // ever move from unset to that one specific person, never reassigned or cleared via this rule.
-    //
-    // Reads are open to any signed-in user, not just the home club — needed for the cross-club
-    // "browse public players" directory itself to work as a query rather than a per-doc lookup.
-    // Same "found by design, small and listable" trust level as /clubDirectory and
-    // /federationDirectory below: nothing sensitive lives on this doc beyond a name and an email,
-    // and it's genuinely meant to be found by other clubs, unlike club/federation membership data
-    // or a match/view code (which stay get-only precisely because they're NOT meant to be found —
-    // see /sharedMatches above).
-    // ---------------------------------------------------------------------
-    match /players/{playerEmail} {
-      allow get: if request.auth != null;
-      allow list: if request.auth != null;
-
-      allow create: if request.auth != null
-        && playerEmail == request.resource.data.email
-        && request.resource.data.get('linkedUid', null) == null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.homeClubId)).data);
-
-      allow update: if request.auth != null && (
-        // (A) Home club's owner/co-owner editing name/public. homeClubId, email, and linkedUid
-        // must not change via this branch — homeClubId transfer isn't supported here (see (C)
-        // below for the dedicated transfer path instead), and linkedUid is exclusively branch
-        // (B)'s to set.
-        (
-          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data) &&
-          request.resource.data.homeClubId == resource.data.homeClubId &&
-          request.resource.data.email == resource.data.email &&
-          request.resource.data.get('linkedUid', null) == resource.data.get('linkedUid', null)
-        )
-        ||
-        // (B) Auto-link on sign-in: the signed-in person's own verified email exactly matches
-        // this doc, nobody's linked to it yet, and the only fields changing are linkedUid (to
-        // exactly this person's own uid) and, optionally, photoURL — see linkPlayerIfMatch in
-        // index.html. photoURL must come verbatim from the auth token's own `picture` claim
-        // (never an arbitrary client-supplied value), so this can only ever mirror the signed-in
-        // person's own Google account picture, not attach an arbitrary image to someone else.
-        (
-          request.auth.token.email.lower() == resource.data.email &&
-          resource.data.get('linkedUid', null) == null &&
-          request.resource.data.linkedUid == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUid', 'photoURL']) &&
-          (
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL']) ||
-            request.resource.data.photoURL == request.auth.token.get('picture', null)
-          )
-        )
-        ||
-        // (C) Transfer to a different home club — authorized by the CURRENT home club's
-        // owner/co-owner only (same authority deletePlayer already requires from them; handing
-        // the player to a specific new club is strictly less drastic than the delete they're
-        // already allowed to do unilaterally, so no separate consent from the destination club is
-        // required here). homeClubId is the only field this branch may touch — everything else
-        // (name/age/role/hands/email/linkedUid/public) carries over exactly as it was, unlike the
-        // old delete-and-republish workaround this replaces, which lost that info. See
-        // transferPlayerHomeClub in index.html.
-        (
-          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['homeClubId']) &&
-          request.resource.data.homeClubId != resource.data.homeClubId
-        )
-      );
-
-      allow delete: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.homeClubId)).data);
-    }
-
-    // ---------------------------------------------------------------------
-    // Club invite codes. A single collection covers both kinds of club invite — becoming a plain
-    // member, or becoming a co-owner — distinguished by the code doc's own `role` field (checked
-    // against the redeemer's signed-in email in the clubs/{clubId} update rule, branch B, not
-    // here). A code is a single-purpose capability token: any signed-in user can look one up by
-    // its exact ID (that's how redeeming resolves code → clubId), but only the club's
-    // owner/co-owner can mint or revoke one.
-    // ---------------------------------------------------------------------
-    match /clubJoinCodes/{code} {
-      allow get: if request.auth != null;
-      allow list: if false;
-
-      allow create: if request.auth != null
-        && request.resource.data.clubId is string
-        && request.resource.data.email is string
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data);
-
-      allow delete: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data);
-
-      allow update: if false; // codes are immutable — rotate by delete + create instead
     }
 
     // ---------------------------------------------------------------------
@@ -650,22 +413,6 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['affiliatedClubIds']) &&
           canSyncFederationClubLeave(resource.data.get('affiliatedClubIds', []), request.resource.data.affiliatedClubIds)
         )
-        ||
-        // (F) Self-redeeming a PENDING /coOwnerInvites doc (scope 'federation') addressed to MY
-        // signed-in email — the federation twin of the clubs/{clubId} branch (F) above; see its
-        // comment for the full reasoning (same "check the invite as minted, not as it stands now"
-        // ordering, same "replaces minting new invites, not existing ones" scope). A federation has
-        // no membership tier of its own, so this only ever touches coOwnerUids.
-        (
-          request.resource.data.createdBy == resource.data.createdBy &&
-          request.resource.data.name == resource.data.name &&
-          request.resource.data.coOwnerUids == resource.data.get('coOwnerUids', []).concat([request.auth.uid]) &&
-          'coOwnerInviteAccepted' in request.resource.data &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.scope == 'federation' &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.entityId == federationId &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.email == request.auth.token.email.lower() &&
-          get(/databases/$(database)/documents/coOwnerInvites/$(request.resource.data.coOwnerInviteAccepted)).data.expiresAt > request.time
-        )
       );
 
       // A federation can be deleted once it's EMPTY — no club currently affiliated — by its
@@ -679,8 +426,7 @@ service cloud.firestore {
     }
 
     // A federation-hosted tournament — read is open to any signed-in user, the SAME trust tier as
-    // the federation document itself and its team directory just above (federations/{federationId},
-    // federations/{federationId}/teams/{entryId}): a federation was already designed as a
+    // the federation document itself just above: a federation was already designed as a
     // semi-public directory rather than a private space like a club, so this doesn't introduce any
     // new exposure, it just extends the same openness to cover the one thing a federation would
     // naturally want to host. The alternative — gating reads to "member of any affiliated club" —
@@ -693,227 +439,6 @@ service cloud.firestore {
     match /federations/{federationId}/tournaments/{tournamentId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
-        && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data);
-    }
-
-    // A club-affiliation invite, addressed to one email. Only that signed-in email may even read
-    // the code (so a stranger can't discover which federation it points to); redeeming it is a
-    // write to the CLUB's own federationIds, enforced by the clubs/{clubId} update rule's general
-    // branch (A), which already requires the caller to be that club's owner/co-owner.
-    match /federationJoinCodes/{code} {
-      allow get: if request.auth != null
-        && resource.data.email == request.auth.token.email.lower();
-      allow list: if false;
-
-      allow create: if request.auth != null
-        && request.resource.data.federationId is string
-        && request.resource.data.email is string
-        && isFederationOwner(get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data);
-
-      allow delete: if request.auth != null
-        && request.auth.uid == resource.data.createdBy;
-
-      allow update: if false;
-    }
-
-    // ---------------------------------------------------------------------
-    // Unified invites, addressed to one email — one collection covering every role/scope
-    // combination that ever needed an email-locked invite: club co-owner, club plain member, and
-    // federation co-owner (a federation has no plain-member tier of its own, so `role` there is
-    // always "coOwner"). Started out narrower — see the BUG FIX block below for the get()-in-list
-    // saga this collection went through while it only covered co-owner invites — then absorbed
-    // club member invites too, retiring clubJoinCodes' role:"member" create path the same way it
-    // already retired federationCoOwnerInviteCodes outright (once every invite minted under a
-    // retired path was confirmed redeemed or expired, its rules were removed rather than kept
-    // alive indefinitely; see docs/co-owner-invites-plan.md for the original migration this
-    // mirrors). Unlike a bearer code, this is a real record-per-invite the recipient's OWN client
-    // can query by their own email (`where("email","==",myEmail)`), so it shows up in their Inbox
-    // on its own — no code to mint, copy, or send out-of-band, for ANY role.
-    //
-    // clubJoinCodes' rules stay alive above (unchanged) — read/redeem-only now, purely so any
-    // member-role code already minted before this collection absorbed member invites still works
-    // until it's used or expires; nothing mints a new one any more (see inviteCoOwner's comment in
-    // index.html). federationCoOwnerInviteCodes, the OTHER old collection, served only co-owner
-    // invites, so once every one ever minted was confirmed redeemed or expired, its rules (and the
-    // federations/{id} update rule's matching redemption branch) were removed outright above
-    // rather than kept alive.
-    // ---------------------------------------------------------------------
-    // BUG FIX (round 3 -- the actual root cause): rounds 1/2 (createdBy-first, defensive
-    // .get(field,default) reads) both landed and were confirmed live, and the symptom STILL didn't
-    // clear -- every list/query against this collection kept failing permission-denied, even a
-    // query matching ZERO real documents (confirmed directly in the browser console, bypassing the
-    // app entirely: both `where("entityId","in",[...])` and the plain `where("entityId","==",...)`
-    // equivalent failed identically; a `where("email","==", <a value matching no document at
-    // all>)` query ALSO failed). That last one is the tell: an empty result set has nothing for a
-    // per-document rule to evaluate against, so a rule that's merely "false for this data" can
-    // never explain it -- something about the QUERY ITSELF was categorically unprovable.
-    //
-    // The actual mechanism: Firestore's rule engine, before it will run a `list`/query request at
-    // all, must be able to prove the rule holds for anything the query's own filters could
-    // possibly return -- and it must do this WITHOUT first fetching a document, since fetching is
-    // the very thing authorization is gating. A rule branch like
-    // `get(/databases/.../clubs/$(data.entityId))` needs `data.entityId`, a field that only exists
-    // once a candidate document has actually been read -- circular, and Firestore can't resolve
-    // it, so it refuses the ENTIRE list request outright. Confirmed this is all-or-nothing, not
-    // per-branch: `data.createdBy == request.auth.uid` alone needs no get() and would be trivially
-    // provable, but sitting in the same `||` expression as the get()-based ownership fallback took
-    // the whole compound expression down with it anyway. A plain `get` (single document, ID
-    // already known up front) has none of this circularity -- confirmed empirically too, all real
-    // invite documents passed individual `get` checks under the exact same rule that denied every
-    // list attempt.
-    //
-    // Fix: `list` now uses a narrower, get()-free check (coOwnerInviteCanList) -- recipient-by-
-    // email, or creator-by-uid, both plain resource.data/request.auth comparisons with no cross-
-    // document lookup at all. `get` keeps the full check (coOwnerInviteIsSender), including the
-    // club/federation-ownership fallback, since a single-document get has no such restriction.
-    // Real, deliberate narrowing versus the original design: a co-owner who didn't personally
-    // create a given invite currently can't find it via list (only its actual sender or its
-    // recipient can) -- would need denormalizing owner/co-owner uids onto the invite doc itself
-    // at send time to close that gap without any get() in a list-reachable rule. Not done here;
-    // flagging it since /federationRequests' `allow list: if ... canSeeRequest(resource.data)`
-    // a little further down has this exact same get()-in-a-list-rule shape and is likely equally
-    // broken, just not yet reported -- same fix pattern would apply there too.
-    function coOwnerInviteIsRecipient(data) {
-      return request.auth.token.email.lower() == data.get('email', '');
-    }
-    function coOwnerInviteCanList(data) {
-      return coOwnerInviteIsRecipient(data) || data.get('createdBy', '') == request.auth.uid;
-    }
-    function coOwnerInviteIsSender(data) {
-      return data.get('createdBy', '') == request.auth.uid
-        || (data.get('scope', '') == 'club' && data.get('entityId', '') != ''
-            && isClubOwner(get(/databases/$(database)/documents/clubs/$(data.entityId)).data))
-        || (data.get('scope', '') == 'federation' && data.get('entityId', '') != ''
-            && isFederationOwner(get(/databases/$(database)/documents/federations/$(data.entityId)).data));
-    }
-    match /coOwnerInvites/{inviteId} {
-      allow get: if request.auth != null
-        && (coOwnerInviteIsRecipient(resource.data) || coOwnerInviteIsSender(resource.data));
-      allow list: if request.auth != null && coOwnerInviteCanList(resource.data);
-
-      allow create: if request.auth != null
-        && request.resource.data.status == 'pending'
-        && request.resource.data.scope in ['club', 'federation']
-        && request.resource.data.entityId is string
-        && request.resource.data.email is string
-        // A federation has no plain-member tier, so role "member" is only ever valid for a club
-        // invite — see clubs/{clubId} branches (F)/(G) above for how each role gets redeemed.
-        && request.resource.data.get('role', 'coOwner') in ['member', 'coOwner']
-        && (request.resource.data.scope == 'club' || request.resource.data.get('role', 'coOwner') == 'coOwner')
-        && coOwnerInviteIsSender(request.resource.data);
-
-      // Recipient may only flip pending -> accepted/declined; sender may only flip pending ->
-      // cancelled. Either way, status (and respondedAt) is the only thing this write may change —
-      // the accept side-effect itself (joining coOwnerUids and/or memberUids, per role — see
-      // clubs/{clubId} branches (F)/(G) and federations/{federationId} branch (F) above) is a
-      // SEPARATE write to the club/federation doc, authorized by that doc's own rules, not this one.
-      allow update: if request.auth != null && resource.data.status == 'pending' && (
-        (coOwnerInviteIsRecipient(resource.data) && request.resource.data.status in ['accepted', 'declined'])
-        || (coOwnerInviteIsSender(resource.data) && request.resource.data.status == 'cancelled')
-      ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt']);
-
-      // Only the sender can clear one, and only once it's resolved (accepted/declined/cancelled) --
-      // this is the sender's own "here's what happened to the invite I sent" acknowledgement card
-      // (see outgoingCoOwnerInvites in inboxScreen.js), not the invite itself while it's still live.
-      // A pending invite is withdrawn via the update rule above (status -> cancelled), never deleted
-      // outright, so the recipient can't have it silently vanish out from under them mid-flight.
-      allow delete: if request.auth != null && coOwnerInviteIsSender(resource.data) && resource.data.status != 'pending';
-    }
-
-    // A directory entry publishes one club's team name as visible to every OTHER club sharing
-    // this same federation. Read is open to any signed-in user — this is intentionally a name
-    // directory, not a security boundary, exactly like what a federation invite itself grants
-    // (see joinFederationWithCode in index.html). A write is only valid if the writer is that
-    // club's owner/co-owner AND that club currently lists this federation in its own
-    // federationIds AND the federation hasn't blocklisted that club (kickedClubIds — see
-    // kickClubFromFederation in index.html for why a "kick" lives here rather than as a write to
-    // the target club's own document, which this app never allows). Existing stale entries are
-    // cleaned up client-side by leaveFederation()/kickClubFromFederation() rather than by this
-    // rule; losing federation affiliation or club ownership just blocks further writes.
-    match /federations/{federationId}/teams/{entryId} {
-      allow read: if request.auth != null;
-
-      allow create, update: if request.auth != null
-        && request.resource.data.clubId is string
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data)
-        && federationId in get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('federationIds', [])
-        && !(request.resource.data.clubId in get(/databases/$(database)/documents/federations/$(federationId)).data.get('kickedClubIds', []));
-
-      allow delete: if request.auth != null
-        && (
-          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data)
-          || isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
-        );
-    }
-
-    // A federation's member directory — one doc per affiliated club ({clubId, clubName}), written
-    // the moment a club's affiliation is confirmed (both accept paths in index.html) regardless of
-    // whether that club has published any teams yet. This exists because affiliatedClubIds on the
-    // federation doc (see canSyncFederationClubJoin/Leave above) is the authoritative membership
-    // list but carries no club name, and a federation owner has no read access to a club doc they
-    // don't belong to (see clubs/{clubId} read rule) — so without this doc a club with zero
-    // published teams would be affiliated but permanently nameless to everyone but itself. Same
-    // write shape and same reasoning as federations/{federationId}/teams just below: the joining
-    // club's own owner writes it (they have read access to their own club doc to source the name),
-    // and either side can delete it (self-leave or being kicked).
-    match /federations/{federationId}/members/{clubId} {
-      allow read: if request.auth != null;
-
-      allow create, update: if request.auth != null
-        && request.resource.data.clubId == clubId
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
-        && federationId in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('federationIds', [])
-        && !(clubId in get(/databases/$(database)/documents/federations/$(federationId)).data.get('kickedClubIds', []));
-
-      allow delete: if request.auth != null
-        && (
-          isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
-          || isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
-        );
-    }
-
-    // ---------------------------------------------------------------------
-    // Public directories — a lightweight denormalized entry so a club or federation can be found
-    // by search WITHOUT exposing the real document (roster, pending invites, description). Every
-    // club/federation is public/directory-listed by default now (createClub/createFederation in
-    // index.html write visibility:"public" and this mirror in the same breath a club/federation is
-    // created) — club/federation membership and every change to it are already owner/co-owner
-    // governed, so a separate opt-in gate on top of that never actually protected anything; there
-    // is no client UI to go private any more. setClubVisibility/setFederationVisibility(true) still
-    // exist purely to self-heal a club/federation created before this simplification whose
-    // visibility field predates it or was still "private" (see ClubPanel's/FederationsPanel's own
-    // comment) — nothing in the app calls them with `false` any more. Same "found by design" trust
-    // level as the /players directory above — read is open to any signed-in user so the search UI
-    // can just list the whole (small) collection and filter client-side.
-    //
-    // /clubDirectory also carries ownerUid/coOwnerUids (not just name/ownerName) — not for search,
-    // but so a federation owner proposing a "federation_to_club" request (see /federationRequests
-    // below) can read the target PUBLIC club's owner/co-owner uids client-side to denormalize them
-    // onto the request as toOwnerUids, without needing club membership: reading the real /clubs
-    // doc requires being a member (see clubs/{clubId} read rule), which a federation owner
-    // proposing to a club they don't belong to never is. This mirror can go stale if the club's
-    // ownership changes after it last republished (only a create/update of this doc refreshes it,
-    // same pre-existing staleness as name/ownerName) — accepted for the same reason those already
-    // are: a spoofed or stale value here can't itself grant anything, since federationRequests'
-    // create rule validates toOwnerUids against the REAL /clubs doc, not this mirror.
-    // ---------------------------------------------------------------------
-    match /clubDirectory/{clubId} {
-      allow get, list: if request.auth != null;
-      allow create, update: if request.auth != null
-        && request.resource.data.clubId == clubId
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data)
-        && get(/databases/$(database)/documents/clubs/$(clubId)).data.get('visibility', 'private') == 'public';
-      allow delete: if request.auth != null
-        && isClubOwner(get(/databases/$(database)/documents/clubs/$(clubId)).data);
-    }
-
-    match /federationDirectory/{federationId} {
-      allow get, list: if request.auth != null;
-      allow create, update: if request.auth != null
-        && request.resource.data.federationId == federationId
-        && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data)
-        && get(/databases/$(database)/documents/federations/$(federationId)).data.get('visibility', 'private') == 'public';
-      allow delete: if request.auth != null
         && isFederationOwner(get(/databases/$(database)/documents/federations/$(federationId)).data);
     }
 
@@ -934,10 +459,10 @@ service cloud.firestore {
     // the create/update rule instead pins every field to the caller's own verified identity: name
     // is theirs to set freely (same as the profile display name elsewhere in the app), but email
     // must equal their own token email and photoURL must equal their own token's `picture` claim
-    // exactly (or be absent/null) — same "can't spoof a photo" reasoning as players' auto-link
-    // branch (B) on clubs/{clubId}. Nothing here can be used to impersonate or misdirect an invite
-    // to someone else, since every field a searcher would act on is independently re-derived from
-    // the searcher's own knowledge of the real person, not just trusted from this doc blindly --
+    // exactly (or be absent/null) — can't spoof a photo. Nothing here can be used to impersonate or
+    // misdirect an invite to someone else, since every field a searcher would act on is
+    // independently derived from the searcher's own knowledge of the real person, not just trusted
+    // from this doc blindly --
     // and the actual invite this feeds into still targets the plain `email` field either way,
     // identical to typing it in by hand.
     // ---------------------------------------------------------------------
@@ -950,121 +475,6 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email.lower()
         && request.resource.data.get('photoURL', null) == request.auth.token.get('picture', null);
       allow delete: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // ---------------------------------------------------------------------
-    // Federation <-> club affiliation requests. Replaces the old federationJoinCodes email/code
-    // flow entirely (that collection's rules above are dead now, kept only so nothing throws for
-    // whatever's mid-flight; nothing in the app creates new ones any more). Either side can
-    // propose: a club owner requesting to join a PUBLIC federation ("club_to_federation"), or a
-    // federation owner inviting a PUBLIC club ("federation_to_club"). The OTHER side accepts or
-    // declines. Accepting a "federation_to_club" request lets the club owner write
-    // clubs/{clubId}.federationIds directly in the very same action, since a club owner already
-    // has unrestricted write access to their own federationIds (see clubs/{clubId} branch A) —
-    // no new capability needed there. Accepting a "club_to_federation" request only flips status
-    // to "accepted" here, because a federation must never get direct write access to a club
-    // document; the requesting club's OWNER finishes the join themselves the next time they see
-    // the acceptance (status -> "joined", see completeAcceptedFederationRequest in index.html).
-    //
-    // BUG FIX: `list`/`get` used to be gated on canSeeRequest doing a LIVE
-    // isClubOwner(get(clubs/data.clubId)) / isFederationOwner(get(federations/data.federationId))
-    // check — the exact same get()-in-a-list-rule shape flagged (but not fixed) when coOwnerInvites
-    // hit this same wall; see that collection's BUG FIX comment below for the full mechanism
-    // (Firestore can't prove a list request's rule holds without first fetching a document, and
-    // fetching is the very thing being authorized, so it refuses the whole request outright,
-    // regardless of what data exists). Confirmed here too: loadMyFederationRequests' client query
-    // filters by clubId/federationId, neither of which a get()-free rule can vouch for, so this
-    // was permission-denied unconditionally the whole time this shape existed — worse than
-    // coOwnerInvites' equivalent bug, since (unlike a co-owner invite's recipient-by-email path)
-    // there was no field on this doc a get()-free rule COULD check for the receiving side at all.
-    //
-    // Fix: denormalize the receiving side's owner/co-owner uids onto the request doc itself at
-    // create time (toOwnerUids), validated against live ownership in the create rule (get() has no
-    // circularity problem in create/update, only in list) so a client can't spoof its way into
-    // someone else's toOwnerUids. `get`/`list` then only need fromUid (the sender) or membership in
-    // toOwnerUids (the receiving side) — both plain resource.data/request.auth comparisons, no
-    // cross-document lookup. For "federation_to_club" the federation owner computing toOwnerUids
-    // client-side needs the target club's owner/co-owner uids without being a club member — see
-    // /clubDirectory below, now carrying ownerUid/coOwnerUids for exactly this (a public club is
-    // already a precondition of this direction, same precondition clubDirectory itself requires).
-    // Real, deliberate narrowing: toOwnerUids is a snapshot as of when the request was created — an
-    // owner/co-owner added to the receiving side afterward won't see this request in their list
-    // (though a still-current owner who WAS on it at creation time can still act on it via `update`
-    // below, which uses live ownership, not this snapshot, since update has no list-style
-    // circularity to route around). Not closed here.
-    // ---------------------------------------------------------------------
-    match /federationRequests/{requestId} {
-      function canSeeRequest(data) {
-        return data.get('fromUid', '') == request.auth.uid
-          || request.auth.uid in data.get('toOwnerUids', []);
-      }
-      allow get: if request.auth != null && canSeeRequest(resource.data);
-      allow list: if request.auth != null && canSeeRequest(resource.data);
-
-      allow create: if request.auth != null
-        && request.resource.data.status == 'pending'
-        && request.resource.data.clubId is string
-        && request.resource.data.federationId is string
-        && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.toOwnerUids is list
-        && (
-          (
-            request.resource.data.direction == 'club_to_federation' &&
-            isClubOwner(get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data) &&
-            get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('visibility', 'private') == 'public' &&
-            request.resource.data.toOwnerUids.hasOnly(
-              get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.get('coOwnerUids', [])
-                .concat([get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data.createdBy])
-            )
-          )
-          ||
-          (
-            request.resource.data.direction == 'federation_to_club' &&
-            isFederationOwner(get(/databases/$(database)/documents/federations/$(request.resource.data.federationId)).data) &&
-            get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('visibility', 'private') == 'public' &&
-            request.resource.data.toOwnerUids.hasOnly(
-              get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.get('coOwnerUids', [])
-                .concat([get(/databases/$(database)/documents/clubs/$(request.resource.data.clubId)).data.ownerUid])
-            )
-          )
-        );
-
-      allow update: if request.auth != null && (
-        // Receiving side accepts/declines a still-pending request.
-        (
-          (
-            (resource.data.direction == 'club_to_federation' && isFederationOwner(get(/databases/$(database)/documents/federations/$(resource.data.federationId)).data))
-            ||
-            (resource.data.direction == 'federation_to_club' && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data))
-          ) &&
-          resource.data.status == 'pending' &&
-          request.resource.data.status in ['accepted', 'declined'] &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
-        )
-        ||
-        // Sending side cancels their own still-pending request.
-        (
-          (
-            (resource.data.direction == 'club_to_federation' && isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data))
-            ||
-            (resource.data.direction == 'federation_to_club' && isFederationOwner(get(/databases/$(database)/documents/federations/$(resource.data.federationId)).data))
-          ) &&
-          resource.data.status == 'pending' &&
-          request.resource.data.status == 'cancelled' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
-        )
-        ||
-        // Club owner finalizing an ACCEPTED club_to_federation request — see comment above.
-        (
-          resource.data.direction == 'club_to_federation' &&
-          resource.data.status == 'accepted' &&
-          isClubOwner(get(/databases/$(database)/documents/clubs/$(resource.data.clubId)).data) &&
-          request.resource.data.status == 'joined' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        )
-      );
-
-      allow delete: if false;
     }
 
     // ---------------------------------------------------------------------
@@ -1098,9 +508,16 @@ service cloud.firestore {
     // event: someone joined, left, was removed, had their role changed, or responded to a
     // co-owner/member invite. This app has no server, no push, no email, so this collection IS the
     // notification system: written by the OTHER party's client at the moment of the real
-    // membership-changing write (see notifyActivity's call sites in index.html — respondCoOwnerInvite,
-    // joinClubWithCode, leaveClub, removeClubMember, removeClubCoOwner, removeFederationCoOwner),
-    // read by the recipient the next time they open their Inbox.
+    // membership-changing write, read by the recipient the next time they open their Inbox.
+    //
+    // Currently dormant: every one of notifyActivity's former call sites (respondCoOwnerInvite,
+    // joinClubWithCode, leaveClub, removeClubMember, removeClubCoOwner, removeFederationCoOwner) was
+    // club/federation-admin UI removed by docs/simplification-plan.md, so nothing writes here any
+    // more. Kept deliberately (see that plan doc) as reusable infrastructure — InboxScreen and the
+    // /activity collection itself stay in the codebase — for if/when team-sharing-with-another-
+    // person ships and needs a notification mechanism again; its club/federation-shaped ownership
+    // checks below would need rewriting for whatever that feature's real permission model turns
+    // out to be, since there'd be no club/federation to check ownership against.
     //
     // `create` can't validate full narrative correctness (e.g. that "removed" actually happened) --
     // that would mean re-deriving what a Firestore rule fundamentally can't see, the OLD value of a
@@ -1113,12 +530,7 @@ service cloud.firestore {
     // member) and the RECIPIENT is the owner being told about it; for removed/role_changed the
     // ACTOR is the owner who acted and the RECIPIENT is the affected person (maybe just a plain
     // member); for invite_response the ACTOR is whoever responded (not owner-tier if they declined,
-    // or if they accepted a plain member-role invite) and the RECIPIENT is the invite's sender (an
-    // owner/co-owner, by construction of coOwnerInvites' own create rule) — recipient-side coverage
-    // handles every one of these on its own even when the actor-side check doesn't.
-    //
-    // Same "get() is fine in create, only list has the circularity problem" distinction as every
-    // other collection in this file that hit that wall (coOwnerInvites, federationRequests above).
+    // or if they accepted a plain member-role invite) and the RECIPIENT is the invite's sender.
     // ---------------------------------------------------------------------
     function isClubOwnerTierUid(club, uid) {
       return uid == club.ownerUid || uid in club.get('coOwnerUids', []);

@@ -3,13 +3,12 @@ import { COLORS } from "./theme.js";
 import { ChevronLeft, ChevronRight, Users, GoogleGLogo, InboxIcon } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, Btn, ConfirmModal } from "./formUiAtoms.js";
-import { PLAYER_ROLES, PLAYER_HANDS } from "./playerModals.js";
 
-// The signed-in-or-not account/settings screen: profile display name, own public player-profile
-// summary if one exists, sign-in methods (link a password to a Google account or vice versa) and
-// sign out, admin tools (Feedback Inbox/Beta Testers counts), beta-tester tools (request beta
-// access, or generate/wipe dummy sandbox data once granted), export/import a JSON backup, and
-// account deletion -- or, signed out, the sign-in form (Google or email, with sign-up/reset).
+// The signed-in-or-not account/settings screen: profile display name, sign-in methods (link a
+// password to a Google account or vice versa) and sign out, admin tools (Feedback Inbox/Beta
+// Testers counts), beta-tester tools (request beta access, or generate/wipe dummy sandbox data
+// once granted), export/import a JSON backup, and account deletion -- or, signed out, the
+// sign-in form (Google or email, with sign-up/reset).
 // Every one of these is a bare-global Firebase Auth/Firestore wrapper, not extracted yet:
 // submitBetaRequest, loadFeedback, loadBetaRequests (an admin-only mount effect),
 // linkPasswordCredential, linkGoogleCredential, signUpEmail, signInEmail, sendPasswordReset --
@@ -21,14 +20,10 @@ import { PLAYER_ROLES, PLAYER_HANDS } from "./playerModals.js";
 export function AccountScreen({
   user,
   profile,
-  myPlayer,
   isAdmin,
   onOpenFeedbackInbox,
   onOpenBetaTesters,
-  onOpenClub,
   isBetaTester = false,
-  onGenerateDummyData,
-  onWipeDummyData,
   clubs = [],
   federationsById = {},
   onSignIn,
@@ -51,9 +46,6 @@ export function AccountScreen({
   const [importResult, setImportResult] = useState(null);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState(null);
-  const [dummyBusy, setDummyBusy] = useState(false);
-  const [dummyStatus, setDummyStatus] = useState("");
-  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [betaRequestBusy, setBetaRequestBusy] = useState(false);
   const [betaRequestSent, setBetaRequestSent] = useState(false);
@@ -117,14 +109,6 @@ export function AccountScreen({
   // Surfaced before deletion so the person can invite a co-owner first if they want a way out.
   const soleOwnerClubs = user ? clubs.filter(c => c.ownerUid === user.uid && (c.coOwnerUids || []).length === 0) : [];
   const soleOwnerFederations = user ? Object.values(federationsById).filter(f => f.createdBy === user.uid && (f.coOwnerUids || []).length === 0) : [];
-  // A player's homeClubId doesn't imply club MEMBERSHIP -- it's set by whichever club first added
-  // them to a team roster (see publishPlayer), entirely independent of the club invite/membership
-  // flow, so it's a normal, common case for someone to have a home club they were never actually
-  // invited into. `clubs` here is already scoped to clubs this account is a MEMBER of (see
-  // loadClubs), so finding a match here specifically means "you can navigate there" — the app has
-  // no way to view a club's internals without being a member, so a "jump to" link only makes sense
-  // when this resolves to something, not just whenever a home club name happens to be known.
-  const myPlayerHomeClub = myPlayer ? clubs.find(c => c.id === myPlayer.homeClubId) : null;
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -282,26 +266,6 @@ export function AccountScreen({
     setBusy(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
-  }
-  async function handleGenerateDummy() {
-    setDummyBusy(true);
-    setDummyStatus("");
-    const result = await onGenerateDummyData();
-    setDummyBusy(false);
-    if (result && result.ok) {
-      const warning = result.partialWipeFailures ? ` (${result.partialWipeFailures} club${result.partialWipeFailures === 1 ? "" : "s"} from a previous run couldn't be cleared \u2014 try Wipe again.)` : "";
-      setDummyStatus(`Dummy data generated \u2014 ${result.clubIds.length} boards, each with a senior XI and a "B" side, affiliated with ICC.${warning}`);
-    } else {
-      setDummyStatus((result && result.error) || "Couldn't generate dummy data.");
-    }
-  }
-  async function handleWipeDummy() {
-    setShowWipeConfirm(false);
-    setDummyBusy(true);
-    setDummyStatus("");
-    const result = await onWipeDummyData();
-    setDummyBusy(false);
-    setDummyStatus(result && !result.ok ? `Removed what it could, but ${result.failedCount} club${result.failedCount === 1 ? "" : "s"} wouldn't delete \u2014 try again.` : "Dummy data removed.");
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -484,75 +448,7 @@ export function AccountScreen({
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "Your player profile"), myPlayer ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 14.5,
-      color: COLORS.ink,
-      marginBottom: 3
-    }
-  }, myPlayer.name || myPlayer.email), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, [myPlayer.age && `${myPlayer.age} yrs`, (PLAYER_ROLES.find(r => r.value === myPlayer.role) || {}).label, myPlayer.battingHand && `${(PLAYER_HANDS.find(h => h.value === myPlayer.battingHand) || {}).label}-hand bat`, myPlayer.bowlingHand && (myPlayer.role === "bowler" || myPlayer.role === "allrounder") && `${(PLAYER_HANDS.find(h => h.value === myPlayer.bowlingHand) || {}).label}-arm bowler`].filter(Boolean).join(" \u00b7 ") || "No further details added yet"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft
-    }
-  }, "Managed by ", myPlayerHomeClub ? myPlayerHomeClub.name : "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Your profile is kept public, so other clubs can borrow you into their own rosters." : " Your profile isn't public, so only they can add you to a roster."), myPlayerHomeClub && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => onOpenClub(myPlayerHomeClub.id),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 8,
-      padding: 0,
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      color: COLORS.pitch
-    }
-  }, "View ", myPlayerHomeClub.name, /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 14
-  }))) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5
-    }
-  }, "No club has added you as a player yet. Once a club adds you to their roster using this exact email address, your profile shows up here automatically.")), /*#__PURE__*/React.createElement("div", {
+  }, "Shown around the app instead of your Google name, if you'd rather use something else."))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -728,71 +624,7 @@ export function AccountScreen({
       color: COLORS.ball,
       marginTop: 8
     }
-  }, betaRequestError)), isBetaTester && /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: COLORS.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 14,
-      boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "Beta tools"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginBottom: 10,
-      lineHeight: 1.5
-    }
-  }, "Fill your account with a club per country (named after its board), real international teams and players, and a shared ICC federation to try new features against."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleGenerateDummy,
-    disabled: dummyBusy,
-    variant: "default",
-    style: {
-      flex: 1,
-      minWidth: 160
-    }
-  }, dummyBusy ? "\u2026" : "Generate dummy data"), /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setShowWipeConfirm(true),
-    disabled: dummyBusy,
-    variant: "danger",
-    style: {
-      flex: 1,
-      minWidth: 160
-    }
-  }, "Wipe dummy data")), dummyStatus && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      marginTop: 8,
-      lineHeight: 1.5
-    }
-  }, dummyStatus), showWipeConfirm && /*#__PURE__*/React.createElement(ConfirmModal, {
-    title: "Wipe dummy data?",
-    message: "Removes every dummy board (club) and its teams. The shared ICC federation itself stays (reused next time) but ends up empty \u2014 you can delete it yourself from Home \u2192 Clubs if you don't want to keep it.",
-    confirmLabel: "Wipe",
-    variant: "danger",
-    busy: dummyBusy,
-    onConfirm: handleWipeDummy,
-    onCancel: () => setShowWipeConfirm(false)
-  }))) : /*#__PURE__*/React.createElement("div", {
+  }, betaRequestError))) : /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,

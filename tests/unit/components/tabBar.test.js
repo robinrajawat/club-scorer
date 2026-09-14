@@ -1,5 +1,5 @@
 // The persistent bottom tab bar (src/components/tabBar.js) shown on the four root screens (Home,
-// Live, Cups, Clubs) -- see TAB_BAR_SCREENS in cricketScorer.js for which screens show it.
+// Live, Cups, Teams) -- see TAB_BAR_SCREENS in cricketScorer.js for which screens show it.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -46,11 +46,11 @@ test("TabBar: tapping a tab calls onSelect with that tab's screen key", () => {
   assert.equal(selected, "tournaments");
 });
 
-test("TabBar: 'Clubs' tab maps to the \"teams\" screen key (TeamsScreen, not MyTeamsScreen)", () => {
+test("TabBar: 'Teams' tab maps to the \"teams\" screen key (MyTeamsScreen)", () => {
   let selected = null;
   const inst = render({ active: "home", onSelect: s => { selected = s; } });
-  const clubsButton = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Clubs");
-  act(() => { clubsButton.props.onClick(); });
+  const teamsButton = inst.root.findAllByType("button").find(b => b.props["aria-label"] === "Teams");
+  act(() => { teamsButton.props.onClick(); });
   assert.equal(selected, "teams");
 });
 

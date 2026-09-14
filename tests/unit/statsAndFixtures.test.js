@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   generateRoundRobinFixtures, generateGroupRoundRobinFixtures, computePlayerStats,
-  computeClubRecords, suggestPlayerOfMatch, suggestBestFielder, suggestPlayerOfTournament,
+  suggestPlayerOfMatch, suggestBestFielder, suggestPlayerOfTournament,
   allMatchPlayers
 } from "../../src/core/statsAndFixtures.js";
 
@@ -107,40 +107,4 @@ test("suggestPlayerOfTournament: same heuristic aggregated across multiple match
 test("allMatchPlayers: every name in every innings' batting/bowling order, no duplicates", () => {
   const names = allMatchPlayers(sampleMatch());
   assert.deepEqual(new Set(names), new Set(["P1", "P2", "P6", "P5"]));
-});
-
-test("computeClubRecords: credits centuries, five-wicket hauls, and win margins correctly", () => {
-  const centuryMatch = {
-    id: "M2", status: "complete", createdAt: 1000,
-    innings: [
-      {
-        battingTeam: "A", bowlingTeam: "B", runs: 200, wickets: 3, legalBalls: 120, ballsPerOver: 6, maxWickets: 10,
-        batsmen: { P1: { runs: 120, balls: 90, out: false } },
-        bowlers: {}
-      },
-      {
-        battingTeam: "B", bowlingTeam: "A", runs: 150, wickets: 10, legalBalls: 100, ballsPerOver: 6, maxWickets: 10,
-        batsmen: {},
-        bowlers: { P9: { wickets: 6, ballsBowled: 24, runs: 20 } }
-      }
-    ]
-  };
-  const records = computeClubRecords([centuryMatch]);
-  assert.equal(records.matchCount, 1);
-  assert.equal(records.centuries.length, 1);
-  assert.equal(records.centuries[0].name, "P1");
-  assert.equal(records.fiveWicketHauls.length, 1);
-  assert.equal(records.fiveWicketHauls[0].name, "P9");
-  // A won by 200 vs 150 all out (never chasing) — B's second-innings all-out means it's scored as
-  // a runs win for A of (200 - 150) = 50.
-  assert.equal(records.winsByRuns.length, 1);
-  assert.equal(records.winsByRuns[0].winner, "A");
-  assert.equal(records.winsByRuns[0].margin, 50);
-});
-
-test("computeClubRecords: sinceTs filters out matches created before the cutoff", () => {
-  const oldMatch = { id: "old", status: "complete", createdAt: 100, innings: [{ battingTeam: "A", bowlingTeam: "B", runs: 10, wickets: 0, batsmen: {}, bowlers: {} }] };
-  const newMatch = { id: "new", status: "complete", createdAt: 2000, innings: [{ battingTeam: "A", bowlingTeam: "B", runs: 20, wickets: 0, batsmen: {}, bowlers: {} }] };
-  const records = computeClubRecords([oldMatch, newMatch], 1000);
-  assert.equal(records.matchCount, 1);
 });

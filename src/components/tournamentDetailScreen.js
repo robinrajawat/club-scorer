@@ -55,17 +55,6 @@ export function TournamentDetailScreen({
   // the same venue and re-entering it per match is pure repetition. A fixture's own venue, when
   // set, still wins -- this only fills in the default.
   const [venueModalOpen, setVenueModalOpen] = useState(false);
-  // Visibility is no longer a manual choice anywhere -- it's derived straight from who's
-  // organizing: a club/federation tournament is always public (membership there is already
-  // owner/co-owner governed, same reasoning ClubPanel's/FederationsPanel's own identical comment
-  // gives), a personal one is always private. Either one created before this simplification, still
-  // carrying the opposite of what its organizer now implies, self-heals the moment its owner opens
-  // it here.
-  useEffect(() => {
-    if (!canManage || !onToggleVisibility) return;
-    if (!isPersonal && tournament.private) onToggleVisibility(tournament);
-    else if (isPersonal && !tournament.private) onToggleVisibility(tournament);
-  }, [tournament.id, tournament.private, isPersonal, canManage]);
   function editTournamentVenue(venue, lat, lng) {
     if (!canManage) return;
     onUpdateTournament({

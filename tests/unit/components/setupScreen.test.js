@@ -196,21 +196,13 @@ function walkToReview(inst) {
   act(() => { btn(inst, "Review").props.onClick(); });
 }
 
-// Visibility used to be its own manual toggle on the review page -- now there's no toggle at all,
-// only an Organizer picker (hidden entirely when this account owns no club/federation, same as
-// TournamentsScreen's own create form), and privacy is derived downstream from whichever of
-// clubId/federationId this match ends up carrying.
-test("SetupScreen: with no club/federation owned, there's no Organizer picker and the match carries no clubId/federationId", () => {
-  let started = null;
-  const inst = render({ onStart: m => { started = m; } });
-  walkToReview(inst);
-  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
-  act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.clubId, null);
-  assert.equal(started.federationId, null);
-});
-
-test("SetupScreen: picking an owned club as Organizer on the review page passes its id through to onStart as clubId", () => {
+// Visibility used to be its own manual toggle on the review page, alongside an Organizer picker
+// (personal/club/federation) that decided who a standalone match was organized under. The
+// Organizer picker is gone entirely now (part of simplifying to Teams/Matches/Tournaments -- see
+// docs/simplification-plan.md) -- every standalone match is just the account's own, regardless of
+// which clubs it owns, and privacy is its own explicit Visibility choice, not derived from who
+// organizes it.
+test("SetupScreen: a standalone match always carries no clubId/federationId, even for an account that owns a club -- no Organizer picker any more", () => {
   let started = null;
   const inst = render({
     onStart: m => { started = m; },
@@ -218,11 +210,9 @@ test("SetupScreen: picking an owned club as Organizer on the review page passes 
     currentUid: "owner1"
   });
   walkToReview(inst);
-  const organizerChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer");
-  assert.ok(organizerChoice, "owning a club should surface the Organizer picker");
-  act(() => { organizerChoice.props.onChange("club:c1"); });
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
   act(() => { btn(inst, "Start Match").props.onClick(); });
-  assert.equal(started.clubId, "c1");
+  assert.equal(started.clubId, null);
   assert.equal(started.federationId, null);
 });
 
@@ -250,6 +240,55 @@ test("SetupScreen: a fixture started from within a tournament inherits ITS organ
   act(() => { btn(inst, "Start Match").props.onClick(); });
   assert.equal(started.clubId, "c1");
   assert.equal(started.federationId, null);
+});
+
+// Reported live: visibility used to be derived from Organizer (personal always private, club/
+// federation always public), and the card carrying that explanation only showed at all once there
+// was more than one Organizer option -- meaning anyone with no clubs got a silently-private match
+// with no visible way to change that. Visibility is now its own always-shown choice, defaulting to
+// Public ("anyone who is interested can just follow the game"), independent of Organizer.
+test("SetupScreen: Visibility defaults to Public and is shown even with no clubs to organize under", () => {
+  let started = null;
+  const inst = render({ onStart: m => { started = m; } });
+  walkToReview(inst);
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  assert.ok(visibilityChoice, "shown even though there's no Organizer picker (no clubs)");
+  assert.equal(visibilityChoice.props.value, "public");
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, false);
+});
+
+test("SetupScreen: switching Visibility to Private flows through to onStart as private:true", () => {
+  let started = null;
+  const inst = render({ onStart: m => { started = m; } });
+  walkToReview(inst);
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  act(() => { visibilityChoice.props.onChange("private"); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, true);
+});
+
+test("SetupScreen: a fixture started from within a tournament inherits ITS visibility, with no Visibility picker of its own", () => {
+  let started = null;
+  const inst = render({
+    onStart: m => { started = m; },
+    presetTournament: { id: "t1", name: "Winter Cup", private: true, fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
+  });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility"), undefined);
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.private, true);
 });
 
 test("SetupScreen: umpires are optional and pass through to onStart", () => {

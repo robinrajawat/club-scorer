@@ -1,36 +1,23 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
+import { ChevronDown, ChevronLeft, Pencil, Plus, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
-import { AvailabilityPollModal } from "./availabilityPollModal.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
-import { isClubOwner } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
-// Two ways to reach this screen: as the "Teams" tab itself (always your personal teams, no
-// `activeClubId`/`onBack`), or nested inside the Clubs tab's own navigation when managing one
-// specific club's roster (`activeClubId` set to that club, `onBack` provided to return to the
-// club's admin screen without leaving the Clubs tab). It used to also offer a merged view across
-// every club at once via a source-chip picker, back when managing a club's teams meant leaving
-// the Clubs tab for this one -- now that a club's own screen hosts its roster directly, there's
-// no longer a case where this needs to show more than one source at a time, so that picker (and
-// the per-row source tag it existed to disambiguate) is gone. Per-team new/edit/delete/
-// send-poll actions remain. Covered by tests/unit/components/myTeamsScreen.test.js.
+// The "Teams" tab -- every team is just the account's own now (no club wrapper, no "nested inside
+// a club's own admin screen" mode, no source-chip picker across multiple clubs -- all of that went
+// alongside club/federation management, see docs/simplification-plan.md). Per-team new/edit/delete
+// actions remain. Covered by tests/unit/components/myTeamsScreen.test.js.
 //
-// Every write action is a prop (onDeleteTeam/onEditTeam/etc.), not a bare global, so
-// this needs no Firestore stubbing at all -- AvailabilityPollModal (used for the "send poll"
-// action) still needs Modal as a bare global internally, same as everywhere else it's used, but
-// that's handled inside its own module and test file, not here.
+// Every write action is a prop (onDeleteTeam/onEditTeam/etc.), not a bare global.
 
 export function MyTeamsScreen({
   teams = [],
   teamsLoading = false,
   matches,
-  clubs = [],
-  activeClubId = null,
   onBack,
-  currentUid,
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
@@ -40,28 +27,6 @@ export function MyTeamsScreen({
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
   // comment for why this is one flag across both screens rather than two separate ones.
   const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
-  // Team to show the availability-poll modal for, or null when it's closed -- club teams only
-  // (see canManageTeam below and the modal's own team-scoping), matching how sending a poll has
-  // always been club-only: there's nobody else to poll for a personal team.
-  const [pollingTeam, setPollingTeam] = useState(null);
-  // Only still needed for the poll modal's clubName below -- the per-row source tag this used to
-  // also drive was removed along with the merged multi-source view (see the file-level comment).
-  function sourceLabel(t) {
-    if (!t._clubId) return "Personal";
-    const club = clubs.find(c => c.id === t._clubId);
-    return club ? club.name : "Club";
-  }
-  // A personal team is always editable by whoever's looking at it; a club team only by that
-  // club's owner/co-owner -- matches firestore.rules (allow write: if isClubOwner(...)), which
-  // silently rejects anyone else's write. Without this check the merged list would offer New/
-  // Edit/Delete/Move to any plain club member and let them hit that rejection after filling out
-  // a whole team, instead of never showing the controls in the first place.
-  function canManageTeam(t) {
-    if (!t._clubId) return true;
-    return isClubOwner(clubs.find(c => c.id === t._clubId), currentUid);
-  }
-  const activeClub = activeClubId ? clubs.find(c => c.id === activeClubId) || null : null;
-  const canManageActive = !activeClub || isClubOwner(activeClub, currentUid);
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
@@ -103,7 +68,7 @@ export function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(ChevronLeft, {
     size: 16
-  }), " ", (activeClub && activeClub.name) || "Back"), /*#__PURE__*/React.createElement("div", {
+  }), " Home"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -121,13 +86,13 @@ export function MyTeamsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, activeClubId ? "Teams" : "My Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Refreshing\u2026",
+  }, "My Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Refreshing…",
     size: 14,
     style: {
       fontSize: 11.5
     }
-  })), !activeClubId && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -135,11 +100,7 @@ export function MyTeamsScreen({
       lineHeight: 1.5,
       marginBottom: 14
     }
-    // "Clearly mention what it is" -- reached from a plain "My Teams" link on Home now rather
-    // than its own bottom tab (see tabBar.js), which used to make "these are YOUR personal teams,
-    // nothing club-owned" obvious just from which tab you were on. That context is gone now that
-    // it's a drill-in screen, so it has to be said outright instead.
-  }, "Your own teams, not tied to any club -- use these for pickup games or matches you score without a club involved. A club's own teams live under that club instead (Clubs tab)."), /*#__PURE__*/React.createElement("div", {
+  }, "Build a simple roster once, then reuse it for every match or tournament you score."), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -168,19 +129,19 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, activeClubId ? (clubs.find(c => c.id === activeClubId) || {}).name || "Club Teams" : "My Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, "My Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
       color: COLORS.inkSoft
     }
-  }, `\u00b7 ${teams.length}`)), /*#__PURE__*/React.createElement("div", {
+  }, `· ${teams.length}`)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 4
     }
-  }, canManageActive && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -226,12 +187,12 @@ export function MyTeamsScreen({
       ...(teams.length === 0 ? { flex: 1, display: "flex", flexDirection: "column" } : {})
     }
   }, teamsLoading && teams.length === 0 ? /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading your teams\u2026",
+    label: "Loading your teams…",
     size: 20,
     style: {
       padding: "10px 4px"
     }
-  }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, activeClubId ? "No teams saved for this club yet." : "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), canManageActive ? "Add one to reuse its line-up in future matches." : "Only the club's owner can add one.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && teams.some(canManageTeam) && /*#__PURE__*/React.createElement("div", {
+  }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "right",
       fontFamily: "'Inter'",
@@ -240,14 +201,14 @@ export function MyTeamsScreen({
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "\u2190 swipe to delete"), teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete"), teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
       marginBottom: i === teams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: canManageTeam(t) ? () => onDeleteTeam(t.id, t._clubId || null) : undefined,
+    onDelete: () => onDeleteTeam(t.id, null),
     deleteLabel: "Delete",
     onSwipeStart: () => setShowSwipeHint(false)
   }, /*#__PURE__*/React.createElement("div", {
@@ -261,17 +222,17 @@ export function MyTeamsScreen({
       justifyContent: "space-between"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    onClick: canManageTeam(t) ? () => onEditTeam(t) : undefined,
-    onKeyDown: canManageTeam(t) ? e => {
+    onClick: () => onEditTeam(t),
+    onKeyDown: e => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         onEditTeam(t);
       }
-    } : undefined,
-    role: canManageTeam(t) ? "button" : undefined,
-    tabIndex: canManageTeam(t) ? 0 : undefined,
+    },
+    role: "button",
+    tabIndex: 0,
     style: {
-      cursor: canManageTeam(t) ? "pointer" : "default",
+      cursor: "pointer",
       flex: 1,
       minWidth: 0
     }
@@ -281,17 +242,7 @@ export function MyTeamsScreen({
       alignItems: "center",
       gap: 7
     }
-  }, t._clubId && (clubs.find(c => c.id === t._clubId) || {}).logoURL && /*#__PURE__*/React.createElement("img", {
-    src: (clubs.find(c => c.id === t._clubId) || {}).logoURL,
-    alt: "",
-    style: {
-      width: 16,
-      height: 16,
-      borderRadius: "50%",
-      objectFit: "cover",
-      flexShrink: 0
-    }
-  }), t.color && /*#__PURE__*/React.createElement("span", {
+  }, t.color && /*#__PURE__*/React.createElement("span", {
     "aria-hidden": "true",
     style: {
       width: 11,
@@ -318,7 +269,7 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " \u00b7 ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played"), (t.captain || t.viceCaptain || t.keeper) && /*#__PURE__*/React.createElement("div", {
+  }, t.players.length, " player", t.players.length === 1 ? "" : "s", " · ", teamMatchCount(t.id), " match", teamMatchCount(t.id) === 1 ? "" : "es", " played"), (t.captain || t.viceCaptain || t.keeper) && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -337,7 +288,7 @@ export function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "C \u00b7 ", t.captain), t.viceCaptain && /*#__PURE__*/React.createElement("span", {
+  }, "C · ", t.captain), t.viceCaptain && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -347,7 +298,7 @@ export function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "VC \u00b7 ", t.viceCaptain), t.keeper && /*#__PURE__*/React.createElement("span", {
+  }, "VC · ", t.viceCaptain), t.keeper && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 10.5,
@@ -357,23 +308,7 @@ export function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "WK \u00b7 ", t.keeper))), canManageTeam(t) && t._clubId && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setPollingTeam(t),
-    className: "cs-btn",
-    "aria-label": `Poll availability for ${t.name}`,
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(CalendarClock, {
-    size: 15
-  })), canManageTeam(t) && /*#__PURE__*/React.createElement("button", {
+  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -390,10 +325,5 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
   })))))))))
-), pollingTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: pollingTeam._clubId,
-    clubName: sourceLabel(pollingTeam),
-    team: pollingTeam,
-    onClose: () => setPollingTeam(null)
-  }))
+))
 }

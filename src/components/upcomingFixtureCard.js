@@ -1,28 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, Hand, Pencil, Share, Trophy, Users } from "./icons.js";
+import { CalendarClock, Pencil, Share, Trophy } from "./icons.js";
 import { Btn, AlertModal } from "./formUiAtoms.js";
-import { FixturePollSummary } from "./scoreboardAtoms.js";
 import { FixtureDateTimeModal, VenueEditModal } from "./venueAndDateModals.js";
-import { AvailabilityPollModal } from "./availabilityPollModal.js";
-import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildFixtureShareText, buildMapsUrl, resolvePollTeams } from "../core/shareAndFormat.js";
-import { expiresAtMillis, weatherCodeInfo } from "../core/miscHelpers.js";
+import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildFixtureShareText, buildMapsUrl } from "../core/shareAndFormat.js";
+import { weatherCodeInfo } from "../core/miscHelpers.js";
 
 // An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
 // section both use this): schedule date/time, edit venue (with a weather forecast once a verified
-// address + upcoming date line up), share match details, add to calendar, and send/check an
-// availability poll to whichever of the two teams this person manages. Own component rather than a
-// plain render function -- it needs its own state for four different inline modals, and hooks
+// address + upcoming date line up), share match details, and add to calendar. Own component rather
+// than a plain render function -- it needs its own state for several inline modals, and hooks
 // can't safely live in a function invoked via .map() the way a real component instance can.
-// References Modal as a bare, unimported global (same pattern as ConfirmModal/playerModals.js) for
-// its own "which team?" picker, so tests can stub `globalThis.Modal` without pulling in jsdom.
 // Covered by tests/unit/components/upcomingFixtureCard.test.js.
 //
-// Three bare-global Firestore/network functions, none extracted (need the Firebase SDK / a real
-// fetch): `loadFixturePollSummary` and `fetchFixtureWeather` both run from mount-time useEffects
-// (not just handlers), so every test stubs them -- same pattern as AvailabilityPollModal/
-// BetaTestersScreen. `loadTeamPolls` (from openPollFor) and `downloadTextFile`/`shareText` are
-// only ever called from onClick handlers.
+// `fetchFixtureWeather` (a bare-global network function, not extracted) runs from a mount-time
+// useEffect, same stubbing pattern as BetaTestersScreen. `downloadTextFile`/`shareText` are only
+// ever called from onClick handlers.
 
 export function UpcomingFixtureCard({
   tournament: t,
@@ -32,8 +25,7 @@ export function UpcomingFixtureCard({
   onScheduleFixture,
   onStartFixture,
   onEditVenue,
-  clubs = [],
-  clubTeamsById = {}
+  clubs = []
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [venueModalOpen, setVenueModalOpen] = useState(false);
@@ -46,48 +38,9 @@ export function UpcomingFixtureCard({
   const venue = f.venue || t.venue;
   const venueLat = f.venue ? f.venueLat : t.venueLat;
   const venueLng = f.venue ? f.venueLng : t.venueLng;
-  const [pollModalOpen, setPollModalOpen] = useState(false);
-  const [pollCheckBusy, setPollCheckBusy] = useState(false);
-  // Set right before opening the poll modal, only if a still-active poll already exists for this
-  // exact fixture -- without this, "Send poll" always opened straight to a fresh create form
-  // regardless of whether one had already gone out for this fixture, an easy way to accidentally
-  // send a duplicate. Opens to that existing poll's results instead when one's found.
-  const [existingPollCode, setExistingPollCode] = useState(null);
-  // Only used when resolvePollTeams below finds more than one match -- lets the person say which
-  // team they mean instead of silently guessing (see resolvePollTeams for why that's possible).
-  const [pollTeamPickerOpen, setPollTeamPickerOpen] = useState(false);
-  const [selectedPollTeam, setSelectedPollTeam] = useState(null); // {team, club}, once resolved or picked
   const [weather, setWeather] = useState(null);
   const friendlyDateTime = formatFixtureDateTime(f.date || "");
   const fixtureDateStr = ISO_DATETIME_RE.test(f.date || "") ? f.date.split("T")[0] : null;
-  // Quietly finds nothing (no "Send poll" button at all) for a fixture where neither side
-  // corresponds to a roster-tracked team, rather than erroring -- most tournament fixtures are
-  // entered as bare names and were never meant to resolve to one. More than one match (both sides
-  // are teams this person manages) surfaces a picker instead of guessing -- see pollTeamPickerOpen.
-  const matchingPollTeams = resolvePollTeams(f.teamA, f.teamB, clubs, clubTeamsById);
-  const [pollSummary, setPollSummary] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    loadFixturePollSummary(f.id, matchingPollTeams).then(result => {
-      if (!cancelled) setPollSummary(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [f.id, matchingPollTeams.map(e => e.team.id).join(",")]);
-  async function openPollFor(club, team) {
-    if (pollCheckBusy) return;
-    setSelectedPollTeam({
-      club,
-      team
-    });
-    setPollCheckBusy(true);
-    const pointers = await loadTeamPolls(club.id, team.id);
-    const existing = pointers.find(p => p.fixtureId === f.id && (expiresAtMillis(p.expiresAt) == null || expiresAtMillis(p.expiresAt) > Date.now()));
-    setPollCheckBusy(false);
-    setExistingPollCode(existing ? existing.code : null);
-    setPollModalOpen(true);
-  }
   // Open-Meteo's forecast horizon is 16 days -- outside that window (or for a fixture with no
   // scheduled date, or a venue with no verified coordinates) there's simply nothing to show, so
   // this quietly does nothing rather than showing a permanent "no forecast yet" placeholder.
@@ -308,38 +261,7 @@ export function UpcomingFixtureCard({
       fontWeight: 600,
       color: COLORS.inkSoft
     }
-  }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), /*#__PURE__*/React.createElement(FixturePollSummary, {
-    items: pollSummary
-  }), matchingPollTeams.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      if (pollCheckBusy) return;
-      if (matchingPollTeams.length > 1) {
-        setPollTeamPickerOpen(true);
-        return;
-      }
-      openPollFor(matchingPollTeams[0].club, matchingPollTeams[0].team);
-    },
-    className: "cs-btn",
-    disabled: pollCheckBusy,
-    "aria-label": "Send availability poll",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 30,
-      height: 30,
-      flexShrink: 0,
-      background: COLORS.creamDark,
-      border: "none",
-      borderRadius: 8,
-      cursor: pollCheckBusy ? "default" : "pointer",
-      opacity: pollCheckBusy ? 0.6 : 1,
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Hand, {
-    size: 14
-  })), f.date && /*#__PURE__*/React.createElement("button", {
+  }, weatherCodeInfo(weather.code).emoji, " ", weather.tempMin, "\u2013", weather.tempMax, "\u00b0"), f.date && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => downloadTextFile(`${f.teamA}-vs-${f.teamB}`.replace(/[^a-z0-9]+/gi, "-") + ".ics", "text/calendar", buildFixtureICS(f, t.name, venue, venueLat, venueLng)),
     className: "cs-btn",
@@ -396,97 +318,6 @@ export function UpcomingFixtureCard({
     clubs: clubs,
     onSave: (newVenue, newLat, newLng) => onEditVenue(t, f, newVenue, newLat, newLng),
     onClose: () => setVenueModalOpen(false)
-  }), pollTeamPickerOpen && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setPollTeamPickerOpen(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Which team?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 16
-    }
-  }, `Both ${f.teamA} and ${f.teamB} are teams you manage \u2014 who's this poll for?`), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, matchingPollTeams.map((entry, idx) => /*#__PURE__*/React.createElement("button", {
-    key: entry.team.id,
-    type: "button",
-    onClick: () => {
-      setPollTeamPickerOpen(false);
-      openPollFor(entry.club, entry.team);
-    },
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 12,
-      padding: "10px 12px",
-      cursor: "pointer",
-      animation: `cs-slideUp 0.3s ease ${idx * 0.04}s backwards`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 28,
-      height: 28,
-      borderRadius: "50%",
-      background: "rgba(74,124,46,0.1)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 13,
-    style: {
-      color: COLORS.turf
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13.5,
-      color: COLORS.ink
-    }
-  }, entry.team.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft
-    }
-  }, entry.club.name)))))), pollModalOpen && selectedPollTeam && /*#__PURE__*/React.createElement(AvailabilityPollModal, {
-    clubId: selectedPollTeam.club.id,
-    clubName: selectedPollTeam.club.name,
-    team: selectedPollTeam.team,
-    initialCode: existingPollCode || undefined,
-    fixtureContext: existingPollCode ? undefined : {
-      tournamentId: t.id,
-      fixtureId: f.id,
-      question: `Available for ${f.teamA} vs ${f.teamB}?`,
-      fixtureDate: fixtureDateStr || ""
-    },
-    onClose: () => {
-      setPollModalOpen(false);
-      loadFixturePollSummary(f.id, matchingPollTeams).then(setPollSummary);
-    }
   }), alertMessage && /*#__PURE__*/React.createElement(AlertModal, {
     message: alertMessage,
     onClose: () => setAlertMessage(null)

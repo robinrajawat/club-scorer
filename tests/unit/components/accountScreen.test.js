@@ -37,8 +37,8 @@ function hasText(node, str) {
 
 function baseProps(overrides = {}) {
   return {
-    user: null, profile: null, myPlayer: null, isAdmin: false,
-    onOpenFeedbackInbox: () => {}, onOpenBetaTesters: () => {}, onOpenClub: () => {},
+    user: null, profile: null, isAdmin: false,
+    onOpenFeedbackInbox: () => {}, onOpenBetaTesters: () => {},
     isBetaTester: false, onGenerateDummyData: () => Promise.resolve({ ok: true, clubIds: [] }),
     onWipeDummyData: () => Promise.resolve({ ok: true }),
     clubs: [], federationsById: {},
@@ -142,23 +142,16 @@ test("AccountScreen: requesting beta access calls submitBetaRequest and shows co
   assert.match(JSON.stringify(inst.toJSON()), /Request sent/);
 });
 
-test("AccountScreen: beta tester tools generate and wipe dummy data", async () => {
-  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  let generated = false, wiped = false;
+// The "generate/wipe dummy data" beta tool seeded fake clubs/federations to try club-related
+// features against -- removed alongside clubs/federations (see docs/simplification-plan.md).
+test("AccountScreen: no dummy-data tools shown, even for a beta tester", () => {
   const inst = render({
     user: { uid: "u1", displayName: "Robin", email: "robin@x.com", providerData: [] },
-    isBetaTester: true,
-    onGenerateDummyData: () => { generated = true; return Promise.resolve({ ok: true, clubIds: ["c1", "c2"] }); },
-    onWipeDummyData: () => { wiped = true; return Promise.resolve({ ok: true }); }
+    isBetaTester: true
   });
-  await act(async () => { btn(inst, "Generate dummy data").props.onClick(); });
-  assert.equal(generated, true);
-  assert.match(JSON.stringify(inst.toJSON()), /2 boards/);
-
-  act(() => { btn(inst, "Wipe dummy data").props.onClick(); });
-  const confirmWipeBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Wipe");
-  await act(async () => { confirmWipeBtn.props.onClick(); });
-  assert.equal(wiped, true);
+  const text = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(text, /Generate dummy data/);
+  assert.doesNotMatch(text, /Wipe dummy data/);
 });
 
 test("AccountScreen: deleting the account requires typing DELETE before it's enabled", async () => {

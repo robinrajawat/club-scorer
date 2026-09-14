@@ -4,9 +4,8 @@ import { ArrowLeftRight, ChevronRight } from "./icons.js";
 import { BallBadge } from "./matchDisplayAtoms.js";
 import { ballLabelsForOver } from "../core/miscHelpers.js";
 
-// Small live-scoring display atoms: OversStrip (the swipeable per-over ball-by-ball strip),
-// FixturePollSummary (yes/no/maybe availability-poll tally chips), and SyncStatusBanner (the
-// "N matches not synced" banner with online/offline awareness). Covered by
+// Small live-scoring display atoms: OversStrip (the swipeable per-over ball-by-ball strip), and
+// SyncStatusBanner (the "N matches not synced" banner with online/offline awareness). Covered by
 // tests/unit/components/scoreboardAtoms.test.js.
 //
 // SyncStatusBanner reads navigator.onLine and window's online/offline events directly, so like
@@ -180,51 +179,6 @@ export function OversStrip({
       label: ballLabelsForOver(i, balls)[bi]
     }))));
   })));
-}
-
-export function FixturePollSummary({
-  items
-}) {
-  if (!items || items.length === 0) return null;
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, items.map(it => /*#__PURE__*/React.createElement("div", {
-    key: it.code,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700
-    }
-  }, items.length > 1 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.inkSoft,
-      fontWeight: 600,
-      maxWidth: 70,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, it.team.name), it.yes > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.pitch
-    }
-  }, it.yes, " yes"), it.no > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.ball
-    }
-  }, it.no, " no"), it.maybe > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.gold
-    }
-  }, it.maybe, " maybe"))));
 }
 
 export function SyncStatusBanner({

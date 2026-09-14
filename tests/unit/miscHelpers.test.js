@@ -9,7 +9,7 @@ import {
   relativeDayLabel, greetingPrefix, tournamentStatus, tournamentDateRangeLabel,
   playerInitials, playerAvatarColor, parseOverLabel, ballLabelsForOver,
   buildClaudeFixPrompt, accountExistsLinkInfo, friendlyEmailAuthError,
-  getFollowCodeFromUrl, getTournamentFollowCodeFromUrl, getPollCodeFromUrl,
+  getFollowCodeFromUrl, getTournamentFollowCodeFromUrl,
   getShortcutActionFromUrl, getAuthActionFromUrl
 } from "../../src/core/miscHelpers.js";
 
@@ -194,7 +194,6 @@ test("friendlyEmailAuthError: maps known Firebase Auth codes to user-facing copy
 test("getFollowCodeFromUrl and friends: fall back to null when window isn't available (as in Node)", () => {
   assert.equal(getFollowCodeFromUrl(), null);
   assert.equal(getTournamentFollowCodeFromUrl(), null);
-  assert.equal(getPollCodeFromUrl(), null);
   assert.equal(getShortcutActionFromUrl(), null);
   assert.equal(getAuthActionFromUrl(), null);
 });

@@ -176,11 +176,9 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   in a template string) won't show up in a `React.createElement(X` grep
   for dependencies — it only surfaces as a `ReferenceError` once a test
   actually imports and runs the file.
-- `src/components/playerModals.js` /
-  `tests/unit/components/playerModals.test.js` — `EditPlayerModal` and
-  `TransferPlayerModal`. `src/components/miscModals.js` /
+- `src/components/miscModals.js` /
   `tests/unit/components/miscModals.test.js` — `FirstLaunchTour` and
-  `TournamentShareModal`. Both files reference `Modal` as a bare,
+  `TournamentShareModal`. Both reference `Modal` as a bare,
   unimported global (same pattern as `ConfirmModal`), not a real
   `import` — a real import binds the identifier at module load, so
   `globalThis.Modal = StubModal` (the trick every other `Modal`-using
@@ -340,13 +338,6 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   (`buildMatchRecapDraft`, from `matchRecap.js` above) with its "Polish with
   AI" button — `polishMatchRecap` (another bare global, not extracted) is
   stubbed per test the same way `saveMatch`/`loadMatch` are.
-- `src/components/playersScreen.js` /
-  `tests/unit/components/playersScreen.test.js` — `PlayersScreen`, the
-  public player directory. Both mount effects call props
-  (`onLoadPublicPlayers`/`onComputeCareerStats`), not bare globals, so
-  no Firestore stubbing anywhere; the only stub needed is `Modal`, for
-  the tests that open `ConfirmModal`/`EditPlayerModal`/
-  `TransferPlayerModal`.
 - `src/components/followScreen.js` /
   `tests/unit/components/followScreen.test.js` — `FollowScreen`, the
   public live match-following page. Subscribes via
@@ -379,15 +370,6 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   `Object.defineProperty` workaround for Node's read-only `navigator`
   as `shareMenus.test.js`. Several action buttons only render once a
   row is expanded, so most tests click the row header first.
-- `src/components/recordsScreen.js` /
-  `tests/unit/components/recordsScreen.test.js` — `RecordsScreen`, a
-  club's/federation's Record Book. `loadFederationTournaments`/
-  `loadClubTournaments`/`loadTournamentMatches` all run together from
-  one mount-time `useEffect`; `downloadMultiSectionCSV` is stubbed only
-  in the export test. Also imports `ISO_DATETIME_RE` from
-  `shareAndFormat.js` and sets it on `globalThis` — `appLogic.js`'s
-  `computeTournamentPlacement` references it as a bare global, and this
-  is the first test file to actually exercise that code path.
 - `src/components/fixturesSection.js` /
   `tests/unit/components/fixturesSection.test.js` — `FixturesSection`,
   a tournament's schedule tab. No bare globals of its own (every write
@@ -480,24 +462,19 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   `/"Step ","1"," of ","4"/`, not a plain substring.
 - `src/components/teamEditScreen.js` / `tests/unit/components/teamEditScreen.test.js`
   — `TeamEditScreen`, create/edit a team's roster (name, jersey color,
-  add/remove players — typed, borrowed from another club, or copied
-  from the club pool — captain/keeper, publish/unpublish to the shared
-  player directory). Every Firestore-reaching write is a prop; the one
-  bare global is `checkDeletedBorrowedPlayers`, stubbed only where a
-  test's roster has a borrowed player with an email. `Modal` stays a
-  bare, unimported global here too (this screen renders it directly
-  for its own borrow/pool dialogs, not just via `ConfirmModal`) — a
-  real `import { Modal } from "./modal.js"` was caught and reverted
-  before any test ran, per the rule from `playerModals.js`/
-  `miscModals.js`'s own batch. One test needed a hand-rolled `hasText`
-  walker instead of `JSON.stringify` to search a *live* React element
-  (as opposed to a `renderer.toJSON()` tree) — `JSON.stringify` throws
-  on a live element's circular `_owner` reference.
+  add/remove players, captain/vice-captain/keeper). Every write is a
+  prop, so this needs no Firestore stubbing; `Modal` (bare, unimported
+  global, same pattern as `ConfirmModal` everywhere else) backs the
+  delete-player/delete-team confirm dialogs. One test needed a
+  hand-rolled `hasText` walker instead of `JSON.stringify` to search a
+  *live* React element (as opposed to a `renderer.toJSON()` tree) —
+  `JSON.stringify` throws on a live element's circular `_owner`
+  reference.
 - `src/components/accountScreen.js` / `tests/unit/components/accountScreen.test.js`
   — `AccountScreen`, the signed-in-or-not account/settings screen
-  (profile name, player-profile summary, sign-in method linking, sign
-  out, admin tools, beta-tester tools, export/import backup, account
-  deletion, or the signed-out sign-in form). Eight bare-global Auth/
+  (profile name, sign-in method linking, sign out, admin tools,
+  beta-tester tools, export/import backup, account deletion, or the
+  signed-out sign-in form). Eight bare-global Auth/
   Firestore calls (`submitBetaRequest`, `loadFeedback`,
   `loadBetaRequests` — an admin-only mount effect —
   `linkPasswordCredential`, `linkGoogleCredential`, `signUpEmail`,

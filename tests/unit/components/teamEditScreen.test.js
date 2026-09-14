@@ -1,9 +1,6 @@
-// Create/edit a team's roster (src/components/teamEditScreen.js). Every Firestore-reaching write
-// is a prop; the one bare global is checkDeletedBorrowedPlayers, called from a mount-time
-// useEffect only when the roster has a borrowed player with an email -- most tests never trigger
-// it, so it only needs stubbing where noted. `Modal` (bare global, same pattern as everywhere else
-// in this suite) backs the borrow/pool dialogs and, one module away, ConfirmModal's own delete
-// dialog -- both stub globalThis.Modal, not a real import.
+// Create/edit a team's roster (src/components/teamEditScreen.js). Every write is a prop, so this
+// needs no Firestore stubbing. `Modal` (bare global, same pattern as everywhere else in this
+// suite) backs ConfirmModal's own delete dialog -- stub globalThis.Modal, not a real import.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -16,18 +13,11 @@ import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
 
 afterEach(() => {
   delete globalThis.Modal;
-  delete globalThis.checkDeletedBorrowedPlayers;
 });
 
 function baseProps(overrides = {}) {
   return {
-    team: null, clubId: null, clubs: [],
-    onPublishPlayer: () => Promise.resolve({ ok: true }),
-    onUnpublishPlayer: () => Promise.resolve({ ok: true }),
-    onUpdatePlayerInfo: () => Promise.resolve({ ok: true }),
-    onLoadPublicPlayers: () => Promise.resolve([]),
-    onAddPoolPlayers: () => {},
-    presetTeamSeed: null,
+    team: null,
     onSave: () => {}, onCancel: () => {},
     ...overrides
   };
@@ -159,120 +149,6 @@ test("TeamEditScreen: jersey color presets and a custom color both update the pa
   act(() => { swatch.props.onClick(); });
   act(() => { btn(inst, "Save Team").props.onClick(); });
   assert.equal(saved.color, "#1b3a6b");
-});
-
-test("TeamEditScreen: 'Borrow a public player' loads and lists the public directory", async () => {
-  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  const inst = render({
-    clubId: "c1",
-    onLoadPublicPlayers: () => Promise.resolve([{ id: "p1", name: "C. Patel", email: "c@x.com", homeClubId: "c2" }])
-  });
-  const borrowBtn = inst.root.findAllByType("button").find(b =>
-    Array.isArray(b.props.children) && b.props.children.some(c => typeof c === "string" && c.includes("Borrow a public player"))
-  );
-  await act(async () => {
-    borrowBtn.props.onClick();
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.match(JSON.stringify(inst.toJSON()), /C\. Patel/);
-});
-
-test("TeamEditScreen: adding from the club player pool copies entries onto the roster", () => {
-  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
-  const inst = render({
-    clubId: "c1",
-    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }]
-  });
-  const poolBtn = inst.root.findAllByType("button").find(b =>
-    Array.isArray(b.props.children) && b.props.children.some(c => typeof c === "string" && c.includes("Add from club pool"))
-  );
-  act(() => { poolBtn.props.onClick(); });
-  const rowBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "D. Singh"));
-  act(() => { rowBtn.props.onClick(); }); // select D. Singh in the picker
-  const addSelectedBtn = inst.root.findAllByType(Btn).find(b => typeof b.props.children === "string" && b.props.children.startsWith("Add "));
-  act(() => { addSelectedBtn.props.onClick(); });
-  assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
-});
-
-test("TeamEditScreen: typing a partial match against the club pool offers it as a suggestion; picking it adds the player and clears the field", () => {
-  const inst = render({
-    clubId: "c1",
-    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }]
-  });
-  act(() => { input(inst, "Player name").props.onChange({ target: { value: "sin" } }); });
-  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "D. Singh"));
-  assert.ok(suggestionBtn, "expected a suggestion row for the matching pool player");
-
-  act(() => { suggestionBtn.props.onClick(); });
-  assert.match(JSON.stringify(inst.toJSON()), /D\. Singh/);
-  assert.equal(input(inst, "Player name").props.value, "");
-});
-
-test("TeamEditScreen: a pool player already on the roster is never suggested again", () => {
-  const inst = render({
-    clubId: "c1",
-    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }]
-  });
-  addPlayer(inst, "D. Singh"); // already on the roster
-  act(() => { input(inst, "Player name").props.onChange({ target: { value: "sin" } }); });
-  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "· from club pool"));
-  assert.equal(suggestionBtn, undefined);
-});
-
-test("TeamEditScreen: no pool suggestions for a personal (non-club) team", () => {
-  const inst = render({ clubId: null });
-  act(() => { input(inst, "Player name").props.onChange({ target: { value: "anything" } }); });
-  const suggestionBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "· from club pool"));
-  assert.equal(suggestionBtn, undefined);
-});
-
-test("TeamEditScreen: flags a club roster player who isn't in the club's pool yet, with a way to add them", () => {
-  let addedTo = null, addedPlayers = null;
-  const inst = render({
-    clubId: "c1",
-    clubs: [{ id: "c1", name: "Riverside CC", playerPool: [{ id: "pp1", name: "D. Singh", role: "Bowler" }] }],
-    onAddPoolPlayers: (clubId, players) => { addedTo = clubId; addedPlayers = players; }
-  });
-  addPlayer(inst, "D. Singh"); // already in the pool
-  addPlayer(inst, "E. Rao"); // not in the pool yet
-
-  const addBtn = inst.root.findByProps({ "aria-label": "Add E. Rao to the club player pool" });
-  assert.throws(() => inst.root.findByProps({ "aria-label": "Add D. Singh to the club player pool" }));
-
-  act(() => { addBtn.props.onClick(); });
-  assert.equal(addedTo, "c1");
-  assert.equal(addedPlayers.length, 1);
-  assert.equal(addedPlayers[0].name, "E. Rao");
-});
-
-test("TeamEditScreen: no pool marking at all for a personal (non-club) team", () => {
-  const inst = render({ clubId: null });
-  addPlayer(inst, "F. Costa");
-  assert.throws(() => inst.root.findByProps({ "aria-label": "Add F. Costa to the club player pool" }));
-});
-
-test("TeamEditScreen: a display-only summary shows player count and whoever's tagged captain/vice-captain/keeper", () => {
-  const inst = render();
-  // Reads the live (pre-toJSON) instance tree, where a numeric child is still a real number and
-  // string fragments haven't been comma-joined into one big JSON blob -- .join("") reassembles a
-  // span's own text across its several children the same way the browser would render it.
-  function summaryText() {
-    return inst.root.findAllByType("span")
-      .filter(s => s.props.style && s.props.style.borderRadius === 12 && s.props.style.padding === "3px 9px")
-      .map(s => [].concat(s.props.children).join(""));
-  }
-  addPlayer(inst, "A. Sharma");
-  addPlayer(inst, "B. Kumar");
-  assert.ok(summaryText().includes("2 players"));
-  // Nobody's tagged yet -- no C/VC/WK summary pill.
-  assert.equal(summaryText().length, 1);
-
-  act(() => { inst.root.findByProps({ "aria-label": "Make A. Sharma captain" }).props.onClick(); });
-  assert.ok(summaryText().includes("C · A. Sharma"));
-  act(() => { inst.root.findByProps({ "aria-label": "Make B. Kumar vice-captain" }).props.onClick(); });
-  assert.ok(summaryText().includes("VC · B. Kumar"));
-  act(() => { inst.root.findByProps({ "aria-label": "Make B. Kumar wicketkeeper" }).props.onClick(); });
-  assert.ok(summaryText().includes("WK · B. Kumar"));
 });
 
 test("TeamEditScreen: no Delete team button when creating a new team, or when the caller offers no onDelete", () => {
