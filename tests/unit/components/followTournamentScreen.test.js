@@ -255,23 +255,24 @@ test("FollowTournamentScreen: a completed fixture's result shows under a Results
 });
 
 // Reported live as a genuine miss: "match completed for the tournament, are not able to get into
-// it to see the scorecard." A completed fixture's result is only tappable into the full scorecard
-// (via onOpenMatch) when that specific match also carries a viewCode -- most won't, and stay a
-// plain, non-clickable result line, same as before this was added.
-test("FollowTournamentScreen: a completed fixture's result is tappable into the scorecard when its match has a viewCode, plain text when it doesn't", async () => {
-  let openedCode = null;
+// it to see the scorecard." A completed fixture's result is tappable into the full scorecard (via
+// onOpenMatch) whenever that fixture has a matchId at all -- no bearer code needed (see
+// followTournamentScreen.js's own comment on why); a fixture with no matchId (never linked to a
+// match) stays a plain, non-clickable result line.
+test("FollowTournamentScreen: a completed fixture's result is tappable into the scorecard when its fixture has a matchId, plain text when it doesn't", async () => {
+  let openedId = null;
   let openedStage = null;
   const data = snapshotData({
     fixtures: [
-      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs", viewCode: "ABCD12", stage: "Semifinal" },
-      { id: "f2", date: "2026-05-08T18:00", teamA: "Riverside 2nd XI", teamB: "Riverside 1st XI", result: "Riverside 2nd XI won by 5 wickets", viewCode: null }
+      { id: "f1", date: "2026-05-01T18:00", teamA: "Riverside 1st XI", teamB: "Riverside 2nd XI", result: "Riverside 1st XI won by 20 runs", matchId: "M1", stage: "Semifinal" },
+      { id: "f2", date: "2026-05-08T18:00", teamA: "Riverside 2nd XI", teamB: "Riverside 1st XI", result: "Riverside 2nd XI won by 5 wickets", matchId: null }
     ]
   });
-  const inst = await renderScreen("XYZ999", { exists: true, data: () => data }, { onOpenMatch: (code, stage) => { openedCode = code; openedStage = stage; } });
+  const inst = await renderScreen("XYZ999", { exists: true, data: () => data }, { onOpenMatch: (id, stage) => { openedId = id; openedStage = stage; } });
 
   const tappableResult = inst.root.findByProps({ "aria-label": "View scorecard: Riverside 1st XI won by 20 runs" });
   act(() => { tappableResult.props.onClick(); });
-  assert.equal(openedCode, "ABCD12");
+  assert.equal(openedId, "M1");
   // The fixture's own stage rides along too, so FollowScreen can show it instead of generic
   // wording once opened -- see followScreen.test.js's own coverage of that display.
   assert.equal(openedStage, "Semifinal");

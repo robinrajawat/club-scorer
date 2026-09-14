@@ -1572,12 +1572,14 @@ export function CricketScorer() {
   }
   // Opens a completed tournament fixture's own read-only match view from FollowTournamentScreen's
   // own Results section (see that component's onOpenMatch prop) -- reported live as a genuine gap:
-  // "match completed for the tournament, are not able to get into it to see the scorecard."
-  // Deliberately leaves tournamentFollowCode set (unlike openLiveTournament, which always sets a
-  // fresh one) so exitFollow's own check sends "Back"/"Done" from this match straight back to the
-  // tournament's follow view rather than home/live.
-  function openTournamentResultMatch(viewCode, stage) {
-    setFollowCode(viewCode);
+  // "match completed for the tournament, are not able to get into it to see the scorecard." By
+  // matchId, not a bearer code -- FollowScreen's matchId prop already reads the match straight from
+  // the open, already-listable /liveMatches collection, the same path Home's "Live now" feed uses,
+  // so no code ever needed minting for this. Deliberately leaves tournamentFollowCode set (unlike
+  // openLiveTournament, which always sets a fresh one) so exitFollow's own check sends "Back"/"Done"
+  // from this match straight back to the tournament's follow view rather than home/live.
+  function openTournamentResultMatch(matchId, stage) {
+    setFollowMatchId(matchId);
     setFollowStage(stage || null);
     setScreen("follow");
   }

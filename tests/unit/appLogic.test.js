@@ -153,36 +153,33 @@ test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fie
   };
   const snapshot = formatTournamentViewSnapshot(tournament, [], [match]);
   assert.deepEqual(snapshot.fixtures, [
-    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", venue: null, venueLat: null, venueLng: null, result: "A won by 50 runs", viewCode: null },
-    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", stage: null, venue: null, venueLat: null, venueLng: null, result: null, viewCode: null }
+    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", venue: null, venueLat: null, venueLng: null, result: "A won by 50 runs", matchId: "M1" },
+    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", stage: null, venue: null, venueLat: null, venueLng: null, result: null, matchId: null }
   ]);
 });
 
 // Reported live as a genuine miss: "match completed for the tournament, are not able to get into
 // it to see the scorecard" -- a completed fixture's own match needs to be reachable from the public
-// view so a spectator can drill into the full scorecard. Deliberately viewCode (the match's own
-// read-only "Follow along" credential), never shareCode (co-scoring/edit access) -- leaking that
-// publicly would let any spectator score the match.
-test("formatTournamentViewSnapshot: carries a completed fixture's match viewCode through, null when the match never had one", () => {
+// view so a spectator can drill into the full scorecard. Carries the match's own plain matchId, not
+// a bearer code -- that used to be a separately-minted viewCode, dropped as unneeded complexity
+// once this data turned out to be no more sensitive than the plain-text result line right next to
+// it (see FollowScreen's own matchId prop, already public/listable /liveMatches data). shareCode
+// (co-scoring/edit access) still must never leak into the public snapshot.
+test("formatTournamentViewSnapshot: carries a completed fixture's match id through, even when the match also has a shareCode", () => {
   const tournament = {
     id: "T1", name: "Summer Cup", teams: ["A", "B"],
     fixtures: [{ id: "F1", teamA: "A", teamB: "B", date: "", matchId: "M1" }]
   };
   const match = {
-    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20, viewCode: "ABCD12",
+    id: "M1", tournamentId: "T1", status: "complete", oversLimit: 20, shareCode: "SECRET1",
     innings: [
       { battingTeam: "A", bowlingTeam: "B", runs: 150, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 },
       { battingTeam: "B", bowlingTeam: "A", runs: 100, wickets: 10, legalBalls: 120, ballsPerOver: 6, maxWickets: 10 }
     ]
   };
   const snapshot = formatTournamentViewSnapshot(tournament, [], [match]);
-  assert.equal(snapshot.fixtures[0].viewCode, "ABCD12");
-
-  // shareCode (co-scoring access) must never leak into the public snapshot, even if present.
-  const matchWithShareCode = { ...match, shareCode: "SECRET1", viewCode: undefined };
-  const snapshotWithout = formatTournamentViewSnapshot(tournament, [], [matchWithShareCode]);
-  assert.equal(snapshotWithout.fixtures[0].viewCode, null);
-  assert.equal(JSON.stringify(snapshotWithout.fixtures[0]).includes("SECRET1"), false);
+  assert.equal(snapshot.fixtures[0].matchId, "M1");
+  assert.equal(JSON.stringify(snapshot.fixtures[0]).includes("SECRET1"), false);
 });
 
 // A fixture's own venue overrides the tournament's default, same convention FixtureRow/
@@ -198,8 +195,8 @@ test("formatTournamentViewSnapshot: a fixture's own venue wins over the tourname
     ]
   };
   const snapshot = formatTournamentViewSnapshot(tournament, []);
-  assert.deepEqual(snapshot.fixtures[0], { id: "F1", teamA: "A", teamB: "B", date: "", stage: null, venue: "Riverside Oval", venueLat: 1, venueLng: 2, result: null, viewCode: null });
-  assert.deepEqual(snapshot.fixtures[1], { id: "F2", teamA: "A", teamB: "B", date: "", stage: null, venue: "Green Park", venueLat: 26.45, venueLng: 80.33, result: null, viewCode: null });
+  assert.deepEqual(snapshot.fixtures[0], { id: "F1", teamA: "A", teamB: "B", date: "", stage: null, venue: "Riverside Oval", venueLat: 1, venueLng: 2, result: null, matchId: null });
+  assert.deepEqual(snapshot.fixtures[1], { id: "F2", teamA: "A", teamB: "B", date: "", stage: null, venue: "Green Park", venueLat: 26.45, venueLng: 80.33, result: null, matchId: null });
 });
 
 // Requested live once the app saw its first real tournament through to the end: "when the
