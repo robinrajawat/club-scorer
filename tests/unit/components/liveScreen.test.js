@@ -243,9 +243,15 @@ test("LiveScreen: watcherMode shows a brand header with a greeting; tapping it r
   assert.equal(findButton(inst, "Results (1)").props["aria-pressed"], true, "re-picks the same smart default, not hardcoded back to Live");
 });
 
-test("LiveScreen: no brand header outside watcher mode", () => {
+// IMPROVEMENT: Live is a real landing page now, not just a watcher's (see cricketScorer.js's own
+// fix keeping a returning signed-in visitor here instead of bouncing to Home) -- so the small brand
+// mark every other main tab carries stays visible here too, regardless of watcherMode. Only the
+// watcher-specific AuthBar and greeting (a signed-in visitor already has both from Home, one tab
+// away) stay gated to watcherMode.
+test("LiveScreen: the brand mark shows outside watcher mode too, but not the watcher-only greeting/AuthBar", () => {
   const inst = render({ liveMatches: [liveMatch()] });
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Club Scorer/);
+  assert.match(JSON.stringify(inst.toJSON()), /Club Scorer/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)/);
 });
 
 test("LiveScreen: Tournaments defaults to Recently Finished when nothing in it is currently live", () => {

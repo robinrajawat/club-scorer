@@ -40,24 +40,27 @@ import { AuthBar } from "./authBar.js";
 // cricketScorer.js's screen-init comment) hides the TabBar (passed in via showTabBar, not handled
 // here).
 //
-// watcherMode gets its own brand header (AppMark + "Club Scorer", a time-of-day greeting below it)
-// above everything else, mirroring HomeScreen's own header layout exactly -- reported live, "the
-// landing page looks too simple, no branding, no greetings" once WelcomeScreen (which used to
-// carry that identity) stopped being the default landing screen. Tapping the brand itself doesn't
-// navigate anywhere (a watcher's landing already IS this screen) -- it resets the search and
-// re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring it back to the
-// landing page" asked for.
+// Always carries its own subtle brand header (AppMark + "Club Scorer") above everything else, same
+// small treatment HomeScreen's own header uses at the top of every other main tab -- Live is a
+// real landing page now (see cricketScorer.js's own cold-landing comment, and the fix that keeps a
+// returning signed-in visitor here too instead of bouncing to Home), not just a watcher's, so it
+// carries the same brand identity every other tab does rather than only when watcherMode is on.
+// Tapping the brand itself doesn't navigate anywhere (this already IS the landing screen) -- it
+// resets the search and re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring
+// it back to the landing page" asked for.
 //
-// The same header carries a real AuthBar (same component HomeScreen's own header uses, already
-// built to handle a signed-out `user` -- "Sign in" instead of an avatar, Help/Feedback/About
-// always available regardless) -- reported live, "if we don't show account icon/menu then you
-// don't present any app level information? like about, support, help." This is also now the ONLY
-// way back to sign-in from here -- a separate "Sign in to score a match" link used to sit at the
-// bottom of the screen too, reported live as redundant once AuthBar's own "Sign in" did the exact
-// same thing ("instead sign in on top can lead to old signin landing page"), so it's gone. Account/
-// Help/Feedback/About all return to wherever they were actually opened from (settingsReturnScreen
-// in cricketScorer.js), not hardcoded back to Home, which a true watcher was never on in the first
-// place.
+// watcherMode additionally shows a real AuthBar right there in the same header row (same component
+// HomeScreen's own header uses, already built to handle a signed-out `user` -- "Sign in" instead of
+// an avatar, Help/Feedback/About always available regardless) plus a time-of-day greeting below --
+// reported live, "if we don't show account icon/menu then you don't present any app level
+// information? like about, support, help." This is also the ONLY way back to sign-in for a watcher
+// -- a separate "Sign in to score a match" link used to sit at the bottom of the screen too,
+// reported live as redundant once AuthBar's own "Sign in" did the exact same thing ("instead sign
+// in on top can lead to old signin landing page"), so it's gone. A signed-in visitor on the normal
+// tab-bar Live (watcherMode off) doesn't need a second AuthBar here -- Home's own header already
+// carries one, one tab away. Account/Help/Feedback/About all return to wherever they were actually
+// opened from (settingsReturnScreen in cricketScorer.js), not hardcoded back to Home, which a true
+// watcher was never on in the first place.
 //
 // Matches' third pill, Fixtures, is every publicly-live tournament's own upcoming, unplayed
 // fixtures (liveTournaments[].upcomingFixtures -- see pickUpcomingFixtures in appLogic.js and its
@@ -445,7 +448,7 @@ export function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, watcherMode && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -475,7 +478,7 @@ export function LiveScreen({
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Club Scorer")), watcherMode && /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
