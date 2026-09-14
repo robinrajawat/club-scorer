@@ -134,8 +134,8 @@ export function EmptyStateBallIllustration() {
   }));
 }
 
-// The "nothing here yet" state every list screen (Home, Live, My Teams, Cups, Players, Inbox)
-// falls back to -- same look everywhere on purpose, so it doesn't matter which screen you're on.
+// The "nothing here yet" state every list screen (Home, Live, Teams, Cups, Inbox) falls back to
+// -- same look everywhere on purpose, so it doesn't matter which screen you're on.
 // Used to be copy-pasted per screen with a fixed vh-fraction minHeight to fake vertical centering
 // -- that reads as "too high" on any screen with more header/search/filter chrome above it than
 // whichever screen that fraction happened to be eyeballed against, since a fixed fraction of the

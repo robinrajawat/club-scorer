@@ -400,9 +400,31 @@ export function FollowScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8
+      gap: 8,
+      minWidth: 0
     }
-  }, match.status !== "complete" && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onExit,
+    className: "cs-btn",
+    "aria-label": "Back",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.creamFixed,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13,
+      cursor: "pointer",
+      padding: 4,
+      marginLeft: -4,
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(ChevronLeft, {
+    size: 16
+  }), "Back"), match.status !== "complete" && /*#__PURE__*/React.createElement("span", {
     style: {
       width: 8,
       height: 8,
@@ -463,27 +485,7 @@ export function FollowScreen({
     size: 13
   }) : /*#__PURE__*/React.createElement(Share, {
     size: 13
-  }), linkCopied ? "Copied!" : "Share"), /*#__PURE__*/React.createElement("button", {
-    onClick: onExit,
-    className: "cs-btn",
-    "aria-label": "Back",
-    style: {
-      background: "rgba(242,236,217,0.14)",
-      border: "1px solid rgba(242,236,217,0.35)",
-      borderRadius: 8,
-      color: COLORS.creamFixed,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13,
-      cursor: "pointer",
-      padding: "6px 10px",
-      display: "flex",
-      alignItems: "center",
-      gap: 3
-    }
-  }, /*#__PURE__*/React.createElement(ChevronLeft, {
-    size: 14
-  }), "Back"))), /*#__PURE__*/React.createElement("div", {
+  }), linkCopied ? "Copied!" : "Share"))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,

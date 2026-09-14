@@ -36,31 +36,26 @@ import { AuthBar } from "./authBar.js";
 // A search box filters both feeds client-side (already fully loaded in memory, same as everywhere
 // else this pattern's used) by team name, tournament name, or the tournament badge a match shows,
 // narrowing whichever tab is currently open -- same persistent-inline-box placement as Home's own
-// search. `watcherMode` (set for a signed-out visitor arriving with no account -- see
-// cricketScorer.js's screen-init comment) hides the TabBar (passed in via showTabBar, not handled
-// here).
+// search.
 //
-// Always carries its own subtle brand header (AppMark + "Club Scorer") above everything else, same
-// small treatment HomeScreen's own header uses at the top of every other main tab -- Live is a
-// real landing page now (see cricketScorer.js's own cold-landing comment, and the fix that keeps a
-// returning signed-in visitor here too instead of bouncing to Home), not just a watcher's, so it
-// carries the same brand identity every other tab does rather than only when watcherMode is on.
-// Tapping the brand itself doesn't navigate anywhere (this already IS the landing screen) -- it
-// resets the search and re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring
-// it back to the landing page" asked for.
-//
-// watcherMode additionally shows a real AuthBar right there in the same header row (same component
-// HomeScreen's own header uses, already built to handle a signed-out `user` -- "Sign in" instead of
-// an avatar, Help/Feedback/About always available regardless) plus a time-of-day greeting below --
-// reported live, "if we don't show account icon/menu then you don't present any app level
-// information? like about, support, help." This is also the ONLY way back to sign-in for a watcher
-// -- a separate "Sign in to score a match" link used to sit at the bottom of the screen too,
-// reported live as redundant once AuthBar's own "Sign in" did the exact same thing ("instead sign
-// in on top can lead to old signin landing page"), so it's gone. A signed-in visitor on the normal
-// tab-bar Live (watcherMode off) doesn't need a second AuthBar here -- Home's own header already
-// carries one, one tab away. Account/Help/Feedback/About all return to wherever they were actually
-// opened from (settingsReturnScreen in cricketScorer.js), not hardcoded back to Home, which a true
-// watcher was never on in the first place.
+// Carries the exact same header treatment regardless of whether anyone's signed in: AppMark +
+// "Club Scorer" brand mark, a real AuthBar (same component HomeScreen's header uses, already built
+// to handle a signed-out `user` -- "Sign in" instead of an avatar, Help/Feedback/About always
+// available regardless), and a time-of-day greeting -- Live is a real landing page (see
+// cricketScorer.js's own cold-landing comment, and the fix that keeps a returning signed-in visitor
+// here too instead of bouncing to Home), not a separate stripped-down "watcher" shell one register
+// down from every other tab -- reported live, "why landing page still feel disconnected... seems
+// like we are still having a separate watcher page." Tapping the brand itself doesn't navigate
+// anywhere (this already IS the landing screen) -- it resets the search and re-picks
+// Live/Fixtures/Results fresh, same as "click on the brand... bring it back to the landing page"
+// asked for. This AuthBar is also the only way back to sign-in for a signed-out visitor -- a
+// separate "Sign in to score a match" link used to sit at the bottom of the screen too, reported
+// live as redundant once AuthBar's own "Sign in" did the exact same thing ("instead sign in on top
+// can lead to old signin landing page"), so it's gone. A signed-in visitor gets a second AuthBar
+// here on top of Home's own, one tab away -- an accepted, deliberate bit of redundancy now that
+// this header is unconditional, the same tradeoff every other tab already makes for its own
+// consistent per-screen chrome. Account/Help/Feedback/About all return to wherever they were
+// actually opened from (settingsReturnScreen in cricketScorer.js), not hardcoded back to Home.
 //
 // Matches' third pill, Fixtures, is every publicly-live tournament's own upcoming, unplayed
 // fixtures (liveTournaments[].upcomingFixtures -- see pickUpcomingFixtures in appLogic.js and its
@@ -85,7 +80,6 @@ export function LiveScreen({
   tournamentNameById = {},
   showTabBar = false,
   loading = false,
-  watcherMode = false,
   user,
   profile,
   onOpenAccount,
@@ -146,9 +140,9 @@ export function LiveScreen({
     return "matches";
   }
   // Reported live: "no way to reopen the landing page... perhaps click on the brand should bring
-  // it to landing page" -- watcherMode's own brand header (below) is that tap target. There's
-  // nowhere else to navigate to (a watcher's landing IS this screen), so this clears the search
-  // and re-runs the same smart-default picks fresh, rather than navigating anywhere.
+  // it to landing page" -- the brand header (below) is that tap target. There's nowhere else to
+  // navigate to (this screen already IS the landing page), so this clears the search and re-runs
+  // the same smart-default picks fresh, rather than navigating anywhere.
   function resetToLanding() {
     setQuery("");
     setView(pickDefaultView());
@@ -478,7 +472,7 @@ export function LiveScreen({
       fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), watcherMode && /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
@@ -488,7 +482,7 @@ export function LiveScreen({
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  })), watcherMode && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,

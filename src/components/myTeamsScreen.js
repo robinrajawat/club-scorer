@@ -86,7 +86,7 @@ export function MyTeamsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, "My Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing…",
     size: 14,
     style: {
@@ -129,7 +129,7 @@ export function MyTeamsScreen({
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "My Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
+  }, "Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
