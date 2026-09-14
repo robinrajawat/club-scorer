@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   computeStandings, formatTournamentViewSnapshot, dlsTarget, dlsResourcePercent, oversLeftTrueDecimal,
-  computeQualificationTarget, decimalOversToLabel, findFixtureToAutoLink
+  computeQualificationTarget, decimalOversToLabel, findFixtureToAutoLink, pickUpcomingFixtures
 } from "../../src/core/appLogic.js";
 
 test("normal result: winner gets 2pts and positive NRR, loser gets 0pts and negative NRR", () => {
@@ -156,6 +156,25 @@ test("formatTournamentViewSnapshot: fixtures are reduced to the display-only fie
     { id: "F1", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: "Final", venue: null, venueLat: null, venueLng: null, result: "A won by 50 runs", matchId: "M1" },
     { id: "F2", teamA: "A", teamB: "B", date: "2026-09-17T11:00", stage: null, venue: null, venueLat: null, venueLng: null, result: null, matchId: null }
   ]);
+});
+
+test("pickUpcomingFixtures: unplayed and dated only, nearest first, capped at the given limit", () => {
+  const fixtures = [
+    { id: "F1", teamA: "A", teamB: "B", date: "2026-09-20T11:00", venue: "Ground 1" },
+    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-10T11:00" },
+    { id: "F3", teamA: "A", teamB: "B", date: "2026-09-15T11:00", matchId: "M1" }, // already played -- excluded
+    { id: "F4", teamA: "A", teamB: "B", stage: "Semifinal" }, // no date yet -- excluded
+    { id: "F5", teamA: "A", teamB: "B", date: "2026-09-12T11:00" }
+  ];
+  assert.deepEqual(pickUpcomingFixtures(fixtures, 2), [
+    { id: "F2", teamA: "A", teamB: "B", date: "2026-09-10T11:00", stage: null, venue: null },
+    { id: "F5", teamA: "A", teamB: "B", date: "2026-09-12T11:00", stage: null, venue: null }
+  ]);
+});
+
+test("pickUpcomingFixtures: no fixtures at all returns an empty list, not an error", () => {
+  assert.deepEqual(pickUpcomingFixtures(undefined), []);
+  assert.deepEqual(pickUpcomingFixtures([]), []);
 });
 
 // Reported live as a genuine miss: "match completed for the tournament, are not able to get into
