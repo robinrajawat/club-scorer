@@ -293,6 +293,24 @@ export function tournamentDateRangeLabel(t) {
 
 export const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
 
+// Plain names for each preset, shown next to the shield picker so "which one is selected" reads
+// at a glance instead of needing to recognize a hex value or a shade of color. Keyed by hex so a
+// lookup for a color that isn't one of these presets (a team with an old, pre-simplification
+// custom color -- see teamEditScreen.js's own comment on that) safely misses and falls back to
+// showing the raw hex instead of a name.
+export const TEAM_COLOR_NAMES = {
+  "#1b3a6b": "Navy",
+  "#7a1f2b": "Maroon",
+  "#1f5c3a": "Forest Green",
+  "#c9a227": "Gold",
+  "#2d7dd2": "Blue",
+  "#d2691e": "Orange",
+  "#6a3d9a": "Purple",
+  "#2b2b2b": "Charcoal",
+  "#c0392b": "Red",
+  "#16a085": "Teal"
+};
+
 export function playerInitials(name) {
   const parts = (name || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";

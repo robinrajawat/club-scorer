@@ -824,7 +824,27 @@ const COLORS = {
 // teams that are nearly indistinguishable on a chart.
 // GENERATED-FN-START: TEAM_COLOR_PRESETS
 const TEAM_COLOR_PRESETS = ["#1b3a6b", "#7a1f2b", "#1f5c3a", "#c9a227", "#2d7dd2", "#d2691e", "#6a3d9a", "#2b2b2b", "#c0392b", "#16a085"];
+
+// Plain names for each preset, shown next to the shield picker so "which one is selected" reads
+// at a glance instead of needing to recognize a hex value or a shade of color. Keyed by hex so a
+// lookup for a color that isn't one of these presets (a team with an old, pre-simplification
+// custom color -- see teamEditScreen.js's own comment on that) safely misses and falls back to
+// showing the raw hex instead of a name.
 // GENERATED-FN-END: TEAM_COLOR_PRESETS
+// GENERATED-FN-START: TEAM_COLOR_NAMES
+const TEAM_COLOR_NAMES = {
+  "#1b3a6b": "Navy",
+  "#7a1f2b": "Maroon",
+  "#1f5c3a": "Forest Green",
+  "#c9a227": "Gold",
+  "#2d7dd2": "Blue",
+  "#d2691e": "Orange",
+  "#6a3d9a": "Purple",
+  "#2b2b2b": "Charcoal",
+  "#c0392b": "Red",
+  "#16a085": "Teal"
+};
+// GENERATED-FN-END: TEAM_COLOR_NAMES
 // GENERATED-FN-START: uid
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -15280,7 +15300,11 @@ function MyTeamsScreen({
       alignItems: "center",
       gap: 4
     }
-  }, /*#__PURE__*/React.createElement("button", {
+    // The FAB below (see the bottom of this component) is the "add a team" entry point on the
+    // Teams tab itself, same as every other tab-bar screen's own create flow -- this inline "+
+    // New" link only still renders for the no-tab-bar drill-in (onBack set, reached from
+    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own.
+  }, !showTabBar && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -15467,7 +15491,10 @@ function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
   })))))))))
-))
+), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
+    onClick: onNewTeam,
+    label: "New team"
+  }))
 }
 // GENERATED-FN-END: MyTeamsScreen
 // GENERATED-FN-START: TeamChips
@@ -22304,7 +22331,16 @@ function TeamEditScreen({
       stroke: COLORS.creamDark,
       strokeWidth: 1
     }
-  }))), color && /*#__PURE__*/React.createElement("button", {
+  }))), color && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft
+    }
+    // Falls back to the raw hex for a color with no preset name -- an old, pre-simplification
+    // custom color a team already had saved (see the comment on the swatch list above).
+  }, TEAM_COLOR_NAMES[color] || color), color && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setColor(""),
     style: {

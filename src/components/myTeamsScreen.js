@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronDown, ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
+import { FabButton } from "./screenAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
@@ -141,7 +142,11 @@ export function MyTeamsScreen({
       alignItems: "center",
       gap: 4
     }
-  }, /*#__PURE__*/React.createElement("button", {
+    // The FAB below (see the bottom of this component) is the "add a team" entry point on the
+    // Teams tab itself, same as every other tab-bar screen's own create flow -- this inline "+
+    // New" link only still renders for the no-tab-bar drill-in (onBack set, reached from
+    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own.
+  }, !showTabBar && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -328,5 +333,8 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
   })))))))))
-))
+), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
+    onClick: onNewTeam,
+    label: "New team"
+  }))
 }

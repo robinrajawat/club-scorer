@@ -5,17 +5,33 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer from "react-test-renderer";
 import { MyTeamsScreen } from "../../../src/components/myTeamsScreen.js";
 import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
 import { Shield } from "../../../src/components/icons.js";
 
+// FabButton (rendered only when showTabBar is true -- see myTeamsScreen.js's own comment) calls
+// ReactDOM.createPortal(..., document.body) as a bare global, same as Modal elsewhere in this
+// suite -- react-test-renderer has no real DOM to portal into, so this stub renders the portal's
+// children in place instead. Harmless for every other test here, which doesn't pass showTabBar
+// and so never mounts FabButton at all.
+beforeEach(() => {
+  globalThis.ReactDOM = { createPortal: node => node };
+  globalThis.document = { body: null };
+});
+
+afterEach(() => {
+  delete globalThis.ReactDOM;
+  delete globalThis.document;
+});
+
 function team(overrides = {}) {
   return { id: "t1", name: "Riverside 1st XI", players: [], ...overrides };
 }
 
-test("MyTeamsScreen: lists teams, wires onEditTeam/onDeleteTeam/onNewTeam", () => {
+test("MyTeamsScreen: lists teams, wires onEditTeam", () => {
   let edited = null;
   const teams = [team()];
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
@@ -26,6 +42,31 @@ test("MyTeamsScreen: lists teams, wires onEditTeam/onDeleteTeam/onNewTeam", () =
   const editBtn = inst.root.findByProps({ "aria-label": `Edit ${teams[0].name}` });
   editBtn.props.onClick();
   assert.equal(edited.id, "t1");
+});
+
+// The FAB (see screenAtoms.js) is the "add a team" entry point on the Teams tab itself, same as
+// every other tab-bar screen's own create flow -- the inline "+ New" link only still renders for
+// the no-tab-bar drill-in (onBack set, reached from elsewhere in the app), which has no FAB.
+test("MyTeamsScreen: the Teams tab (showTabBar) shows a floating 'New team' button, wired to onNewTeam, instead of the inline link", () => {
+  let newCalled = false;
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], showTabBar: true, onNewTeam: () => { newCalled = true; }
+  }));
+  const fab = inst.root.findByProps({ "aria-label": "New team" });
+  fab.props.onClick();
+  assert.equal(newCalled, true);
+  assert.equal(inst.root.findAllByProps({ "aria-label": "New team" }).length, 1, "only the FAB, not also the inline link");
+});
+
+test("MyTeamsScreen: the no-tab-bar drill-in (onBack) shows the inline 'New team' link, not a FAB, wired to onNewTeam", () => {
+  let newCalled = false;
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onBack: () => {}, onNewTeam: () => { newCalled = true; }
+  }));
+  const link = inst.root.findByProps({ "aria-label": "New team" });
+  link.props.onClick();
+  assert.equal(newCalled, true);
+  assert.equal(inst.root.findAllByProps({ "aria-label": "New team" }).length, 1, "only the inline link, not also a FAB");
 });
 
 test("MyTeamsScreen: deleting goes through SwipeableRow's onDelete, calling onDeleteTeam", () => {
