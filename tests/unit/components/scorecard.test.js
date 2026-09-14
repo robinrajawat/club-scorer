@@ -84,6 +84,35 @@ test("MatchStatsPanel: showOvers=true shows the live-innings summary card, overs
   assert.match(text, /Charts/);
 });
 
+test("MatchStatsPanel: showOvers=true folds the scorecard by default while the match is still live", () => {
+  const match = matchWith([inning({ complete: false })]);
+  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
+  // "Fall of Wickets" only ever renders inside the expanded InningScorecard table, unlike a
+  // batsman's own name which can also show up in the always-visible live-summary card above it.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Fall of Wickets/);
+});
+
+// IMPROVEMENT: reported live as "match results should automatically expand the scoreboard" --
+// showOvers=true (FollowScreen) used to fold the scorecard by default regardless of whether the
+// match was still live or already decided, even though the live-summary card above it (the actual
+// reason to fold in the first place, see its own comment) has nothing left to show once a match is
+// complete -- leaving a follower who lands on a finished result with an extra, needless tap before
+// seeing the one thing that screen still has to say.
+test("MatchStatsPanel: showOvers=true auto-expands the scorecard/charts when the match is already complete on mount", () => {
+  const match = matchWith([inning({ complete: true })], { status: "complete" });
+  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
+  assert.match(JSON.stringify(inst.toJSON()), /Fall of Wickets/);
+});
+
+test("MatchStatsPanel: showOvers=true auto-expands the scorecard/charts the moment a live match completes while mounted", () => {
+  const match = matchWith([inning({ complete: false })]);
+  const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: true }));
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Fall of Wickets/);
+  const completedMatch = matchWith([inning({ complete: true })], { status: "complete" });
+  act(() => { inst.update(React.createElement(MatchStatsPanel, { match: completedMatch, tab: 0, setTab: () => {}, showOvers: true })); });
+  assert.match(JSON.stringify(inst.toJSON()), /Fall of Wickets/);
+});
+
 test("MatchStatsPanel: showOvers=false always renders the scorecard and charts inline, no toggle", () => {
   const match = matchWith([inning({ complete: true })]);
   const inst = renderer.create(React.createElement(MatchStatsPanel, { match, tab: 0, setTab: () => {}, showOvers: false }));
