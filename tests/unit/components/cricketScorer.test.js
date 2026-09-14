@@ -234,17 +234,20 @@ test("CricketScorer: a ?follow=CODE URL routes straight to FollowScreen with tha
   assert.equal(follow.props.code, "ABC123");
 });
 
-// WelcomeScreen is reached only via this link now, not landed on directly -- see the cold-landing
-// test above. Its own Back arrow (onWatch) is the round trip back to watcher Live.
-test("CricketScorer: Live's 'Sign in to score a match' link opens WelcomeScreen; its Back arrow returns to watcher Live", async () => {
+// WelcomeScreen is reached only via AuthBar's "Sign in" now (openAccount, same handler wired to
+// LiveScreen's onOpenAccount and HomeScreen's own) -- not landed on directly, see the cold-landing
+// test above, and no longer via a separate standalone link either (that was dropped: "instead sign
+// in on top can lead to old signin landing page" -- one canonical way in). WelcomeScreen's own Back
+// arrow is the round trip back to watcher Live, via settingsReturnScreen.
+test("CricketScorer: Live's AuthBar 'Sign in' opens WelcomeScreen; its Back arrow returns to watcher Live", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);
-  act(() => { live.props.onExitWatcherMode(); });
+  act(() => { live.props.onOpenAccount(); });
   const welcome = inst.root.findByType(WelcomeScreen);
   assert.throws(() => inst.root.findByType(LiveScreen));
 
-  act(() => { welcome.props.onWatch(); });
+  act(() => { welcome.props.onBack(); });
   const liveAgain = inst.root.findByType(LiveScreen);
   assert.equal(liveAgain.props.watcherMode, true);
   assert.throws(() => inst.root.findByType(WelcomeScreen));
@@ -254,7 +257,7 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
   const inst = await render();
   await flush();
   const live = inst.root.findByType(LiveScreen);
-  act(() => { live.props.onExitWatcherMode(); });
+  act(() => { live.props.onOpenAccount(); });
   const welcome = inst.root.findByType(WelcomeScreen);
   await act(async () => {
     welcome.props.onSignIn();
@@ -305,6 +308,46 @@ test("CricketScorer: a session that resolves signed-in while still on the watche
   await signIn(inst);
   assert.ok(inst.root.findByType(HomeScreen));
   assert.equal(inst.root.findAllByType(LiveScreen).length, 0);
+});
+
+// A watcher who opens sign-in (AuthBar) then backs out with "Continue without an account" instead
+// of actually signing in -- watcherMode is left untouched all the way through the WelcomeScreen
+// detour (see openAccount's own comment), so this is the one place besides a real sign-in that
+// must clear it: otherwise Home would render with the watcher-stripped TabBar hidden, for someone
+// who just explicitly chose full guest access.
+test("CricketScorer: a watcher who 'Continue without an account's out of sign-in lands on Home with the full tab bar, not still watcher-restricted", async () => {
+  const inst = await render();
+  await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onOpenAccount(); });
+  const welcome = inst.root.findByType(WelcomeScreen);
+  act(() => { welcome.props.onSkip(); });
+  assert.ok(inst.root.findByType(HomeScreen));
+  assert.equal(inst.root.findAllByType(TabBar).length, 1);
+});
+
+// The same AuthBar (and the same WelcomeScreen it opens) also has to work for a signed-out guest
+// already on Home -- not just a watcher -- since "Sign in" now goes to the one canonical
+// WelcomeScreen from wherever it's tapped (see openAccount's own comment). Its Back arrow needs to
+// return to Home here, not to Live, which settingsReturnScreen (captured as whatever `screen` was
+// at the moment "Sign in" was tapped) is what makes correct.
+test("CricketScorer: a signed-out guest already on Home can also reach sign-in via AuthBar, with Back returning to Home", async () => {
+  const inst = await render();
+  await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onOpenAccount(); });
+  let welcome = inst.root.findByType(WelcomeScreen);
+  act(() => { welcome.props.onSkip(); }); // becomes a guest on Home, watcherMode cleared
+  assert.ok(inst.root.findByType(HomeScreen));
+
+  const home = inst.root.findByType(HomeScreen);
+  act(() => { home.props.onOpenAccount(); });
+  welcome = inst.root.findByType(WelcomeScreen);
+  assert.throws(() => inst.root.findByType(HomeScreen));
+
+  act(() => { welcome.props.onBack(); });
+  assert.ok(inst.root.findByType(HomeScreen));
+  assert.equal(inst.root.findAllByType(TabBar).length, 1);
 });
 
 test("CricketScorer: Home's 'New Match' navigates to SetupScreen", async () => {

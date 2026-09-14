@@ -419,16 +419,13 @@ test("LiveScreen: a match also matches by its tournament badge name", () => {
   assert.match(JSON.stringify(inst.toJSON()), /Live \(1\)/);
 });
 
-test("LiveScreen: no sign-in-to-score link outside watcher mode", () => {
-  const inst = render({ liveMatches: [liveMatch()] });
+// Reported live: "instead sign in on top can lead to old signin landing page" -- a separate
+// "Sign in to score a match" link used to sit at the bottom of the screen too, redundant once
+// AuthBar's own "Sign in" (see the account-menu tests above) does the exact same thing. One way
+// back to sign-in now, not two.
+test("LiveScreen: no separate 'sign in to score a match' link, in or out of watcher mode -- AuthBar is the only way back", () => {
+  const inst = render({ watcherMode: true, liveMatches: [liveMatch()] });
   assert.equal(findButton(inst, "Sign in to score a match"), undefined);
-});
-
-test("LiveScreen: watcherMode shows a link back to sign-in even with nothing live, and tapping it calls onExitWatcherMode", () => {
-  let exited = false;
-  const inst = render({ watcherMode: true, onExitWatcherMode: () => { exited = true; } });
-  clickButton(inst, "Sign in to score a match");
-  assert.equal(exited, true);
 });
 
 test("LiveScreen: shows a 'nothing matches' state (distinct from 'Nothing live right now') when a search has no results anywhere, and Clear resets it", () => {

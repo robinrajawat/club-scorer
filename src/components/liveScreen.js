@@ -37,22 +37,26 @@ import { AuthBar } from "./authBar.js";
 // else this pattern's used) by team name, tournament name, or the tournament badge a match shows,
 // narrowing whichever tab is currently open -- same persistent-inline-box placement as Home's own
 // search. `watcherMode` (set for a signed-out visitor arriving with no account -- see
-// cricketScorer.js's handleWatch/exitWatcherMode) hides the TabBar (passed in via showTabBar, not
-// handled here) and adds a single low-key way back to sign-in at the bottom of the screen, rather
-// than stranding a watcher with no path to scoring. watcherMode also gets its own brand header
-// (AppMark + "Club Scorer", a time-of-day greeting below it) above everything else, mirroring
-// HomeScreen's own header layout exactly -- reported live, "the landing page looks too simple, no
-// branding, no greetings" once WelcomeScreen (which used to carry that identity) stopped being the
-// default landing screen. Tapping the brand itself doesn't navigate anywhere (a watcher's landing
-// already IS this screen) -- it resets the search and re-picks Live/Fixtures/Results fresh, same as
-// "click on the brand... bring it back to the landing page" asked for.
+// cricketScorer.js's screen-init comment) hides the TabBar (passed in via showTabBar, not handled
+// here).
 //
-// The same header also carries a real AuthBar (same component HomeScreen's own header uses,
-// already built to handle a signed-out `user` -- "Sign in" instead of an avatar, Help/Feedback/
-// About always available regardless) -- reported live, "if we don't show account icon/menu then
-// you don't present any app level information? like about, support, help." Account/Help/Feedback/
-// About all return to wherever they were actually opened from (settingsReturnScreen in
-// cricketScorer.js), not hardcoded back to Home, which a true watcher was never on in the first
+// watcherMode gets its own brand header (AppMark + "Club Scorer", a time-of-day greeting below it)
+// above everything else, mirroring HomeScreen's own header layout exactly -- reported live, "the
+// landing page looks too simple, no branding, no greetings" once WelcomeScreen (which used to
+// carry that identity) stopped being the default landing screen. Tapping the brand itself doesn't
+// navigate anywhere (a watcher's landing already IS this screen) -- it resets the search and
+// re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring it back to the
+// landing page" asked for.
+//
+// The same header carries a real AuthBar (same component HomeScreen's own header uses, already
+// built to handle a signed-out `user` -- "Sign in" instead of an avatar, Help/Feedback/About
+// always available regardless) -- reported live, "if we don't show account icon/menu then you
+// don't present any app level information? like about, support, help." This is also now the ONLY
+// way back to sign-in from here -- a separate "Sign in to score a match" link used to sit at the
+// bottom of the screen too, reported live as redundant once AuthBar's own "Sign in" did the exact
+// same thing ("instead sign in on top can lead to old signin landing page"), so it's gone. Account/
+// Help/Feedback/About all return to wherever they were actually opened from (settingsReturnScreen
+// in cricketScorer.js), not hardcoded back to Home, which a true watcher was never on in the first
 // place.
 //
 // Matches' third pill, Fixtures, is every publicly-live tournament's own upcoming, unplayed
@@ -79,7 +83,6 @@ export function LiveScreen({
   showTabBar = false,
   loading = false,
   watcherMode = false,
-  onExitWatcherMode,
   user,
   profile,
   onOpenAccount,
@@ -556,21 +559,5 @@ export function LiveScreen({
         }
       }, emptyForTab) : currentList.map(currentRenderer)
     )
-  ), watcherMode && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onExitWatcherMode,
-    className: "cs-btn",
-    style: {
-      marginTop: 24,
-      alignSelf: "center",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      textDecoration: "underline"
-    }
-  }, "Sign in to score a match"));
+  ));
 }

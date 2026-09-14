@@ -246,15 +246,16 @@ export function CricketScorer() {
   // actually wanted). Reported live, the underlying complaint both times: most people who opened
   // the app just to follow a tournament never realized they needed to find the Live tab at all,
   // having landed on what read as a sign-in wall first. WelcomeScreen is still there -- reached by
-  // watcherMode's own "Sign in to score a match" link (exitWatcherMode below) -- just not the
-  // default landing any more.
+  // watcherMode's own AuthBar, "Sign in" (openAccount below) -- just not the default landing any
+  // more.
   const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode && !initialPollCode;
   const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
   // Suppresses the full Home/Live/Cups/Clubs tab bar down to nothing (see the TabBar render
   // below) for as long as it's on: Cups and Clubs are organizer concepts a spectator with no
   // account has no use for, and Home has nothing to show someone with no matches of their own.
-  // True from mount for the default cold landing above; also set/cleared directly by
-  // handleWatch/exitWatcherMode once someone's actually navigating between Live and sign-in.
+  // True from mount for the default cold landing above; left untouched (never explicitly cleared)
+  // by a trip through WelcomeScreen to sign in -- see openAccount's own comment -- and only
+  // actually cleared once the broadened auth-redirect effect below fires on a real sign-in.
   const [watcherMode, setWatcherMode] = useState(isDefaultColdLanding);
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
@@ -1583,25 +1584,21 @@ export function CricketScorer() {
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
-  // WelcomeScreen's own Back arrow -- returns to Live with no sign-in step, same destination a
-  // cold visit lands on directly now (see watcherMode's own comment above).
-  function handleWatch() {
-    setWatcherMode(true);
-    setScreen("live");
-  }
-  // The one way into WelcomeScreen from watcher mode -- a spectator who decides they actually
-  // want to score something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs)
-  // reappears once they're past sign-in, same as anyone else arriving at "login" normally.
-  function exitWatcherMode() {
-    setWatcherMode(false);
-    setScreen("login");
-  }
   // Account/Help/Feedback/About -- shared between HomeScreen's own AuthBar and watcherMode Live's
   // (see its own comment). settingsReturnScreen captures wherever this was actually opened from,
   // so each one's own onBack (below) returns there instead of always dumping back onto Home.
+  //
+  // "Sign in" for a signed-out visitor -- whether that's a watcher or a guest on Home who chose
+  // "Continue without an account" -- goes straight to WelcomeScreen instead of AccountScreen's own
+  // (separate, near-duplicate) sign-in prompt. Reported live: "instead sign in on top can lead to
+  // old signin landing page" -- one canonical sign-in screen, reached the same way from anywhere,
+  // rather than two different ones depending on which "Sign in" you happened to tap. watcherMode
+  // itself is left untouched here (not cleared) -- WelcomeScreen's own Back (settingsReturnScreen)
+  // returns to "live" exactly as it was, watcher UI and all, if that's where this came from; for a
+  // signed-in-adjacent Home guest, watcherMode was never true to begin with.
   function openAccount() {
     setSettingsReturnScreen(screen);
-    setScreen("account");
+    setScreen(user ? "account" : "login");
   }
   function openHelp(q) {
     setHelpInitialQuery(q || "");
@@ -2825,8 +2822,16 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(WelcomeScreen, {
     onSignIn: handleSignInGoogle,
-    onSkip: () => setScreen(initialShortcutAction === "new-match" ? "setup" : "home"),
-    onWatch: handleWatch
+    // Clears watcherMode too, not just navigates -- if this was reached from watcherMode's own
+    // AuthBar (a watcher who opened sign-in, then chose to skip it), "Continue without an account"
+    // is the moment they actually leave the watcher-restricted experience for full Home/Cups/Clubs
+    // access, same as a real sign-in does via the auth-redirect effect above. Harmless no-op
+    // otherwise, since watcherMode is already false whenever this is reached any other way.
+    onSkip: () => {
+      setWatcherMode(false);
+      setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
+    },
+    onBack: () => setScreen(settingsReturnScreen)
   })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "home",
     direction: navDirection
@@ -2915,7 +2920,6 @@ export function CricketScorer() {
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     showTabBar: !watcherMode,
     watcherMode: watcherMode,
-    onExitWatcherMode: exitWatcherMode,
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
@@ -3142,6 +3146,10 @@ export function CricketScorer() {
     profile: profile,
     myPlayer: myPlayer,
     isAdmin: isAdmin,
+    // Both one level down from Account, same as SharedLinksScreen just below -- their own onBack
+    // (below) returns to "account" directly, not settingsReturnScreen (which points at wherever
+    // Account ITSELF was opened from). Found auditing navigation for "proper navigation, not some
+    // exits randomly": these used to skip past Account straight to Home.
     onOpenFeedbackInbox: () => setScreen("feedback-inbox"),
     onOpenBetaTesters: () => setScreen("beta-testers"),
     onOpenClub: clubId => {
@@ -3184,12 +3192,12 @@ export function CricketScorer() {
     navKey: "feedback-inbox",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(FeedbackInboxScreen, {
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("account")
   })), screen === "beta-testers" && isAdmin && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "beta-testers",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(BetaTestersScreen, {
-    onBack: () => setScreen("home")
+    onBack: () => setScreen("account")
   })), screen === "about" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "about",
     direction: navDirection
