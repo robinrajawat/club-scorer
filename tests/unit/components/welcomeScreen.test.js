@@ -1,4 +1,6 @@
-// Signed-out landing screen (src/components/welcomeScreen.js). `signUpEmail`/`signInEmail`/
+// The sign-in screen (src/components/welcomeScreen.js), reached only when someone deliberately
+// asks for it (Live's "Sign in to score a match" link) -- not what a cold, signed-out visit lands
+// on any more (see cricketScorer.test.js for that). `signUpEmail`/`signInEmail`/
 // `sendPasswordReset` are bare-global Firebase Auth wrappers, called only from the email-submit
 // handler -- never during render or a mount effect -- so each test just stubs the one it needs.
 
@@ -27,42 +29,26 @@ function hasText(node, str) {
   return false;
 }
 
-// Everything below "I'm watching"/"I'm scoring" is reached only after tapping "I'm scoring" --
-// see welcomeScreen.js's own comment on why sign-in is no longer what a signed-out visitor lands
-// on by default.
-function renderScoring(props) {
-  const inst = renderer.create(React.createElement(WelcomeScreen, baseProps(props)));
-  const scoringBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "I'm scoring"));
-  act(() => { scoringBtn.props.onClick(); });
-  return inst;
+function render(props) {
+  return renderer.create(React.createElement(WelcomeScreen, baseProps(props)));
 }
 
-// Reported live: most people who opened the app just to follow a tournament never realized they
-// needed to find the Live tab at all, having landed on what read as a sign-in wall first. The
-// entry screen now opens on an intent choice instead of presenting sign-in as the default.
-test("WelcomeScreen: opens on an intent choice -- 'I'm watching' calls onWatch directly, with no sign-in content shown", () => {
-  let watched = false;
-  const inst = renderer.create(React.createElement(WelcomeScreen, baseProps({ onWatch: () => { watched = true; } })));
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Sign in with Google/, "sign-in content isn't shown until 'I'm scoring' is chosen");
-  const watchBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "I'm watching"));
-  act(() => { watchBtn.props.onClick(); });
-  assert.equal(watched, true);
+test("WelcomeScreen: renders sign-in content directly -- no intent choice in front of it", () => {
+  const inst = render();
+  assert.match(JSON.stringify(inst.toJSON()), /Sign in with Google/);
 });
 
-test("WelcomeScreen: 'I'm scoring' reveals the sign-in content, and Back returns to the intent choice", () => {
-  const inst = renderScoring();
-  assert.match(JSON.stringify(inst.toJSON()), /Sign in with Google/);
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /I'm watching/);
-
+test("WelcomeScreen: the Back arrow calls onWatch (returns to Live with no sign-in), not internal state", () => {
+  let watched = false;
+  const inst = render({ onWatch: () => { watched = true; } });
   const backBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Back"));
   act(() => { backBtn.props.onClick(); });
-  assert.match(JSON.stringify(inst.toJSON()), /I'm watching/);
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Sign in with Google/);
+  assert.equal(watched, true);
 });
 
 test("WelcomeScreen: clicking 'Sign in with Google' calls onSignIn", async () => {
   let called = false;
-  const inst = renderScoring({ onSignIn: () => { called = true; return Promise.resolve({ ok: true }); } });
+  const inst = render({ onSignIn: () => { called = true; return Promise.resolve({ ok: true }); } });
   const googleBtn = inst.root.findAllByType("button").find(b => Array.isArray(b.props.children) && (b.props.children[1] === "Sign in with Google" || b.props.children[1] === "Opening Google…"));
   await act(async () => {
     googleBtn.props.onClick();
@@ -72,7 +58,7 @@ test("WelcomeScreen: clicking 'Sign in with Google' calls onSignIn", async () =>
 });
 
 test("WelcomeScreen: a failed onSignIn shows the returned error", async () => {
-  const inst = renderScoring({ onSignIn: () => Promise.resolve({ ok: false, error: "Sign-in was cancelled." }) });
+  const inst = render({ onSignIn: () => Promise.resolve({ ok: false, error: "Sign-in was cancelled." }) });
   const googleBtn = inst.root.findAllByType("button").find(b => Array.isArray(b.props.children) && (b.props.children[1] === "Sign in with Google" || b.props.children[1] === "Opening Google…"));
   await act(async () => {
     googleBtn.props.onClick();
@@ -82,7 +68,7 @@ test("WelcomeScreen: a failed onSignIn shows the returned error", async () => {
 });
 
 test("WelcomeScreen: onSignIn returning needsLink pre-fills the email and opens email sign-in mode", async () => {
-  const inst = renderScoring({ onSignIn: () => Promise.resolve({ needsLink: true, linkEmail: "robin@example.com" }) });
+  const inst = render({ onSignIn: () => Promise.resolve({ needsLink: true, linkEmail: "robin@example.com" }) });
   const googleBtn = inst.root.findAllByType("button").find(b => Array.isArray(b.props.children) && (b.props.children[1] === "Sign in with Google" || b.props.children[1] === "Opening Google…"));
   await act(async () => {
     googleBtn.props.onClick();
@@ -94,7 +80,7 @@ test("WelcomeScreen: onSignIn returning needsLink pre-fills the email and opens 
 
 test("WelcomeScreen: 'Continue without an account' calls onSkip", () => {
   let skipped = false;
-  const inst = renderScoring({ onSkip: () => { skipped = true; } });
+  const inst = render({ onSkip: () => { skipped = true; } });
   const skipBtn = inst.root.findAllByType("button").find(b => b.props.children === "Continue without an account");
   skipBtn.props.onClick();
   assert.equal(skipped, true);
@@ -102,7 +88,7 @@ test("WelcomeScreen: 'Continue without an account' calls onSkip", () => {
 
 test("WelcomeScreen: email sign-in validates a missing password before calling signInEmail", async () => {
   globalThis.signInEmail = () => { throw new Error("should not be called"); };
-  const inst = renderScoring();
+  const inst = render();
   const openBtn = inst.root.findAllByType("button").find(b => b.props.children === "Sign in with email");
   act(() => { openBtn.props.onClick(); });
 
@@ -120,7 +106,7 @@ test("WelcomeScreen: email sign-in validates a missing password before calling s
 test("WelcomeScreen: email sign-in submits email+password to signInEmail", async () => {
   let signedInWith = null;
   globalThis.signInEmail = (email, password) => { signedInWith = { email, password }; return Promise.resolve({ ok: true }); };
-  const inst = renderScoring();
+  const inst = render();
   const openBtn = inst.root.findAllByType("button").find(b => b.props.children === "Sign in with email");
   act(() => { openBtn.props.onClick(); });
 
@@ -139,7 +125,7 @@ test("WelcomeScreen: email sign-in submits email+password to signInEmail", async
 
 test("WelcomeScreen: 'Forgot password?' switches to reset mode, and a successful reset shows a confirmation", async () => {
   globalThis.sendPasswordReset = () => Promise.resolve({ ok: true });
-  const inst = renderScoring();
+  const inst = render();
   const openBtn = inst.root.findAllByType("button").find(b => b.props.children === "Sign in with email");
   act(() => { openBtn.props.onClick(); });
 
@@ -160,7 +146,7 @@ test("WelcomeScreen: 'Forgot password?' switches to reset mode, and a successful
 test("WelcomeScreen: 'Create account' switches between sign-in and sign-up labels, calling signUpEmail", async () => {
   let signedUp = false;
   globalThis.signUpEmail = () => { signedUp = true; return Promise.resolve({ ok: true }); };
-  const inst = renderScoring();
+  const inst = render();
   const openBtn = inst.root.findAllByType("button").find(b => b.props.children === "Sign in with email");
   act(() => { openBtn.props.onClick(); });
 

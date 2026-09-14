@@ -208,10 +208,21 @@ afterEach(() => {
   delete globalThis.saveClubTournament;
 });
 
-test("CricketScorer: signed out, mounts straight to WelcomeScreen once the initial load settles", async () => {
+// Reported live, twice over: first as "most spectators who opened the app just to follow a
+// tournament never realized they needed to find the Live tab, having landed on what read as a
+// sign-in wall first" (when WelcomeScreen's sign-in content was the default landing), then again
+// once a fix for that shipped an "I'm watching"/"I'm scoring" choice screen in front of it --
+// "Scorer and watcher views has to be blended in a sense," since an upfront "who are you" question
+// was still friction nobody watching a match actually wanted. A cold, signed-out visit now skips
+// both: straight to Live, watcherMode on, no TabBar (nothing else for an account-less spectator to
+// navigate to), no WelcomeScreen at all until they ask for it.
+test("CricketScorer: a signed-out cold visit lands straight on Live in watcher mode, no tab bar, no sign-in wall", async () => {
   const inst = await render();
   await flush();
-  assert.ok(inst.root.findByType(WelcomeScreen));
+  const live = inst.root.findByType(LiveScreen);
+  assert.equal(live.props.watcherMode, true);
+  assert.equal(inst.root.findAllByType(TabBar).length, 0);
+  assert.throws(() => inst.root.findByType(WelcomeScreen));
 });
 
 test("CricketScorer: a ?follow=CODE URL routes straight to FollowScreen with that code", async () => {
@@ -222,9 +233,27 @@ test("CricketScorer: a ?follow=CODE URL routes straight to FollowScreen with tha
   assert.equal(follow.props.code, "ABC123");
 });
 
+// WelcomeScreen is reached only via this link now, not landed on directly -- see the cold-landing
+// test above. Its own Back arrow (onWatch) is the round trip back to watcher Live.
+test("CricketScorer: Live's 'Sign in to score a match' link opens WelcomeScreen; its Back arrow returns to watcher Live", async () => {
+  const inst = await render();
+  await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onExitWatcherMode(); });
+  const welcome = inst.root.findByType(WelcomeScreen);
+  assert.throws(() => inst.root.findByType(LiveScreen));
+
+  act(() => { welcome.props.onWatch(); });
+  const liveAgain = inst.root.findByType(LiveScreen);
+  assert.equal(liveAgain.props.watcherMode, true);
+  assert.throws(() => inst.root.findByType(WelcomeScreen));
+});
+
 test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
   const inst = await render();
   await flush();
+  const live = inst.root.findByType(LiveScreen);
+  act(() => { live.props.onExitWatcherMode(); });
   const welcome = inst.root.findByType(WelcomeScreen);
   await act(async () => {
     welcome.props.onSignIn();
@@ -234,30 +263,17 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
   assert.ok(inst.root.findByType(HomeScreen));
 });
 
-// Reported live: most spectators who opened the app just to follow a tournament never realized
-// they needed to find the Live tab, having landed on what read as a sign-in wall first.
-// WelcomeScreen's "I'm watching" choice (onWatch) now drops straight onto Live -- with no TabBar,
-// since a watcher who never signed in has nowhere else to go -- and its own escape hatch there
-// leads back to WelcomeScreen's sign-in content, not just its own intent choice.
-test("CricketScorer: 'I'm watching' from WelcomeScreen goes straight to Live with no tab bar", async () => {
+// A returning session whose sign-in resolves asynchronously (the render() harness's own
+// onAuthStateChanged stub fires null first, same as a real cold load before Firebase's local
+// session restore settles) -- covers the broadened redirect effect that now fires for the
+// watcher-default landing, not just WelcomeScreen's own "login" screen.
+test("CricketScorer: a session that resolves signed-in while still on the watcher default lands on Home, watcherMode cleared", async () => {
   const inst = await render();
   await flush();
-  const welcome = inst.root.findByType(WelcomeScreen);
-  act(() => { welcome.props.onWatch(); });
-  const live = inst.root.findByType(LiveScreen);
-  assert.equal(live.props.watcherMode, true);
-  assert.equal(inst.root.findAllByType(TabBar).length, 0);
-});
-
-test("CricketScorer: exiting watcher mode from Live returns to WelcomeScreen, sign-in wall and all", async () => {
-  const inst = await render();
-  await flush();
-  const welcome = inst.root.findByType(WelcomeScreen);
-  act(() => { welcome.props.onWatch(); });
-  const live = inst.root.findByType(LiveScreen);
-  act(() => { live.props.onExitWatcherMode(); });
-  assert.ok(inst.root.findByType(WelcomeScreen));
-  assert.throws(() => inst.root.findByType(LiveScreen));
+  assert.ok(inst.root.findByType(LiveScreen));
+  await signIn(inst);
+  assert.ok(inst.root.findByType(HomeScreen));
+  assert.equal(inst.root.findAllByType(LiveScreen).length, 0);
 });
 
 test("CricketScorer: Home's 'New Match' navigates to SetupScreen", async () => {

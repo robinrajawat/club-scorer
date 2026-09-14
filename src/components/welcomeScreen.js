@@ -4,13 +4,18 @@ import { AppMark } from "./illustrations.js";
 import { GoogleGLogo } from "./icons.js";
 import { TextField, Btn } from "./formUiAtoms.js";
 
-// Signed-out landing screen. Opens on an intent choice -- "I'm watching" (onWatch, straight to
-// the Live tab, no sign-in screen at all) or "I'm scoring" (reveals the sign-in content this
-// screen always used to show unconditionally: Google, email sign-in/sign-up/reset, or "Continue
-// without an account") -- rather than presenting sign-in as the default and "watching" as an
-// undiscoverable escape hatch. Reported live: most people who opened the app just to follow a
-// tournament never realized they needed to find the Live tab at all, having landed on what read as
-// a sign-in wall first. Covered by tests/unit/components/welcomeScreen.test.js.
+// The sign-in screen, reached only by someone who deliberately asked for it (the "Sign in to
+// score a match" link on Live, or Home's own Account entry) -- NOT what a cold, signed-out visit
+// lands on by default any more. It used to be exactly that default, and before that briefly had
+// its own "I'm watching"/"I'm scoring" choice screen in front of it; both were reported as the
+// same underlying problem from two different angles -- "most people who opened the app just to
+// follow a tournament never realized they needed to find the Live tab at all, having landed on
+// what read as a sign-in wall first" (the original sign-in default), and then, once that choice
+// screen shipped, "Scorer and watcher views has to be blended in a sense" -- an upfront "who are
+// you" question was still one tap of friction nobody watching a match actually wanted. A cold
+// visit now lands straight on Live instead (see cricketScorer.js's own screen-init comment); onWatch
+// here is the Back arrow's way of returning there without signing in, not a first-screen choice
+// card. Covered by tests/unit/components/welcomeScreen.test.js.
 //
 // `signUpEmail`, `signInEmail`, `sendPasswordReset` are bare-global Firebase Auth wrappers (not
 // extracted), called only from the email-submit handler -- never during render or a mount effect,
@@ -21,7 +26,6 @@ export function WelcomeScreen({
   onSkip,
   onWatch
 }) {
-  const [intent, setIntent] = useState(null); // null | 'watching' | 'scoring'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [emailMode, setEmailMode] = useState(null); // null | 'signin' | 'signup' | 'reset'
@@ -110,66 +114,8 @@ export function WelcomeScreen({
       color: COLORS.inkSoft,
       marginTop: 5
     }
-  }, "Ball-by-ball scoring for friendly games")), intent === null && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+  }, "Ball-by-ball scoring for friendly games")), /*#__PURE__*/React.createElement("button", {
     onClick: onWatch,
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: `1.5px solid ${COLORS.pitch}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      marginBottom: 12,
-      cursor: "pointer",
-      touchAction: "manipulation",
-      WebkitTapHighlightColor: "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.pitch
-    }
-  }, "I'm watching"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginTop: 3
-    }
-  }, "See live scores & results — no account needed")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setIntent("scoring"),
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: "none",
-      border: `1.5px solid ${COLORS.creamDark}`,
-      borderRadius: 12,
-      padding: "16px 18px",
-      marginBottom: 4,
-      cursor: "pointer",
-      touchAction: "manipulation",
-      WebkitTapHighlightColor: "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.ink
-    }
-  }, "I'm scoring"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginTop: 3
-    }
-  }, "Run the scoreboard for your own match"))), intent === "scoring" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setIntent(null),
     className: "cs-btn",
     style: {
       display: "flex",
@@ -416,5 +362,5 @@ export function WelcomeScreen({
       marginTop: 4,
       lineHeight: 1.5
     }
-  }, "Matches and teams stay on this device only. You can sign in anytime from Account.")));
+  }, "Matches and teams stay on this device only. You can sign in anytime from Account."));
 }

@@ -239,15 +239,23 @@ export function CricketScorer() {
   const initialTournamentFollowCode = useRef(getTournamentFollowCodeFromUrl()).current;
   const initialPollCode = useRef(getPollCodeFromUrl()).current;
   const initialShortcutAction = useRef(getShortcutActionFromUrl()).current;
-  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "login"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
-  // Set only by WelcomeScreen's "I'm watching" choice (handleWatch below) -- lands straight on
-  // "live" with no sign-in step at all, and suppresses the full Home/Live/Cups/Clubs tab bar down
-  // to nothing (see the TabBar render below): Cups and Clubs are organizer concepts a spectator
-  // with no account has no use for, and Home has nothing to show someone with no matches of their
-  // own. Reported live: most people who opened the app just to follow a tournament never realized
-  // they needed to find the Live tab at all, having landed on what read as a sign-in wall first --
-  // this is the other half of that fix, once they're actually past the entry screen.
-  const [watcherMode, setWatcherMode] = useState(false);
+  // A plain cold visit (no special URL param below) now lands straight on "live" with watcherMode
+  // on -- no sign-in step, no upfront "who are you" choice screen either (that shipped once, then
+  // got dropped: "Scorer and watcher views has to be blended in a sense," since asking a spectator
+  // to declare an intent before showing them anything was still friction nobody watching a match
+  // actually wanted). Reported live, the underlying complaint both times: most people who opened
+  // the app just to follow a tournament never realized they needed to find the Live tab at all,
+  // having landed on what read as a sign-in wall first. WelcomeScreen is still there -- reached by
+  // watcherMode's own "Sign in to score a match" link (exitWatcherMode below) -- just not the
+  // default landing any more.
+  const isDefaultColdLanding = !initialAuthAction && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode && !initialPollCode;
+  const [screen, setScreenRaw] = useState(initialAuthAction ? "auth-action" : initialFollowCode || initialFollowMatchId ? "follow" : initialTournamentFollowCode ? "follow-tournament" : initialPollCode ? "poll-respond" : "live"); // home | login | setup | match | teams | team-edit | live | follow | follow-tournament | poll-respond | auth-action
+  // Suppresses the full Home/Live/Cups/Clubs tab bar down to nothing (see the TabBar render
+  // below) for as long as it's on: Cups and Clubs are organizer concepts a spectator with no
+  // account has no use for, and Home has nothing to show someone with no matches of their own.
+  // True from mount for the default cold landing above; also set/cleared directly by
+  // handleWatch/exitWatcherMode once someone's actually navigating between Live and sign-in.
+  const [watcherMode, setWatcherMode] = useState(isDefaultColdLanding);
   const [followCode, setFollowCode] = useState(initialFollowCode);
   // Set instead of followCode when FollowScreen is reached from Home's recent-match row (a tap),
   // the Live tab, search, or a "?followMatch=ID" link -- see openLiveMatch/handleOpenLiveMatch
@@ -963,7 +971,8 @@ export function CricketScorer() {
   // exact case that shortcut exists for. Only ever fires once: initialShortcutAction is a ref
   // (frozen at mount from the URL), not state, so it can't re-trigger on a later sign-out/in.
   useEffect(() => {
-    if (user && screen === "login") {
+    if (user && (screen === "login" || watcherMode)) {
+      setWatcherMode(false);
       setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
     }
   }, [user]);
@@ -1567,15 +1576,15 @@ export function CricketScorer() {
     setTournamentFollowCode(code);
     setScreen("follow-tournament");
   }
-  // WelcomeScreen's "I'm watching" choice -- see watcherMode's own comment above for why this
-  // skips sign-in entirely and lands straight on Live.
+  // WelcomeScreen's own Back arrow -- returns to Live with no sign-in step, same destination a
+  // cold visit lands on directly now (see watcherMode's own comment above).
   function handleWatch() {
     setWatcherMode(true);
     setScreen("live");
   }
-  // The one way back out of watcher mode -- a spectator who decides they actually want to score
-  // something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs) reappears once
-  // they're past sign-in, same as anyone else arriving at "login" normally.
+  // The one way into WelcomeScreen from watcher mode -- a spectator who decides they actually
+  // want to score something. Clears watcherMode first so the full tab bar (and Home/Cups/Clubs)
+  // reappears once they're past sign-in, same as anyone else arriving at "login" normally.
   function exitWatcherMode() {
     setWatcherMode(false);
     setScreen("login");
