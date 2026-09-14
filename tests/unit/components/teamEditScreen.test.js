@@ -139,7 +139,7 @@ test("TeamEditScreen: removing a player goes through SwipeableRow's onDelete, op
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /A\. Sharma/);
 });
 
-test("TeamEditScreen: jersey color presets and a custom color both update the payload", () => {
+test("TeamEditScreen: picking a jersey color preset updates the payload; presets only, no custom color entry", () => {
   let saved = null;
   const inst = render({ onSave: t => { saved = t; } });
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
@@ -149,6 +149,7 @@ test("TeamEditScreen: jersey color presets and a custom color both update the pa
   act(() => { swatch.props.onClick(); });
   act(() => { btn(inst, "Save Team").props.onClick(); });
   assert.equal(saved.color, "#1b3a6b");
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Custom jersey color" }));
 });
 
 test("TeamEditScreen: no Delete team button when creating a new team, or when the caller offers no onDelete", () => {
