@@ -2028,7 +2028,6 @@ export function CricketScorer() {
     clubTeamsById: clubTeamsById,
     teams: allTeamsFlat,
     onOpenTeam: () => setScreen("my-teams"),
-    onOpenMyTeams: () => setScreen("my-teams"),
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
