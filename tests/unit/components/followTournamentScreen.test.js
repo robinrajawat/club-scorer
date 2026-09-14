@@ -10,6 +10,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { FollowTournamentScreen } from "../../../src/components/followTournamentScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
+import { COLORS } from "../../../src/components/theme.js";
 
 beforeEach(() => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
@@ -315,6 +316,31 @@ test("FollowTournamentScreen: shows Orange/Purple Cap and a Stats section when t
   assert.match(text, /Most runs/);
   assert.match(text, /B\. Kumar/);
   assert.match(text, /Most wickets/);
+});
+
+// Requested live: "perhaps a highlight to top 3, something to enhance the readability" -- ten
+// visually identical rows read as a wall of text. The top 3 in each list now get a filled rank
+// badge and bolder name/value; the rest get a plain muted number, same row shape either way.
+test("FollowTournamentScreen: Stats rows rank 1-3 with a highlighted badge, the rest with a plain muted number", async () => {
+  const data = snapshotData({
+    topBatters: [1, 2, 3, 4].map(n => ({ name: `Batter ${n}`, runs: 300 - n * 10, battingInnings: 4, battingAvg: 50, strikeRate: 110 }))
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const json = inst.toJSON();
+  function findRankBadges(node) {
+    if (Array.isArray(node)) return node.flatMap(findRankBadges);
+    if (node && node.type === "span" && node.props["aria-hidden"] === "true" && /^\d+$/.test(node.children?.[0])) return [node];
+    if (node && node.children) return findRankBadges(node.children);
+    return [];
+  }
+  const badges = findRankBadges(json);
+  assert.equal(badges.length, 4);
+  assert.deepEqual(badges.map(b => b.children[0]), ["1", "2", "3", "4"]);
+  // Top 3 get the gold-filled badge background; rank 4 doesn't.
+  assert.equal(badges[0].props.style.background, COLORS.gold);
+  assert.equal(badges[1].props.style.background, COLORS.gold);
+  assert.equal(badges[2].props.style.background, COLORS.gold);
+  assert.equal(badges[3].props.style.background, "transparent");
 });
 
 test("FollowTournamentScreen: no Orange/Purple Cap or Stats section when the snapshot has no player stats yet", async () => {

@@ -6,6 +6,7 @@ import { EmptyState, LoadingNote, AppMark } from "./illustrations.js";
 import { matchScoreLine, formatFixtureDateTime } from "../core/shareAndFormat.js";
 import { greetingPrefix } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
+import { AuthBar } from "./authBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
 // /liveTournaments). A match card opens the live scoring/scorecard screen, a tournament card
@@ -38,13 +39,21 @@ import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 // search. `watcherMode` (set for a signed-out visitor arriving with no account -- see
 // cricketScorer.js's handleWatch/exitWatcherMode) hides the TabBar (passed in via showTabBar, not
 // handled here) and adds a single low-key way back to sign-in at the bottom of the screen, rather
-// than stranding a watcher with no path to scoring. watcherMode also gets its own small brand
-// header (AppMark + "Club Scorer" + a time-of-day greeting) above everything else -- reported
-// live, "the landing page looks too simple, no branding, no greetings" once WelcomeScreen (which
-// used to carry that identity) stopped being the default landing screen. Tapping it doesn't
-// navigate anywhere (a watcher's landing already IS this screen) -- it resets the search and
-// re-picks Live/Fixtures/Results fresh, same as "click on the brand... bring it back to the
-// landing page" asked for.
+// than stranding a watcher with no path to scoring. watcherMode also gets its own brand header
+// (AppMark + "Club Scorer", a time-of-day greeting below it) above everything else, mirroring
+// HomeScreen's own header layout exactly -- reported live, "the landing page looks too simple, no
+// branding, no greetings" once WelcomeScreen (which used to carry that identity) stopped being the
+// default landing screen. Tapping the brand itself doesn't navigate anywhere (a watcher's landing
+// already IS this screen) -- it resets the search and re-picks Live/Fixtures/Results fresh, same as
+// "click on the brand... bring it back to the landing page" asked for.
+//
+// The same header also carries a real AuthBar (same component HomeScreen's own header uses,
+// already built to handle a signed-out `user` -- "Sign in" instead of an avatar, Help/Feedback/
+// About always available regardless) -- reported live, "if we don't show account icon/menu then
+// you don't present any app level information? like about, support, help." Account/Help/Feedback/
+// About all return to wherever they were actually opened from (settingsReturnScreen in
+// cricketScorer.js), not hardcoded back to Home, which a true watcher was never on in the first
+// place.
 //
 // Matches' third pill, Fixtures, is every publicly-live tournament's own upcoming, unplayed
 // fixtures (liveTournaments[].upcomingFixtures -- see pickUpcomingFixtures in appLogic.js and its
@@ -70,7 +79,16 @@ export function LiveScreen({
   showTabBar = false,
   loading = false,
   watcherMode = false,
-  onExitWatcherMode
+  onExitWatcherMode,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("matches"); // matches | tournaments
@@ -100,24 +118,47 @@ export function LiveScreen({
   function pickDefaultTourneyTab() {
     return liveTournaments.some(t => !t.champion) ? "live" : "finished";
   }
+  // Which segment (Matches vs Tournaments) to land on isn't hardcoded to Matches either -- same
+  // smart-default idea, one level up: whichever segment actually has the most "live-adjacent"
+  // content wins, ranked live match > upcoming fixture > live tournament > finished match >
+  // finished tournament. Reported live: a tournament that finished YESTERDAY sat one tap away
+  // under Tournaments while a default-selected, entirely empty Matches segment greeted a
+  // first-time visitor instead -- optimizing WHEN within a segment but never asking WHICH segment
+  // was the same mistake the original Live-pill default was built to fix.
+  //
+  // Fixtures outranks "live tournament" deliberately: `!t.champion` is also true for a tournament
+  // that simply hasn't started yet (zero matches played, nothing decided) -- there's no separate
+  // "genuinely in progress" signal on the lean /liveTournaments mirror to tell that apart from one
+  // that's actually mid-bracket. A concrete upcoming fixture (an opponent, a date) is more useful
+  // to land on than a bare tournament card with only a team count, so it wins the tie.
+  function pickDefaultView() {
+    if (liveMatches.some(m => m.status !== "complete")) return "matches";
+    if (allFixtures.length > 0) return "matches";
+    if (liveTournaments.some(t => !t.champion)) return "tournaments";
+    if (liveMatches.some(m => m.status === "complete")) return "matches";
+    if (liveTournaments.some(t => t.champion)) return "tournaments";
+    return "matches";
+  }
   // Reported live: "no way to reopen the landing page... perhaps click on the brand should bring
   // it to landing page" -- watcherMode's own brand header (below) is that tap target. There's
   // nowhere else to navigate to (a watcher's landing IS this screen), so this clears the search
   // and re-runs the same smart-default picks fresh, rather than navigating anywhere.
   function resetToLanding() {
     setQuery("");
-    setView("matches");
+    setView(pickDefaultView());
     setMatchTab(pickDefaultMatchTab());
     setTourneyTab(pickDefaultTourneyTab());
   }
 
-  // See this file's own top comment -- flips a segment's default pill away from Live, once, the
-  // first time real data settles in with nothing currently live in it. Guarded by a ref (not
-  // state) so it can never fire a second time and fight a choice made after that.
+  // See this file's own top comment -- flips a segment's default pill (and, now, the segment
+  // itself) away from Live/Matches, once, the first time real data settles in with nothing
+  // currently live. Guarded by a ref (not state) so it can never fire a second time and fight a
+  // choice made after that.
   const autoTabPicked = useRef(false);
   useEffect(() => {
     if (loading || autoTabPicked.current) return;
     autoTabPicked.current = true;
+    setView(pickDefaultView());
     setMatchTab(pickDefaultMatchTab());
     setTourneyTab(pickDefaultTourneyTab());
   }, [loading, liveMatches, liveTournaments, allFixtures]);
@@ -401,7 +442,14 @@ export function LiveScreen({
       flexDirection: "column",
       minHeight: "100dvh"
     }
-  }, watcherMode && /*#__PURE__*/React.createElement("button", {
+  }, watcherMode && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: resetToLanding,
     className: "cs-btn",
@@ -409,31 +457,39 @@ export function LiveScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 10,
+      gap: 8,
       background: "none",
       border: "none",
       padding: 0,
-      marginBottom: 20,
       cursor: "pointer",
-      textAlign: "left",
-      width: "100%"
+      textAlign: "left"
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
-    size: 36
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    size: 26
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
+      fontSize: 19,
       color: COLORS.pitch
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    profile: profile,
+    onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme
+  })), watcherMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      marginTop: 1
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 16,
+      color: COLORS.pitch,
+      marginBottom: 20
     }
-  }, `${greetingPrefix()} — live scores, fixtures & results`))), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, `${greetingPrefix()} — live scores, fixtures & results`), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
