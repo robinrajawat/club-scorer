@@ -22272,54 +22272,39 @@ function TeamEditScreen({
       gap: 8,
       alignItems: "center"
     }
+    // A fixed set of presets, no custom color entry -- ten already covers the practical range of
+    // jersey colors, and dropping the custom picker matches the app's own simplification bent
+    // elsewhere. A team that already has a genuinely custom (pre-existing, non-preset) color keeps
+    // it untouched -- `color` state still initializes from team.color regardless of whether it's a
+    // preset -- it just won't show as the "active" swatch among these until re-picked or cleared.
+    // Each swatch shows the same shield crest the color renders as everywhere else in the app (see
+    // myTeamsScreen.js), not a plain color dot, so picking one previews exactly what it becomes.
   }, TEAM_COLOR_PRESETS.map(c => /*#__PURE__*/React.createElement("button", {
     key: c,
     type: "button",
     onClick: () => setColor(color === c ? "" : c),
     "aria-label": `Jersey color ${c}`,
     style: {
-      width: 30,
-      height: 30,
-      borderRadius: "50%",
-      border: color === c ? `2.5px solid ${COLORS.ink}` : "2.5px solid transparent",
-      boxShadow: "0 1px 3px rgba(42,36,32,0.25)",
-      background: c,
-      cursor: "pointer",
-      padding: 0
-    }
-  })), /*#__PURE__*/React.createElement("label", {
-    "aria-label": "Custom jersey color",
-    style: {
-      width: 30,
-      height: 30,
-      borderRadius: "50%",
-      border: `1.5px dashed ${COLORS.willow}`,
+      width: 34,
+      height: 34,
+      borderRadius: 10,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
+      border: color === c ? `2px solid ${COLORS.ink}` : "2px solid transparent",
+      boxShadow: "0 1px 3px rgba(42,36,32,0.15)",
+      background: COLORS.surface,
       cursor: "pointer",
-      background: !color || TEAM_COLOR_PRESETS.includes(color) ? "#fff" : color,
-      position: "relative",
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "color",
-    value: color && !TEAM_COLOR_PRESETS.includes(color) ? color : "#888888",
-    onChange: e => setColor(e.target.value),
-    style: {
-      position: "absolute",
-      inset: 0,
-      opacity: 0,
-      cursor: "pointer",
-      border: "none",
       padding: 0
     }
-  }), (!color || TEAM_COLOR_PRESETS.includes(color)) && /*#__PURE__*/React.createElement(Plus, {
-    size: 14,
+  }, /*#__PURE__*/React.createElement(Shield, {
+    size: 19,
     style: {
-      color: COLORS.inkSoft
+      fill: c,
+      stroke: COLORS.creamDark,
+      strokeWidth: 1
     }
-  })), color && /*#__PURE__*/React.createElement("button", {
+  }))), color && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setColor(""),
     style: {
@@ -22478,18 +22463,18 @@ function TeamEditScreen({
     style: {
       padding: "7px 8px 7px 6px",
       borderRadius: 12,
-      background: COLORS.creamDark
-    }
-    // Two rows, not one -- a jersey number and name (row 1), plus C/VC/WK (row 2) below it.
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
+      background: COLORS.creamDark,
       display: "flex",
       alignItems: "center",
+      flexWrap: "wrap",
       gap: 8
     }
+    // One line -- jersey number, name, then the C/VC/WK pills -- rather than the role pills
+    // sitting on a second row underneath. `flexWrap` above is just a narrow-phone safety net;
+    // the pills are sized to fit alongside the two inputs on a normal phone width.
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 44,
+      width: 40,
       flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement("input", {
@@ -22508,21 +22493,13 @@ function TeamEditScreen({
       borderRadius: 8,
       padding: "5px 2px"
     }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      minWidth: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("input", {
+  })), /*#__PURE__*/React.createElement("input", {
     value: p.name,
     onChange: e => updateName(p._key, e.target.value),
     placeholder: "Player name",
     style: {
       flex: 1,
-      minWidth: 0,
+      minWidth: 60,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13.5,
@@ -22532,36 +22509,28 @@ function TeamEditScreen({
       borderRadius: 8,
       padding: "5px 8px"
     }
-  }))), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 6,
-      flexWrap: "wrap",
-      marginTop: 6,
-      paddingLeft: 52
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      borderRadius: 10,
-      overflow: "hidden",
-      border: `1px solid ${COLORS.willow}`,
+      gap: 4,
       flexShrink: 0
     }
-    // One pill divided into three sections, rather than three separate same-sized round buttons
-    // floating with gaps between them -- reads as a single "set the role" control.
+    // Three separate pill chips, not one box divided into sections -- ghost (light, outlined)
+    // when off, solid with a small shadow when on, same chip language as the color/role tags
+    // used elsewhere in the app rather than a fused segmented control.
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setCaptain(captain === p.name ? "" : p.name),
     "aria-label": captain === p.name ? `Remove ${p.name} as captain` : `Make ${p.name} captain`,
     title: "Captain",
     style: {
-      padding: "5px 9px",
-      border: "none",
-      borderRight: `1px solid ${COLORS.willow}`,
-      background: captain === p.name ? COLORS.gold : "transparent",
+      padding: "4px 7px",
+      borderRadius: 999,
+      border: `1.5px solid ${captain === p.name ? COLORS.gold : "rgba(107,90,63,0.25)"}`,
+      background: captain === p.name ? COLORS.gold : "rgba(255,255,255,0.35)",
       color: captain === p.name ? "#2e1c04" : COLORS.inkSoft,
+      boxShadow: captain === p.name ? "0 1px 3px rgba(184,137,43,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 10,
       fontWeight: 800,
@@ -22573,11 +22542,12 @@ function TeamEditScreen({
     "aria-label": viceCaptain === p.name ? `Remove ${p.name} as vice-captain` : `Make ${p.name} vice-captain`,
     title: "Vice-captain",
     style: {
-      padding: "5px 9px",
-      border: "none",
-      borderRight: `1px solid ${COLORS.willow}`,
-      background: viceCaptain === p.name ? "#c9a876" : "transparent",
+      padding: "4px 7px",
+      borderRadius: 999,
+      border: `1.5px solid ${viceCaptain === p.name ? "#c9a876" : "rgba(107,90,63,0.25)"}`,
+      background: viceCaptain === p.name ? "#c9a876" : "rgba(255,255,255,0.35)",
       color: viceCaptain === p.name ? "#5a4522" : COLORS.inkSoft,
+      boxShadow: viceCaptain === p.name ? "0 1px 3px rgba(201,168,118,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 9,
       fontWeight: 800,
@@ -22589,16 +22559,18 @@ function TeamEditScreen({
     "aria-label": keeper === p.name ? `Remove ${p.name} as wicketkeeper` : `Make ${p.name} wicketkeeper`,
     title: "Wicketkeeper",
     style: {
-      padding: "5px 9px",
-      border: "none",
-      background: keeper === p.name ? COLORS.turf : "transparent",
+      padding: "4px 7px",
+      borderRadius: 999,
+      border: `1.5px solid ${keeper === p.name ? COLORS.turf : "rgba(107,90,63,0.25)"}`,
+      background: keeper === p.name ? COLORS.turf : "rgba(255,255,255,0.35)",
       color: keeper === p.name ? "#fff" : COLORS.inkSoft,
+      boxShadow: keeper === p.name ? "0 1px 3px rgba(45,80,22,0.4)" : "none",
       fontFamily: "'Inter'",
       fontSize: 9,
       fontWeight: 800,
       cursor: "pointer"
     }
-  }, "WK")))))))), /*#__PURE__*/React.createElement(Btn, {
+  }, "WK"))))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => onSave(buildTeamPayload()),
