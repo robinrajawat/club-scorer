@@ -37,8 +37,8 @@ function hasText(node, str) {
 
 function baseProps(overrides = {}) {
   return {
-    user: null, profile: null, myPlayer: null, isAdmin: false,
-    onOpenFeedbackInbox: () => {}, onOpenBetaTesters: () => {}, onOpenClub: () => {},
+    user: null, profile: null, isAdmin: false,
+    onOpenFeedbackInbox: () => {}, onOpenBetaTesters: () => {},
     isBetaTester: false, onGenerateDummyData: () => Promise.resolve({ ok: true, clubIds: [] }),
     onWipeDummyData: () => Promise.resolve({ ok: true }),
     clubs: [], federationsById: {},

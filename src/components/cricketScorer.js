@@ -14,11 +14,9 @@ import { TeamEditScreen } from "./teamEditScreen.js";
 import { MyTeamsScreen } from "./myTeamsScreen.js";
 import { AccountScreen } from "./accountScreen.js";
 import { InboxScreen } from "./inboxScreen.js";
-import { PlayersScreen } from "./playersScreen.js";
 import { TournamentsScreen } from "./tournamentsScreen.js";
 import { TournamentDetailScreen } from "./tournamentDetailScreen.js";
 import { SeriesDetailScreen } from "./seriesDetailScreen.js";
-import { RecordsScreen } from "./recordsScreen.js";
 import { FollowScreen } from "./followScreen.js";
 import { FollowTournamentScreen } from "./followTournamentScreen.js";
 import { HelpScreen, AboutScreen, FeedbackScreen, SharedLinksScreen, BetaTestersScreen } from "./infoScreens.js";
@@ -333,16 +331,6 @@ export function CricketScorer() {
   // loadPublicTournamentName's own comment for where this data actually comes from.
   const [foreignTournamentNames, setForeignTournamentNames] = useState({});
   const [viewingTournament, setViewingTournament] = useState(null);
-  const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
-  // Shared by every Record Book entry point, whichever screen it's opened from.
-  function handleOpenRecords(sourceType, sourceId, sourceName) {
-    setViewingRecordsSource({
-      type: sourceType,
-      id: sourceId,
-      name: sourceName
-    });
-    setScreen("records");
-  }
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
@@ -353,20 +341,12 @@ export function CricketScorer() {
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [viewingTournamentFederationId, setViewingTournamentFederationId] = useState(null); // federation variant of the above -- at most one of this and viewingTournamentClubId is ever non-null
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
-  // Set when Home's Players-tab search result is tapped directly, so PlayersScreen opens straight
-  // to that player's detail instead of its own list view. Cleared on the way back to Home so a
-  // later, unrelated entry into the players screen doesn't reopen a stale profile.
-  const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
-  // Prefills a new team's name/roster when team-edit is opened with a seed in hand, instead of the
-  // usual empty new-team state. Cleared after save and by every other route into team-edit, so a
-  // stale seed never leaks into an unrelated "New Team" tap afterward.
-  const [presetTeamSeed, setPresetTeamSeed] = useState(null);
   // Which screen to return to after saving/cancelling out of team-edit -- entering from Home
   // (a personal team) should land back on Home, entering from the Teams tab (personal or a
   // club's own team) should land back there, same as it always did.
   const [teamEditReturnScreen, setTeamEditReturnScreen] = useState("teams");
-  // Same idea as teamEditReturnScreen, for tournament-detail/series-detail/records -- opening a
+  // Same idea as teamEditReturnScreen, for tournament-detail/series-detail -- opening a
   // tournament from My Tournaments (personal) should return there on Back, opening one from Cups
   // (a club/federation) should return to Cups, same as it always did.
   const [tournamentDetailReturnScreen, setTournamentDetailReturnScreen] = useState("tournaments");
@@ -394,14 +374,6 @@ export function CricketScorer() {
     };
   }, [user && user.uid]);
   const [profile, setProfile] = useState(null);
-  // This account's own published player profile, if any club has ever published one at this
-  // exact email (see publishPlayer/linkPlayerIfMatch) -- fetched by a direct doc lookup on the
-  // signed-in person's own email (the doc id itself), not a query, so it works whether or not the
-  // player is marked public. Surfaced on the Account screen; view-only there, since editing name/
-  // age/role/hand is deliberately the home club's alone (see the players/{email} update rule) --
-  // this account being the PERSON the profile describes doesn't grant edit rights to it, only
-  // linkedUid (set once, automatically, on first sign-in after a matching email is published).
-  const [myPlayer, setMyPlayer] = useState(null);
   const [isBetaTester, setIsBetaTester] = useState(false);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
@@ -769,15 +741,6 @@ export function CricketScorer() {
       // corrected themselves whenever auth actually finished — with no loading indicator either
       // way, so it looked like clubs/federations just took an unpredictable while to show up.
       refreshClubs();
-      // Courtesy auto-link, not something worth blocking or surfacing errors for — see
-      // linkPlayerIfMatch's own comment for exactly what it will and won't touch. Chained (not
-      // fired in parallel) so loadMyPlayerProfile picks up a just-completed auto-link instead of
-      // racing it.
-      if (u && u.email) {
-        linkPlayerIfMatch(u.uid, u.email, u.photoURL).catch(() => {}).then(() => loadMyPlayerProfile(u.email)).then(setMyPlayer);
-      } else {
-        setMyPlayer(null);
-      }
     });
     Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
       setMatches(idx);
@@ -1584,7 +1547,6 @@ export function CricketScorer() {
     await saveTeams(updated);
     setScreen(teamEditReturnScreen);
     setEditingTeam(null);
-    setPresetTeamSeed(null);
   }
   async function handleDeleteTeam(id) {
     const updated = teams.filter(t => t.id !== id);
@@ -2051,11 +2013,6 @@ export function CricketScorer() {
     onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
-    onOpenPlayer: player => {
-      setPlayersInitialSelected(player);
-      setScreen("players");
-    },
-    onLoadPublicPlayers: loadPublicPlayers,
     onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
@@ -2138,13 +2095,11 @@ export function CricketScorer() {
     onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
       setEditingTeam(t);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
@@ -2159,13 +2114,11 @@ export function CricketScorer() {
     matches: matches,
     onNewTeam: () => {
       setEditingTeam(null);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
       setEditingTeam(t);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
@@ -2182,16 +2135,7 @@ export function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
     onOpenTournament: t => openTournamentDetail(t, "tournaments", t._clubId || null, t._federationId || null),
-    onOpenRecords: handleOpenRecords,
     showTabBar: true
-  })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "records",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(RecordsScreen, {
-    sourceType: viewingRecordsSource.type,
-    sourceId: viewingRecordsSource.id,
-    sourceName: viewingRecordsSource.name,
-    onBack: () => setScreen("tournaments")
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",
     direction: navDirection
@@ -2217,11 +2161,6 @@ export function CricketScorer() {
     onToggleVisibility: handleToggleTournamentVisibility,
     onOpenMatch: openMatch,
     onDeleteTournament: handleDeleteTournament,
-    // Lets the champion banner (see FixturesSection) link straight to the club/federation's
-    // Record Book the moment a title's actually decided — the same handleOpenRecords used by the
-    // Club/Federation screen entry points, just resolved from whichever source this tournament
-    // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
-    onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid),
     isPersonal: !viewingTournamentClubId && !viewingTournamentFederationId,
     clubs: clubs,
@@ -2232,7 +2171,6 @@ export function CricketScorer() {
   }, /*#__PURE__*/React.createElement(AccountScreen, {
     user: user,
     profile: profile,
-    myPlayer: myPlayer,
     isAdmin: isAdmin,
     // Both one level down from Account, same as SharedLinksScreen just below -- their own onBack
     // (below) returns to "account" directly, not settingsReturnScreen (which points at wherever
@@ -2300,23 +2238,6 @@ export function CricketScorer() {
     onRevokeShareCode: handleRevokeShareCode,
     onRevokeViewCode: handleRevokeViewCode,
     onBack: () => setScreen("account")
-  })), screen === "players" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "players",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(PlayersScreen, {
-    onBack: () => {
-      setScreen("home");
-      setPlayersInitialSelected(null);
-    },
-    initialSelected: playersInitialSelected,
-    onLoadPublicPlayers: loadPublicPlayers,
-    onComputeCareerStats: computePlayerCareerStats,
-    onDeletePlayer: deletePlayer,
-    onSearchPublicClubs: searchPublicClubs,
-    onTransferPlayer: transferPlayerHomeClub,
-    onUpdatePlayerInfo: updatePlayerInfo,
-    currentUid: user && user.uid,
-    clubs: clubs
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow",
     direction: navDirection
@@ -2343,12 +2264,6 @@ export function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
-    clubs: clubs,
-    onPublishPlayer: publishPlayer,
-    onUnpublishPlayer: unpublishPlayer,
-    onUpdatePlayerInfo: updatePlayerInfo,
-    onLoadPublicPlayers: loadPublicPlayers,
-    presetTeamSeed: presetTeamSeed,
     onSave: team => handleSaveTeam(team, null),
     onCancel: () => setScreen(teamEditReturnScreen),
     onDelete: editingTeam ? () => handleDeleteTeam(editingTeam.id, null).then(() => setScreen(teamEditReturnScreen)) : undefined

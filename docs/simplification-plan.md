@@ -1,6 +1,6 @@
 # Simplifying to Teams/Matches/Tournaments — plan and reasoning
 
-**Status: agreed, Phase 1 in progress (2026-09-14).** Full club/federation/player-profile/
+**Status: agreed, Phases 1-4 complete, Phase 5 (cleanup) not started (2026-09-14).** Full club/federation/player-profile/
 records-book version is preserved at the `archive/pre-simplification-club-federation` branch on
 GitHub — recoverable in full any time, including if the app is ever officially adopted by a real
 federation.

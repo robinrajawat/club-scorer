@@ -10312,11 +10312,9 @@ function RuleChoice({
 function AccountScreen({
   user,
   profile,
-  myPlayer,
   isAdmin,
   onOpenFeedbackInbox,
   onOpenBetaTesters,
-  onOpenClub,
   isBetaTester = false,
   clubs = [],
   federationsById = {},
@@ -10403,14 +10401,6 @@ function AccountScreen({
   // Surfaced before deletion so the person can invite a co-owner first if they want a way out.
   const soleOwnerClubs = user ? clubs.filter(c => c.ownerUid === user.uid && (c.coOwnerUids || []).length === 0) : [];
   const soleOwnerFederations = user ? Object.values(federationsById).filter(f => f.createdBy === user.uid && (f.coOwnerUids || []).length === 0) : [];
-  // A player's homeClubId doesn't imply club MEMBERSHIP -- it's set by whichever club first added
-  // them to a team roster (see publishPlayer), entirely independent of the club invite/membership
-  // flow, so it's a normal, common case for someone to have a home club they were never actually
-  // invited into. `clubs` here is already scoped to clubs this account is a MEMBER of (see
-  // loadClubs), so finding a match here specifically means "you can navigate there" — the app has
-  // no way to view a club's internals without being a member, so a "jump to" link only makes sense
-  // when this resolves to something, not just whenever a home club name happens to be known.
-  const myPlayerHomeClub = myPlayer ? clubs.find(c => c.id === myPlayer.homeClubId) : null;
   async function handleSignIn() {
     setBusy(true);
     setActionError("");
@@ -10750,75 +10740,7 @@ function AccountScreen({
       color: COLORS.inkSoft,
       marginTop: 6
     }
-  }, "Shown around the app instead of your Google name, if you'd rather use something else.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 1,
-      background: COLORS.cardDivider,
-      margin: "14px 0"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase",
-      marginBottom: 10
-    }
-  }, "Your player profile"), myPlayer ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 4
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 14.5,
-      color: COLORS.ink,
-      marginBottom: 3
-    }
-  }, myPlayer.name || myPlayer.email), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, [myPlayer.age && `${myPlayer.age} yrs`, (PLAYER_ROLES.find(r => r.value === myPlayer.role) || {}).label, myPlayer.battingHand && `${(PLAYER_HANDS.find(h => h.value === myPlayer.battingHand) || {}).label}-hand bat`, myPlayer.bowlingHand && (myPlayer.role === "bowler" || myPlayer.role === "allrounder") && `${(PLAYER_HANDS.find(h => h.value === myPlayer.bowlingHand) || {}).label}-arm bowler`].filter(Boolean).join(" \u00b7 ") || "No further details added yet"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft
-    }
-  }, "Managed by ", myPlayerHomeClub ? myPlayerHomeClub.name : "a club", " \u2014 only they can edit your name, age, role, or batting/bowling hand here.", myPlayer.public ? " Your profile is kept public, so other clubs can borrow you into their own rosters." : " Your profile isn't public, so only they can add you to a roster."), myPlayerHomeClub && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => onOpenClub(myPlayerHomeClub.id),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 8,
-      padding: 0,
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      color: COLORS.pitch
-    }
-  }, "View ", myPlayerHomeClub.name, /*#__PURE__*/React.createElement(ChevronRight, {
-    size: 14
-  }))) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5
-    }
-  }, "No club has added you as a player yet. Once a club adds you to their roster using this exact email address, your profile shows up here automatically.")), /*#__PURE__*/React.createElement("div", {
+  }, "Shown around the app instead of your Google name, if you'd rather use something else."))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.surface,
       borderRadius: 16,
@@ -18019,7 +17941,6 @@ function HomeScreen({
   onNew,
   onOpen,
   onDelete,
-  onOpenClub,
   user,
   profile,
   onOpenAccount,
@@ -18033,8 +17954,6 @@ function HomeScreen({
   onSetTheme,
   onJoinCode,
   onOpenTournaments,
-  onOpenPlayer,
-  onLoadPublicPlayers,
   pendingCount,
   onPendingSynced,
   inboxBadgeCount = 0,
@@ -18091,20 +18010,14 @@ function HomeScreen({
   const [upcomingManuallySet, setUpcomingManuallySet] = useState(false);
   // Merges what used to be separate destinations (a "Search players" screen, plus Cups/Clubs/
   // Federations/Help each living behind their own tap) into one search box: type once, see
-  // matches, players, tournaments/series, clubs, federations, and FAQ entries all filtered by the
-  // same query, with a chip row to narrow down to just one kind of result. "All" only ever
-  // searches data already sitting in memory (matches, tournaments, clubs, and the static FAQ
-  // content) -- the public player directory is a real network fetch, so it's loaded lazily and
-  // only once someone deliberately picks the Players chip, same as before this was unified.
-  const [searchScope, setSearchScope] = useState("all"); // all | matches | teams | players | cups | clubs | federations | help
+  // matches, tournaments/series, teams, and FAQ entries all filtered by the same query, with a
+  // chip row to narrow down to just one kind of result. Only ever searches data already sitting in
+  // memory (matches, tournaments, teams, and the static FAQ content).
+  const [searchScope, setSearchScope] = useState("all"); // all | matches | teams | cups | help
   const [showSearchInfo, setShowSearchInfo] = useState(false);
-  const [publicPlayers, setPublicPlayers] = useState(null); // null = not loaded yet
-  const [playersLoading, setPlayersLoading] = useState(false);
-  const hasPlayerSearch = typeof onLoadPublicPlayers === "function";
   // Live + recently-completed matches across the whole app (not just this account's own), for the
-  // Matches search only -- same lazy-loaded, fetched-once-then-filtered-in-memory pattern as
-  // publicPlayers above, but keyed off any non-empty query rather than a chip pick, since Matches
-  // is the default scope. Deliberately never shown outside of an active search: the Home screen's
+  // Matches search only -- fetched once then filtered in memory, keyed off any non-empty query.
+  // Deliberately never shown outside of an active search: the Home screen's
   // own "Live now" strip above already covers browsing, this is only for finding one specific
   // match someone remembers watching.
   const [recentMatches, setRecentMatches] = useState(null); // null = not loaded yet
@@ -18120,19 +18033,6 @@ function HomeScreen({
   // true without a signed-in user. A guest is still someone actually using the app right now;
   // there's just no name to put after the time-of-day prefix.
   const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
-  useEffect(() => {
-    if (searchScope !== "players" || publicPlayers !== null || !hasPlayerSearch) return;
-    let cancelled = false;
-    setPlayersLoading(true);
-    onLoadPublicPlayers().then(list => {
-      if (cancelled) return;
-      setPublicPlayers(list);
-      setPlayersLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [searchScope, publicPlayers, hasPlayerSearch]);
   useEffect(() => {
     if (!query.trim() || recentMatches !== null || !hasRecentMatchSearch) return;
     if (searchScope !== "matches" && searchScope !== "all") return;
@@ -18159,30 +18059,6 @@ function HomeScreen({
   // in Saved Matches, not a second time down here just because it's also currently live or recent.
   const ownMatchIds = new Set(matches.map(m => m.id));
   const filteredRecentMatches = q && recentMatches ? recentMatches.filter(m => !ownMatchIds.has(m.id) && (m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q))) : [];
-  const roleLabel = v => (PLAYER_ROLES.find(r => r.value === v) || {}).label;
-  // Two more sources of player names besides the public directory, both already sitting in memory
-  // (no fetch needed, same reasoning filteredTournaments/filteredTeamsList above already give) --
-  // yet neither used to be searchable from here at all, which was the actual gap: a club's own
-  // Player Pool is deliberately NOT published to the public directory by default (no email
-  // required, see teamsScreen.js's own pool copy), so most clubs' players were only ever findable
-  // by remembering which team/club they were on and navigating there by hand. Tagged with enough
-  // context (which club's pool, which team's roster) to disambiguate two different people who
-  // happen to share a name, and kept as separate sections below rather than merged into one list
-  // with the public directory for the same reason.
-  const myPoolPlayers = q ? clubs.flatMap(c => (c.playerPool || []).filter(p => p.status !== "inactive" && (p.name.toLowerCase().includes(q) || (p.team || "").toLowerCase().includes(q) || c.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q))).map(p => ({ ...p,
-    _clubId: c.id,
-    _clubName: c.name
-  }))) : [];
-  // team.players entries are either a plain string (an older saved team, before per-player role/
-  // hand fields existed) or a {name, ...} object -- normalized the same way setupScreen.js's own
-  // normalizePlayers does, since this is the only other place in the app that reads a team's roster
-  // generically rather than for a specific already-known team.
-  const myRosterPlayers = q ? teams.flatMap(t => (t.players || []).map(p => typeof p === "string" ? {
-    name: p
-  } : p).filter(p => p.name && (p.name.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q))).map(p => ({ ...p,
-    _team: t
-  }))) : [];
-  const filteredPlayers = publicPlayers ? (q ? publicPlayers.filter(p => p.name.toLowerCase().includes(q) || (roleLabel(p.role) || "").toLowerCase().includes(q)) : publicPlayers) : [];
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
   // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
   // taps Start on it. Searched alongside saved matches so "that Riverside game" finds it whether
@@ -18478,72 +18354,6 @@ function renderMatchCard(m, i, {
   function renderTeamRow(t) {
     const club = t._clubId ? clubs.find(c => c.id === t._clubId) : null;
     return searchResultRow(t.id, () => onOpenTeam(t), t.name, club ? club.name : "Personal");
-  }
-  // Shared row shape for all three player sources (public directory, a club's pool, a team's
-  // roster) -- same avatar-plus-two-line look regardless of source, only the click target and the
-  // context subtitle differ, so a mixed set of matches still reads as one consistent list.
-  function renderPlayerRow(key, onClick, p, subtitle) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: key,
-      type: "button",
-      onClick: onClick,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        gap: 10,
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: "none",
-        background: COLORS.surface,
-        cursor: "pointer",
-        textAlign: "left",
-        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
-      }
-    }, /*#__PURE__*/React.createElement(PlayerAvatar, {
-      name: p.name,
-      photoURL: p.photoURL,
-      size: 34
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 14,
-        color: COLORS.ink,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, p.name), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11.5,
-        color: COLORS.inkSoft,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, subtitle)));
-  }
-  function renderPublicPlayerRow(p) {
-    return renderPlayerRow(p.id, () => onOpenPlayer(p), p, [roleLabel(p.role), p.age && `${p.age} yrs`].filter(Boolean).join(" · "));
-  }
-  // Opens the club this pool player belongs to (same destination as tapping the club itself in
-  // search) -- the Player Pool section lives there, one tap under "Manage", rather than a
-  // dedicated profile screen a pool player doesn't have (unlike a published public player).
-  function renderPoolPlayerRow(p) {
-    return renderPlayerRow(`pool:${p._clubId}:${p.id}`, () => onOpenClub(p._clubId), p, [roleLabel(p.role), p.team ? `${p._clubName} · ${p.team}` : p._clubName].filter(Boolean).join(" · "));
-  }
-  // Opens the team itself (same onOpenTeam a Teams-scope result already uses) -- straight to the
-  // roster this name actually lives on, personal or a specific club's.
-  function renderRosterPlayerRow(p, idx) {
-    const club = p._team._clubId ? clubs.find(c => c.id === p._team._clubId) : null;
-    return renderPlayerRow(`roster:${p._team.id}:${idx}`, () => onOpenTeam(p._team), p, [roleLabel(p.role), `${club ? club.name : "Personal"} · ${p._team.name}`].filter(Boolean).join(" · "));
   }
   function renderHelpRow(e) {
     return searchResultRow(e.q, () => onOpenHelp(query), e.q, e.section);
@@ -18938,7 +18748,7 @@ function renderMatchCard(m, i, {
       borderRadius: 12,
       padding: "10px 12px"
     }
-  }, "Searches your matches, teams, cups & series, clubs, federations, and Help & FAQ all at once. Players is separate \u2014 it searches every team roster and club Player Pool you have access to, plus the cross-club public directory (a fresh fetch, so pick that chip on purpose rather than every search reaching out for it)."),
+  }, "Searches your matches, teams, cups & series, and Help & FAQ all at once."),
   // These used to render only once query or scope already moved off the default ("All" with an
   // empty box) -- reported live: "you cannot even see the pills, what you are searching." That
   // hid the one thing that tells someone what's even searchable (Matches/Teams/Players/Cups/
@@ -18962,10 +18772,7 @@ function renderMatchCard(m, i, {
   }, {
     key: "teams",
     label: "Teams"
-  }, ...(hasPlayerSearch ? [{
-    key: "players",
-    label: "Players"
-  }] : []), {
+  }, {
     key: "cups",
     label: "Cups"
   }, {
@@ -19220,43 +19027,7 @@ function renderMatchCard(m, i, {
     }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode }))));
   })()) : /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "50vh"
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "players" && /*#__PURE__*/React.createElement("div", null, playersLoading && /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading players\u2026",
-    style: { marginBottom: 14 }
-  }), !playersLoading && filteredPlayers.length === 0 && myPoolPlayers.length === 0 && myRosterPlayers.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, !q && (publicPlayers || []).length === 0 ? "No public players yet." : "No players match that search."), myRosterPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 18 }
-  }, categorySectionLabel("Team rosters"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, myRosterPlayers.map((p, i) => renderRosterPlayerRow(p, i)))), myPoolPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 18 }
-  }, categorySectionLabel("Your clubs' pools"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, myPoolPlayers.map(renderPoolPlayerRow))), !playersLoading && filteredPlayers.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: { marginBottom: 18 }
-  }, categorySectionLabel("Public directory"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredPlayers.map(renderPublicPlayerRow)))), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "30px 0",
@@ -19301,7 +19072,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && myRosterPlayers.length === 0 && myPoolPlayers.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
+  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "30vh"
   }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -19353,19 +19124,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), (myRosterPlayers.length > 0 || myPoolPlayers.length > 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-    // Only the two free, in-memory sources here -- the public directory is a real network fetch
-    // (see hasPlayerSearch), so it stays behind the deliberate Players chip tap, same as always.
-  }, categorySectionLabel("Players"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, myRosterPlayers.slice(0, ALL_SCOPE_CAP).map((p, i) => renderRosterPlayerRow(p, i)), myPoolPlayers.slice(0, Math.max(0, ALL_SCOPE_CAP - myRosterPlayers.length)).map(renderPoolPlayerRow)), myRosterPlayers.length + myPoolPlayers.length > ALL_SCOPE_CAP && seeAllLink("players", myRosterPlayers.length + myPoolPlayers.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 18
     }
@@ -19375,14 +19134,7 @@ function renderMatchCard(m, i, {
       flexDirection: "column",
       gap: 6
     }
-  }, filteredHelpEntries.slice(0, ALL_SCOPE_CAP).map(renderHelpRow)), filteredHelpEntries.length > ALL_SCOPE_CAP && seeAllLink("help", filteredHelpEntries.length)), hasPlayerSearch && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, "Looking for a player? Switch to the Players tab above."))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+  }, filteredHelpEntries.slice(0, ALL_SCOPE_CAP).map(renderHelpRow)), filteredHelpEntries.length > ALL_SCOPE_CAP && seeAllLink("help", filteredHelpEntries.length)))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -28996,104 +28748,26 @@ function TeamsScreen({
 // GENERATED-FN-START: TeamEditScreen
 function TeamEditScreen({
   team,
-  clubId,
-  clubs = [],
-  onPublishPlayer,
-  onUnpublishPlayer,
-  onUpdatePlayerInfo,
-  onLoadPublicPlayers,
-  onAddPoolPlayers,
-  // Prefills a brand-new team's name/roster (only ever consulted when `team` is null) -- set
-  // when this screen was opened via "Create team" from a Player Pool group in TeamsScreen,
-  // instead of the usual empty new-team state. { name, players: [pool player objects] } | null.
-  presetTeamSeed,
   onSave,
   onCancel,
   onDelete
 }) {
-  const [name, setName] = useState(team ? team.name : presetTeamSeed ? presetTeamSeed.name : "");
+  const [name, setName] = useState(team ? team.name : "");
   const [players, setPlayers] = useState(team ? team.players.map(p => typeof p === "string" ? {
     name: p,
     number: "",
-    email: "",
-    public: false,
-    age: "",
-    role: "",
-    battingHand: "",
-    bowlingHand: "",
     _key: uid()
   } : {
     name: p.name,
     number: p.number || "",
-    email: p.email || "",
-    public: !!p.public,
-    homeClubId: p.homeClubId || null,
-    // Only set when this row was already backed by a published player doc at mount -- used to
-    // warn if `name` (edited via the row's own name input above) drifts from it, since
-    // computePlayerCareerStats matches a player to their past scorecards by name string, not a
-    // stable id. A brand-new publish (was never public before) isn't a rename, so this stays
-    // null in that case and no warning is shown.
-    _originalName: p.public ? p.name : null,
-    // Age/role/hand live only on the shared player doc, not on the roster entry itself (avoids
-    // two copies drifting apart) — so re-opening an already-published player's row starts these
-    // blank rather than pre-filled; editing here always writes straight through to that doc.
-    age: "",
-    role: "",
-    battingHand: "",
-    bowlingHand: "",
     _key: uid()
-  }) : (presetTeamSeed ? presetTeamSeed.players : []).map(p => ({
-    name: p.name,
-    number: "",
-    email: "",
-    public: false,
-    age: "",
-    role: p.role || "",
-    battingHand: "",
-    bowlingHand: "",
-    _key: uid()
-  })));
+  }) : []);
   const [newPlayer, setNewPlayer] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [captain, setCaptain] = useState(team ? team.captain || "" : "");
   const [viceCaptain, setViceCaptain] = useState(team ? team.viceCaptain || "" : "");
   const [keeper, setKeeper] = useState(team ? team.keeper || "" : "");
   const [color, setColor] = useState(team ? team.color || "" : "");
-  // Player details (email + public toggle) are tucked behind a per-row expand, rather than always
-  // shown, since most rec-league rosters will never touch this — one row open at a time.
-  const [expandedKey, setExpandedKey] = useState(null);
-  const [publishBusyKey, setPublishBusyKey] = useState(null);
-  // Which row's EditPlayerModal is open, if any -- separate from expandedKey (which row's detail
-  // panel is expanded) since the modal can be opened while any row is expanded.
-  const [editingPlayerKey, setEditingPlayerKey] = useState(null);
-  const [publishError, setPublishError] = useState("");
-  // Cross-club "borrow a player" directory — only relevant for a club-owned team (clubId set);
-  // loaded lazily the first time the picker opens rather than on mount, since most edits never
-  // need it.
-  const [browseOpen, setBrowseOpen] = useState(false);
-  const [browseLoading, setBrowseLoading] = useState(false);
-  const [publicPlayers, setPublicPlayers] = useState([]);
-  // Club player pool picker -- data's already on hand via the clubs prop (no async load needed,
-  // unlike publicPlayers above), so this is just visibility state for the modal.
-  const [poolPickerOpen, setPoolPickerOpen] = useState(false);
-  // Which pool players are checked in the picker, keyed by pool entry id -- lets someone tick
-  // several names and add them all in one go instead of reopening the picker per player (the
-  // previous behavior: tapping a row added it and closed the modal immediately). Cleared whenever
-  // the picker opens/closes so a stale selection never carries into the next time it's opened.
-  const [selectedPoolIds, setSelectedPoolIds] = useState(new Set());
-  const [poolSearch, setPoolSearch] = useState("");
-  function togglePoolSelection(id) {
-    setSelectedPoolIds(cur => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);else next.add(id);
-      return next;
-    });
-  }
-  function closePoolPicker() {
-    setPoolPickerOpen(false);
-    setSelectedPoolIds(new Set());
-    setPoolSearch("");
-  }
   // Removing a player is destructive to whatever local edits (number, captain/keeper role) they
   // had on this team, so it goes through the same ConfirmModal pattern as every other destructive
   // action in the app, instead of the previous single-tap X.
@@ -29102,132 +28776,8 @@ function TeamEditScreen({
   // gated on there actually being an existing team (and a caller that wants to offer it at all)
   // rather than a brand-new one that's never been saved and has nothing to delete yet.
   const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false);
-  // Checked once on mount against whatever borrowed players this roster already had (see
-  // isBorrowed) — a set of emails whose player doc no longer exists at all, so the badge below
-  // can flag a roster row whose source was actually deleted, not just merely unpublished.
-  const [deletedBorrowedEmails, setDeletedBorrowedEmails] = useState(new Set());
-  useEffect(() => {
-    const borrowedEmails = players.filter(p => isBorrowed(p) && p.email).map(p => p.email);
-    if (borrowedEmails.length === 0) return;
-    let cancelled = false;
-    checkDeletedBorrowedPlayers(borrowedEmails).then(set => {
-      if (!cancelled) setDeletedBorrowedEmails(set);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  async function openBrowse() {
-    setBrowseOpen(true);
-    if (publicPlayers.length > 0) return;
-    setBrowseLoading(true);
-    setPublicPlayers(await onLoadPublicPlayers());
-    setBrowseLoading(false);
-  }
-  function addBorrowedPlayer(p) {
-    if (players.some(x => x.email && x.email === p.email)) {
-      setBrowseOpen(false);
-      return;
-    }
-    setPlayers(list => [...list, {
-      name: p.name,
-      number: "",
-      email: p.email,
-      public: true,
-      // Marks this row as belonging to another club's player directory entry, not this team's
-      // own roster — see isBorrowed() below, which gates name/age/role/hand editing (those stay
-      // the home club's to manage) while leaving the jersey number free to differ per team.
-      homeClubId: p.homeClubId || null,
-      age: p.age || "",
-      role: p.role || "",
-      battingHand: p.battingHand || "",
-      bowlingHand: p.bowlingHand || "",
-      _key: uid()
-    }]);
-    setBrowseOpen(false);
-  }
-  // True when this roster row is a player published by a DIFFERENT club — their name, email, and
-  // age/role/hand are that club's to manage, not this one's. Jersey number is always local to
-  // this team's roster regardless (a borrowed player can easily wear a different number here than
-  // they do for their own club), so it's deliberately excluded from this check.
-  function isBorrowed(p) {
-    return !!(p.homeClubId && clubId && p.homeClubId !== clubId);
-  }
-  // Resolves a borrowed player's home club id into a readable name for the badge below. Was
-  // previously only ever surfaced via a `title` tooltip on the badge -- invisible on a touch
-  // device, since a tooltip needs hover, which a phone doesn't have. The dedicated Players screen
-  // already shows "Home club: X" as plain, always-visible text (see the homeClub lookup there);
-  // this roster view had the same information available (p.homeClubId) but no way to actually
-  // show it, since it never received a `clubs` list to resolve the id against at all.
-  function homeClubName(p) {
-    const c = clubs.find(x => x.id === p.homeClubId);
-    return c ? c.name : "another club";
-  }
-  // This team's own club's player pool -- already present on the clubs prop, unlike publicPlayers
-  // above which needs its own async load. clubId is always null now that club management is gone
-  // (see docs/simplification-plan.md), so this is permanently empty in practice.
-  const clubPool = clubId ? ((clubs.find(c => c.id === clubId) || {}).playerPool || []).filter(p => p.status !== "inactive") : [];
-  // Roster rows show whether they're already reusable club-wide (via the pool) or a one-off typed
-  // just for this team -- match by name only, same loose join addPoolPlayersToRoster/addPlayer's
-  // own dedup checks already use, since neither side carries a stable link back to the other.
-  function isInPool(p) {
-    return clubPool.some(pp => pp.name.trim().toLowerCase() === p.name.trim().toLowerCase());
-  }
-  // Retrofits a roster row that predates the pool (or had alsoAddToPool off, or was added before
-  // this club had a pool at all) into it, without leaving this screen. Carries over whatever role/
-  // hand/email this row already has, same fields addPoolPlayers itself accepts.
-  function addToPoolFromRoster(p) {
-    if (!onAddPoolPlayers) return;
-    onAddPoolPlayers(clubId, [{
-      name: p.name,
-      role: p.role || "",
-      battingHand: p.battingHand || "",
-      bowlingHand: p.bowlingHand || "",
-      email: p.email || ""
-    }]);
-  }
-  // Hoisted out of the JSX (rather than computed inline where it's used) so the render tree below
-  // stays a plain ternary instead of an inline IIFE -- much easier to get right than juggling
-  // extra parens deep inside a JSX expression.
-  const filteredPool = poolSearch.trim() ? clubPool.filter(pp => pp.name.toLowerCase().includes(poolSearch.trim().toLowerCase())) : clubPool;
-  // "Select all" acts on whatever's currently filtered, not the whole pool -- so searching first
-  // then selecting-all only grabs the matches, and it toggles off if everything visible (that
-  // isn't already on the roster) is already checked, rather than being a one-way action.
-  // Selections outside the current filter (from a previous search term) are left untouched.
-  const selectablePoolIds = filteredPool.filter(pp => !players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase())).map(pp => pp.id);
-  const allFilteredSelected = selectablePoolIds.length > 0 && selectablePoolIds.every(id => selectedPoolIds.has(id));
-  function toggleSelectAllFiltered() {
-    setSelectedPoolIds(cur => {
-      const next = new Set(cur);
-      selectablePoolIds.forEach(id => allFilteredSelected ? next.delete(id) : next.add(id));
-      return next;
-    });
-  }
-  // Live suggestions for the free-text "Player name" field below, so a name already in the club's
-  // pool can be picked instead of retyped (and mistyped) from scratch. Same substring match as the
-  // Browse-pool search box, scoped to what's currently typed; excludes anyone already on this
-  // roster (nothing useful to suggest) and an exact match of the text already typed (nothing left
-  // to autocomplete). Capped at 5 so a big pool doesn't turn one keystroke into a wall of rows.
-  const trimmedNewPlayer = newPlayer.trim();
-  const nameSuggestions = trimmedNewPlayer ? clubPool.filter(pp => pp.name.toLowerCase().includes(trimmedNewPlayer.toLowerCase()) && pp.name.trim().toLowerCase() !== trimmedNewPlayer.toLowerCase() && !players.some(p => p.name.trim().toLowerCase() === pp.name.trim().toLowerCase())).slice(0, 5) : [];
-  // Picking a suggestion adds that pool player outright (same path as ticking them in the Browse
-  // picker) rather than just filling the text field -- they're already a known pool entry, so
-  // there's nothing left to edit before adding, and this saves the extra tap on "+".
-  function pickNameSuggestion(pp) {
-    addPoolPlayersToRoster([pp]);
-    setNewPlayer("");
-    setNewNumber("");
-    setAddError("");
-  }
   const [addError, setAddError] = useState("");
-  // Typing a brand-new name into the roster only ever added them to THIS team -- there was no way
-  // to also get them into the club's reusable pool without leaving team editing entirely, adding
-  // them from the club's own Player Pool screen, then coming back. Defaults on for a club team
-  // (opt-out, not opt-in) since the whole point of a pool is that most new names typed while
-  // building a roster are genuinely new club members worth having reusable for future teams too,
-  // not one-off placeholders. Irrelevant for a personal team (no clubId, no pool to add to).
-  const [alsoAddToPool, setAlsoAddToPool] = useState(true);
-  async function addPlayer() {
+  function addPlayer() {
     const n = newPlayer.trim();
     if (!n) return;
     if (players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
@@ -29238,54 +28788,10 @@ function TeamEditScreen({
     setPlayers(p => [...p, {
       name: n,
       number: newNumber.trim(),
-      email: "",
-      public: false,
       _key: uid()
     }]);
-    // Skips silently (not an error) on a name already in the pool -- same "picking, not typing,
-    // makes a clash almost certainly accidental" reasoning as addPoolPlayerToRoster below, and
-    // this path is typing, so an exact match is more likely someone re-adding the same person to
-    // a second team than a genuine same-named duplicate. onAddPoolPlayers (handleAddPoolPlayers
-    // at the App level) already updates the shared clubs state on success, so clubPool picks up
-    // the addition on next render with no extra plumbing needed here.
-    if (clubId && alsoAddToPool && onAddPoolPlayers && !clubPool.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
-      onAddPoolPlayers(clubId, [{
-        name: n
-      }]);
-    }
     setNewPlayer("");
     setNewNumber("");
-  }
-  // Copies club player-pool entries onto this team's roster -- a one-time snapshot, same
-  // relationship as addBorrowedPlayer above, not a live reference back to the pool (editing or
-  // removing them from the pool later doesn't touch teams that already added them). Skips
-  // silently over any name clash rather than erroring, since picking from a list (as opposed
-  // to typing) makes an accidental double-add the far more likely cause than a genuine intent
-  // to add a same-named second player. Takes the whole selected batch at once so ticking several
-  // names in the picker adds them all in a single tap instead of one modal round-trip each.
-  function addPoolPlayersToRoster(entries) {
-    setPlayers(p => {
-      const existingLower = new Set(p.map(x => x.name.trim().toLowerCase()));
-      const additions = [];
-      entries.forEach(pp => {
-        const lower = pp.name.trim().toLowerCase();
-        if (existingLower.has(lower)) return;
-        existingLower.add(lower);
-        additions.push({
-          name: pp.name,
-          number: "",
-          email: "",
-          public: false,
-          age: "",
-          role: pp.role || "",
-          battingHand: "",
-          bowlingHand: "",
-          _key: uid()
-        });
-      });
-      return [...p, ...additions];
-    });
-    closePoolPicker();
   }
   function removePlayer(key) {
     const old = players.find(p => p._key === key);
@@ -29314,129 +28820,20 @@ function TeamEditScreen({
       if (keeper === old.name) setKeeper(newName);
     }
   }
-  function updateEmail(key, email) {
-    setPlayers(p => p.map(x => x._key === key ? {
-      ...x,
-      email
-    } : x));
-  }
-  // Small pill toggle used for the "also save to club pool" checkbox below — same visual
-  // language as the color swatches above, just text instead of a color fill.
-  function pillBtn(active, label, onClick, key) {
-    return /*#__PURE__*/React.createElement("button", {
-      key,
-      type: "button",
-      onClick,
-      "aria-pressed": active,
-      style: {
-        padding: "4px 10px",
-        borderRadius: 12,
-        border: active ? "none" : `1.5px solid ${COLORS.willow}`,
-        background: active ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-        color: active ? "#fff" : COLORS.inkSoft,
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 11.5,
-        cursor: "pointer"
-      }
-    }, label);
-  }
-  // Builds the same payload the bottom Save button writes to the team's own storage. Pulled out
-  // so savePlayerDetails/makePrivate below can call it too (with an override for the players
-  // array, since setPlayers is async and the caller needs the just-updated array immediately,
-  // not next render).
-  function buildTeamPayload(playersOverride, captainOverride, keeperOverride, viceCaptainOverride) {
-    const savedPlayers = (playersOverride || players).map(p => ({
+  function buildTeamPayload() {
+    const savedPlayers = players.map(p => ({
       name: p.name.trim(),
-      number: p.number,
-      email: normalizeEmail(p.email),
-      public: !!p.public,
-      homeClubId: p.homeClubId || null
+      number: p.number
     }));
     return {
       id: team ? team.id : uid(),
       name: name.trim(),
       players: savedPlayers,
-      captain: (captainOverride !== undefined ? captainOverride : captain).trim(),
-      viceCaptain: (viceCaptainOverride !== undefined ? viceCaptainOverride : viceCaptain).trim(),
-      keeper: (keeperOverride !== undefined ? keeperOverride : keeper).trim(),
+      captain: captain.trim(),
+      viceCaptain: viceCaptain.trim(),
+      keeper: keeper.trim(),
       color: color || null
     };
-  }
-  // Not-yet-public: publishes with whatever age/role/hand fields are already filled in. Already
-  // public: saves any edits to those fields straight through instead (name/public/homeClubId
-  // never change via this path — see updatePlayerInfo).
-  // Publishing/editing/un-publishing a player writes straight to Firestore's shared /players doc
-  // immediately regardless of whether this screen's own Save has been pressed -- that part was
-  // always true and is correct (the shared doc has to reflect reality the moment another club
-  // could see it). What used to be missing: the LOCAL roster's own copy of `public` only picked
-  // up that change if the person also pressed the screen's bottom Save button afterward. Back out
-  // any other way -- a nav-away, a closed tab -- and the roster would silently keep showing "Make
-  // public" for a player Firestore already had as public. Calling onSave immediately here, with
-  // the freshly-updated players array (not the one still in state pre-render), closes that gap:
-  // this screen's own storage can now never drift from the shared doc it just wrote.
-  async function savePlayerDetails(key, info) {
-    const row = players.find(p => p._key === key);
-    if (!row || publishBusyKey) return {
-      ok: false,
-      error: "Already saving \u2014 try again in a moment."
-    };
-    setPublishError("");
-    setPublishBusyKey(key);
-    const detail = {
-      age: info.age,
-      role: info.role,
-      battingHand: info.battingHand,
-      bowlingHand: info.bowlingHand
-    };
-    const result = row.public ? await onUpdatePlayerInfo(row.email, {
-      name: info.name,
-      ...detail
-    }) : await onPublishPlayer(clubId, info.name, row.email, detail);
-    setPublishBusyKey(null);
-    if (!result.ok) {
-      setPublishError(result.error);
-      return result;
-    }
-    const updatedPlayers = players.map(x => x._key === key ? {
-      ...x,
-      name: info.name,
-      ...detail,
-      public: true
-    } : x);
-    setPlayers(updatedPlayers);
-    // Renaming can now also happen through EditPlayerModal's Save (not just the row's own name
-    // field, which already does this via updateName) -- keep captain/vice-captain/keeper in sync
-    // either way, since all three are tracked by name string rather than a stable id. Computed
-    // explicitly rather than read back from state for the buildTeamPayload call below:
-    // setCaptain/setViceCaptain/setKeeper are async, so the immediate persist would otherwise
-    // still see the pre-rename name.
-    const newCaptain = row.name !== info.name && captain === row.name ? info.name : captain;
-    const newViceCaptain = row.name !== info.name && viceCaptain === row.name ? info.name : viceCaptain;
-    const newKeeper = row.name !== info.name && keeper === row.name ? info.name : keeper;
-    if (newCaptain !== captain) setCaptain(newCaptain);
-    if (newViceCaptain !== viceCaptain) setViceCaptain(newViceCaptain);
-    if (newKeeper !== keeper) setKeeper(newKeeper);
-    onSave(buildTeamPayload(updatedPlayers, newCaptain, newKeeper, newViceCaptain));
-    return result;
-  }
-  async function makePrivate(key) {
-    const row = players.find(p => p._key === key);
-    if (!row || publishBusyKey) return;
-    setPublishError("");
-    setPublishBusyKey(key);
-    const result = await onUnpublishPlayer(row.email);
-    setPublishBusyKey(null);
-    if (!result.ok) {
-      setPublishError(result.error);
-      return;
-    }
-    const updatedPlayers = players.map(x => x._key === key ? {
-      ...x,
-      public: false
-    } : x);
-    setPlayers(updatedPlayers);
-    onSave(buildTeamPayload(updatedPlayers));
   }
   const trimmedNames = players.map(p => p.name.trim());
   const canSave = name.trim() && players.length > 0 && trimmedNames.every(n => n) && new Set(trimmedNames.map(n => n.toLowerCase())).size === players.length;
@@ -29503,7 +28900,7 @@ function TeamEditScreen({
       fontWeight: 500,
       color: COLORS.inkSoft
     }
-  }, "(optional \u2014 used on charts and the scoreboard)")), /*#__PURE__*/React.createElement("div", {
+  }, "(optional — used on charts and the scoreboard)")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -29618,7 +29015,7 @@ function TeamEditScreen({
       padding: "3px 9px",
       borderRadius: 12
     }
-  }, "C \u00b7 ", captain), viceCaptain && /*#__PURE__*/React.createElement("span", {
+  }, "C · ", captain), viceCaptain && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -29628,7 +29025,7 @@ function TeamEditScreen({
       padding: "3px 9px",
       borderRadius: 12
     }
-  }, "VC \u00b7 ", viceCaptain), keeper && /*#__PURE__*/React.createElement("span", {
+  }, "VC · ", viceCaptain), keeper && /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
@@ -29638,14 +29035,14 @@ function TeamEditScreen({
       padding: "3px 9px",
       borderRadius: 12
     }
-  }, "WK \u00b7 ", keeper)), players.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "WK · ", keeper)), players.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11.5,
       color: COLORS.inkSoft,
       marginBottom: 10
     }
-  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper \u2014 tap again to clear. Swipe a row left to remove that player."), /*#__PURE__*/React.createElement("div", {
+  }, "Tap ", /*#__PURE__*/React.createElement("strong", null, "C"), ", ", /*#__PURE__*/React.createElement("strong", null, "VC"), ", or ", /*#__PURE__*/React.createElement("strong", null, "WK"), " on a row to set captain / vice-captain / keeper — tap again to clear. Swipe a row left to remove that player."), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -29684,90 +29081,14 @@ function TeamEditScreen({
     }
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 17
-  }))), nameSuggestions.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 10,
-      border: `1px solid ${COLORS.cardDivider}`,
-      borderRadius: 10,
-      overflow: "hidden"
-    }
-  }, nameSuggestions.map((pp, idx) => /*#__PURE__*/React.createElement("button", {
-    key: pp.id,
-    type: "button",
-    onClick: () => pickNameSuggestion(pp),
-    className: "cs-btn",
-    style: {
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.surface,
-      border: "none",
-      borderBottom: idx < nameSuggestions.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
-      padding: "8px 10px",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.ink
-    }
-  }, pp.name, " ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: COLORS.inkSoft,
-      fontSize: 11
-    }
-  }, "\u00b7 from club pool")))), clubId && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: addError ? 4 : 10
-    }
-  }, pillBtn(alsoAddToPool, alsoAddToPool ? "\u2713 Also save to club pool" : "Also save to club pool", () => setAlsoAddToPool(v => !v))), addError && /*#__PURE__*/React.createElement("div", {
+  }))), addError && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
       color: COLORS.ball,
       marginBottom: 12
     }
-  }, addError), clubId && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: openBrowse,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      padding: 0,
-      textDecoration: "underline",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(Globe, {
-    size: 13
-  }), "Borrow a public player from another club"), clubId && clubPool.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setPoolPickerOpen(true),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      padding: 0,
-      textDecoration: "underline",
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 13
-  }), `Add from club pool (${clubPool.length})`), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, addError), players.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -29794,9 +29115,7 @@ function TeamEditScreen({
       borderRadius: 12,
       background: COLORS.creamDark
     }
-    // Two rows, not one -- a jersey number and name (row 1), plus the pool marker and
-    // C/VC/WK/public controls (row 2) below it. Cramming all of that plus a remove button onto a
-    // single line left the name input barely wide enough for a few letters.
+    // Two rows, not one -- a jersey number and name (row 1), plus C/VC/WK (row 2) below it.
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -29836,74 +29155,18 @@ function TeamEditScreen({
     value: p.name,
     onChange: e => updateName(p._key, e.target.value),
     placeholder: "Player name",
-    disabled: isBorrowed(p),
-    title: isBorrowed(p) ? "Borrowed from another club \u2014 only that club can edit their name or details." : undefined,
     style: {
       flex: 1,
       minWidth: 0,
       fontFamily: "'Inter'",
       fontWeight: 600,
       fontSize: 13.5,
-      color: isBorrowed(p) ? COLORS.inkSoft : COLORS.ink,
-      background: isBorrowed(p) ? COLORS.creamDark : COLORS.surface,
+      color: COLORS.ink,
+      background: COLORS.surface,
       border: `1px solid ${COLORS.willow}`,
       borderRadius: 8,
       padding: "5px 8px"
     }
-  }), isBorrowed(p) && /*#__PURE__*/React.createElement("span", {
-    title: "This player belongs to another club's roster \u2014 only their home club can edit name, email, age, role, or batting/bowling hand. Jersey number is yours to set.",
-    style: {
-      flexShrink: 0,
-      fontFamily: "'Inter'",
-      fontSize: 9.5,
-      fontWeight: 700,
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-      color: COLORS.gold,
-      background: "rgba(184,137,43,0.16)",
-      padding: "2px 6px",
-      borderRadius: 8,
-      whiteSpace: "nowrap"
-    }
-  }, "Borrowed \u00b7 ", homeClubName(p)), p.email && deletedBorrowedEmails.has(p.email) && /*#__PURE__*/React.createElement("span", {
-    title: "The player their home club published has since been deleted \u2014 your roster still keeps its own local copy of their name/number, this is just letting you know the source is gone.",
-    style: {
-      flexShrink: 0,
-      fontFamily: "'Inter'",
-      fontSize: 9.5,
-      fontWeight: 700,
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-      color: COLORS.ball,
-      background: "rgba(198,58,58,0.14)",
-      padding: "2px 6px",
-      borderRadius: 8,
-      whiteSpace: "nowrap"
-    }
-  }, "No longer published")), clubId && !isBorrowed(p) && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setExpandedKey(k => k === p._key ? null : p._key),
-    "aria-label": p.public ? `${p.name} is a public player — edit details` : `Add an email to make ${p.name} a public player`,
-    title: "Player details (email, public)",
-    className: "cs-btn",
-    style: {
-      width: 24,
-      height: 24,
-      borderRadius: "50%",
-      flexShrink: 0,
-      border: "none",
-      background: expandedKey === p._key ? COLORS.pitchFixed : p.public ? "rgba(184,137,43,0.16)" : "transparent",
-      color: expandedKey === p._key ? "#fff" : p.public ? COLORS.gold : COLORS.inkSoft,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-    // Moved here from row 2 (was a globe icon) -- a chevron next to the name is a more generic
-    // "expand for details" affordance, and row 2 no longer needs a third, unrelated icon crowding
-    // the role pill.
-  }, /*#__PURE__*/React.createElement(ChevronDown, {
-    size: 15
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -29913,44 +29176,7 @@ function TeamEditScreen({
       marginTop: 6,
       paddingLeft: 52
     }
-    // Row 2: pool marker, then the role toggles, then the public-player toggle -- everything that
-    // used to be crammed alongside the name input on one line now has the full row to itself.
-  }, clubId && !isBorrowed(p) && (isInPool(p) ? /*#__PURE__*/React.createElement("span", {
-    title: "Already in this club's player pool.",
-    style: {
-      flexShrink: 0,
-      display: "flex",
-      alignItems: "center",
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Check, {
-    size: 13
-  })) : /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => addToPoolFromRoster(p),
-    className: "cs-btn",
-    "aria-label": `Add ${p.name} to the club player pool`,
-    title: "Not in the club player pool yet — tap to add.",
-    style: {
-      flexShrink: 0,
-      display: "flex",
-      alignItems: "center",
-      gap: 2,
-      fontFamily: "'Inter'",
-      fontSize: 9.5,
-      fontWeight: 700,
-      letterSpacing: 0.2,
-      color: COLORS.inkSoft,
-      background: "rgba(42,36,32,0.08)",
-      border: "none",
-      padding: "2px 6px",
-      borderRadius: 8,
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, /*#__PURE__*/React.createElement(Plus, {
-    size: 10
-  }), "Pool")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       borderRadius: 10,
@@ -30007,93 +29233,7 @@ function TeamEditScreen({
       fontWeight: 800,
       cursor: "pointer"
     }
-  }, "WK"))))), expandedKey === p._key && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 14,
-      padding: "10px 8px 14px 58px"
-    }
-  }, p._originalName && p.name.trim() && p.name.trim().toLowerCase() !== p._originalName.trim().toLowerCase() && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      color: COLORS.gold
-    }
-  }, "Career stats are matched by name against past scorecards \u2014 renaming means stats already recorded under \"", p._originalName, "\" won't show up under this one."), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 5
-    }
-  }, "Email"), /*#__PURE__*/React.createElement("input", {
-    value: p.email,
-    onChange: e => updateEmail(p._key, e.target.value),
-    placeholder: "player@example.com",
-    "aria-label": "Email",
-    autoCapitalize: "none",
-    autoCorrect: "off",
-    autoComplete: "off",
-    inputMode: "email",
-    style: {
-      width: "100%",
-      boxSizing: "border-box",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.ink,
-      background: COLORS.surface,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 8,
-      padding: "7px 8px"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      color: COLORS.inkSoft,
-      marginTop: 4
-    }
-  }, "Lets other clubs find and borrow this player onto their own roster \u2014 leave blank to keep them private to this team.")), p.email.trim() && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    variant: p.public ? "gold" : "default",
-    onClick: () => setEditingPlayerKey(p._key),
-    disabled: publishBusyKey === p._key,
-    style: {
-      flexShrink: 0,
-      padding: "0 14px",
-      minHeight: 34,
-      fontSize: 12
-    }
-  }, publishBusyKey === p._key ? "\u2026" : p.public ? "Edit details" : "Make public"), p.public && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => makePrivate(p._key),
-    disabled: publishBusyKey === p._key,
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      cursor: "pointer",
-      textDecoration: "underline",
-      padding: 0
-    }
-  }, "Make private")), publishError && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontSize: 11.5,
-      fontFamily: "'Inter'",
-      marginTop: 8
-    }
-  }, publishError)))))), /*#__PURE__*/React.createElement(Btn, {
+  }, "WK")))))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
     disabled: !canSave,
     onClick: () => onSave(buildTeamPayload()),
@@ -30124,7 +29264,7 @@ function TeamEditScreen({
     size: 15
   }), "Delete team"), confirmDeleteTeam && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: `Delete ${name.trim() || "this team"}?`,
-    message: "Removes this team and its roster entirely. Matches already scored with it are untouched \u2014 this only affects future ones. This can't be undone.",
+    message: "Removes this team and its roster entirely. Matches already scored with it are untouched — this only affects future ones. This can't be undone.",
     confirmLabel: "Delete",
     onConfirm: () => {
       setConfirmDeleteTeam(false);
@@ -30133,267 +29273,14 @@ function TeamEditScreen({
     onCancel: () => setConfirmDeleteTeam(false)
   }), confirmRemove && /*#__PURE__*/React.createElement(ConfirmModal, {
     title: `Remove ${confirmRemove.name}?`,
-    message: isBorrowed(confirmRemove) ? `${confirmRemove.name} is borrowed from another club \u2014 this only removes them from this team's roster, nothing about their own player record.` : `Removes ${confirmRemove.name} from this team's roster. If they're captain, vice-captain, or wicketkeeper here, that's cleared too.`,
+    message: `Removes ${confirmRemove.name} from this team's roster. If they're captain, vice-captain, or wicketkeeper here, that's cleared too.`,
     confirmLabel: "Remove",
     onConfirm: () => {
       removePlayer(confirmRemove._key);
       setConfirmRemove(null);
     },
     onCancel: () => setConfirmRemove(null)
-  }), browseOpen && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setBrowseOpen(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 19,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Borrow a public player"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 14
-    }
-  }, "Published by another club \u2014 adding one here doesn't remove them from anywhere else."), browseLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Loading public players\u2026"
-  }) : publicPlayers.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic",
-      textAlign: "center",
-      padding: "20px 0"
-    }
-  }, "No public players yet \u2014 make one of your own players public first, from their row above.") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6,
-      maxHeight: "50vh",
-      overflowY: "auto"
-    }
-  }, publicPlayers.map(p => /*#__PURE__*/React.createElement("button", {
-    key: p.id,
-    type: "button",
-    onClick: () => addBorrowedPlayer(p),
-    disabled: players.some(x => x.email && x.email === p.email),
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: "none",
-      background: COLORS.surface,
-      cursor: "pointer",
-      textAlign: "left",
-      opacity: players.some(x => x.email && x.email === p.email) ? 0.5 : 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 13.5,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, p.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11.5,
-      color: COLORS.inkSoft,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, p.email, p.homeClubId && ` \u00b7 ${homeClubName(p)}`)), /*#__PURE__*/React.createElement(Globe, {
-    size: 15,
-    style: {
-      color: COLORS.gold,
-      flexShrink: 0
-    }
-  }))))), editingPlayerKey && (() => {
-    const editingRow = players.find(p => p._key === editingPlayerKey);
-    return editingRow && /*#__PURE__*/React.createElement(EditPlayerModal, {
-      player: editingRow,
-      title: editingRow.public ? "Edit player details" : "Make player public",
-      onSave: info => savePlayerDetails(editingPlayerKey, info),
-      onClose: () => setEditingPlayerKey(null)
-    });
-  })(), poolPickerOpen && /*#__PURE__*/React.createElement(Modal, {
-    onClose: closePoolPicker
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 19,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Add from club pool"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 14
-    }
-  }, "Tick everyone you want, then add them all at once. Copies them onto this team's roster \u2014 editing or removing them from the pool later won't change this roster."), clubPool.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative",
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: poolSearch,
-    onChange: setPoolSearch,
-    placeholder: "Search the pool\u2026",
-    autoCapitalize: "off",
-    autoCorrect: "off",
-    autoComplete: "off",
-    spellCheck: false,
-    autoFocus: true,
-    style: {
-      padding: "8px 10px",
-      paddingRight: poolSearch ? 30 : 10,
-      fontSize: 13
-    }
-  }), poolSearch && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setPoolSearch(""),
-    "aria-label": "Clear search",
-    style: {
-      position: "absolute",
-      right: 4,
-      top: "50%",
-      transform: "translateY(-50%)",
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontSize: 17,
-      lineHeight: 1,
-      padding: "4px 6px",
-      cursor: "pointer"
-    }
-  }, "\u00d7")), clubPool.length > 0 && filteredPool.length > 0 && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: toggleSelectAllFiltered,
-    disabled: selectablePoolIds.length === 0,
-    style: {
-      background: "none",
-      border: "none",
-      color: selectablePoolIds.length === 0 ? COLORS.inkSoft : COLORS.turf,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12,
-      cursor: selectablePoolIds.length === 0 ? "default" : "pointer",
-      padding: 0,
-      marginBottom: 10,
-      textDecoration: "underline"
-    }
-  }, allFilteredSelected ? "Clear selection" : poolSearch.trim() ? `Select all ${selectablePoolIds.length} match${selectablePoolIds.length === 1 ? "" : "es"}` : `Select all ${selectablePoolIds.length}`), clubPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic",
-      textAlign: "center",
-      padding: "20px 0"
-    }
-  }, "No players in the club pool yet \u2014 add some from the Clubs tab first.") : filteredPool.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic",
-      textAlign: "center",
-      padding: "20px 0"
-    }
-  }, `No matches for "${poolSearch.trim()}".`) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6,
-      maxHeight: "50vh",
-      overflowY: "auto"
-    }
-  }, filteredPool.map(pp => {
-    const alreadyOnRoster = players.some(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase());
-    const checked = selectedPoolIds.has(pp.id);
-    return /*#__PURE__*/React.createElement("button", {
-      key: pp.id,
-      type: "button",
-      onClick: () => togglePoolSelection(pp.id),
-      disabled: alreadyOnRoster,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        padding: "10px 12px",
-        borderRadius: 12,
-        border: checked ? `1.5px solid ${COLORS.turf}` : "1.5px solid transparent",
-        background: checked ? "rgba(74,124,46,0.08)" : COLORS.surface,
-        cursor: alreadyOnRoster ? "default" : "pointer",
-        textAlign: "left",
-        opacity: alreadyOnRoster ? 0.5 : 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: 18,
-        height: 18,
-        borderRadius: 5,
-        flexShrink: 0,
-        border: checked ? "none" : `1.5px solid ${COLORS.inkSoft}`,
-        background: checked ? COLORS.turf : "none",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }
-    }, checked && /*#__PURE__*/React.createElement(Check, {
-      size: 12,
-      color: "#fff"
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 13.5,
-        color: COLORS.ink,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, pp.name)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11.5,
-        color: COLORS.inkSoft,
-        flexShrink: 0
-      }
-    }, alreadyOnRoster ? "Already added" : (PLAYER_ROLES.find(r => r.value === pp.role) || {}).label || ""));
-  })), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    disabled: selectedPoolIds.size === 0,
-    onClick: () => addPoolPlayersToRoster(clubPool.filter(pp => selectedPoolIds.has(pp.id))),
-    style: {
-      width: "100%",
-      marginTop: 14
-    }
-  }, selectedPoolIds.size === 0 ? "Add selected" : `Add ${selectedPoolIds.size} player${selectedPoolIds.size === 1 ? "" : "s"}`)))))
+  })));
 }
 // GENERATED-FN-END: TeamEditScreen
 
@@ -39888,16 +38775,6 @@ function CricketScorer() {
   // loadPublicTournamentName's own comment for where this data actually comes from.
   const [foreignTournamentNames, setForeignTournamentNames] = useState({});
   const [viewingTournament, setViewingTournament] = useState(null);
-  const [viewingRecordsSource, setViewingRecordsSource] = useState(null); // { type, id, name } | null
-  // Shared by every Record Book entry point, whichever screen it's opened from.
-  function handleOpenRecords(sourceType, sourceId, sourceName) {
-    setViewingRecordsSource({
-      type: sourceType,
-      id: sourceId,
-      name: sourceName
-    });
-    setScreen("records");
-  }
   const [themePref, setThemePrefState] = useState(loadThemePref);
   const [showTour, setShowTour] = useState(() => !hasSeenTour());
   // Only ever true for iOS Safari, not already installed, and not yet dismissed on this device
@@ -39908,20 +38785,12 @@ function CricketScorer() {
   const [viewingTournamentClubId, setViewingTournamentClubId] = useState(null); // which source viewingTournament came from
   const [viewingTournamentFederationId, setViewingTournamentFederationId] = useState(null); // federation variant of the above -- at most one of this and viewingTournamentClubId is ever non-null
   const [presetTournament, setPresetTournament] = useState(null); // tournament to tag onto the next match created via Setup
-  // Set when Home's Players-tab search result is tapped directly, so PlayersScreen opens straight
-  // to that player's detail instead of its own list view. Cleared on the way back to Home so a
-  // later, unrelated entry into the players screen doesn't reopen a stale profile.
-  const [playersInitialSelected, setPlayersInitialSelected] = useState(null);
   const [editingTeam, setEditingTeam] = useState(null); // null = new team
-  // Prefills a new team's name/roster when team-edit is opened with a seed in hand, instead of the
-  // usual empty new-team state. Cleared after save and by every other route into team-edit, so a
-  // stale seed never leaks into an unrelated "New Team" tap afterward.
-  const [presetTeamSeed, setPresetTeamSeed] = useState(null);
   // Which screen to return to after saving/cancelling out of team-edit -- entering from Home
   // (a personal team) should land back on Home, entering from the Teams tab (personal or a
   // club's own team) should land back there, same as it always did.
   const [teamEditReturnScreen, setTeamEditReturnScreen] = useState("teams");
-  // Same idea as teamEditReturnScreen, for tournament-detail/series-detail/records -- opening a
+  // Same idea as teamEditReturnScreen, for tournament-detail/series-detail -- opening a
   // tournament from My Tournaments (personal) should return there on Back, opening one from Cups
   // (a club/federation) should return to Cups, same as it always did.
   const [tournamentDetailReturnScreen, setTournamentDetailReturnScreen] = useState("tournaments");
@@ -39949,14 +38818,6 @@ function CricketScorer() {
     };
   }, [user && user.uid]);
   const [profile, setProfile] = useState(null);
-  // This account's own published player profile, if any club has ever published one at this
-  // exact email (see publishPlayer/linkPlayerIfMatch) -- fetched by a direct doc lookup on the
-  // signed-in person's own email (the doc id itself), not a query, so it works whether or not the
-  // player is marked public. Surfaced on the Account screen; view-only there, since editing name/
-  // age/role/hand is deliberately the home club's alone (see the players/{email} update rule) --
-  // this account being the PERSON the profile describes doesn't grant edit rights to it, only
-  // linkedUid (set once, automatically, on first sign-in after a matching email is published).
-  const [myPlayer, setMyPlayer] = useState(null);
   const [isBetaTester, setIsBetaTester] = useState(false);
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [authError, setAuthError] = useState("");
@@ -40324,15 +39185,6 @@ function CricketScorer() {
       // corrected themselves whenever auth actually finished — with no loading indicator either
       // way, so it looked like clubs/federations just took an unpredictable while to show up.
       refreshClubs();
-      // Courtesy auto-link, not something worth blocking or surfacing errors for — see
-      // linkPlayerIfMatch's own comment for exactly what it will and won't touch. Chained (not
-      // fired in parallel) so loadMyPlayerProfile picks up a just-completed auto-link instead of
-      // racing it.
-      if (u && u.email) {
-        linkPlayerIfMatch(u.uid, u.email, u.photoURL).catch(() => {}).then(() => loadMyPlayerProfile(u.email)).then(setMyPlayer);
-      } else {
-        setMyPlayer(null);
-      }
     });
     Promise.all([loadIndex(), loadTeams(), loadProfile(), loadRules(), loadTournaments(), loadBetaStatus()]).then(([idx, teamList, prof, r, tourneys, beta]) => {
       setMatches(idx);
@@ -41139,7 +39991,6 @@ function CricketScorer() {
     await saveTeams(updated);
     setScreen(teamEditReturnScreen);
     setEditingTeam(null);
-    setPresetTeamSeed(null);
   }
   async function handleDeleteTeam(id) {
     const updated = teams.filter(t => t.id !== id);
@@ -41606,11 +40457,6 @@ function CricketScorer() {
     onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
-    onOpenPlayer: player => {
-      setPlayersInitialSelected(player);
-      setScreen("players");
-    },
-    onLoadPublicPlayers: loadPublicPlayers,
     onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
@@ -41693,13 +40539,11 @@ function CricketScorer() {
     onBack: () => setScreen("home"),
     onNewTeam: () => {
       setEditingTeam(null);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
       setEditingTeam(t);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("my-teams");
       setScreen("team-edit");
     },
@@ -41714,13 +40558,11 @@ function CricketScorer() {
     matches: matches,
     onNewTeam: () => {
       setEditingTeam(null);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
     onEditTeam: t => {
       setEditingTeam(t);
-      setPresetTeamSeed(null);
       setTeamEditReturnScreen("teams");
       setScreen("team-edit");
     },
@@ -41737,16 +40579,7 @@ function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
     onOpenTournament: t => openTournamentDetail(t, "tournaments", t._clubId || null, t._federationId || null),
-    onOpenRecords: handleOpenRecords,
     showTabBar: true
-  })), screen === "records" && viewingRecordsSource && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "records",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(RecordsScreen, {
-    sourceType: viewingRecordsSource.type,
-    sourceId: viewingRecordsSource.id,
-    sourceName: viewingRecordsSource.name,
-    onBack: () => setScreen("tournaments")
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",
     direction: navDirection
@@ -41772,11 +40605,6 @@ function CricketScorer() {
     onToggleVisibility: handleToggleTournamentVisibility,
     onOpenMatch: openMatch,
     onDeleteTournament: handleDeleteTournament,
-    // Lets the champion banner (see FixturesSection) link straight to the club/federation's
-    // Record Book the moment a title's actually decided — the same handleOpenRecords used by the
-    // Club/Federation screen entry points, just resolved from whichever source this tournament
-    // was opened from (at most one of viewingTournamentClubId/FederationId is ever set).
-    onOpenRecords: viewingTournamentFederationId ? () => handleOpenRecords("federation", viewingTournamentFederationId, (federationsById[viewingTournamentFederationId] || {}).name || "") : viewingTournamentClubId ? () => handleOpenRecords("club", viewingTournamentClubId, (clubs.find(c => c.id === viewingTournamentClubId) || {}).name || "") : undefined,
     canManage: viewingTournamentFederationId ? isFederationOwner(federationsById[viewingTournamentFederationId], user && user.uid) : !viewingTournamentClubId || isClubOwner(clubs.find(c => c.id === viewingTournamentClubId), user && user.uid),
     isPersonal: !viewingTournamentClubId && !viewingTournamentFederationId,
     clubs: clubs,
@@ -41787,7 +40615,6 @@ function CricketScorer() {
   }, /*#__PURE__*/React.createElement(AccountScreen, {
     user: user,
     profile: profile,
-    myPlayer: myPlayer,
     isAdmin: isAdmin,
     // Both one level down from Account, same as SharedLinksScreen just below -- their own onBack
     // (below) returns to "account" directly, not settingsReturnScreen (which points at wherever
@@ -41855,23 +40682,6 @@ function CricketScorer() {
     onRevokeShareCode: handleRevokeShareCode,
     onRevokeViewCode: handleRevokeViewCode,
     onBack: () => setScreen("account")
-  })), screen === "players" && /*#__PURE__*/React.createElement(NavWrap, {
-    navKey: "players",
-    direction: navDirection
-  }, /*#__PURE__*/React.createElement(PlayersScreen, {
-    onBack: () => {
-      setScreen("home");
-      setPlayersInitialSelected(null);
-    },
-    initialSelected: playersInitialSelected,
-    onLoadPublicPlayers: loadPublicPlayers,
-    onComputeCareerStats: computePlayerCareerStats,
-    onDeletePlayer: deletePlayer,
-    onSearchPublicClubs: searchPublicClubs,
-    onTransferPlayer: transferPlayerHomeClub,
-    onUpdatePlayerInfo: updatePlayerInfo,
-    currentUid: user && user.uid,
-    clubs: clubs
   })), screen === "follow" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "follow",
     direction: navDirection
@@ -41898,12 +40708,6 @@ function CricketScorer() {
     direction: navDirection
   }, /*#__PURE__*/React.createElement(TeamEditScreen, {
     team: editingTeam,
-    clubs: clubs,
-    onPublishPlayer: publishPlayer,
-    onUnpublishPlayer: unpublishPlayer,
-    onUpdatePlayerInfo: updatePlayerInfo,
-    onLoadPublicPlayers: loadPublicPlayers,
-    presetTeamSeed: presetTeamSeed,
     onSave: team => handleSaveTeam(team, null),
     onCancel: () => setScreen(teamEditReturnScreen),
     onDelete: editingTeam ? () => handleDeleteTeam(editingTeam.id, null).then(() => setScreen(teamEditReturnScreen)) : undefined
