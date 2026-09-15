@@ -435,9 +435,10 @@ test("LiveScreen: shows a 'nothing matches' state (distinct from 'Nothing live r
 });
 
 // Reported live: "date/time is missing, also missing if the match was group stage, qualifier,
-// semi or final". Falls back to "Group Stage" when the match itself has no stage set -- same
-// fallback homeScreen.js's own renderMatchCard uses, for the same reason (see startNewMatch's own
-// comment on when a match's stage is actually known).
+// semi or final" -- then, once a papered-over "Group Stage" default shipped, "Billund-Ikast match
+// was final not the group stage". So a match only ever shows a stage badge when it's actually
+// known (same as homeScreen.js's own renderMatchCard, for the same reason -- see startNewMatch's
+// own comment); one with no stage of its own shows no badge at all, never a guessed label.
 test("LiveScreen: a public Results row shows its tournament stage and played date/time", () => {
   const known = new Date();
   known.setHours(15, 5, 0, 0);
@@ -450,5 +451,33 @@ test("LiveScreen: a public Results row shows its tournament stage and played dat
   assert.match(json, /Summer Cup/);
   assert.match(json, /Final/);
   assert.match(json, /3:05 PM/);
+});
+
+test("LiveScreen: a Results row with no stage of its own shows no stage badge, never a guessed one", () => {
+  const inst = render({
+    liveMatches: [liveMatch({ status: "complete", tournamentId: "t1", stage: null })],
+    tournamentNameById: { t1: "Summer Cup" }
+  });
+  clickButton(inst, "Results (1)");
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Summer Cup/);
+  assert.doesNotMatch(json, /Group Stage/);
+});
+
+// Reported live: results showing in no discernible time order -- the /liveMatches mirror's own
+// query orders by updatedAt (last write to the mirror doc), which can disagree with when a match
+// was actually played. Sorted client-side by createdAt instead, most recent first.
+test("LiveScreen: Results sorts most recently played first, regardless of the feed's own order", () => {
+  const inst = render({
+    liveMatches: [
+      liveMatch({ id: "m1", status: "complete", teamA: "Oldest CC", createdAt: 1000 }),
+      liveMatch({ id: "m2", status: "complete", teamA: "Newest CC", createdAt: 3000 }),
+      liveMatch({ id: "m3", status: "complete", teamA: "Middle CC", createdAt: 2000 })
+    ]
+  });
+  clickButton(inst, "Results (3)");
+  const json = JSON.stringify(inst.toJSON());
+  const positions = ["Newest CC", "Middle CC", "Oldest CC"].map(name => json.indexOf(name));
+  assert.ok(positions[0] < positions[1] && positions[1] < positions[2], "Newest, then Middle, then Oldest");
 });
 

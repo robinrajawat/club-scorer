@@ -96,7 +96,7 @@ export function renderMatchCard(m, i, {
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 10
-  }), tournamentNameById[m.tournamentId] || "Tournament", " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
+  }), tournamentNameById[m.tournamentId] || "Tournament", m.stage && ` · ${m.stage}`), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,

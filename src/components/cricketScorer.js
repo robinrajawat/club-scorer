@@ -968,8 +968,11 @@ export function CricketScorer() {
       // generic "Start Match" in a tournament rather than a specific fixture card (findFixtureToAutoLink
       // below backfills the fixture *link* after the fact, but this match doc is already saved by
       // then, so its own stage stays unset in that case rather than reaching back to patch an
-      // already-scoring match). Match cards fall back to "Group Stage" for any tournament match
-      // with this still null, since the common "Score this fixture" path always sets it.
+      // already-scoring match). Match cards only show a stage badge when this is actually set --
+      // reported live once as a mislabeling risk ("Billund-Ikast match was final not the group
+      // stage"), so unset never gets papered over with an assumed "Group Stage" text; a genuine
+      // group match (no stage label of its own either way) just shows no badge at all, same as a
+      // standalone one.
       stage: setup.stage || null,
       // BUG FIX: this used to always be newInning(setup.teamA, setup.teamB, ...) — the first
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by

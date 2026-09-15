@@ -187,7 +187,12 @@ export function LiveScreen({
   // m.status is the match's own real status; a tournament has no single status field, so
   // `champion` (see renderTournamentRow's own comment) stands in for it here too.
   const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
-  const finishedMatches = filteredMatches.filter(m => m.status === "complete");
+  // Most recently played first -- the /liveMatches mirror's own query orders by updatedAt (last
+  // write to the mirror doc), not by when the match was actually played, so those can disagree
+  // (e.g. a later edit, or a batch of matches mirrored in a different order than they were
+  // played). Reported live: results showing in no discernible time order. Sorted client-side by
+  // createdAt instead, same field the date/time under each result actually displays.
+  const finishedMatches = filteredMatches.filter(m => m.status === "complete").sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const liveNowTournaments = filteredTournaments.filter(t => !t.champion);
   const finishedTournaments = filteredTournaments.filter(t => t.champion);
 
@@ -314,7 +319,7 @@ export function LiveScreen({
     }, /*#__PURE__*/React.createElement(Trophy, {
       size: 10,
       style: { flexShrink: 0 }
-    }), tournamentNameForBadge(m.tournamentId), " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
+    }), tournamentNameForBadge(m.tournamentId), m.stage && ` · ${m.stage}`), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontWeight: 700,
