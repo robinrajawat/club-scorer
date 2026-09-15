@@ -191,6 +191,30 @@ test("HomeScreen: clicking a match card calls onOpen with the full match object,
   assert.equal(opened.id, "m1");
 });
 
+// Reported live: "date/time is missing, also missing if the match was group stage, qualifier,
+// semi or final". A tournament match's card shows its stage next to the tournament name (falling
+// back to "Group Stage" when the match has none of its own -- see startNewMatch's own comment on
+// when that's set), and its played date/time under the score line.
+test("HomeScreen: a match card shows its tournament stage and played date/time", () => {
+  const known = new Date();
+  known.setHours(15, 5, 0, 0);
+  const withStage = render({
+    matches: [match({ tournamentId: "t1", stage: "Semifinal", createdAt: known.getTime() })],
+    tournamentNameById: { t1: "Summer Cup" }
+  });
+  let json = JSON.stringify(withStage.toJSON());
+  assert.match(json, /Summer Cup/);
+  assert.match(json, /Semifinal/);
+  assert.match(json, /3:05 PM/);
+
+  const groupMatch = render({
+    matches: [match({ tournamentId: "t1", stage: null })],
+    tournamentNameById: { t1: "Summer Cup" }
+  });
+  json = JSON.stringify(groupMatch.toJSON());
+  assert.match(json, /Group Stage/, "falls back to Group Stage when the match has no stage of its own");
+});
+
 test("HomeScreen: JoinCodeBar's onJoin prop is wired to onJoinCode", () => {
   let joinedWith = null;
   const inst = render({ onJoinCode: code => { joinedWith = code; } });
@@ -213,34 +237,52 @@ test("HomeScreen: deleting a match opens a confirm dialog, and confirming calls 
 
 // An in-progress match still has live scoring state at risk -- not just a finished record like a
 // completed match -- so an accidental swipe-and-confirm there deserves a distinct, stronger
-// warning instead of the same wording used for both. Only the in-progress half is reachable from
-// this screen now -- Home no longer shows completed matches at all (see the next test), so a
-// completed match's own delete-confirm wording has no swipe-to-delete trigger to reach it from
-// here any more. The same confirm-modal logic (and its completed-match wording) still matters on
-// LiveScreen's Home tab, which reuses this exact renderMatchCard for this account's own completed
-// matches -- covered there instead once that merge exists.
-test("HomeScreen: the delete confirmation warns strongly for an in-progress match", () => {
+// warning instead of the same wording used for both.
+test("HomeScreen: the delete confirmation warns strongly for an in-progress match, and more mildly for a completed one", () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inProgress = render({ matches: [match({ status: "in-progress" })] });
   act(() => { inProgress.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
   const inProgressText = JSON.stringify(inProgress.toJSON());
   assert.match(inProgressText, /Delete this in-progress match\?/);
   assert.match(inProgressText, /is still in progress — deleting it throws away everything scored so far/);
+
+  const completed = render({ matches: [match({ status: "complete" })] });
+  act(() => { completed.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
+  const completedText = JSON.stringify(completed.toJSON());
+  assert.match(completedText, /Delete this match\?/);
+  assert.match(completedText, /will be permanently removed from your saved matches/);
 });
 
-// IMPROVEMENT: a completed match used to have its own foldable "Completed" section right here on
-// Home. It's gone now -- this screen is deliberately just the scoring queue (in progress, plus
-// what's coming up next), reported live: "Home is dedicated for scoring." A completed match still
-// exists, just on the Home tab (LiveScreen's Results, merged with everyone else's public results
-// -- see liveScreen.js's own comment on that), not here.
-test("HomeScreen: a completed match never shows here, only in-progress ones and upcoming fixtures do", () => {
+// Score is the admin home for standalone matches now (mirrors Cups for tournaments/series) --
+// reported live, "within score we can have a control on the matches". A completed match with
+// nothing else on the page (no in-progress match, no upcoming fixture) forces its Completed fold
+// open by the same "don't fold the only content" rule Upcoming already uses, so the screen never
+// looks empty at a glance just because history is collapsed-by-default.
+test("HomeScreen: a completed match, alone on the page, shows in an auto-expanded Completed section", () => {
+  const inst = render({
+    matches: [match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
+  });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Hawks CC/);
+  assert.doesNotMatch(text, /Nothing to score right now\./);
+});
+
+// Completed folds independently of In Progress -- collapsed by default once there's other content
+// on the page (an in-progress match to actually act on), same as Upcoming already behaves relative
+// to In Progress.
+test("HomeScreen: Completed is collapsed by default alongside an in-progress match, and expands on tap", () => {
   const inst = render({
     matches: [match({ id: "live1", status: "in-progress" }), match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
   });
-  const text = JSON.stringify(inst.toJSON());
+  let text = JSON.stringify(inst.toJSON());
   assert.match(text, /Riverside CC/);
-  assert.doesNotMatch(text, /Hawks CC/);
-  assert.doesNotMatch(text, /Completed/);
+  assert.doesNotMatch(text, /Hawks CC/, "collapsed by default once there's an in-progress match on the page too");
+
+  const completedToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Completed ("));
+  assert.ok(completedToggle, "the Completed fold toggle renders");
+  act(() => { completedToggle.props.onClick(); });
+  text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Hawks CC/);
 });
 
 test("HomeScreen: 'In Progress' has no fold toggle when nothing else is on the page -- the matches just show", () => {

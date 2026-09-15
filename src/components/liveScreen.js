@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { ChevronRight, Trophy } from "./icons.js";
-import { TextField, Btn } from "./formUiAtoms.js";
+import { TextField } from "./formUiAtoms.js";
 import { EmptyState, LoadingNote, AppMark } from "./illustrations.js";
 import { matchScoreLine, formatFixtureDateTime } from "../core/shareAndFormat.js";
-import { greetingPrefix } from "../core/miscHelpers.js";
-import { hasSeenSwipeHint } from "../core/appLogic.js";
+import { greetingPrefix, matchDateTimeLabel } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 import { AuthBar } from "./authBar.js";
-import { renderMatchCard } from "./homeScreen.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
 // /liveTournaments). A match card opens the live scoring/scorecard screen, a tournament card
@@ -73,16 +71,14 @@ import { renderMatchCard } from "./homeScreen.js";
 // currently live but something IS coming up -- "starting soon" reads as more "live-adjacent" than
 // a stale old result does.
 //
-// Results merges two different things now: everyone else's public completed matches (from
-// liveMatches, read-only, opens FollowScreen) and this account's OWN completed matches (from
-// `matches`, the same full personal index HomeScreen's own Score tab reads from) -- reported live,
-// Home's own former Completed section moved here since "Home is dedicated for scoring" and a
-// completed match isn't something left to score. An owned match keeps full owner actions (swipe-
-// to-delete, Share) rather than becoming read-only just by showing up in a shared list -- reported
-// live, "user should be able to control their matches" -- reusing homeScreen.js's own
-// `renderMatchCard` (exported from there for exactly this) rather than a second, duplicated card.
-// De-duplicated against the public feed by id (see ownMatchIds below): a public match this account
-// also owns shows once, with owner actions, not twice.
+// Results is everyone else's public completed matches (from liveMatches), read-only, opens
+// FollowScreen -- reported live, "home should be a feed page only for public matches". This
+// account's OWN matches (in-progress and completed alike) are administered from the Score tab
+// instead now, the same way Cups is the admin home for tournaments/series -- see homeScreen.js's
+// own Completed section for that. A match this account also owns and has shared publicly still
+// shows here too, same as a public tournament shows on both Cups (admin) and Home (browse): once
+// as a plain read-only row like any spectator sees it, and separately with full owner controls on
+// Score.
 //
 // Covered by tests/unit/components/liveScreen.test.js.
 export function LiveScreen({
@@ -93,11 +89,6 @@ export function LiveScreen({
   tournamentNameById = {},
   showTabBar = false,
   loading = false,
-  matches = [],
-  onOpen,
-  onDelete,
-  onGetShareCode,
-  onGetViewCode,
   user,
   profile,
   onOpenAccount,
@@ -112,12 +103,6 @@ export function LiveScreen({
   const [view, setView] = useState("matches"); // matches | tournaments
   const [matchTab, setMatchTab] = useState("live"); // live | fixtures | results
   const [tourneyTab, setTourneyTab] = useState("live"); // live | finished
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
-  // Same shared, learn-once flag as Home's Saved Matches list and the Teams screen's own roster --
-  // see hasSeenSwipeHint's own comment for why this is one flag across every screen with a
-  // swipeable row rather than a separate one per screen.
-  const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
 
   // Every publicly-live tournament's own upcoming fixtures, flattened into one app-wide,
   // nearest-first list (each tournament's own slice already arrives pre-sorted -- see
@@ -202,13 +187,7 @@ export function LiveScreen({
   // m.status is the match's own real status; a tournament has no single status field, so
   // `champion` (see renderTournamentRow's own comment) stands in for it here too.
   const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
-  // Own completed matches first (this account's own history, most relevant to whoever's actually
-  // signed in), then everyone else's public results. Excludes anything already counted in `matches`
-  // from the public side (see ownMatchIds) -- a match this account owns and has also shared/made
-  // public shows once, with owner actions, not a second time as a plain read-only public row.
-  const ownMatchIds = new Set(matches.map(m => m.id));
-  const ownCompletedMatches = (q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (tournamentNameForBadge(m.tournamentId) || "").toLowerCase().includes(q)) : matches).filter(m => m.status === "complete");
-  const finishedMatches = [...ownCompletedMatches, ...filteredMatches.filter(m => m.status === "complete" && !ownMatchIds.has(m.id))];
+  const finishedMatches = filteredMatches.filter(m => m.status === "complete");
   const liveNowTournaments = filteredTournaments.filter(t => !t.champion);
   const finishedTournaments = filteredTournaments.filter(t => t.champion);
 
@@ -335,7 +314,7 @@ export function LiveScreen({
     }, /*#__PURE__*/React.createElement(Trophy, {
       size: 10,
       style: { flexShrink: 0 }
-    }), tournamentNameForBadge(m.tournamentId)), /*#__PURE__*/React.createElement("div", {
+    }), tournamentNameForBadge(m.tournamentId), " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontWeight: 700,
@@ -358,17 +337,14 @@ export function LiveScreen({
         textOverflow: "ellipsis",
         whiteSpace: "nowrap"
       }
-    }, matchScoreLine(m))));
-  }
-
-  // Results dispatches per-row rather than using renderMatchRow uniformly -- an owned match (see
-  // ownMatchIds above) gets the full owner card (swipe-to-delete, Share, opens the real scoring/
-  // scorecard screen via onOpen) instead of the plain read-only public row.
-  function renderResultRow(m, i) {
-    if (ownMatchIds.has(m.id)) {
-      return renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode });
-    }
-    return renderMatchRow(m);
+    }, matchScoreLine(m)), matchDateTimeLabel(m.createdAt) && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Inter'",
+        fontSize: 11.5,
+        color: COLORS.inkSoft,
+        marginTop: 3
+      }
+    }, matchDateTimeLabel(m.createdAt))));
   }
 
   // No scorecard exists yet for an unplayed fixture -- opens its tournament instead (the same
@@ -458,12 +434,12 @@ export function LiveScreen({
   const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
   const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
 
-  const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0 && !matches.some(m => m.status === "complete");
-  const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0 && filteredFixtures.length === 0 && ownCompletedMatches.length === 0;
+  const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0;
+  const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0 && filteredFixtures.length === 0;
 
   const isMatches = view === "matches";
   const currentList = isMatches ? matchTab === "live" ? liveNowMatches : matchTab === "fixtures" ? filteredFixtures : finishedMatches : tourneyTab === "live" ? liveNowTournaments : finishedTournaments;
-  const currentRenderer = isMatches ? matchTab === "fixtures" ? renderFixtureRow : matchTab === "results" ? renderResultRow : renderMatchRow : renderTournamentRow;
+  const currentRenderer = isMatches ? matchTab === "fixtures" ? renderFixtureRow : renderMatchRow : renderTournamentRow;
   // Shown only when the search itself found something (filteredEmpty already covers "nothing at
   // all"), but the specific tab currently open happens to have none of it -- e.g. a search that
   // only matches a finished match, while sitting on the Live tab.
@@ -599,43 +575,5 @@ export function LiveScreen({
         }
       }, emptyForTab) : currentList.map(currentRenderer)
     )
-  ), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
-    onClose: () => setConfirmDeleteId(null)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.ball,
-      marginBottom: 10
-    }
-  }, matchToConfirmDelete.status !== "complete" ? "Delete this in-progress match?" : "Delete this match?"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      lineHeight: 1.6,
-      marginBottom: 18
-    }
-  }, matchToConfirmDelete.status !== "complete"
-    ? `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} is still in progress — deleting it throws away everything scored so far, not just a finished record. This can’t be undone.`
-    : `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} will be permanently removed from your saved matches. This can’t be undone.`), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: () => setConfirmDeleteId(null),
-    style: {
-      flex: 1
-    }
-  }, "Cancel"), /*#__PURE__*/React.createElement(Btn, {
-    variant: "danger",
-    onClick: () => {
-      onDelete(matchToConfirmDelete.id);
-      setConfirmDeleteId(null);
-    },
-    style: {
-      flex: 1
-    }
-  }, "Delete"))));
+  ));
 }

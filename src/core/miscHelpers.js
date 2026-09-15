@@ -257,6 +257,18 @@ export function relativeDayLabel(ts) {
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
 
+// Same day label as relativeDayLabel (Today/Yesterday/Wed, 5 Sep) plus a 12-hour time, e.g.
+// "Today · 3:30 PM" -- same time format as formatFixtureDateTime uses for a scheduled fixture, so
+// a played match and an upcoming one read consistently wherever both show up.
+export function matchDateTimeLabel(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  let hour12 = d.getHours() % 12;
+  if (hour12 === 0) hour12 = 12;
+  const period = d.getHours() >= 12 ? "PM" : "AM";
+  return `${relativeDayLabel(ts)} · ${hour12}:${String(d.getMinutes()).padStart(2, "0")} ${period}`;
+}
+
 export function greetingPrefix() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";

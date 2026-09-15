@@ -173,11 +173,10 @@ function signInRaw(inst, user = { uid: "u1", email: "robin@x.com", displayName: 
   });
 }
 
-// Signs in and lands on Home, same as every test below expects -- since a session resolving from
-// the watcher-default landing now stays on Live (see signInRaw's own comment and the dedicated test
-// for that), this taps through the tab bar to Home afterward for tests that just want a signed-in
-// Home screen to test something unrelated. A no-op tap if it's already there (e.g. reached via the
-// explicit WelcomeScreen sign-in flow, which still lands on Home directly).
+// Signs in and lands on Score, same as every test below expects -- every real sign-in path (a
+// silent session restore, or an explicit WelcomeScreen sign-in) now lands on Live/Home instead
+// (see the dedicated tests for that), so this always taps through the tab bar to Score afterward
+// for tests that just want a signed-in Score screen to test something unrelated.
 async function signIn(inst, user = { uid: "u1", email: "robin@x.com", displayName: "Robin", providerData: [] }) {
   await signInRaw(inst, user);
   if (inst.root.findAllByType(HomeScreen).length > 0) return;
@@ -282,8 +281,11 @@ test("CricketScorer: signing in from WelcomeScreen lands on Home", async () => {
     welcome.props.onSignIn();
     await new Promise(r => setTimeout(r, 0));
   });
-  await signIn(inst);
-  assert.ok(inst.root.findByType(HomeScreen));
+  // signInRaw, not the signIn() helper -- that helper taps through to Score afterward for tests
+  // that just want a signed-in Score screen to test something unrelated, which would mask the
+  // actual redirect target this test exists to pin down.
+  await signInRaw(inst);
+  assert.ok(inst.root.findByType(LiveScreen));
 });
 
 // Reported live: "if we don't show account icon/menu then you don't present any app level
@@ -341,7 +343,7 @@ test("CricketScorer: 'Continue without an account' out of sign-in lands on Home 
   act(() => { live.props.onOpenAccount(); });
   const welcome = inst.root.findByType(WelcomeScreen);
   act(() => { welcome.props.onSkip(); });
-  assert.ok(inst.root.findByType(HomeScreen));
+  assert.ok(inst.root.findByType(LiveScreen));
   assert.equal(inst.root.findAllByType(TabBar).length, 1);
 });
 
@@ -357,15 +359,15 @@ test("CricketScorer: a signed-out guest already on Home can also reach sign-in v
   act(() => { live.props.onOpenAccount(); });
   let welcome = inst.root.findByType(WelcomeScreen);
   act(() => { welcome.props.onSkip(); }); // becomes a guest on Home, watcherMode cleared
-  assert.ok(inst.root.findByType(HomeScreen));
+  assert.ok(inst.root.findByType(LiveScreen));
 
-  const home = inst.root.findByType(HomeScreen);
-  act(() => { home.props.onOpenAccount(); });
+  const homeAfterSkip = inst.root.findByType(LiveScreen);
+  act(() => { homeAfterSkip.props.onOpenAccount(); });
   welcome = inst.root.findByType(WelcomeScreen);
-  assert.throws(() => inst.root.findByType(HomeScreen));
+  assert.throws(() => inst.root.findByType(LiveScreen));
 
   act(() => { welcome.props.onBack(); });
-  assert.ok(inst.root.findByType(HomeScreen));
+  assert.ok(inst.root.findByType(LiveScreen));
   assert.equal(inst.root.findAllByType(TabBar).length, 1);
 });
 

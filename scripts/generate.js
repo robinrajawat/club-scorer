@@ -92,6 +92,7 @@ const FUNCTIONS = [
   { name: "SHORT_WEEKDAYS", file: "src/core/miscHelpers.js" },
   { name: "SHORT_MONTHS", file: "src/core/miscHelpers.js" },
   { name: "relativeDayLabel", file: "src/core/miscHelpers.js" },
+  { name: "matchDateTimeLabel", file: "src/core/miscHelpers.js" },
   { name: "greetingPrefix", file: "src/core/miscHelpers.js" },
   { name: "tournamentStatus", file: "src/core/miscHelpers.js" },
   { name: "tournamentDateRangeLabel", file: "src/core/miscHelpers.js" },

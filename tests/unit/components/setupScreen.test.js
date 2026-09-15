@@ -242,6 +242,32 @@ test("SetupScreen: a fixture started from within a tournament inherits ITS organ
   assert.equal(started.federationId, null);
 });
 
+// Reported live: match cards were missing "if the match was group stage, qualifier, semi or
+// final" -- fixtureStage (set by handleStartFixtureMatch/cricketScorer.js from the fixture's own
+// f.stage) flows through onStart's setup so cricketScorer.js's startNewMatch can save it onto the
+// match itself.
+test("SetupScreen: 'Score this fixture' carries the fixture's own knockout stage through to onStart", () => {
+  let started = null;
+  const inst = render({
+    onStart: m => { started = m; },
+    presetTournament: { id: "t1", name: "Winter Cup", private: false, fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC", fixtureStage: "Semifinal" }
+  });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
+  act(() => { input(inst, "Batsman name").props.onChange({ target: { value: "A" } }); });
+  act(() => {
+    inst.root.findAllByType("input").filter(i => i.props.placeholder === "Batsman name")[1]
+      .props.onChange({ target: { value: "B" } });
+  });
+  act(() => { input(inst, "Bowler name").props.onChange({ target: { value: "C" } }); });
+  act(() => { btn(inst, "Review").props.onClick(); });
+  act(() => { btn(inst, "Start Match").props.onClick(); });
+  assert.equal(started.stage, "Semifinal");
+});
+
 // Reported live: visibility used to be derived from Organizer (personal always private, club/
 // federation always public), and the card carrying that explanation only showed at all once there
 // was more than one Organizer option -- meaning anyone with no clubs got a silently-private match

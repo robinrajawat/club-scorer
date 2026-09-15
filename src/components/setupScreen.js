@@ -1821,6 +1821,7 @@ export function SetupScreen({
         } : null,
         tournamentId: presetTournament ? presetTournament.id : null,
         fixtureId: presetTournament ? presetTournament.fixtureId || null : null,
+        stage: presetTournament ? presetTournament.fixtureStage || null : null,
         clubId: presetTournament ? presetTournament._clubId || null : null,
         federationId: presetTournament ? presetTournament._federationId || null : null,
         private: isPrivate

@@ -763,10 +763,12 @@ export function CricketScorer() {
     });
     return unsubAuth;
   }, []);
-  // Once someone signs in from the welcome screen, move straight past it into Home rather than
-  // leaving them stuck looking at a sign-in button. If the app was opened via the "New match"
-  // home-screen shortcut, land straight on Setup instead — same destination as tapping Home's own
-  // "New" button, just skipping the extra tap for the exact case that shortcut exists for.
+  // Once someone signs in from the welcome screen, move straight past it into Home (the "live"
+  // screen key -- see tabBar.js's own comment on why the label and the internal key don't match)
+  // rather than leaving them stuck looking at a sign-in button. If the app was opened via the "New
+  // match" home-screen shortcut, land straight on Setup instead — same destination as tapping
+  // Home's own "New" button, just skipping the extra tap for the exact case that shortcut exists
+  // for.
   //
   // BUG FIX: this used to fire for watcherMode too whenever `user` went truthy for ANY reason --
   // including Firebase Auth silently RESTORING an already-signed-in session on a cold reload, not
@@ -777,11 +779,15 @@ export function CricketScorer() {
   // real, explicit sign-in interaction -- the only way to reach that screen from watcherMode, see
   // openAccount) still redirects to Home/Setup; watcherMode resolving to signed-in on its own just
   // drops the watcher-only chrome and lets them keep browsing Live right where they landed.
+  //
+  // BUG FIX: this used to land on "home" (the Score tab's own internal key) -- correct before the
+  // Home/Live swap, when that key still meant the Home tab, but stale once the swap moved Home's
+  // label onto "live" instead. Reported live: "default tab goes to score - from the login screen".
   useEffect(() => {
     if (!user) return;
     if (screen === "login") {
       setWatcherMode(false);
-      setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
+      setScreen(initialShortcutAction === "new-match" ? "setup" : "live");
     } else if (watcherMode) {
       setWatcherMode(false);
     }
@@ -955,6 +961,16 @@ export function CricketScorer() {
       playerOfMatch: null,
       bestFielder: null,
       tournamentId: setup.tournamentId || null,
+      // The originating fixture's own knockout stage ("Quarterfinal"/"Semifinal"/"Final"/a custom
+      // playoff label), only ever known when this match was started from a specific fixture card
+      // (see handleStartFixtureMatch/SetupScreen's own fixtureStage plumbing) -- null for a group-
+      // stage fixture (no stage label of its own), a standalone match, or one started via the
+      // generic "Start Match" in a tournament rather than a specific fixture card (findFixtureToAutoLink
+      // below backfills the fixture *link* after the fact, but this match doc is already saved by
+      // then, so its own stage stays unset in that case rather than reaching back to patch an
+      // already-scoring match). Match cards fall back to "Group Stage" for any tournament match
+      // with this still null, since the common "Score this fixture" path always sets it.
+      stage: setup.stage || null,
       // BUG FIX: this used to always be newInning(setup.teamA, setup.teamB, ...) — the first
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
       // SetupScreen from the actual toss decision, defaulting to teamA if no toss was recorded)
@@ -1892,7 +1908,8 @@ export function CricketScorer() {
       venueLng: fixture.venue ? fixture.venueLng : t.venueLng,
       fixtureId: fixture.id,
       fixtureTeamA: fixture.teamA,
-      fixtureTeamB: fixture.teamB
+      fixtureTeamB: fixture.teamB,
+      fixtureStage: fixture.stage || null
     });
     setScreen("setup");
   }
@@ -1985,7 +2002,7 @@ export function CricketScorer() {
         url.searchParams.delete("lang");
         window.history.replaceState({}, "", url.pathname + url.search);
       } catch (e) {}
-      setScreen(user ? "home" : "login");
+      setScreen(user ? "live" : "login");
     }
   })), screen === "login" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "login",
@@ -1999,7 +2016,7 @@ export function CricketScorer() {
     // this is reached any other way.
     onSkip: () => {
       setWatcherMode(false);
-      setScreen(initialShortcutAction === "new-match" ? "setup" : "home");
+      setScreen(initialShortcutAction === "new-match" ? "setup" : "live");
     },
     onBack: () => setScreen(settingsReturnScreen)
   })), screen === "home" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -2057,11 +2074,6 @@ export function CricketScorer() {
     tournamentNameById: tournamentNameById,
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     showTabBar: true,
-    matches: matches,
-    onOpen: openMatch,
-    onDelete: handleDelete,
-    onGetShareCode: handleGetShareCodeForMatch,
-    onGetViewCode: handleGetViewCodeForMatch,
     user: user,
     profile: profile,
     onOpenAccount: openAccount,

@@ -6,7 +6,7 @@ import {
   isFeedbackAdmin, genMatchCode, expiresAtMillis, inviteExpiryLabel,
   formatAddressLabel, weatherCodeInfo,
   parseCsvLine, parseBulkPlayers, normalizeEmail, isClubOwner, isFederationOwner,
-  relativeDayLabel, greetingPrefix, tournamentStatus, tournamentDateRangeLabel,
+  relativeDayLabel, matchDateTimeLabel, greetingPrefix, tournamentStatus, tournamentDateRangeLabel,
   playerInitials, playerAvatarColor, parseOverLabel, ballLabelsForOver,
   buildClaudeFixPrompt, accountExistsLinkInfo, friendlyEmailAuthError,
   getFollowCodeFromUrl, getTournamentFollowCodeFromUrl,
@@ -105,6 +105,15 @@ test("relativeDayLabel: Today / Yesterday / weekday-and-date, year appended only
   assert.equal(relativeDayLabel(now), "Today");
   assert.equal(relativeDayLabel(now - 24 * 60 * 60 * 1000), "Yesterday");
   assert.equal(relativeDayLabel(null), null);
+});
+
+test("matchDateTimeLabel: relativeDayLabel's day plus a 12-hour time", () => {
+  const d = new Date();
+  d.setHours(15, 5, 0, 0);
+  assert.equal(matchDateTimeLabel(d.getTime()), "Today · 3:05 PM");
+  d.setHours(0, 30, 0, 0);
+  assert.equal(matchDateTimeLabel(d.getTime()), "Today · 12:30 AM");
+  assert.equal(matchDateTimeLabel(null), null);
 });
 
 test("greetingPrefix: returns one of the three time-of-day greetings", () => {
