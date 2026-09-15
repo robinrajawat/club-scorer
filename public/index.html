@@ -32177,7 +32177,20 @@ function CricketScorer() {
     background: COLORS.cream,
     backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(42,36,32,0.045) 28px)",
     WebkitTextSizeAdjust: "100%",
-    touchAction: "manipulation"
+    touchAction: "manipulation",
+    // BUG FIX: NavWrap's own entrance animation (cs-navInRight/cs-navInLeft, see screenAtoms.js)
+    // slides the incoming screen in from an 18px horizontal offset -- harmless on its own, but with
+    // nothing clipping it, that transiently pushed the whole page 18px wider than the viewport on
+    // every "forward" transition (any tab-bar screen except Score, per SCREEN_DEPTH's forward/back
+    // split below), which is real overflow, not just a visual nicety: a desktop browser's own
+    // scrollbar would flash in to cover it, shrinking the actual viewport width for that ~150ms and
+    // shifting TabBar (position: fixed, centered) sideways along with it -- reported live, "click on
+    // home... disturbs the bottom tab bar/pill, moves it a bit... seems stable when I click on
+    // Score" (Score alone slides in from a negative offset, which clips silently with no scrollbar,
+    // which is why it alone looked fine). Doesn't affect any of this app's own internal horizontally-
+    // scrollable regions (scorecard tables, etc.) -- those declare their own overflowX: "auto"
+    // locally and contain their scrolling before it ever reaches this far up the tree.
+    overflowX: "hidden"
   };
   if (loading || !authChecked && !initialFollowCode && !initialFollowMatchId && !initialTournamentFollowCode) {
     return /*#__PURE__*/React.createElement("div", {
