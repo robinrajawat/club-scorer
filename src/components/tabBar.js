@@ -1,18 +1,25 @@
 import React from "react";
 import { COLORS } from "./theme.js";
-import { House, Radio, Trophy, Users } from "./icons.js";
+import { House, ScorePad, Trophy, Users } from "./icons.js";
 
-// Four root destinations: Home (your own stuff), Live (everyone else's live matches/tournaments),
-// Cups (every tournament/series you've created), and Teams (every roster you've created --
-// MyTeamsScreen directly, no club wrapper around it; see docs/simplification-plan.md for why club/
-// federation management was removed and this tab now points straight at personal teams instead of
-// a Clubs/Federations browser).
+// Four root destinations: Home (live matches/results/fixtures -- everyone's, plus your own
+// completed ones; the app's default landing screen, see cricketScorer.js's cold-landing comment),
+// Score (your own scoring queue -- in progress, up next, upcoming), Cups (every tournament/series
+// you've created), and Teams (every roster you've created -- MyTeamsScreen directly, no club
+// wrapper around it; see docs/simplification-plan.md for why club/federation management was
+// removed and this tab now points straight at personal teams instead of a Clubs/Federations
+// browser).
 // `screen` is CricketScorer's own app-level screen key, reused directly rather than inventing a
 // separate "tab" concept -- TAB_BAR_SCREENS (see cricketScorer.js) is the single source of truth
-// for which screens show this bar at all.
+// for which screens show this bar at all. Home's own screen key stays "live" (LiveScreen) and
+// Score's stays "home" (HomeScreen) -- renaming those internally would ripple through every
+// setScreen("home"/"live") call site and test in the app for no user-visible benefit; only the
+// label, icon, and position shown here changed, reported live: "Score might be the most logical
+// name" for the scoring-queue tab, and "we can actually use home for live tab... sounds logical as
+// the default landing happens there."
 export const TABS = [
-  { screen: "home", label: "Home", Icon: House },
-  { screen: "live", label: "Live", Icon: Radio },
+  { screen: "live", label: "Home", Icon: House },
+  { screen: "home", label: "Score", Icon: ScorePad },
   { screen: "tournaments", label: "Cups", Icon: Trophy },
   { screen: "teams", label: "Teams", Icon: Users }
 ];

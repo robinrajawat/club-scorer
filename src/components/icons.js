@@ -405,6 +405,31 @@ export const Radio = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*
   d: "M19.1 4.9C23 8.8 23 15.1 19.1 19"
 }));
 
+// A pen resting on a scorebook -- the Score tab's own icon (see tabBar.js), picked over House
+// (taken by Home once Live's content moved there) and over Pencil (already means "edit" on team
+// rows/etc. elsewhere in this set -- reusing it for a tab would blur that meaning). A literal
+// scorebook reads as "keeping score," not "playing," which is the more accurate metaphor for a
+// tab that's a scoring queue rather than the game itself.
+export const ScorePad = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("rect", {
+  x: "3",
+  y: "4",
+  width: "14",
+  height: "17",
+  rx: "1.5"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6.5",
+  y1: "9",
+  x2: "13.5",
+  y2: "9"
+}), /*#__PURE__*/React.createElement("line", {
+  x1: "6.5",
+  y1: "13",
+  x2: "11",
+  y2: "13"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "m15 17 6.5-6.5a1.5 1.5 0 0 0-2.5-2.5L12.5 15 12 18z"
+}));
+
 export const Share = p => /*#__PURE__*/React.createElement(Icon, p, /*#__PURE__*/React.createElement("circle", {
   cx: "18",
   cy: "5",

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { LiveScreen } from "../../../src/components/liveScreen.js";
+import { Btn } from "../../../src/components/formUiAtoms.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -432,4 +433,70 @@ test("LiveScreen: shows a 'nothing matches' state (distinct from 'Nothing live r
   json = JSON.stringify(inst.toJSON());
   assert.match(json, /Riverside CC/);
   assert.doesNotMatch(json, /Nothing matches/);
+});
+
+// Reported live: "user should be able to control their matches" -- an owned completed match keeps
+// full owner actions (swipe-to-delete, Share, opens the real scoring/scorecard screen) instead of
+// becoming a plain read-only public row just by sitting in the same Results list as everyone
+// else's. Reuses homeScreen.js's own renderMatchCard (exported from there for exactly this) --
+// same SwipeableRow/ShareMenu, not a second, duplicated card.
+test("LiveScreen: an owned completed match in Results gets the full owner card (swipe-to-delete, opens via onOpen not onOpenLiveMatch)", () => {
+  let opened = null;
+  let openedLiveId = null;
+  const inst = render({
+    matches: [liveMatch({ id: "own1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })],
+    onOpen: m => { opened = m; },
+    onOpenLiveMatch: id => { openedLiveId = id; }
+  });
+  clickButton(inst, "Results (1)");
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Hawks CC/);
+  assert.ok(inst.root.findByProps({ deleteLabel: "Delete" }), "owned match is swipeable, unlike a plain public row");
+
+  const card = inst.root.findAllByProps({ role: "button" }).find(b => hasText(b.props.children, "Hawks CC"));
+  act(() => { card.props.onClick(); });
+  assert.equal(opened.id, "own1", "opens via onOpen (the real scoring/scorecard screen), not the read-only follow view");
+  assert.equal(openedLiveId, null);
+});
+
+// De-duplicated against the public feed by id -- a match this account owns and has also shared
+// publicly shows once, with owner actions, not a second time as a plain read-only public row too.
+test("LiveScreen: a match that's both owned and in the public feed shows once, with owner actions", () => {
+  const inst = render({
+    matches: [liveMatch({ id: "shared1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })],
+    liveMatches: [liveMatch({ id: "shared1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
+  });
+  clickButton(inst, "Results (1)");
+  const json = JSON.stringify(inst.toJSON());
+  assert.match(json, /Results \(1\)/, "counted once, not twice");
+  assert.equal(inst.root.findAllByProps({ deleteLabel: "Delete" }).length, 1);
+});
+
+test("LiveScreen: deleting an owned match from Results opens a confirm dialog, and confirming calls onDelete", () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let deletedId = null;
+  const inst = render({
+    matches: [liveMatch({ id: "own1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })],
+    onDelete: id => { deletedId = id; }
+  });
+  clickButton(inst, "Results (1)");
+  const row = inst.root.findByProps({ deleteLabel: "Delete" });
+  act(() => { row.props.onDelete(); });
+  const deleteBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Delete");
+  act(() => { deleteBtn.props.onClick(); });
+  assert.equal(deletedId, "own1");
+  delete globalThis.Modal;
+});
+
+// BUG FIX: rawEmpty (the big "Nothing live right now" state, hiding the search/tabs UI entirely)
+// used to only check the public feeds -- an account with only its own completed matches and no
+// public live/results data at all would hit this branch and never be able to reach its own
+// Results tab.
+test("LiveScreen: an account with only its own completed matches (no public live data) still reaches Results, not the raw empty state", () => {
+  const inst = render({
+    matches: [liveMatch({ id: "own1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
+  });
+  const json = JSON.stringify(inst.toJSON());
+  assert.doesNotMatch(json, /Nothing live right now/);
+  assert.match(json, /Hawks CC/);
 });
