@@ -6,7 +6,7 @@
 <title>Club Scorer</title>
 <meta name="description" content="Ball-by-ball cricket scoring for friendly club games. Sync your matches and teams across devices, join clubs, and share live scores." />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
-<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAEJ0lEQVRYhe2W228bVRDGv7N7vOvEduy4cRLFiVEMToJIEYWklJsEKQIEVJVATRTEC0KogEIRLYgnXlEjBBKIIvEPNE2hVDxGQlStaBKVEtqSqrlScnMT4lxsx/Vld8/w0MSq7LXXQbyRednVnKP5fTtzZucAO/Z/N7adzceDwYAsRDcHOiFJFQxQAYCANIiiBtFplsn0HQuH5/5TAb1+f71is53gsrzX5XD47IoiMwBEBNp8CiGQ1DTjdjK5rAsxzHS95+j8/IJVbNlqw8kXXzicicZO+jyehyscDhfnXMqFExHAGGySJJWpqtMmy80ZIV5746nHo99PTI78awFfNjZ+8uhbb35a13iPJzZ9kxEAbALvhmf9mz6JMbb70Cuuura255v+uI6BaPRCIYZUaOGLQKDTZrMd+evMWTV44CWUVftKghMRHLW1aDp4ADf6+lWZ8/c/CwQ6t5WBXr+/XlGUH2q83mo9mQQAVD+yB0u//W4JJwCtr3cjfOkylq5chY3zcl3Xn+xwufp+isXiJWVAUZRvqtzumq3gs+fOo7a9DbJdtYRzVYV/317c/PncnbMBwK6qtVySvjZj5Qk4HgwGuCy32zjP1lzb2MDq2DiqdrcWhRMRavY8hL+vjSIT38j6ZElijLHHev3+eksBNiG6XeXlvtwDtzo+jsrQfUXhALCrOYTIjbG8dYVzn6Qo3ZYCJKDTrihy7oFbnZiCO9hYFE5EqLw3iMjkVF6pOOcyE6LLUgCTJLdZnyfX1mD3eIrCiQiqx43bkRXTUjHAbSkAjClmrZaJxWFzOorCCYDidCETj5uWCoyp1gIK9TljlnAiAgkBwZh5HBMza8O0WaspLie0u062KZwImUQCqtNhWioiSlsKMIiiQoi8FNrdbqSi0aJwApBaX0eZ15ufrTvv65YCGNCf1DQ9N4WVTSGsTk0XhYMIK5PT2NUUyoMbhmFAiD5LAZROn0omk5Hc4N6WZqyMTxSFE4DlsTFU3d+S++XQiJaFEKctBRwLh+c0IYYymiayv9fycvhamrF09ZrlMApfHkHtg62wOR1ZvzAMAtHgxwsL85YCAIDp+nuxRGJJbAYNPtuBuaFhaMmU5TDKpFKYuTiE0P5nsn7NMBZloMeMZSrg6Pz8AgHvxBKJSJm3EqGDL2Ps7I8lTUIiwuh3Z/DAoVdR5q2EpuurAI58MDNzy4xV8EIysL4+/lxFhdr+7ttPhAeH+a2RKyXBQYT0xgZICAT3d6T+/OVi70ezs98W4hS9EQ1EoxeeZrQ4ce58uyxJTgYwKzgBEEKI8Oj1xUw8+uHhS79+VYxR2qW0oaFOlqQTEmP7FM59Mud5wwpE0IXQdcOIEDDIgZ5Cad+2gC37vK6uAaraJYTokgAPbf7bGVGaGFuDYfRLRKdKuQ3v2I5t2T96L6NmCGpoPAAAAABJRU5ErkJggg==" />
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAE0UlEQVR4nNRXW0wcZRQ+c9mZ3ZndLbOtu3Qp0K01QEtLNZGgFJSkNmmtRG0TozWpib40NmoMoj6oL8bog+XBGO2DNfqADw2J0sTWpJTaCwbNtjEBWoNIYBeWm+wWFmZmdy7+/+wu7P1SY4hnM/l3Zs6c7zvff+b8/9CwwUbDBtv/i8DEtZMCyPTW1Yh03+jEctXiXdEFmgabeGq2eqtlkmGUeY02BfYe6Q4WG5Mo5OAffHfz1NRyw8At//GFoLTrL19w23xQqogqKqEoGuiaDiaaAILQ9XIHO1XpZP1OwTTcWMd1Oxn197oTfX/fE4GZnzr4m4Hlo9d/mzx2685cm29mxaooinFPQ6CxUVsPRMSC6egWRQFUOpnwXg/X/2g9f+6RXUKP+6nzq0UTmL/+ie3bi7929/aPHQrMhSmKIkBRVCO4GgfX9fWRQOiJcyQEkMgfXUE/ApxllHqkqezCgWbT8aYXB5fSsbLWgEQu2cf9Ic/cwgrKRQc5oq0BpIOnj/ifqsSUoUmUzF2VGp+RPBbRbkeXMgiQkMOMoEgfRc0Nnpx5+ohNxYTi0yTmwMlOwPDW1+Y6G3jRI0pCVXWAkghYVo1qwoVVCCQbuRRlND1eaGIJBOK+mnYPGUOmArHKsJRAwHhYBZIkSgKz8wx8+PJ24DkmRQEDvyQF4pZPgfQCdDnMcOb9FljUyyG8Iqf4a7qWEyNHKxZBR9Wf3CTSwXETSpDwVFjh0zcegoveZTjz3WCSX3wEKJUAQFRBvDFzPb8Cuz2b4KOTdfDl+Wn48efRVD+sIGpKEUXTzAqpF01AkuUIbyE1iPezXOBN9Zvhree3wcfdk3Djpj9jWrACeBqtFiqyFJUiRRNQo4Rk4+iwpqkp4AnD5088LMBLh1zw3lkfDI0uZJBMNquZCKuUnLUKsxZhTfvZMFJgQdcJI4v0oKi3w5MH9sGbn48Z4Lk6YkwBDTiWDLW9OhIumgCOJ/C0V7BRQKY1o9Y9PLQ01cI7p69BYF7MAE0e8bOCjQY7R3ghh+V8Des83CXHJiYcJ2QEbfCwsGWLAJ1dv8CqGEkBS9j6eUyBMo4M11RxfSUTcJdXeR/fJ9zARYQzsTBojxDSoOeyL28bTowUiow3LPv38AMMFyxdgQcOfybvdJu/cTmYKI2iiREdZhYjqUtv/EgHT9SNSzBFq53U14df+1POhUNBHjt3aXw4eKemdWAotANvuxKrWrIC2QqQQb5R5PvcY/Yrb39xuzMfRt5WjGNXOojOxlreF1V0YE1kBlhiW5Y4N1G6Af7g/WZftdPSAQWMKuTQ0++f6Xhh57CmEwfHpkUrayLWtmUpmSDZaRQtilrH/t38XFsDd+JU19BAofgFCWDrvTo1drTNfdnOmZpH/aITK4Fyh8SWkqZi/QKr1FLPjewoNz3zwVd/FAQvmgC2K97ZQNfrtX1OO1U+OS/XhEWNpFHaeMOqooXLWWZSjrWU/dDebH3l1OmRkWLjFvwuQEazLOtBW2MbmmfG7aC49taK9rmQ8vTtSbkaLzh11eyEw0Z8f+HqbO/0krqKCjOiquqyLMvj6Hnl3xLAhpWyosOMjEVE2IONgnu7y/Ysnojx6VBPn3cpgIBlSZLwKyehAzcxtVDgYgn8Z7bhH6f/AAAA//+VRBtuAAAABklEQVQDABg7/WWXOxRIAAAAAElFTkSuQmCC" />
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
 <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png" />
 <meta property="og:title" content="Club Scorer" />
@@ -11160,9 +11160,6 @@ function AboutScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "inline-block",
-      borderRadius: "50%",
-      boxShadow: "0 3px 10px rgba(45,80,22,0.25)",
       marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
@@ -12408,40 +12405,26 @@ function AuthActionScreen({
 }
 // GENERATED-FN-END: AuthActionScreen
 
-// The real app icon (icon-512.png etc, used for the favicon/home-screen/app-switcher) carries a
-// deliberate safe-zone margin around the ball -- content only fills the center ~75% of the
-// canvas, standard practice for maskable icons. Rendered at true size that's invisible, but at
-// the small sizes the in-app mark needs (login splash, home header) that margin reads as the
-// ball just floating small in empty space. Cropping to the content box and scaling it back up to
-// fill the circle here is what makes this the same mark as the installed icon instead of a
-// smaller, oddly-padded copy of it.
+// icon-512.png is the shield mark on a transparent background, drawn full-bleed (no safe-zone
+// padding baked in the way the old circular ball mark had) -- so it's rendered here at 1:1 with
+// no crop and no scale-up trick. A circular/rounded-rect crop would clip the shield's point and
+// "ears"; the drop-shadow follows the shape's own alpha silhouette instead of a box, so it still
+// reads correctly wherever this is placed (login splash, home header, etc).
 // GENERATED-FN-START: AppMark
 function AppMark({
   size
 }) {
-  const scale = 192 / 144; // inverse of the ~75%-of-canvas content box shared by every icon export
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: size,
-      height: size,
-      borderRadius: "50%",
-      overflow: "hidden",
-      flexShrink: 0,
-      position: "relative"
-    }
-  }, /*#__PURE__*/React.createElement("img", {
+  return /*#__PURE__*/React.createElement("img", {
     src: "./icons/icon-512.png",
     alt: "",
     "aria-hidden": "true",
     style: {
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      width: size * scale,
-      height: size * scale,
-      transform: "translate(-50%, -50%)"
+      width: size,
+      height: size,
+      flexShrink: 0,
+      filter: "drop-shadow(0 3px 8px rgba(20,20,20,0.3))"
     }
-  }));
+  });
 }
 // GENERATED-FN-END: AppMark
 // GENERATED-FN-START: WelcomeScreen
@@ -12516,11 +12499,7 @@ function WelcomeScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 64,
-      height: 64,
-      borderRadius: "50%",
-      margin: "0 auto 16px",
-      boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
+      marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
     size: 64

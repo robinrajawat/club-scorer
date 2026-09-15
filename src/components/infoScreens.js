@@ -504,9 +504,6 @@ export function AboutScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "inline-block",
-      borderRadius: "50%",
-      boxShadow: "0 3px 10px rgba(45,80,22,0.25)",
       marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement(AppMark, {

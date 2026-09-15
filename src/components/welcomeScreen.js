@@ -94,11 +94,7 @@ export function WelcomeScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 64,
-      height: 64,
-      borderRadius: "50%",
-      margin: "0 auto 16px",
-      boxShadow: "0 6px 18px rgba(45,80,22,0.35)"
+      marginBottom: 16
     }
   }, /*#__PURE__*/React.createElement(AppMark, {
     size: 64
