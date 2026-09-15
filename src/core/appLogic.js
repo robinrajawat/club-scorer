@@ -960,7 +960,7 @@ export function applyTheme(pref) {
   const resolved = resolveTheme(pref);
   document.documentElement.dataset.theme = resolved;
   const meta = document.getElementById("cs-theme-color");
-  if (meta) meta.setAttribute("content", resolved === "dark" ? "#17140f" : "#2d5016");
+  if (meta) meta.setAttribute("content", resolved === "dark" ? "#17140f" : "#141414");
 }
 // Pinning a club or federation to the front of its chip row is a per-device browsing
 // preference, not account data -- same reasoning as theme above, so it lives in localStorage
