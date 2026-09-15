@@ -11,7 +11,7 @@ import { ShareMenu } from "./shareMenus.js";
 import { AuthBar } from "./authBar.js";
 import { UpcomingFixtureCard } from "./upcomingFixtureCard.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
-import { relativeDayLabel } from "../core/miscHelpers.js";
+import { matchDateTimeLabel } from "../core/miscHelpers.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
@@ -96,7 +96,7 @@ export function renderMatchCard(m, i, {
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 10
-  }), tournamentNameById[m.tournamentId] || "Tournament"), /*#__PURE__*/React.createElement("div", {
+  }), tournamentNameById[m.tournamentId] || "Tournament", " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
@@ -131,7 +131,7 @@ export function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", relativeDayLabel(m.createdAt) && ` · ${relativeDayLabel(m.createdAt)}`))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", matchDateTimeLabel(m.createdAt) && ` · ${matchDateTimeLabel(m.createdAt)}`))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
     match: m,
     onGetCode: () => onGetShareCode(m),
     onGetViewCode: () => onGetViewCode(m),
@@ -147,13 +147,19 @@ export function renderMatchCard(m, i, {
   }))));
 }
 
-// The Score tab: this account's own scoring queue -- a "Continue scoring" hero for any match
-// still in progress, a "Next up" teaser for the nearest scheduled tournament fixture, and the
-// full In Progress / Upcoming lists below. Completed matches live on the Home tab now instead
-// (see liveScreen.js's own comment on merging them into its Results section, alongside everyone
-// else's public results) -- this screen is deliberately just the queue of what's still ahead of
-// you, not a history. `Modal` (bare global, same as everywhere else in this suite) backs the
-// delete-confirm dialog. Covered by tests/unit/components/homeScreen.test.js.
+// The Score tab: this account's own matches, queue AND history -- a "Continue scoring" hero for
+// any match still in progress, a "Next up" teaser for the nearest scheduled tournament fixture,
+// the full In Progress / Upcoming lists, and a Completed section below them. This is the admin
+// home for standalone matches, the same role Cups plays for tournaments/series -- reported live,
+// "home should be a feed page only for public matches... within score we can have a control on
+// the matches". Completed briefly lived on the Home/Live tab's own Results section instead (see
+// liveScreen.js's history); moved back here once that turned out to mix "browsing everyone's
+// public results" with "managing my own match" in one feed, including matches marked private
+// showing on a tab framed as public. Home's own Results still shows a public match this account
+// owns too -- read-only there, same as anyone else's -- while this is where its owner actions
+// (swipe-to-delete, Share, tap to reopen the scorecard) live, regardless of whether it's public or
+// private. `Modal` (bare global, same as everywhere else in this suite) backs the delete-confirm
+// dialog. Covered by tests/unit/components/homeScreen.test.js.
 //
 // `renderMatchCard`, the per-match-card renderer, is exported above this component rather than
 // nested inside it -- see its own comment for why, and for LiveScreen's reuse of it.
@@ -218,6 +224,11 @@ export function HomeScreen({
   // fold has actually been tapped once, its own state is the only thing that decides it from then
   // on -- this tracks that a manual choice happened at all, not what the choice was.
   const [upcomingManuallySet, setUpcomingManuallySet] = useState(false);
+  // Same fold pattern as Upcoming, one section down -- collapsed by default (history isn't
+  // something to act on the way a live match is), but forced open if it's the only thing on the
+  // page so this screen never looks empty at a glance when all that's here is match history.
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [completedManuallySet, setCompletedManuallySet] = useState(false);
   // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
   // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
   // taps Start on it.
@@ -256,6 +267,10 @@ export function HomeScreen({
   // resume), force it open rather than handing back a Score tab that looks empty at a glance just
   // because collapsed-by-default is now the norm for this section.
   const showUpcoming = upcomingManuallySet ? upcomingExpanded : upcomingExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length > 0;
+  // Most recently played first -- a history list, so newest is the natural default rather than
+  // relying on `matches` already arriving in some particular order.
+  const completedMatches = [...matches].filter(m => m.status === "complete").sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const showCompleted = completedManuallySet ? completedExpanded : completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0 && completedMatches.length > 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingTop: 28,
@@ -500,7 +515,7 @@ export function HomeScreen({
     clubTeamsById: clubTeamsById
   })), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, inProgressMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 || completedMatches.length > 0 ? /*#__PURE__*/React.createElement("div", null, inProgressMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -625,7 +640,44 @@ export function HomeScreen({
       fontSize: 12,
       color: COLORS.turf
     }
-  }, "+", hiddenUpcomingCount, " more in Cups"))) : /*#__PURE__*/React.createElement(EmptyState, {
+  }, "+", hiddenUpcomingCount, " more in Cups")), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? 18 : 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setCompletedManuallySet(true);
+      setCompletedExpanded(!showCompleted);
+    },
+    className: "cs-btn",
+    "aria-expanded": showCompleted,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      marginBottom: 8,
+      fontFamily: "'Inter'",
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 1,
+      color: COLORS.inkSoft,
+      textTransform: "uppercase",
+      opacity: 0.75
+    }
+  }, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 13,
+    style: {
+      transform: showCompleted ? "rotate(90deg)" : "none",
+      transition: "transform 0.15s ease",
+      flexShrink: 0
+    }
+  }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })))) : /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "50vh"
   }, "Nothing to score right now.", /*#__PURE__*/React.createElement("br", null), "Start a match to see it here."), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
