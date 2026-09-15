@@ -455,6 +455,9 @@ export function LiveScreen({
     }), t.champion, " won") : `${t.teamsCount} team${t.teamsCount === 1 ? "" : "s"}`)));
   }
 
+  const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
+  const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
+
   const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0 && !matches.some(m => m.status === "complete");
   const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0 && filteredFixtures.length === 0 && ownCompletedMatches.length === 0;
 
@@ -529,7 +532,7 @@ export function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, `${greetingPrefix()} — live scores, fixtures & results`), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"

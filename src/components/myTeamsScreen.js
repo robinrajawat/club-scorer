@@ -86,7 +86,7 @@ export function MyTeamsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, teams.length > 0 ? `Teams · ${teams.length}` : "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing…",
     size: 14,
     style: {
@@ -108,44 +108,20 @@ export function MyTeamsScreen({
       marginBottom: 18,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, !showTabBar && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft
-    }
-  }, `· ${teams.length}`)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      justifyContent: "flex-end"
     }
     // The FAB below (see the bottom of this component) is the "add a team" entry point on the
     // Teams tab itself, same as every other tab-bar screen's own create flow -- this inline "+
     // New" link only still renders for the no-tab-bar drill-in (onBack set, reached from
-    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own.
-  }, !showTabBar && /*#__PURE__*/React.createElement("button", {
+    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own. The count
+    // now lives in the page's own "Teams · N" heading above instead of a repeated inline label
+    // here -- this card's only section was always its team list, so a second "Teams" eyebrow
+    // right above it was pure repetition.
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -166,7 +142,7 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14,
     strokeWidth: 2.5
-  }), "New"))), /*#__PURE__*/React.createElement("div", {
+  }), "New")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: teams.length > 0 ? 10 : 14,
       ...(teams.length === 0 ? { flex: 1, display: "flex", flexDirection: "column" } : {})

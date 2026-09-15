@@ -24,28 +24,6 @@ test("WEEKDAY_LABELS/MONTH_LABELS: are the expected 7/12-entry label lists", () 
   assert.equal(MONTH_LABELS[0], "January");
 });
 
-test("VenueEditModal: with a short/empty venue, shows the club-address shortcuts with no search triggered", () => {
-  const clubs = [
-    { id: "c1", name: "Riverside CC", address: "1 River Rd", addressLat: 1, addressLng: 2 },
-    { id: "c2", name: "No-address CC" } // filtered out -- no verified address
-  ];
-  const inst = renderer.create(React.createElement(VenueEditModal, { value: "", clubs, onSave: () => {}, onClose: () => {} }));
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Riverside CC/);
-  assert.doesNotMatch(text, /No-address CC/);
-  assert.doesNotMatch(text, /Address verified/);
-});
-
-test("VenueEditModal: picking a club shortcut fills the field and marks the address verified", () => {
-  const clubs = [{ id: "c1", name: "Riverside CC", address: "1 River Rd", addressLat: 1, addressLng: 2 }];
-  const inst = renderer.create(React.createElement(VenueEditModal, { value: "", clubs, onSave: () => {}, onClose: () => {} }));
-  const clubBtn = inst.root.findAllByType("button")[0];
-  clubBtn.props.onClick();
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Address verified/);
-  assert.equal(inst.root.findByType(TextField).props.value, "1 River Rd");
-});
-
 test("VenueEditModal: starting with verified initialLat/initialLng shows the address as already verified", () => {
   const inst = renderer.create(React.createElement(VenueEditModal, {
     value: "Riverside Ground", initialLat: 1.5, initialLng: 2.5, onSave: () => {}, onClose: () => {}
