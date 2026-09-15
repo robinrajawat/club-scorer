@@ -1,5 +1,5 @@
 // The persistent bottom tab bar (src/components/tabBar.js) shown on the four root screens (Home,
-// Live, Cups, Teams) -- see TAB_BAR_SCREENS in cricketScorer.js for which screens show it.
+// Score, Cups, Teams) -- see TAB_BAR_SCREENS in cricketScorer.js for which screens show it.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -61,11 +61,15 @@ test("TabBar: no badge on the Home tab when homeBadgeCount is 0/omitted", () => 
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /pending/);
 });
 
-test("TabBar: shows a badge on the Home tab (and only Home) when homeBadgeCount is set, capped at '9+'", () => {
+// homeBadgeCount marks the "home" screen key specifically -- HomeScreen's own header is where the
+// Inbox bell button that this badge tracks actually lives (unrelated to which tab is currently
+// labeled "Home"; see tabBar.js's own comment on the label/icon swap). That screen key is the
+// Score tab now, so the badge shows there.
+test("TabBar: shows a badge on the Score tab (and only Score) when homeBadgeCount is set, capped at '9+'", () => {
   const inst = render({ active: "live", onSelect: () => {}, homeBadgeCount: 12 });
-  const homeButton = inst.root.findAllByType("button").find(b => b.props["aria-label"].startsWith("Home"));
-  assert.equal(homeButton.props["aria-label"], "Home, 12 pending");
+  const scoreButton = inst.root.findAllByType("button").find(b => b.props["aria-label"].startsWith("Score"));
+  assert.equal(scoreButton.props["aria-label"], "Score, 12 pending");
   const json = JSON.stringify(inst.toJSON());
-  // Exactly one "9+" in the whole tree -- confirms the badge only ever renders once, on Home.
+  // Exactly one "9+" in the whole tree -- confirms the badge only ever renders once, on Score.
   assert.equal((json.match(/9\+/g) || []).length, 1);
 });

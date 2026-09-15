@@ -948,25 +948,6 @@ test("CricketScorer: the Teams tab renders MyTeamsScreen directly, with the tab 
   assert.equal(myTeams.props.onBack, undefined, "no Back button -- it's a tab, not a drill-in");
 });
 
-// Home's own "My Teams" shortcut is a separate route from the Teams tab (screen "my-teams" vs.
-// "teams") -- reached with no tab bar, and its own Back button returning to Home, same as any
-// other drill-in screen.
-test("CricketScorer: Home's 'My Teams' shortcut opens MyTeamsScreen with no tab bar and a Back to Home", async () => {
-  const inst = await render();
-  await flush();
-  await signIn(inst);
-  await flush();
-  await flush();
-
-  const home = inst.root.findByType(HomeScreen);
-  act(() => { home.props.onOpenTeam({ id: "team1" }); });
-  assert.throws(() => inst.root.findByType(TabBar), "no tab bar on this drill-in screen");
-  const myTeams = inst.root.findByType(MyTeamsScreen);
-  assert.equal(typeof myTeams.props.onBack, "function", "reached from Home, so it needs its own way back");
-  act(() => { myTeams.props.onBack(); });
-  assert.ok(inst.root.findByType(HomeScreen), "onBack returns to Home");
-  await flush();
-});
 
 test("CricketScorer: opening Feedback Inbox without admin access bounces back to Home", async () => {
   const inst = await render();

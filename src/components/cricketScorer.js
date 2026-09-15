@@ -214,10 +214,16 @@ export const SCREEN_DEPTH = {
 // bar only renders while `screen` is one of these, hidden everywhere else (mid-match scoring,
 // setup wizard, edit/detail screens reached by drilling in further) since it would just compete
 // with those screens' own fixed-position UI (MatchScreen's scoring pad chief among them) or with
-// their own single-purpose back button. "teams" here is the Teams tab (MyTeamsScreen, every roster
-// you've created). "my-teams" is the same MyTeamsScreen reached instead from a Home shortcut, so it
-// renders with no tab bar, same as "records"/"team-edit"/every other drill-in screen -- see
-// tabBar.js's own TABS list for the reasoning.
+// their own single-purpose back button. These screen keys are the app's own internal identifiers,
+// not what the tab bar actually labels them -- "live" (LiveScreen) is tab-labeled "Home" now and
+// "home" (HomeScreen) is labeled "Score"; see tabBar.js's own TABS list and top comment for why
+// the keys stayed put while the labels/order/icons swapped. "teams" here is the Teams tab
+// (MyTeamsScreen, every roster you've created).
+//
+// KNOWN DEAD CODE, not yet removed: "my-teams" (a second route to the same MyTeamsScreen, no tab
+// bar, reached instead from a Home shortcut) has had no reachable entry point since that shortcut
+// was removed from HomeScreen a while back -- nothing in this file calls setScreen("my-teams")
+// any more. Left in place rather than folded into this same change's own scope; a real follow-up.
 export const TAB_BAR_SCREENS = ["home", "live", "tournaments", "teams"];
 
 export function CricketScorer() {
@@ -1891,14 +1897,6 @@ export function CricketScorer() {
     setScreen("setup");
   }
   const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
-  // Merged, source-tagged team list (mirrors allTournamentsFlat below): personal teams plus every
-  // club's. Only ever consumed by Home now (its own team search, and to tell onOpenTeam whether a
-  // tapped team is personal or a specific club's).
-  const allTeamsFlat = [...teams.map(t => ({ ...t,
-    _clubId: null
-  })), ...Object.entries(clubTeamsById).flatMap(([cid, list]) => (list || []).map(t => ({ ...t,
-    _clubId: cid
-  })))].sort((a, b) => a.name.localeCompare(b.name));
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
@@ -2026,7 +2024,6 @@ export function CricketScorer() {
     onSetTheme: handleSetTheme,
     onJoinCode: handleJoinCode,
     onOpenTournaments: () => setScreen("tournaments"),
-    onLoadRecentMatches: fetchLiveAndRecentMatches,
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
     inboxBadgeCount: inboxBadgeCount,
@@ -2039,8 +2036,6 @@ export function CricketScorer() {
     clubs: clubs,
     federationsById: federationsById,
     clubTeamsById: clubTeamsById,
-    teams: allTeamsFlat,
-    onOpenTeam: () => setScreen("my-teams"),
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
@@ -2063,6 +2058,11 @@ export function CricketScorer() {
     tournamentNameById: tournamentNameById,
     loading: !liveMatchesLoaded || !liveTournamentsLoaded,
     showTabBar: true,
+    matches: matches,
+    onOpen: openMatch,
+    onDelete: handleDelete,
+    onGetShareCode: handleGetShareCodeForMatch,
+    onGetViewCode: handleGetViewCodeForMatch,
     user: user,
     profile: profile,
     onOpenAccount: openAccount,

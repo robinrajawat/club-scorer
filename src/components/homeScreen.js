@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { Bell, ChevronRight, Info, Trophy } from "./icons.js";
-import { Btn, TextField } from "./formUiAtoms.js";
+import { Bell, ChevronRight, Trophy } from "./icons.js";
+import { Btn } from "./formUiAtoms.js";
 import { AppMark, LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { SyncStatusBanner } from "./scoreboardAtoms.js";
@@ -10,224 +10,19 @@ import { JoinCodeBar } from "./pickerAtoms.js";
 import { ShareMenu } from "./shareMenus.js";
 import { AuthBar } from "./authBar.js";
 import { UpcomingFixtureCard } from "./upcomingFixtureCard.js";
-import { HELP_SECTIONS } from "./infoScreens.js";
 import { matchScoreLine } from "../core/shareAndFormat.js";
-import { relativeDayLabel, greetingPrefix } from "../core/miscHelpers.js";
+import { relativeDayLabel } from "../core/miscHelpers.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
-// The app's landing screen once signed in (or skipped sign-in): a "Continue scoring" hero for any
-// match this account has in progress, a "Next up" teaser for the nearest scheduled tournament
-// fixture, saved matches (in-progress/upcoming/completed, each collapsible), and a unified search
-// across matches/teams/tournaments/help. Everyone else's live matches/tournaments moved to the Live
-// tab (see TabBar/LiveScreen) -- this screen only ever surfaces this account's own stuff, plus
-// what's coming up next for it.
-// Matches search also reaches beyond this account's own saved matches: `onLoadRecentMatches`
-// lazily fetches every live/recently-completed match app-wide (see fetchLiveAndRecentMatches in
-// index.html) the first time someone actually types a query, surfacing a match found that way
-// under "Across Club Scorer". `Modal` (bare global, same as everywhere else in this suite) backs
-// one dialog. Covered by tests/unit/components/homeScreen.test.js.
-//
-// `renderMatchCard`, the per-match-card renderer, stays nested inside HomeScreen exactly as it was
-// in public/index.html, but its signature was refactored here (before this extraction) to take the
-// values it used to close over -- onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById,
-// onGetShareCode, onGetViewCode -- as an explicit third argument instead, since a module-level
-// function obviously can't close over another function's local state/props the way a truly nested
-// one can. Every one of its four call sites (still inside HomeScreen) was updated to pass that
-// object explicitly; the change is otherwise behavior-preserving -- same values, same call order,
-// nothing about what actually renders differs. This was flagged back when `renderMatchCard` was
-// first discovered (during an earlier batch's extraction survey) as the one thing blocking
-// HomeScreen from being extracted the same verbatim-splice way as everything else in this project;
-// the other nested helpers below it (renderCupRow, renderHelpRow, renderTeamRow, searchResultRow,
-// seeAllLink) needed no such treatment -- they're only ever called from within HomeScreen's own
-// render, so they simply travel with it as part of the same function body, no refactor required.
-
-export function HomeScreen({
-  matches,
-  onNew,
-  onOpen,
-  onDelete,
-  user,
-  profile,
-  onOpenAccount,
-  onOpenInbox,
-  onOpenSharedLinks,
-  onOpenHelp,
-  onOpenFeedback,
-  onOpenAbout,
-  onSignOut,
-  themePref,
-  onSetTheme,
-  onJoinCode,
-  onOpenTournaments,
-  pendingCount,
-  onPendingSynced,
-  inboxBadgeCount = 0,
-  tournamentNameById = {},
-  tournaments = [],
-  onOpenTournament,
-  onScheduleFixture,
-  onStartFixture,
-  onEditVenue,
-  clubs = [],
-  federationsById = {},
-  clubTeamsById = {},
-  teams = [],
-  onOpenTeam,
-  onGetShareCode,
-  onGetViewCode,
-  onOpenLiveMatch,
-  onLoadRecentMatches,
-  showInstallHint = false,
-  onDismissInstallHint,
-  showTabBar = false
-}) {
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
-  const [query, setQuery] = useState("");
-  // The "swipe to delete" label next to Saved Matches -- shown until a real swipe happens
-  // anywhere in the app (see SwipeableRow's onSwipeStart / hasSeenSwipeHint), not just once ever
-  // on render, so it keeps earning its space until the gesture's actually been demonstrated.
-  const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
-  // Collapsed by default -- a season's worth of completed matches otherwise buries the in-progress
-  // ones (the matches someone's actually mid-way through and likely opened this screen to resume)
-  // under everything already finished. Forced open below whenever there are no in-progress matches
-  // to separate it from, since folding the only content on screen would just look empty -- but
-  // only as a DEFAULT, before the person has ever actually tapped the fold themselves (see
-  // completedManuallySet/upcomingManuallySet below).
-  const [completedExpanded, setCompletedExpanded] = useState(false);
-  // In Progress stays open by default -- it's what someone most likely opened this screen to
-  // resume. Upcoming and Completed both default closed: Upcoming is planning-ahead information,
-  // not something to act on right this moment the way a live match is, and a season's worth of
-  // either otherwise pushes past the fold before the "New Match" button and search even come into
-  // view. All three still get the same fold affordance either way, so nothing here is one-way.
-  const [inProgressExpanded, setInProgressExpanded] = useState(true);
-  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
-  // BUG FIX: showCompleted/showUpcoming below used to force themselves back open on every render
-  // whenever nothing else was on the page, with no way to tell "the smart default" apart from "the
-  // person deliberately tapped this closed" -- so once every match in a tournament was complete
-  // (leaving nothing else on Home), collapsing Completed was pointless: the very next render forced
-  // it straight back open, since the only-content-on-screen condition was still true. Reported live
-  // as "Home page completed doesn't collapse when all matches are completed." Once a fold has
-  // actually been tapped once, its own state is the only thing that decides it from then on --
-  // these track that a manual choice happened at all, not what the choice was.
-  const [completedManuallySet, setCompletedManuallySet] = useState(false);
-  const [upcomingManuallySet, setUpcomingManuallySet] = useState(false);
-  // Merges what used to be separate destinations (a "Search players" screen, plus Cups/Clubs/
-  // Federations/Help each living behind their own tap) into one search box: type once, see
-  // matches, tournaments/series, teams, and FAQ entries all filtered by the same query, with a
-  // chip row to narrow down to just one kind of result. Only ever searches data already sitting in
-  // memory (matches, tournaments, teams, and the static FAQ content).
-  const [searchScope, setSearchScope] = useState("all"); // all | matches | teams | cups | help
-  const [showSearchInfo, setShowSearchInfo] = useState(false);
-  // Live + recently-completed matches across the whole app (not just this account's own), for the
-  // Matches search only -- fetched once then filtered in memory, keyed off any non-empty query.
-  // Deliberately never shown outside of an active search: the Home screen's
-  // own "Live now" strip above already covers browsing, this is only for finding one specific
-  // match someone remembers watching.
-  const [recentMatches, setRecentMatches] = useState(null); // null = not loaded yet
-  const [recentMatchesLoading, setRecentMatchesLoading] = useState(false);
-  const hasRecentMatchSearch = typeof onLoadRecentMatches === "function";
-  // Same first-name logic AuthBar's own trigger label used to show directly -- now the greeting's
-  // job instead, since the account button is icon-only. Blank (not "Account"/some placeholder)
-  // when there's genuinely no name to show, so the line below falls back to the plain time-of-day
-  // greeting instead of saying something empty or generic.
-  const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
-  // BUG FIX: someone who skipped sign-in ("Continue without an account") used to see no greeting
-  // at all -- this line only ever rendered once homeGreetingName was non-empty, which is never
-  // true without a signed-in user. A guest is still someone actually using the app right now;
-  // there's just no name to put after the time-of-day prefix.
-  const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
-  useEffect(() => {
-    if (!query.trim() || recentMatches !== null || !hasRecentMatchSearch) return;
-    if (searchScope !== "matches" && searchScope !== "all") return;
-    let cancelled = false;
-    setRecentMatchesLoading(true);
-    onLoadRecentMatches().then(list => {
-      if (cancelled) return;
-      setRecentMatches(list);
-      setRecentMatchesLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [query, searchScope, recentMatches, hasRecentMatchSearch]);
-  const q = query.trim().toLowerCase();
-  // Matches against both team names and the tournament name (when it belongs to one) -- someone
-  // searching is far more likely to remember "that Riverside game" or "the DCF final" than to
-  // scroll hunting for a specific date. Venue isn't included: local-only/offline matches never
-  // carry it on this lightweight list (see upsertLocalPointer), only cloud-synced ones do, and a
-  // filter that only sometimes searches a field would be more confusing than one that reliably
-  // doesn't.
-  const filteredMatches = q ? matches.filter(m => m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q) || (m.tournamentId && (tournamentNameById[m.tournamentId] || "").toLowerCase().includes(q))) : matches;
-  // Excludes anything already in `matches` -- a match this account owns (or has open) shows once,
-  // in Saved Matches, not a second time down here just because it's also currently live or recent.
-  const ownMatchIds = new Set(matches.map(m => m.id));
-  const filteredRecentMatches = q && recentMatches ? recentMatches.filter(m => !ownMatchIds.has(m.id) && (m.teamA.toLowerCase().includes(q) || m.teamB.toLowerCase().includes(q))) : [];
-  // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
-  // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
-  // taps Start on it. Searched alongside saved matches so "that Riverside game" finds it whether
-  // it's already been played or is still just sitting on a tournament's schedule -- without this,
-  // searching for an upcoming game here would silently come back empty, which is worse than not
-  // having search at all. Only surfaced while there's an active query (see below) -- a permanent
-  // always-visible upcoming section is a bigger change than what was asked for here.
-  const upcomingFixtures = tournaments.flatMap(t => (t.fixtures || []).filter(f => !f.matchId).map(f => ({
-    tournament: t,
-    fixture: f
-  })));
-  const filteredUpcoming = q ? upcomingFixtures.filter(({
-    tournament: t,
-    fixture: f
-  }) => f.teamA.toLowerCase().includes(q) || f.teamB.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)) : [];
-  // Chronological, nearest first -- fixtures without a scheduled date/time yet fall to the end
-  // rather than sorting arbitrarily first, since "not yet scheduled" isn't more urgent than
-  // something happening tomorrow. f.date is an ISO datetime-local string ("YYYY-MM-DDTHH:MM"),
-  // which sorts correctly as a plain string compare -- no need to parse it into a Date first.
-  const sortedUpcomingFixtures = [...upcomingFixtures].sort((a, b) => {
-    if (!a.fixture.date && !b.fixture.date) return 0;
-    if (!a.fixture.date) return 1;
-    if (!b.fixture.date) return -1;
-    return a.fixture.date < b.fixture.date ? -1 : a.fixture.date > b.fixture.date ? 1 : 0;
-  });
-  // Capped on the home screen -- a full tournament's fixture list could easily be 20+ games, and
-  // this is meant as a "here's what's next" glance, not a duplicate of the Cups tab (which already
-  // has the complete, unbounded list one tap away). Uncapped in search results below, since a
-  // filtered set is already short and specific.
-  const UPCOMING_HOME_LIMIT = 4;
-  const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
-  const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
-  // The hero "Continue scoring" card at the very top of the screen -- everyone else's live
-  // matches moved to the Live tab (see TabBar/LiveScreen), but a match THIS account is actively
-  // scoring is a different thing entirely: the one action someone opening the app mid-match is
-  // almost certainly here for, so it gets the most prominent slot on the page, above even Next
-  // up. Not deduped against the "In Progress" list further down Saved Matches -- same
-  // teaser-plus-full-list relationship as Next up has with the full Upcoming list.
-  const inProgressOwnMatches = matches.filter(m => m.status === "in-progress");
-  // Cups (tournaments + series), teams, clubs, federations, and Help/FAQ entries -- all already
-  // sitting in memory (tournaments/teams/clubs are loaded right after sign-in for other reasons;
-  // HELP_SECTIONS is static), so unlike Players these cost nothing to search and only ever show
-  // while there's a query, same "no browse mode" reasoning as filteredUpcoming above.
-  const filteredTournaments = q ? tournaments.filter(t => t.name.toLowerCase().includes(q)) : [];
-  // teams is the same merged, source-tagged list (personal + every club's) the Teams screen
-  // itself shows -- see allTeamsFlat -- so a search here finds a team no matter which club it
-  // belongs to, not just personal ones.
-  const filteredTeamsList = q ? teams.filter(t => t.name.toLowerCase().includes(q)) : [];
-  // Matches against both the question and the answer text, same reasoning as HelpScreen's own
-  // search -- kept each entry tagged with its section title so a result out of context ("Set at
-  // match creation, under Customize") still makes sense on its own.
-  const filteredHelpEntries = q ? HELP_SECTIONS.flatMap(section => section.entries.filter(e => e.q.toLowerCase().includes(q) || e.a.toLowerCase().includes(q)).map(e => ({ ...e,
-    section: section.title
-  }))) : [];
-  // Cap per category when showing everything at once under "All" -- a glance, not a duplicate of
-  // what picking that category's own chip shows uncapped.
-  const ALL_SCOPE_CAP = 3;
-  // In progress first (the ones someone likely opened this screen to resume), completed second and
-  // foldable -- see completedExpanded above. Grouping is skipped entirely while searching: a filtered
-  // result set is already short and specific, so splitting it into two labeled groups (one likely
-  // collapsed) would just be extra taps to find the one match being searched for.
-  const inProgressMatches = filteredMatches.filter(m => m.status !== "complete");
-  const completedMatches = filteredMatches.filter(m => m.status === "complete");
-function renderMatchCard(m, i, {
+// A single match card -- swipe-to-delete, tap to open, a Share menu when this account can
+// actually share it (onGetShareCode/onGetViewCode both present). Module-level (not nested in
+// HomeScreen) since it closes over nothing but its own params -- everything it needs (onOpen,
+// setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode) comes
+// through the third argument explicitly. Exported so LiveScreen's Home tab can reuse the exact
+// same card, with the exact same owner actions, for this account's own completed matches sitting
+// alongside everyone else's public results -- see liveScreen.js's own comment on that merge.
+export function renderMatchCard(m, i, {
   onOpen,
   setConfirmDeleteId,
   setShowSwipeHint,
@@ -235,7 +30,7 @@ function renderMatchCard(m, i, {
   onGetShareCode,
   onGetViewCode
 }) {
-    return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
     key: m.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`
@@ -350,154 +145,117 @@ function renderMatchCard(m, i, {
       marginLeft: 8
     }
   }))));
-  }
-  // A live/recent match found via app-wide search, opening straight into the same read-only
-  // FollowScreen a Live tab card does (see onOpenLiveMatch) -- there's no owner-only affordance
-  // here (no swipe-to-delete, no ShareMenu) since this is someone else's match, found by search,
-  // not one of this account's own.
-  function renderRecentMatchRow(m) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: "recent-" + m.id,
-      type: "button",
-      onClick: () => onOpenLiveMatch && onOpenLiveMatch(m.id),
-      className: "cs-btn",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-        width: "100%",
-        textAlign: "left",
-        background: COLORS.surface,
-        border: "none",
-        borderRadius: 12,
-        padding: "12px 14px",
-        marginBottom: 6,
-        cursor: "pointer",
-        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 13.5,
-        color: COLORS.ink,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
-      }
-    }, m.teamA, " ", /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: COLORS.inkSoft,
-        fontWeight: 500
-      }
-    }, "vs"), " ", m.teamB), matchScoreLine(m) && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 12,
-        fontWeight: 600,
-        color: COLORS.inkSoft,
-        marginTop: 2
-      }
-    }, matchScoreLine(m))), /*#__PURE__*/React.createElement("span", {
-      "aria-hidden": "true",
-      style: {
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        flexShrink: 0,
-        background: m.status === "complete" ? COLORS.inkSoft : COLORS.live,
-        boxShadow: m.status === "complete" ? "none" : "0 0 0 3px rgba(230,84,75,0.18)",
-        animation: m.status === "complete" ? "none" : "cs-pulse 1.6s ease infinite"
-      }
-    }));
-  }
-  // Shared row style for the four new search categories below -- same look as the player search
-  // results just above, so a mixed set of result kinds still reads as one consistent list style
-  // rather than four differently-designed rows bolted together.
-  function searchResultRow(key, onClick, primary, secondary) {
-    return /*#__PURE__*/React.createElement("button", {
-      key: key,
-      type: "button",
-      onClick: onClick,
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 2,
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: "none",
-        background: COLORS.surface,
-        cursor: "pointer",
-        textAlign: "left",
-        boxShadow: "0 1px 2px rgba(42,36,32,0.06)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontWeight: 700,
-        fontSize: 14,
-        color: COLORS.ink
-      }
-    }, primary), secondary && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 11.5,
-        color: COLORS.inkSoft
-      }
-    }, secondary));
-  }
-  function renderCupRow(t) {
-    return searchResultRow(t.id, () => onOpenTournament(t), t.name, t.kind === "series" ? "Series" : "Tournament");
-  }
-  function renderTeamRow(t) {
-    const club = t._clubId ? clubs.find(c => c.id === t._clubId) : null;
-    return searchResultRow(t.id, () => onOpenTeam(t), t.name, club ? club.name : "Personal");
-  }
-  function renderHelpRow(e) {
-    return searchResultRow(e.q, () => onOpenHelp(query), e.q, e.section);
-  }
-  // "See all N" link under an All-scope category preview -- switches straight to that category's
-  // own chip instead of just being a label, so narrowing down is one tap from the preview itself.
-  function seeAllLink(scope, count) {
-    return /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: () => setSearchScope(scope),
-      className: "cs-btn",
-      style: {
-        display: "block",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: "6px 2px",
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 12,
-        color: COLORS.turf,
-        textDecoration: "underline"
-      }
-    }, `See all ${count}`);
-  }
-  function categorySectionLabel(text) {
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 8,
-        opacity: 0.75
-      }
-    }, text);
-  }
+}
+
+// The Score tab: this account's own scoring queue -- a "Continue scoring" hero for any match
+// still in progress, a "Next up" teaser for the nearest scheduled tournament fixture, and the
+// full In Progress / Upcoming lists below. Completed matches live on the Home tab now instead
+// (see liveScreen.js's own comment on merging them into its Results section, alongside everyone
+// else's public results) -- this screen is deliberately just the queue of what's still ahead of
+// you, not a history. `Modal` (bare global, same as everywhere else in this suite) backs the
+// delete-confirm dialog. Covered by tests/unit/components/homeScreen.test.js.
+//
+// `renderMatchCard`, the per-match-card renderer, is exported above this component rather than
+// nested inside it -- see its own comment for why, and for LiveScreen's reuse of it.
+
+export function HomeScreen({
+  matches,
+  onNew,
+  onOpen,
+  onDelete,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenInbox,
+  onOpenSharedLinks,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme,
+  onJoinCode,
+  onOpenTournaments,
+  pendingCount,
+  onPendingSynced,
+  inboxBadgeCount = 0,
+  tournamentNameById = {},
+  tournaments = [],
+  onOpenTournament,
+  onScheduleFixture,
+  onStartFixture,
+  onEditVenue,
+  clubs = [],
+  federationsById = {},
+  clubTeamsById = {},
+  onGetShareCode,
+  onGetViewCode,
+  showInstallHint = false,
+  onDismissInstallHint,
+  showTabBar = false
+}) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const matchToConfirmDelete = confirmDeleteId ? matches.find(m => m.id === confirmDeleteId) : null;
+  // The "swipe to delete" label next to Saved Matches -- shown until a real swipe happens
+  // anywhere in the app (see SwipeableRow's onSwipeStart / hasSeenSwipeHint), not just once ever
+  // on render, so it keeps earning its space until the gesture's actually been demonstrated.
+  const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
+  // In Progress stays open by default -- it's what someone most likely opened this screen to
+  // resume. Upcoming defaults closed: it's planning-ahead information, not something to act on
+  // right this moment the way a live match is, and a season's worth of it otherwise pushes past
+  // the fold before the "New Match" button even comes into view. Both still get the same fold
+  // affordance either way, so nothing here is one-way.
+  const [inProgressExpanded, setInProgressExpanded] = useState(true);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
+  // BUG FIX: showUpcoming below used to force itself back open on every render whenever nothing
+  // else was on the page, with no way to tell "the smart default" apart from "the person
+  // deliberately tapped this closed" -- so once every in-progress match was resumed/finished
+  // (leaving nothing else on the page), collapsing Upcoming was pointless: the very next render
+  // forced it straight back open, since the only-content-on-screen condition was still true.
+  // Reported live as "Home page completed doesn't collapse when all matches are completed" (the
+  // same bug, on the Completed fold this screen no longer has -- Upcoming inherits the fix since
+  // it's the one fold left with this exact "am I the only thing on the page" default). Once a
+  // fold has actually been tapped once, its own state is the only thing that decides it from then
+  // on -- this tracks that a manual choice happened at all, not what the choice was.
+  const [upcomingManuallySet, setUpcomingManuallySet] = useState(false);
+  // Every fixture, across every tournament, that hasn't been started yet (no matchId) -- these
+  // aren't in `matches` at all, since a fixture only becomes a real match once someone actually
+  // taps Start on it.
+  const upcomingFixtures = tournaments.flatMap(t => (t.fixtures || []).filter(f => !f.matchId).map(f => ({
+    tournament: t,
+    fixture: f
+  })));
+  // Chronological, nearest first -- fixtures without a scheduled date/time yet fall to the end
+  // rather than sorting arbitrarily first, since "not yet scheduled" isn't more urgent than
+  // something happening tomorrow. f.date is an ISO datetime-local string ("YYYY-MM-DDTHH:MM"),
+  // which sorts correctly as a plain string compare -- no need to parse it into a Date first.
+  const sortedUpcomingFixtures = [...upcomingFixtures].sort((a, b) => {
+    if (!a.fixture.date && !b.fixture.date) return 0;
+    if (!a.fixture.date) return 1;
+    if (!b.fixture.date) return -1;
+    return a.fixture.date < b.fixture.date ? -1 : a.fixture.date > b.fixture.date ? 1 : 0;
+  });
+  // Capped on the home screen -- a full tournament's fixture list could easily be 20+ games, and
+  // this is meant as a "here's what's next" glance, not a duplicate of the Cups tab (which already
+  // has the complete, unbounded list one tap away).
+  const UPCOMING_HOME_LIMIT = 4;
+  const visibleUpcomingFixtures = sortedUpcomingFixtures.slice(0, UPCOMING_HOME_LIMIT);
+  const hiddenUpcomingCount = sortedUpcomingFixtures.length - visibleUpcomingFixtures.length;
+  // The hero "Continue scoring" card at the very top of the screen -- everyone else's live
+  // matches (and this account's own completed ones) live on the Home tab now, but a match THIS
+  // account is actively scoring is a different thing entirely: the one action someone opening
+  // this screen mid-match is almost certainly here for, so it gets the most prominent slot on the
+  // page, above even Next up. Not deduped against the "In Progress" list further down Saved
+  // Matches -- same teaser-plus-full-list relationship as Next up has with the full Upcoming list.
+  const inProgressOwnMatches = matches.filter(m => m.status === "in-progress");
+  // Only ever in-progress now -- a completed match doesn't belong in this account's scoring
+  // queue at all any more (see the top-of-file comment), so there's nothing left to filter here.
+  const inProgressMatches = matches.filter(m => m.status !== "complete");
+  // Same "don't fold the only thing on the page" rule the old Completed fold used to need too --
+  // if Upcoming is literally the only section with anything in it (no in-progress match to
+  // resume), force it open rather than handing back a Score tab that looks empty at a glance just
+  // because collapsed-by-default is now the norm for this section.
+  const showUpcoming = upcomingManuallySet ? upcomingExpanded : upcomingExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length > 0;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingTop: 28,
@@ -595,14 +353,7 @@ function renderMatchCard(m, i, {
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 18,
-      color: COLORS.pitch,
-      marginBottom: 26
-    }
-  }, homeGreeting), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
+  }))), pendingCount > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "center",
@@ -749,128 +500,7 @@ function renderMatchCard(m, i, {
     clubTeamsById: clubTeamsById
   })), /*#__PURE__*/React.createElement(JoinCodeBar, {
     onJoin: onJoinCode
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative",
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: query,
-    onChange: setQuery,
-    placeholder: "Search everything\u2026",
-    style: {
-      paddingRight: 38
-    }
-  }), query ? /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      setQuery("");
-      setSearchScope("all");
-    },
-    "aria-label": "Clear search",
-    className: "cs-btn",
-    style: {
-      position: "absolute",
-      right: 8,
-      top: "50%",
-      transform: "translateY(-50%)",
-      width: 26,
-      height: 26,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      color: COLORS.inkSoft,
-      borderRadius: "50%",
-      fontSize: 20,
-      lineHeight: 1
-    }
-  }, "\u00d7") : /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setShowSearchInfo(v => !v),
-    "aria-label": showSearchInfo ? "Hide info" : "What does this search?",
-    "aria-expanded": showSearchInfo,
-    className: "cs-btn",
-    style: {
-      position: "absolute",
-      right: 8,
-      top: "50%",
-      transform: "translateY(-50%)",
-      width: 26,
-      height: 26,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      padding: 0,
-      color: COLORS.inkSoft
-    }
-  }, /*#__PURE__*/React.createElement(Info, {
-    size: 18
-  }))), showSearchInfo && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft,
-      marginBottom: 14,
-      lineHeight: 1.5,
-      background: COLORS.surface,
-      borderRadius: 12,
-      padding: "10px 12px"
-    }
-  }, "Searches your matches, teams, cups & series, and Help & FAQ all at once."),
-  // These used to render only once query or scope already moved off the default ("All" with an
-  // empty box) -- reported live: "you cannot even see the pills, what you are searching." That
-  // hid the one thing that tells someone what's even searchable (Matches/Teams/Players/Cups/
-  // Clubs/Federations/Help) behind having already typed something, a chicken-and-egg trap. Always
-  // visible now, same as the segment/tab pills everywhere else in the app.
-  /*#__PURE__*/React.createElement("div", {
-    className: "cs-no-scrollbar",
-    style: {
-      display: "flex",
-      gap: 6,
-      overflowX: "auto",
-      paddingBottom: 4,
-      marginBottom: 14
-    }
-  }, [{
-    key: "all",
-    label: "All"
-  }, {
-    key: "matches",
-    label: "Matches"
-  }, {
-    key: "teams",
-    label: "Teams"
-  }, {
-    key: "cups",
-    label: "Cups"
-  }, {
-    key: "help",
-    label: "Help"
-  }].map(t => /*#__PURE__*/React.createElement("button", {
-    key: t.key,
-    type: "button",
-    onClick: () => setSearchScope(t.key),
-    className: "cs-btn",
-    style: {
-      flexShrink: 0,
-      padding: "7px 13px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: searchScope === t.key ? COLORS.pitch : COLORS.creamDark,
-      color: searchScope === t.key ? "#fff" : COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 12.5,
-      whiteSpace: "nowrap"
-    }
-  }, t.label))), (searchScope === "matches" || (searchScope === "all" && !q)) && (matches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, matches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? /*#__PURE__*/React.createElement("div", null, inProgressMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -886,273 +516,85 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       textTransform: "uppercase"
     }
-  }, "Saved Matches"), showSwipeHint && !q && /*#__PURE__*/React.createElement("div", {
+  }, "Saved Matches"), showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
       color: COLORS.inkSoft,
       opacity: 0.7
     }
-  }, "← swipe to delete")), filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && q ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "24px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, "No matches match \u201c", query.trim(), "\u201d.") : (() => {
-    if (q) return /*#__PURE__*/React.createElement(React.Fragment, null, filteredMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), filteredUpcoming.length > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: filteredMatches.length > 0 ? 18 : 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 8,
-        opacity: 0.75
-      }
-    }, "Upcoming"), filteredUpcoming.map(({
-      tournament: t,
-      fixture: f
-    }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
-      key: f.id,
-      tournament: t,
-      fixture: f,
-      index: i,
-      onOpenTournament: onOpenTournament,
-      onScheduleFixture: onScheduleFixture,
-      onStartFixture: onStartFixture,
-      onEditVenue: onEditVenue,
-      clubs: clubs,
-      clubTeamsById: clubTeamsById
-    }))), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: filteredMatches.length > 0 || filteredUpcoming.length > 0 ? 18 : 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 8,
-        opacity: 0.75
-      }
-    }, "Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
-      label: "Searching live & recent matches…"
-    }) : filteredRecentMatches.map(renderRecentMatchRow)));
-    const showCompleted = completedManuallySet ? completedExpanded : completedExpanded || inProgressMatches.length === 0 && sortedUpcomingFixtures.length === 0;
-    // Same "don't fold the only thing on the page" rule as showCompleted above, mirrored: if
-    // Upcoming is literally the only section with anything in it (no in-progress match to resume,
-    // no completed history either), force it open rather than handing back a Home screen that
-    // looks empty at a glance just because collapsed-by-default is now the norm for this section.
-    // Same completedManuallySet reasoning applies here too, via upcomingManuallySet.
-    const showUpcoming = upcomingManuallySet ? upcomingExpanded : upcomingExpanded || inProgressMatches.length === 0 && completedMatches.length === 0 && sortedUpcomingFixtures.length > 0;
-    return /*#__PURE__*/React.createElement(React.Fragment, null, inProgressMatches.length > 0 && (completedMatches.length > 0 || sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: () => setInProgressExpanded(e => !e),
-      className: "cs-btn",
-      "aria-expanded": inProgressExpanded,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        width: "100%",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-        marginBottom: 8,
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        opacity: 0.75
-      }
-    }, /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 13,
-      style: {
-        transform: inProgressExpanded ? "rotate(90deg)" : "none",
-        transition: "transform 0.15s ease",
-        flexShrink: 0
-      }
-    }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: inProgressMatches.length > 0 ? 18 : 0
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: () => {
-        // Flips whatever's actually ON SCREEN right now (showUpcoming), not the raw upcomingExpanded
-        // state -- before the first manual tap, those two can disagree (showUpcoming forced open by
-        // the "nothing else on the page" default while upcomingExpanded is still its false initial
-        // value), and toggling the raw value in that case would leave the visible state unchanged.
-        setUpcomingManuallySet(true);
-        setUpcomingExpanded(!showUpcoming);
-      },
-      className: "cs-btn",
-      "aria-expanded": showUpcoming,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        width: "100%",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: 0,
-        marginBottom: 8,
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        opacity: 0.75
-      }
-    }, /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 13,
-      style: {
-        transform: showUpcoming ? "rotate(90deg)" : "none",
-        transition: "transform 0.15s ease",
-        flexShrink: 0
-      }
-    }), "Upcoming (", sortedUpcomingFixtures.length, ")"), showUpcoming && visibleUpcomingFixtures.map(({
-      tournament: t,
-      fixture: f
-    }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
-      key: f.id,
-      tournament: t,
-      fixture: f,
-      index: i,
-      onOpenTournament: onOpenTournament,
-      onScheduleFixture: onScheduleFixture,
-      onStartFixture: onStartFixture,
-      onEditVenue: onEditVenue,
-      clubs: clubs,
-      clubTeamsById: clubTeamsById
-    })), showUpcoming && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: onOpenTournaments,
-      className: "cs-btn",
-      style: {
-        display: "block",
-        width: "100%",
-        textAlign: "center",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: "6px 0 2px",
-        fontFamily: "'Inter'",
-        fontWeight: 600,
-        fontSize: 12,
-        color: COLORS.turf
-      }
-    }, "+", hiddenUpcomingCount, " more in Cups")), completedMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: inProgressMatches.length > 0 || sortedUpcomingFixtures.length > 0 ? 18 : 0
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      onClick: () => {
-        // Same reasoning as the Upcoming toggle above -- flips what's actually shown (showCompleted),
-        // not the raw completedExpanded state, so the very first tap (while it's only open because
-        // of the "nothing else on the page" default) genuinely collapses it instead of no-op'ing.
-        setCompletedManuallySet(true);
-        setCompletedExpanded(!showCompleted);
-      },
-      className: "cs-btn",
-      "aria-expanded": showCompleted,
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        width: "100%",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-        padding: "4px 0 10px",
-        fontFamily: "'Inter'",
-        fontSize: 10.5,
-        fontWeight: 700,
-        letterSpacing: 1,
-        color: COLORS.inkSoft,
-        textTransform: "uppercase",
-        opacity: 0.75
-      }
-    }, /*#__PURE__*/React.createElement(ChevronRight, {
-      size: 13,
-      style: {
-        transform: showCompleted ? "rotate(90deg)" : "none",
-        transition: "transform 0.15s ease",
-        flexShrink: 0
-      }
-    }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode }))));
-  })()) : /*#__PURE__*/React.createElement(EmptyState, {
-    minHeight: "50vh"
-  }, "No matches yet.", /*#__PURE__*/React.createElement("br", null), "Start your first game to see it here.")), searchScope === "cups" && /*#__PURE__*/React.createElement("div", null, filteredTournaments.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      color: COLORS.inkSoft,
-      fontStyle: "italic"
-    }
-  }, q ? "No tournaments or series match that search." : "Type to search tournaments & series.") : /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete")), inProgressMatches.length > 0 && (sortedUpcomingFixtures.length > 0) && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setInProgressExpanded(e => !e),
+    className: "cs-btn",
+    "aria-expanded": inProgressExpanded,
     style: {
       display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredTournaments.map(renderCupRow))), searchScope === "teams" && /*#__PURE__*/React.createElement("div", null, filteredTeamsList.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
+      alignItems: "center",
+      gap: 6,
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      marginBottom: 8,
       fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 1,
       color: COLORS.inkSoft,
-      fontStyle: "italic"
+      textTransform: "uppercase",
+      opacity: 0.75
     }
-  }, q ? "No teams match that search." : "Type to search your teams.") : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 13,
+    style: {
+      transform: inProgressExpanded ? "rotate(90deg)" : "none",
+      transition: "transform 0.15s ease",
+      flexShrink: 0
+    }
+  }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: inProgressMatches.length > 0 ? 18 : 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      // Flips whatever's actually ON SCREEN right now (showUpcoming), not the raw upcomingExpanded
+      // state -- before the first manual tap, those two can disagree (showUpcoming forced open by
+      // the "nothing else on the page" default while upcomingExpanded is still its false initial
+      // value), and toggling the raw value in that case would leave the visible state unchanged.
+      setUpcomingManuallySet(true);
+      setUpcomingExpanded(!showUpcoming);
+    },
+    className: "cs-btn",
+    "aria-expanded": showUpcoming,
     style: {
       display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredTeamsList.map(renderTeamRow))), searchScope === "help" && /*#__PURE__*/React.createElement("div", null, filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
+      alignItems: "center",
+      gap: 6,
+      width: "100%",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 0,
+      marginBottom: 8,
       fontFamily: "'Inter'",
-      fontSize: 13,
+      fontSize: 10.5,
+      fontWeight: 700,
+      letterSpacing: 1,
       color: COLORS.inkSoft,
-      fontStyle: "italic"
+      textTransform: "uppercase",
+      opacity: 0.75
     }
-  }, q ? "No Help & FAQ entries match that search." : "Type to search Help & FAQ.") : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(ChevronRight, {
+    size: 13,
     style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
+      transform: showUpcoming ? "rotate(90deg)" : "none",
+      transition: "transform 0.15s ease",
+      flexShrink: 0
     }
-  }, filteredHelpEntries.map(renderHelpRow))), searchScope === "all" && q && (filteredMatches.length === 0 && filteredUpcoming.length === 0 && filteredRecentMatches.length === 0 && !recentMatchesLoading && filteredTournaments.length === 0 && filteredTeamsList.length === 0 && filteredHelpEntries.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
-    minHeight: "30vh"
-  }, "No results for \u201c", query.trim(), "\u201d.") : /*#__PURE__*/React.createElement("div", null, (filteredMatches.length > 0 || filteredUpcoming.length > 0) && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Matches"), filteredMatches.slice(0, ALL_SCOPE_CAP).map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), filteredUpcoming.slice(0, ALL_SCOPE_CAP).map(({
+  }), "Upcoming (", sortedUpcomingFixtures.length, ")"), showUpcoming && visibleUpcomingFixtures.map(({
     tournament: t,
     fixture: f
   }, i) => /*#__PURE__*/React.createElement(UpcomingFixtureCard, {
@@ -1166,49 +608,26 @@ function renderMatchCard(m, i, {
     onEditVenue: onEditVenue,
     clubs: clubs,
     clubTeamsById: clubTeamsById
-  })), filteredMatches.length + filteredUpcoming.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), (recentMatchesLoading || filteredRecentMatches.length > 0) && /*#__PURE__*/React.createElement("div", {
+  })), showUpcoming && hiddenUpcomingCount > 0 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenTournaments,
+    className: "cs-btn",
     style: {
-      marginBottom: 18
+      display: "block",
+      width: "100%",
+      textAlign: "center",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: "6px 0 2px",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12,
+      color: COLORS.turf
     }
-  }, categorySectionLabel("Across Club Scorer"), recentMatchesLoading ? /*#__PURE__*/React.createElement(LoadingNote, {
-    label: "Searching live & recent matches…"
-  }) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredRecentMatches.slice(0, ALL_SCOPE_CAP).map(renderRecentMatchRow)), filteredRecentMatches.length > ALL_SCOPE_CAP && seeAllLink("matches", filteredMatches.length + filteredUpcoming.length)), filteredTournaments.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Cups"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredTournaments.slice(0, ALL_SCOPE_CAP).map(renderCupRow)), filteredTournaments.length > ALL_SCOPE_CAP && seeAllLink("cups", filteredTournaments.length)), filteredTeamsList.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Teams"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredTeamsList.slice(0, ALL_SCOPE_CAP).map(renderTeamRow)), filteredTeamsList.length > ALL_SCOPE_CAP && seeAllLink("teams", filteredTeamsList.length)), filteredHelpEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 18
-    }
-  }, categorySectionLabel("Help & FAQ"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, filteredHelpEntries.slice(0, ALL_SCOPE_CAP).map(renderHelpRow)), filteredHelpEntries.length > ALL_SCOPE_CAP && seeAllLink("help", filteredHelpEntries.length)))), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
+  }, "+", hiddenUpcomingCount, " more in Cups"))) : /*#__PURE__*/React.createElement(EmptyState, {
+    minHeight: "50vh"
+  }, "Nothing to score right now.", /*#__PURE__*/React.createElement("br", null), "Start a match to see it here."), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1230,8 +649,8 @@ function renderMatchCard(m, i, {
     // data at that point -- this one is still live, so an accidental swipe here throws away
     // everything scored so far, not a finished record sitting safely in the background. Called
     // out explicitly rather than reusing the completed-match wording verbatim.
-    ? `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} is still in progress \u2014 deleting it throws away everything scored so far, not just a finished record. This can\u2019t be undone.`
-    : `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} will be permanently removed from your saved matches. This can\u2019t be undone.`), /*#__PURE__*/React.createElement("div", {
+    ? `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} is still in progress — deleting it throws away everything scored so far, not just a finished record. This can’t be undone.`
+    : `${matchToConfirmDelete.teamA} vs ${matchToConfirmDelete.teamB} will be permanently removed from your saved matches. This can’t be undone.`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8

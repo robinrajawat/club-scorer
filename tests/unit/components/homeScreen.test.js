@@ -13,7 +13,6 @@ import { HomeScreen } from "../../../src/components/homeScreen.js";
 import { Btn } from "../../../src/components/formUiAtoms.js";
 import { JoinCodeBar } from "../../../src/components/pickerAtoms.js";
 import { TAB_BAR_HEIGHT } from "../../../src/components/tabBar.js";
-import { EmptyStateBallIllustration } from "../../../src/components/illustrations.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -58,32 +57,19 @@ function match(overrides = {}) {
 function baseProps(overrides = {}) {
   return {
     matches: [], onNew: () => {}, onOpen: () => {}, onDelete: () => {},
-    onOpenFederation: () => {}, user: null, profile: null,
+    user: null, profile: null,
     onOpenAccount: () => {}, onOpenInbox: () => {}, onOpenSharedLinks: () => {}, onOpenHelp: () => {},
     onOpenFeedback: () => {}, onOpenAbout: () => {}, onSignOut: () => Promise.resolve({ ok: true }),
     themePref: "system", onSetTheme: () => {}, onJoinCode: () => {}, onOpenTournaments: () => {},
     pendingCount: 0, onPendingSynced: () => {}, onOpenTournament: () => {},
     onScheduleFixture: () => {}, onStartFixture: () => {}, onEditVenue: () => {},
-    teams: [], onOpenTeam: () => {}, onGetShareCode: () => {}, onGetViewCode: () => {},
+    onGetShareCode: () => {}, onGetViewCode: () => {},
     ...overrides
   };
 }
 
 function render(props) {
   return renderer.create(React.createElement(HomeScreen, baseProps(props)));
-}
-
-function liveMatch(overrides = {}) {
-  return {
-    id: "live1", teamA: "Riverside CC", teamB: "Oakwood CC", status: "in-progress",
-    oversLimit: 20, currentInningIndex: 0,
-    innings: [{
-      battingTeam: "Riverside CC", bowlingTeam: "Oakwood CC",
-      runs: 85, wickets: 3, legalBalls: 72, ballsPerOver: 6,
-      battingOrder: ["Virat Kohli"], bowlingOrder: ["Jasprit Bumrah"]
-    }],
-    ...overrides
-  };
 }
 
 test("HomeScreen: no 'Next up' section when there are no unstarted fixtures", async () => {
@@ -182,22 +168,9 @@ test("HomeScreen: reserves extra bottom padding for the fixed TabBar when showTa
   assert.match(String(withBar.props.style.paddingBottom), new RegExp(`calc\\(${TAB_BAR_HEIGHT}px \\+ 40px \\+ max\\(env\\(safe-area-inset-bottom\\), 12px\\)\\)`));
 });
 
-// BUG FIX: someone who chose "Continue without an account" (user: null) used to see no greeting
-// line at all -- it only ever rendered once a first name was available, which is never true
-// without a signed-in user. A guest is still someone actually using the app right now.
-test("HomeScreen: shows a time-of-day greeting even signed out, with no name", () => {
-  const inst = render({ user: null, profile: null });
-  assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)!/);
-});
-
-test("HomeScreen: shows a greeting with the signed-in user's first name once one's available", () => {
-  const inst = render({ user: { displayName: "Robin Singh" }, profile: null });
-  assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening), Robin/);
-});
-
-test("HomeScreen: shows an empty state with no matches", () => {
+test("HomeScreen: shows an empty state with no in-progress matches or upcoming fixtures", () => {
   const inst = render();
-  assert.match(JSON.stringify(inst.toJSON()), /No matches yet\./);
+  assert.match(JSON.stringify(inst.toJSON()), /Nothing to score right now\./);
 });
 
 // "New Match" is a floating "+" (FabButton, bottom-right, thumb-reachable) rather than a top-of-
@@ -240,188 +213,74 @@ test("HomeScreen: deleting a match opens a confirm dialog, and confirming calls 
 
 // An in-progress match still has live scoring state at risk -- not just a finished record like a
 // completed match -- so an accidental swipe-and-confirm there deserves a distinct, stronger
-// warning instead of the same wording used for both.
-test("HomeScreen: the delete confirmation warns more strongly for an in-progress match than a completed one", () => {
+// warning instead of the same wording used for both. Only the in-progress half is reachable from
+// this screen now -- Home no longer shows completed matches at all (see the next test), so a
+// completed match's own delete-confirm wording has no swipe-to-delete trigger to reach it from
+// here any more. The same confirm-modal logic (and its completed-match wording) still matters on
+// LiveScreen's Home tab, which reuses this exact renderMatchCard for this account's own completed
+// matches -- covered there instead once that merge exists.
+test("HomeScreen: the delete confirmation warns strongly for an in-progress match", () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   const inProgress = render({ matches: [match({ status: "in-progress" })] });
   act(() => { inProgress.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
   const inProgressText = JSON.stringify(inProgress.toJSON());
   assert.match(inProgressText, /Delete this in-progress match\?/);
   assert.match(inProgressText, /is still in progress — deleting it throws away everything scored so far/);
-
-  const completed = render({ matches: [match({ status: "complete" })] });
-  act(() => { completed.root.findByProps({ deleteLabel: "Delete" }).props.onDelete(); });
-  const completedText = JSON.stringify(completed.toJSON());
-  assert.match(completedText, /Delete this match\?/);
-  assert.doesNotMatch(completedText, /Delete this in-progress match\?/);
-  assert.match(completedText, /will be permanently removed from your saved matches/);
 });
 
-test("HomeScreen: 'In Progress'/'Completed' sections both render and collapse independently", () => {
+// IMPROVEMENT: a completed match used to have its own foldable "Completed" section right here on
+// Home. It's gone now -- this screen is deliberately just the scoring queue (in progress, plus
+// what's coming up next), reported live: "Home is dedicated for scoring." A completed match still
+// exists, just on the Home tab (LiveScreen's Results, merged with everyone else's public results
+// -- see liveScreen.js's own comment on that), not here.
+test("HomeScreen: a completed match never shows here, only in-progress ones and upcoming fixtures do", () => {
   const inst = render({
     matches: [match({ id: "live1", status: "in-progress" }), match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
   });
-  let text = JSON.stringify(inst.toJSON());
+  const text = JSON.stringify(inst.toJSON());
   assert.match(text, /Riverside CC/);
-  // Completed starts collapsed since In Progress has content to separate it from.
   assert.doesNotMatch(text, /Hawks CC/);
-
-  const completedToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Completed ("));
-  act(() => { completedToggle.props.onClick(); });
-  text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Hawks CC/);
+  assert.doesNotMatch(text, /Completed/);
 });
 
-// BUG FIX: reported live as "Home page completed doesn't collapse when all matches are completed."
-// showCompleted forces itself open whenever there's nothing else on the page (no in-progress match,
-// no upcoming fixture) -- a sensible DEFAULT so Home doesn't look empty at a glance, but it used to
-// keep re-forcing itself open on every render regardless of what the person actually tapped, so once
-// every match was complete, collapsing this section was a permanent no-op: the very next render
-// found the same "nothing else on the page" condition still true and reopened it.
-test("HomeScreen: 'Completed' can actually be collapsed even when it's the only section on the page", () => {
-  const inst = render({
-    matches: [match({ id: "done1", status: "complete", teamA: "Hawks CC", teamB: "Eagles CC" })]
-  });
-  // Forced open by default here -- nothing else (no in-progress, no upcoming) to separate it from.
+test("HomeScreen: 'In Progress' has no fold toggle when nothing else is on the page -- the matches just show", () => {
+  const inst = render({ matches: [match({ id: "live1", status: "in-progress" })] });
+  const text = JSON.stringify(inst.toJSON());
+  assert.match(text, /Riverside CC/);
+  assert.doesNotMatch(text, /In Progress \(/, "no toggle needed when there's nothing below to fold away from");
+});
+
+// BUG FIX: the same "collapsed-by-default section re-forces itself open" bug this app already hit
+// once on the old Completed fold (reported live as "Home page completed doesn't collapse when all
+// matches are completed") applies just as much to Upcoming now that it's the one section left with
+// a "nothing else on the page" auto-expand default. Two fixtures here, not one -- the nearest one
+// also shows in the separate, always-visible "Next up" teaser regardless of this fold's state (by
+// design, same as before this change), so only the second fixture's name is a reliable signal of
+// whether the Upcoming list itself is actually showing.
+test("HomeScreen: 'Upcoming' can actually be collapsed even when it's the only section on the page", () => {
+  const tournaments = [{
+    id: "t1", name: "Summer Cup",
+    fixtures: [
+      { id: "f-soonest", teamA: "Soonest CC", teamB: "Oakwood CC", date: "2026-09-05T10:00" },
+      { id: "f-later", teamA: "Hawks CC", teamB: "Eagles CC", date: "2026-09-20T10:00" }
+    ]
+  }];
+  const inst = render({ tournaments });
+  // Forced open by default -- nothing else (no in-progress match) to separate it from.
+  let upcomingToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Upcoming ("));
+  assert.ok(upcomingToggle, "the Upcoming fold toggle renders");
   let text = JSON.stringify(inst.toJSON());
   assert.match(text, /Hawks CC/);
 
-  const completedToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Completed ("));
-  act(() => { completedToggle.props.onClick(); });
+  act(() => { upcomingToggle.props.onClick(); });
   text = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(text, /Hawks CC/, "the explicit tap to collapse must actually stick, not get silently re-forced open");
 
   // And tapping again reopens it, same as any other fold.
-  act(() => { completedToggle.props.onClick(); });
+  upcomingToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Upcoming ("));
+  act(() => { upcomingToggle.props.onClick(); });
   text = JSON.stringify(inst.toJSON());
   assert.match(text, /Hawks CC/);
-});
-
-test("HomeScreen: searching narrows the matches shown", () => {
-  const inst = render({
-    // Both completed (not in-progress) so neither shows up a second time in the "Continue
-    // scoring" hero, which isn't filtered by the search query -- that would make "Hawks CC"
-    // legitimately present on the page for a reason unrelated to what this test checks.
-    matches: [match({ id: "m1", teamA: "Riverside CC", status: "complete" }), match({ id: "m2", teamA: "Hawks CC", teamB: "Eagles CC", status: "complete" })]
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  act(() => { search.props.onChange({ target: { value: "Riverside" } }); });
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Riverside CC/);
-  assert.doesNotMatch(text, /Hawks CC/);
-});
-
-// IMPROVEMENT: the "All" scope's no-results message was plain italic text, unlike every other
-// empty list in the app (Home's own "no matches yet", Live, and -- after this same round of
-// improvements -- Cups/My Teams/Players/Inbox), which all show the same illustrated ball graphic.
-// Matches that consistent treatment now instead of standing out as the one unfinished-looking case.
-test("HomeScreen: a search with no results anywhere shows the same illustrated empty state as everywhere else", () => {
-  const inst = render();
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  act(() => { search.props.onChange({ target: { value: "zzznonexistentzzz" } }); });
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /No results for/);
-  assert.ok(inst.root.findAllByType(EmptyStateBallIllustration).length > 0);
-});
-
-test("HomeScreen: typing a search query lazily fetches app-wide live/recent matches once and shows a matching one under 'Across Club Scorer'", async () => {
-  let loadCalls = 0;
-  const inst = render({
-    onLoadRecentMatches: () => { loadCalls++; return Promise.resolve([liveMatch({ id: "other1", teamA: "Hawks CC", teamB: "Eagles CC" })]); }
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  await act(async () => {
-    search.props.onChange({ target: { value: "Hawks" } });
-    await new Promise(r => setTimeout(r, 0));
-  });
-  const text = JSON.stringify(inst.toJSON());
-  assert.match(text, /Across Club Scorer/);
-  assert.match(text, /Hawks CC/);
-  assert.equal(loadCalls, 1);
-  // A second keystroke re-filters the already-fetched list in memory, no second fetch.
-  await act(async () => {
-    search.props.onChange({ target: { value: "Hawks C" } });
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.equal(loadCalls, 1);
-});
-
-test("HomeScreen: a recent-match search result already in this account's own Saved Matches is not shown twice", async () => {
-  const inst = render({
-    matches: [match({ id: "own1", teamA: "Hawks CC", teamB: "Eagles CC" })],
-    onLoadRecentMatches: () => Promise.resolve([liveMatch({ id: "own1", teamA: "Hawks CC", teamB: "Eagles CC" })])
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  await act(async () => {
-    search.props.onChange({ target: { value: "Hawks" } });
-    await new Promise(r => setTimeout(r, 0));
-  });
-  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Across Club Scorer/);
-});
-
-test("HomeScreen: tapping an 'Across Club Scorer' result calls onOpenLiveMatch with its id", async () => {
-  let openedId = null;
-  const inst = render({
-    onOpenLiveMatch: id => { openedId = id; },
-    onLoadRecentMatches: () => Promise.resolve([liveMatch({ id: "other1", teamA: "Hawks CC", teamB: "Eagles CC" })])
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  await act(async () => {
-    search.props.onChange({ target: { value: "Hawks" } });
-    await new Promise(r => setTimeout(r, 0));
-  });
-  const row = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Hawks CC"));
-  act(() => { row.props.onClick(); });
-  assert.equal(openedId, "other1");
-});
-
-test("HomeScreen: the 'Teams' search chip lists matching teams and opens one via onOpenTeam", () => {
-  let opened = null;
-  const inst = render({
-    teams: [{ id: "t1", name: "Riverside 1st XI" }],
-    onOpenTeam: t => { opened = t; }
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  act(() => { search.props.onChange({ target: { value: "Riverside" } }); });
-  const teamsChip = inst.root.findAllByType("button").find(b => b.props.children === "Teams");
-  act(() => { teamsChip.props.onClick(); });
-  const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside 1st XI"));
-  resultRow.props.onClick();
-  assert.equal(opened.id, "t1");
-});
-
-test("HomeScreen: the 'Cups' search chip lists matching tournaments and opens one via onOpenTournament", () => {
-  let opened = null;
-  const inst = render({
-    tournaments: [{ id: "t1", name: "Summer Cup", teams: [] }],
-    onOpenTournament: t => { opened = t; }
-  });
-  const search = inst.root.findAllByType("input").find(i => i.props.placeholder === "Search everything…");
-  act(() => { search.props.onChange({ target: { value: "Summer" } }); });
-  const cupsChip = inst.root.findAllByType("button").find(b => b.props.children === "Cups");
-  act(() => { cupsChip.props.onClick(); });
-  const resultRow = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Summer Cup"));
-  resultRow.props.onClick();
-  assert.equal(opened.id, "t1");
-});
-
-// Reported live: "you cannot even see the pills, what you are searching" -- they used to render
-// only once query or scope already moved off the empty default, a chicken-and-egg trap that hid
-// the one thing telling someone what's even searchable.
-test("HomeScreen: the search scope chips (All/Matches/Teams/...) are visible immediately, with no query typed yet", () => {
-  const inst = render();
-  const json = JSON.stringify(inst.toJSON());
-  assert.match(json, /Matches/);
-  assert.match(json, /Teams/);
-  assert.match(json, /Cups/);
-});
-
-// The "Clubs"/"Federations" search scope chips went away alongside club/federation management --
-// see docs/simplification-plan.md.
-test("HomeScreen: there are no 'Clubs' or 'Federations' search chips any more", () => {
-  const inst = render();
-  assert.equal(inst.root.findAllByType("button").find(b => b.props.children === "Clubs"), undefined);
-  assert.equal(inst.root.findAllByType("button").find(b => b.props.children === "Federations"), undefined);
 });
 
 test("HomeScreen: showInstallHint renders InstallHintBanner wired to onDismissInstallHint", () => {
