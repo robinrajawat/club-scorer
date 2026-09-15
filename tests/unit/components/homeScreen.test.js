@@ -192,9 +192,11 @@ test("HomeScreen: clicking a match card calls onOpen with the full match object,
 });
 
 // Reported live: "date/time is missing, also missing if the match was group stage, qualifier,
-// semi or final". A tournament match's card shows its stage next to the tournament name (falling
-// back to "Group Stage" when the match has none of its own -- see startNewMatch's own comment on
-// when that's set), and its played date/time under the score line.
+// semi or final". A tournament match's card shows its stage next to the tournament name when it's
+// actually known, and its played date/time under the score line. Reported live again once a
+// papered-over default shipped and mislabeled a real Final as "Group Stage": "Billund-Ikast match
+// was final not the group stage" -- so a match with no stage of its own now shows no badge for it
+// at all, never a guessed label (see startNewMatch's own comment on when stage is actually set).
 test("HomeScreen: a match card shows its tournament stage and played date/time", () => {
   const known = new Date();
   known.setHours(15, 5, 0, 0);
@@ -212,7 +214,8 @@ test("HomeScreen: a match card shows its tournament stage and played date/time",
     tournamentNameById: { t1: "Summer Cup" }
   });
   json = JSON.stringify(groupMatch.toJSON());
-  assert.match(json, /Group Stage/, "falls back to Group Stage when the match has no stage of its own");
+  assert.match(json, /Summer Cup/);
+  assert.doesNotMatch(json, /Group Stage/, "never guesses a stage label when the match doesn't actually carry one");
 });
 
 test("HomeScreen: JoinCodeBar's onJoin prop is wired to onJoinCode", () => {
@@ -283,6 +286,19 @@ test("HomeScreen: Completed is collapsed by default alongside an in-progress mat
   act(() => { completedToggle.props.onClick(); });
   text = JSON.stringify(inst.toJSON());
   assert.match(text, /Hawks CC/);
+});
+
+test("HomeScreen: Completed sorts most recently played first", () => {
+  const inst = render({
+    matches: [
+      match({ id: "m1", status: "complete", teamA: "Oldest CC", createdAt: 1000 }),
+      match({ id: "m2", status: "complete", teamA: "Newest CC", createdAt: 3000 }),
+      match({ id: "m3", status: "complete", teamA: "Middle CC", createdAt: 2000 })
+    ]
+  });
+  const json = JSON.stringify(inst.toJSON());
+  const positions = ["Newest CC", "Middle CC", "Oldest CC"].map(name => json.indexOf(name));
+  assert.ok(positions[0] < positions[1] && positions[1] < positions[2], "Newest, then Middle, then Oldest");
 });
 
 test("HomeScreen: 'In Progress' has no fold toggle when nothing else is on the page -- the matches just show", () => {

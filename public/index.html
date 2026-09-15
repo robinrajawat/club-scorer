@@ -13381,7 +13381,7 @@ function renderMatchCard(m, i, {
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 10
-  }), tournamentNameById[m.tournamentId] || "Tournament", " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
+  }), tournamentNameById[m.tournamentId] || "Tournament", m.stage && ` · ${m.stage}`), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontWeight: 700,
@@ -14120,7 +14120,12 @@ function LiveScreen({
   // m.status is the match's own real status; a tournament has no single status field, so
   // `champion` (see renderTournamentRow's own comment) stands in for it here too.
   const liveNowMatches = filteredMatches.filter(m => m.status !== "complete");
-  const finishedMatches = filteredMatches.filter(m => m.status === "complete");
+  // Most recently played first -- the /liveMatches mirror's own query orders by updatedAt (last
+  // write to the mirror doc), not by when the match was actually played, so those can disagree
+  // (e.g. a later edit, or a batch of matches mirrored in a different order than they were
+  // played). Reported live: results showing in no discernible time order. Sorted client-side by
+  // createdAt instead, same field the date/time under each result actually displays.
+  const finishedMatches = filteredMatches.filter(m => m.status === "complete").sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const liveNowTournaments = filteredTournaments.filter(t => !t.champion);
   const finishedTournaments = filteredTournaments.filter(t => t.champion);
 
@@ -14247,7 +14252,7 @@ function LiveScreen({
     }, /*#__PURE__*/React.createElement(Trophy, {
       size: 10,
       style: { flexShrink: 0 }
-    }), tournamentNameForBadge(m.tournamentId), " · ", m.stage || "Group Stage"), /*#__PURE__*/React.createElement("div", {
+    }), tournamentNameForBadge(m.tournamentId), m.stage && ` · ${m.stage}`), /*#__PURE__*/React.createElement("div", {
       style: {
         fontFamily: "'Inter'",
         fontWeight: 700,
@@ -31167,8 +31172,11 @@ function CricketScorer() {
       // generic "Start Match" in a tournament rather than a specific fixture card (findFixtureToAutoLink
       // below backfills the fixture *link* after the fact, but this match doc is already saved by
       // then, so its own stage stays unset in that case rather than reaching back to patch an
-      // already-scoring match). Match cards fall back to "Group Stage" for any tournament match
-      // with this still null, since the common "Score this fixture" path always sets it.
+      // already-scoring match). Match cards only show a stage badge when this is actually set --
+      // reported live once as a mislabeling risk ("Billund-Ikast match was final not the group
+      // stage"), so unset never gets papered over with an assumed "Group Stage" text; a genuine
+      // group match (no stage label of its own either way) just shows no badge at all, same as a
+      // standalone one.
       stage: setup.stage || null,
       // BUG FIX: this used to always be newInning(setup.teamA, setup.teamB, ...) — the first
       // innings was hard-coded as Team A batting regardless of the toss. battingFirstTeam (set by
