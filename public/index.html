@@ -25372,7 +25372,17 @@ function FollowTournamentScreen({
     standings: [...g.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr)
   })) : null;
   const fixtures = data.fixtures || [];
-  const completedFixtures = fixtures.filter(f => f.result);
+  // Most recently played first -- reported live: results showing in no discernible order.
+  // Mirrors scheduledFixtures' own date comparator below, just reversed (recent-first for history,
+  // soonest-first for what's still ahead). An undated completed fixture (rare, but a fixture can in
+  // principle carry a result with no date ever set) sorts after every dated one rather than
+  // jumbling the dated ones around it.
+  const completedFixtures = [...fixtures].filter(f => f.result).sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date > b.date ? -1 : a.date < b.date ? 1 : 0;
+  });
   // BUG FIX: this used to require f.date, so an unscheduled fixture (common early in a tournament,
   // or an informal one where dates are never set at all) fell through both this filter and
   // completedFixtures above -- present in the snapshot, invisible on screen. Only the date LABEL
