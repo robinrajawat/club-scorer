@@ -128,7 +128,13 @@ export function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
       style: {
         fontFamily: "'Inter'",
         fontSize: 10.5,
-        fontWeight: isActive ? 700 : 600,
+        // BUG FIX: this used to go 600 -> 700 on activation -- a real font-weight change, not just
+        // a color one, so the label's own measured width changed too. Centered inside a flex:1
+        // column, that width change re-centered the label (and the icon above it) by a couple of
+        // pixels the instant a tab was tapped -- reported live as "click on home disturbs the
+        // bottom tab bar/pill, moves it a bit." Color alone (plus the icon's own active styling)
+        // already carries the active/inactive distinction without touching text metrics.
+        fontWeight: 600,
         color: isActive ? COLORS.pitch : COLORS.inkSoft
       }
     }, label));
