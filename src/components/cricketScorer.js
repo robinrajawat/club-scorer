@@ -1896,7 +1896,6 @@ export function CricketScorer() {
     });
     setScreen("setup");
   }
-  const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
@@ -2082,10 +2081,9 @@ export function CricketScorer() {
       setPresetTournament(null);
       setScreen(cameFromTournament ? "tournament-detail" : "home");
     },
-    teams: allTeamsForSetup,
+    teams: teams,
     rules: rules,
-    presetTournament: presetTournament,
-    clubs: clubs
+    presetTournament: presetTournament
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection

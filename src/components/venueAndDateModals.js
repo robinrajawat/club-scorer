@@ -4,24 +4,22 @@ import { ChevronLeft, ChevronRight } from "./icons.js";
 import { TextField, Btn } from "./formUiAtoms.js";
 import { parseFixtureDateTime, buildFixtureIso, pad2 } from "../core/shareAndFormat.js";
 
-// Fixture scheduling modals: VenueEditModal (address search with a club-address shortcut, feeding
-// the weather forecast card) and FixtureDateTimeModal (a small custom date/time picker, using
-// WEEKDAY_LABELS/MONTH_LABELS below). Covered by tests/unit/components/venueAndDateModals.test.js.
+// Fixture scheduling modals: VenueEditModal (free-text address search) and FixtureDateTimeModal (a
+// small custom date/time picker, using WEEKDAY_LABELS/MONTH_LABELS below). Covered by
+// tests/unit/components/venueAndDateModals.test.js.
 //
 // Both reference Modal as a bare, unimported global (same pattern as ConfirmModal/playerModals.js)
 // so tests can stub globalThis.Modal without pulling in jsdom. VenueEditModal's address search
 // (`searchAddress`, a debounced Nominatim fetch call, defined in public/index.html, not extracted --
 // network-touching and side-effecting) is gated behind a 400ms setTimeout and a 3-character
-// minimum; tests exercise venue.length < 3 and the independent club-address-shortcut path
-// (clubMatches, computed with no debounce at all) without ever reaching that timer, since
-// triggering it for real would mean either waiting out 400ms per test or risking a leaked timer if
-// a test doesn't unmount before it fires.
+// minimum; tests exercise venue.length < 3 without ever reaching that timer, since triggering it
+// for real would mean either waiting out 400ms per test or risking a leaked timer if a test
+// doesn't unmount before it fires.
 
 export function VenueEditModal({
   value,
   initialLat,
   initialLng,
-  clubs = [],
   onSave,
   onClose
 }) {
@@ -38,16 +36,6 @@ export function VenueEditModal({
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Most fixtures actually happen at a ground the person's own club already has an address for
-  // (see updateClubAddress) -- surfacing those first, before any free-text search, means the
-  // common case is a single tap instead of retyping/re-searching an address that's already on
-  // file. Shown with no query needed (an empty venue field lists every club with a saved address)
-  // and narrowed by name or address text once typing starts; only clubs with verified coordinates
-  // count, since an unverified address string wouldn't give the weather card anything usable
-  // anyway. Falls through to the existing free-text Nominatim search below regardless -- this is a
-  // shortcut in front of that, not a replacement for it.
-  const q = venue.trim().toLowerCase();
-  const clubMatches = coords ? [] : clubs.filter(c => c.address && c.addressLat != null && c.addressLng != null).filter(c => !q || c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q));
   // Debounced address search -- one Nominatim request per pause in typing, not per keystroke, both
   // to stay comfortably under their 1 request/second usage policy and because there's no reason to
   // search on every character.
@@ -65,14 +53,6 @@ export function VenueEditModal({
     }, 400);
     return () => clearTimeout(handle);
   }, [venue, coords]);
-  function pickClub(c) {
-    setVenueValue(c.address);
-    setCoords({
-      lat: c.addressLat,
-      lng: c.addressLng
-    });
-    setSuggestions([]);
-  }
   function pickSuggestion(s) {
     setVenueValue(s.label);
     setCoords({
@@ -110,7 +90,7 @@ export function VenueEditModal({
     },
     placeholder: "e.g. Riverside Ground",
     onKeyDown: e => {
-      if (e.key === "Enter" && suggestions.length === 0 && clubMatches.length === 0) save();
+      if (e.key === "Enter" && suggestions.length === 0) save();
     }
   }), coords && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -119,67 +99,7 @@ export function VenueEditModal({
       color: COLORS.turf,
       marginTop: 5
     }
-  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), clubMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 4
-    }
-  }, "Your clubs"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      border: `1px solid ${COLORS.cardDivider}`,
-      borderRadius: 10,
-      overflow: "hidden"
-    }
-  }, clubMatches.map((c, idx) => /*#__PURE__*/React.createElement("button", {
-    key: c.id,
-    type: "button",
-    onClick: () => pickClub(c),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.surface,
-      border: "none",
-      borderBottom: idx < clubMatches.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
-      padding: "8px 10px",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.ink
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0
-    }
-  }, "\uD83C\uDFDF\uFE0F"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600
-    }
-  }, c.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, c.address)))))), !coords && clubMatches.length === 0 && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
+  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), !coords && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,

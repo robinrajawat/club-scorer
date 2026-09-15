@@ -12833,7 +12833,6 @@ function VenueEditModal({
   value,
   initialLat,
   initialLng,
-  clubs = [],
   onSave,
   onClose
 }) {
@@ -12850,16 +12849,6 @@ function VenueEditModal({
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Most fixtures actually happen at a ground the person's own club already has an address for
-  // (see updateClubAddress) -- surfacing those first, before any free-text search, means the
-  // common case is a single tap instead of retyping/re-searching an address that's already on
-  // file. Shown with no query needed (an empty venue field lists every club with a saved address)
-  // and narrowed by name or address text once typing starts; only clubs with verified coordinates
-  // count, since an unverified address string wouldn't give the weather card anything usable
-  // anyway. Falls through to the existing free-text Nominatim search below regardless -- this is a
-  // shortcut in front of that, not a replacement for it.
-  const q = venue.trim().toLowerCase();
-  const clubMatches = coords ? [] : clubs.filter(c => c.address && c.addressLat != null && c.addressLng != null).filter(c => !q || c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q));
   // Debounced address search -- one Nominatim request per pause in typing, not per keystroke, both
   // to stay comfortably under their 1 request/second usage policy and because there's no reason to
   // search on every character.
@@ -12877,14 +12866,6 @@ function VenueEditModal({
     }, 400);
     return () => clearTimeout(handle);
   }, [venue, coords]);
-  function pickClub(c) {
-    setVenueValue(c.address);
-    setCoords({
-      lat: c.addressLat,
-      lng: c.addressLng
-    });
-    setSuggestions([]);
-  }
   function pickSuggestion(s) {
     setVenueValue(s.label);
     setCoords({
@@ -12922,7 +12903,7 @@ function VenueEditModal({
     },
     placeholder: "e.g. Riverside Ground",
     onKeyDown: e => {
-      if (e.key === "Enter" && suggestions.length === 0 && clubMatches.length === 0) save();
+      if (e.key === "Enter" && suggestions.length === 0) save();
     }
   }), coords && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12931,67 +12912,7 @@ function VenueEditModal({
       color: COLORS.turf,
       marginTop: 5
     }
-  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), clubMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 10.5,
-      fontWeight: 700,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-      color: COLORS.inkSoft,
-      marginBottom: 4
-    }
-  }, "Your clubs"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      border: `1px solid ${COLORS.cardDivider}`,
-      borderRadius: 10,
-      overflow: "hidden"
-    }
-  }, clubMatches.map((c, idx) => /*#__PURE__*/React.createElement("button", {
-    key: c.id,
-    type: "button",
-    onClick: () => pickClub(c),
-    className: "cs-btn",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      width: "100%",
-      textAlign: "left",
-      background: COLORS.surface,
-      border: "none",
-      borderBottom: idx < clubMatches.length - 1 ? `1px solid ${COLORS.cardDivider}` : "none",
-      padding: "8px 10px",
-      cursor: "pointer",
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.ink
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0
-    }
-  }, "\uD83C\uDFDF\uFE0F"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 600
-    }
-  }, c.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: COLORS.inkSoft,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, c.address)))))), !coords && clubMatches.length === 0 && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
+  }, "\u2713 Address verified \u2014 weather forecast will be available for this fixture"), !coords && suggestions.length === 0 && !searching && venue.trim().length >= 3 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 11,
@@ -14397,6 +14318,9 @@ function LiveScreen({
     }), t.champion, " won") : `${t.teamsCount} team${t.teamsCount === 1 ? "" : "s"}`)));
   }
 
+  const homeGreetingName = user ? (profile && profile.displayName ? profile.displayName : user.displayName || "").trim().split(" ")[0] : "";
+  const homeGreeting = homeGreetingName ? `${greetingPrefix()}, ${homeGreetingName}` : `${greetingPrefix()}!`;
+
   const rawEmpty = liveMatches.length === 0 && liveTournaments.length === 0 && !matches.some(m => m.status === "complete");
   const filteredEmpty = filteredMatches.length === 0 && filteredTournaments.length === 0 && filteredFixtures.length === 0 && ownCompletedMatches.length === 0;
 
@@ -14471,7 +14395,7 @@ function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, `${greetingPrefix()} — live scores, fixtures & results`), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
+  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 20px"
@@ -14776,7 +14700,7 @@ function MyTeamsScreen({
       fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
+  }, teams.length > 0 ? `Teams · ${teams.length}` : "Teams"), teamsLoading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Refreshing…",
     size: 14,
     style: {
@@ -14798,44 +14722,20 @@ function MyTeamsScreen({
       marginBottom: 18,
       boxShadow: "0 1px 3px rgba(42,36,32,0.06), 0 4px 14px rgba(42,36,32,0.05)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, !showTabBar && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      color: COLORS.inkSoft,
-      textTransform: "uppercase"
-    }
-  }, "Teams"), teams.length > 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 11,
-      color: COLORS.inkSoft
-    }
-  }, `· ${teams.length}`)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      justifyContent: "flex-end"
     }
     // The FAB below (see the bottom of this component) is the "add a team" entry point on the
     // Teams tab itself, same as every other tab-bar screen's own create flow -- this inline "+
     // New" link only still renders for the no-tab-bar drill-in (onBack set, reached from
-    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own.
-  }, !showTabBar && /*#__PURE__*/React.createElement("button", {
+    // elsewhere in the app rather than as the Teams tab), which has no FAB of its own. The count
+    // now lives in the page's own "Teams · N" heading above instead of a repeated inline label
+    // here -- this card's only section was always its team list, so a second "Teams" eyebrow
+    // right above it was pure repetition.
+  }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: onNewTeam,
     "aria-label": "New team",
@@ -14856,7 +14756,7 @@ function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Plus, {
     size: 14,
     strokeWidth: 2.5
-  }), "New"))), /*#__PURE__*/React.createElement("div", {
+  }), "New")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: teams.length > 0 ? 10 : 14,
       ...(teams.length === 0 ? { flex: 1, display: "flex", flexDirection: "column" } : {})
@@ -15354,11 +15254,7 @@ function SetupScreen({
   teams,
   rules,
   presetTournament,
-  clubUmpires,
-  // Read-only -- feeds VenueEditModal's "suggest a venue from one of your clubs' saved addresses"
-  // list only. No longer drives a create-form Organizer picker (every new match is just the
-  // account's own).
-  clubs = []
+  clubUmpires
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -15883,7 +15779,6 @@ function SetupScreen({
     value: venue,
     initialLat: venueLat,
     initialLng: venueLng,
-    clubs: clubs,
     onSave: (v, lat, lng) => {
       setVenue(v || "");
       setVenueLat(lat != null ? lat : null);
@@ -32191,7 +32086,6 @@ function CricketScorer() {
     });
     setScreen("setup");
   }
-  const allTeamsForSetup = [...teams, ...Object.values(clubTeamsById).flat()];
   const tournamentNameById = {};
   for (const t of tournaments) tournamentNameById[t.id] = t.name;
   for (const list of Object.values(clubTournamentsById)) {
@@ -32377,10 +32271,9 @@ function CricketScorer() {
       setPresetTournament(null);
       setScreen(cameFromTournament ? "tournament-detail" : "home");
     },
-    teams: allTeamsForSetup,
+    teams: teams,
     rules: rules,
-    presetTournament: presetTournament,
-    clubs: clubs
+    presetTournament: presetTournament
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection

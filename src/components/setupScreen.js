@@ -37,11 +37,7 @@ export function SetupScreen({
   teams,
   rules,
   presetTournament,
-  clubUmpires,
-  // Read-only -- feeds VenueEditModal's "suggest a venue from one of your clubs' saved addresses"
-  // list only. No longer drives a create-form Organizer picker (every new match is just the
-  // account's own).
-  clubs = []
+  clubUmpires
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -566,7 +562,6 @@ export function SetupScreen({
     value: venue,
     initialLat: venueLat,
     initialLng: venueLng,
-    clubs: clubs,
     onSave: (v, lat, lng) => {
       setVenue(v || "");
       setVenueLat(lat != null ? lat : null);
