@@ -10,11 +10,10 @@ import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustrati
 
 test("AppMark: renders the app icon image sized to the given size prop", () => {
   const tree = renderer.create(React.createElement(AppMark, { size: 32 })).toJSON();
-  assert.equal(tree.type, "div");
+  assert.equal(tree.type, "img");
   assert.equal(tree.props.style.width, 32);
-  const img = tree.children[0];
-  assert.equal(img.type, "img");
-  assert.equal(img.props.src, "./icons/icon-512.png");
+  assert.equal(tree.props.style.height, 32);
+  assert.equal(tree.props.src, "./icons/icon-512.png");
 });
 
 test("LoadingBallIllustration: renders an svg sized to the given size, defaults to 44", () => {

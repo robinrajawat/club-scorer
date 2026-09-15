@@ -8,29 +8,17 @@ import { COLORS } from "./theme.js";
 export function AppMark({
   size
 }) {
-  const scale = 192 / 144; // inverse of the ~75%-of-canvas content box shared by every icon export
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: size,
-      height: size,
-      borderRadius: "50%",
-      overflow: "hidden",
-      flexShrink: 0,
-      position: "relative"
-    }
-  }, /*#__PURE__*/React.createElement("img", {
+  return /*#__PURE__*/React.createElement("img", {
     src: "./icons/icon-512.png",
     alt: "",
     "aria-hidden": "true",
     style: {
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      width: size * scale,
-      height: size * scale,
-      transform: "translate(-50%, -50%)"
+      width: size,
+      height: size,
+      flexShrink: 0,
+      filter: "drop-shadow(0 3px 8px rgba(20,20,20,0.3))"
     }
-  }));
+  });
 }
 
 export function LoadingBallIllustration({
