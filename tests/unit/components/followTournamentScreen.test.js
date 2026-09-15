@@ -207,6 +207,26 @@ test("FollowTournamentScreen: scheduled fixtures are sorted by date/time, earlie
   assert.ok(posB < posUndated, "every dated fixture renders before the undated one");
 });
 
+// Reported live: results showing in no discernible order -- Results is sorted most-recently-played
+// first (the reverse of Fixtures' own soonest-first order above), regardless of storage order.
+test("FollowTournamentScreen: Results are sorted by date/time, most recently played first, regardless of storage order", async () => {
+  const data = snapshotData({
+    fixtures: [
+      { id: "f1", date: "2026-05-01T18:00", teamA: "Oldest", teamB: "Rival", result: "Oldest won by 1 run" },
+      { id: "f3", date: "", teamA: "Undated", teamB: "Rival", result: "Undated won by 1 run" },
+      { id: "f2", date: "2026-05-08T18:00", teamA: "Newest", teamB: "Rival", result: "Newest won by 1 run" }
+    ]
+  });
+  const inst = await renderScreen("ABCD12", { exists: true, data: () => data });
+  const text = JSON.stringify(inst.toJSON());
+  const posNewest = text.indexOf("Newest");
+  const posOldest = text.indexOf("Oldest");
+  const posUndated = text.indexOf("Undated");
+  assert.ok(posNewest !== -1 && posOldest !== -1 && posUndated !== -1, "all three results render");
+  assert.ok(posNewest < posOldest, "the more recent result (8 May) renders before the older one (1 May)");
+  assert.ok(posOldest < posUndated, "every dated result renders before the undated one");
+});
+
 test("FollowTournamentScreen: shows venue and a format summary line when the snapshot carries them", async () => {
   const data = snapshotData({
     venue: "Green Park", venueLat: 26.45, venueLng: 80.33,

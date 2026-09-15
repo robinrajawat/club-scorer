@@ -14633,7 +14633,13 @@ function TabBar({ active, onSelect, homeBadgeCount = 0 }) {
       style: {
         fontFamily: "'Inter'",
         fontSize: 10.5,
-        fontWeight: isActive ? 700 : 600,
+        // BUG FIX: this used to go 600 -> 700 on activation -- a real font-weight change, not just
+        // a color one, so the label's own measured width changed too. Centered inside a flex:1
+        // column, that width change re-centered the label (and the icon above it) by a couple of
+        // pixels the instant a tab was tapped -- reported live as "click on home disturbs the
+        // bottom tab bar/pill, moves it a bit." Color alone (plus the icon's own active styling)
+        // already carries the active/inactive distinction without touching text metrics.
+        fontWeight: 600,
         color: isActive ? COLORS.pitch : COLORS.inkSoft
       }
     }, label));
@@ -25372,7 +25378,17 @@ function FollowTournamentScreen({
     standings: [...g.standings].sort((a, b) => b.points - a.points || b.nrr - a.nrr)
   })) : null;
   const fixtures = data.fixtures || [];
-  const completedFixtures = fixtures.filter(f => f.result);
+  // Most recently played first -- reported live: results showing in no discernible order.
+  // Mirrors scheduledFixtures' own date comparator below, just reversed (recent-first for history,
+  // soonest-first for what's still ahead). An undated completed fixture (rare, but a fixture can in
+  // principle carry a result with no date ever set) sorts after every dated one rather than
+  // jumbling the dated ones around it.
+  const completedFixtures = [...fixtures].filter(f => f.result).sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date > b.date ? -1 : a.date < b.date ? 1 : 0;
+  });
   // BUG FIX: this used to require f.date, so an unscheduled fixture (common early in a tournament,
   // or an informal one where dates are never set at all) fell through both this filter and
   // completedFixtures above -- present in the snapshot, invisible on screen. Only the date LABEL
