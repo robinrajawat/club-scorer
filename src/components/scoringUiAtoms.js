@@ -215,18 +215,29 @@ export function InningsTimer({
   }), label);
 }
 
+// `extraIcon`/`extraLabel`/`onExtra` add a second revealed action before Delete (further from the
+// edge, so it takes a fuller swipe to reach than the one-tap-closer extra action) -- e.g. Pin on
+// the Teams list. Omit them and this is exactly the delete-only row it always was; REVEAL only
+// widens to fit a second button when onExtra is actually given, so every existing delete-only
+// caller keeps its original swipe distance.
 export function SwipeableRow({
   children,
   onDelete,
   deleteLabel = "Delete",
-  onSwipeStart
+  onSwipeStart,
+  extraIcon: ExtraIcon,
+  extraLabel,
+  extraActiveLabel,
+  extraActive = false,
+  onExtra
 }) {
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
   const startDragX = useRef(0);
   const moved = useRef(false);
-  const REVEAL = 78;
+  const ACTION_WIDTH = 78;
+  const REVEAL = onExtra ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   function pointerX(e) {
     return e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
   }
@@ -279,7 +290,7 @@ export function SwipeableRow({
     },
     className: "cs-btn",
     style: {
-      width: REVEAL,
+      width: ACTION_WIDTH,
       background: `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`,
       color: "#fff",
       border: "none",
@@ -295,7 +306,31 @@ export function SwipeableRow({
     }
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 16
-  }), deleteLabel)), /*#__PURE__*/React.createElement("div", {
+  }), deleteLabel), onExtra && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onExtra();
+      setDragX(0);
+    },
+    className: "cs-btn",
+    style: {
+      width: ACTION_WIDTH,
+      background: extraActive ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.creamDark,
+      color: extraActive ? "#2e1c04" : COLORS.ink,
+      border: "none",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(ExtraIcon, {
+    size: 16,
+    fill: extraActive ? "currentColor" : undefined
+  }), extraActive ? extraActiveLabel : extraLabel)), /*#__PURE__*/React.createElement("div", {
     onPointerDown: onPointerDown,
     onPointerMove: onPointerMove,
     onPointerUp: endDrag,

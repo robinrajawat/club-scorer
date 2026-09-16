@@ -115,31 +115,31 @@ test("SetupScreen: 'No coin handy?' toss flow gates Flip behind picking a caller
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
 
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Who's calling it/);
-  const coinToggle = inst.root.findAllByType("button").find(b => b.props.children === "🪙 No coin handy?");
+  const coinToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "No coin handy?"));
   act(() => { coinToggle.props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /Who's calling it/);
 
   // No Flip button until a caller is picked.
-  assert.equal(inst.root.findAllByType("button").some(b => b.props.children === "🪙 Flip"), false);
+  assert.equal(inst.root.findAllByType("button").some(b => hasText(b.props.children, "Flip")), false);
   const callerBtn = inst.root.findAllByType("button").find(b => b.props.children === "Riverside CC");
   act(() => { callerBtn.props.onClick(); });
   assert.match(JSON.stringify(inst.toJSON()), /Riverside CC calls/);
 
   // Still no Flip button until Heads/Tails is picked.
-  assert.equal(inst.root.findAllByType("button").some(b => b.props.children === "🪙 Flip"), false);
+  assert.equal(inst.root.findAllByType("button").some(b => hasText(b.props.children, "Flip")), false);
   const headsBtn = inst.root.findAllByType("button").find(b => b.props.children === "Heads");
   act(() => { headsBtn.props.onClick(); });
 
-  const flipBtn = inst.root.findAllByType("button").find(b => b.props.children === "🪙 Flip");
+  const flipBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Flip"));
   assert.ok(flipBtn);
   assert.equal(flipBtn.props.disabled, false);
   act(() => { flipBtn.props.onClick(); });
 
-  // Flipping starts synchronously (setFlipping(true) runs before the cosmetic interval is even
+  // Flipping starts synchronously (setFlipping(true) runs before the toss animation is even
   // scheduled), so the button is already mid-flip and re-clicking it is a no-op without waiting
-  // for any part of the flicker animation to play out. Excludes the "No coin handy?" toggle,
-  // which also starts with the same coin emoji.
-  const flippingBtn = inst.root.findAllByType("button").find(b => typeof b.props.children === "string" && b.props.children.includes("🪙") && b.props.children !== "🪙 No coin handy?");
+  // for any part of the toss animation to play out. hasText also matches "Flipping…"/"Flip
+  // again", both fine here since only one Flip-labeled button exists at this point.
+  const flippingBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Flip"));
   assert.equal(flippingBtn.props.disabled, true);
 });
 
@@ -147,7 +147,7 @@ test("SetupScreen: toss flow -- choosing a different caller resets any coin-flip
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
-  const coinToggle = inst.root.findAllByType("button").find(b => b.props.children === "🪙 No coin handy?");
+  const coinToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "No coin handy?"));
   act(() => { coinToggle.props.onClick(); });
 
   // Simulate having already recorded a winner via the manual "Won the toss" picker (same effect

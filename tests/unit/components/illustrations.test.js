@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
-import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration, EmptyState, CoinFlipIllustration } from "../../../src/components/illustrations.js";
+import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration, EmptyState, CoinFlipIllustration, CoinIcon } from "../../../src/components/illustrations.js";
 
 test("AppMark: renders the app icon image sized to the given size prop", () => {
   const tree = renderer.create(React.createElement(AppMark, { size: 32 })).toJSON();
@@ -59,18 +59,44 @@ test("EmptyState: an explicit minHeight is passed through, for a screen whose ro
   assert.equal(tree.props.style.minHeight, "50vh");
 });
 
-test("CoinFlipIllustration: rotates the coin to the given angle, transitioning only while spinning, showing both an H and a T face", () => {
-  const staticTree = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 180, spinning: false })).toJSON();
-  const coinDiv = staticTree.children[0];
-  assert.equal(coinDiv.props.style.transform, "rotateY(180deg)");
-  assert.equal(coinDiv.props.style.transition, "none");
+function coinDiscDiv(root) {
+  // The rotated coin itself, distinct from the ground-shadow ellipse below it (also round, but
+  // not preserve-3d/positioned).
+  return root.find(n => n.props && n.props.style && n.props.style.transformStyle === "preserve-3d");
+}
 
-  const spinningTree = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 1620, spinning: true })).toJSON();
-  const spinningCoinDiv = spinningTree.children[0];
-  assert.equal(spinningCoinDiv.props.style.transform, "rotateY(1620deg)");
-  assert.match(spinningCoinDiv.props.style.transition, /transform/);
+test("CoinFlipIllustration: phase='rest' is static -- no transition, no lift", () => {
+  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 180, phase: "rest" })).root;
+  const disc = coinDiscDiv(root);
+  assert.equal(disc.props.style.transform, "translateY(0px) rotateY(180deg)");
+  assert.equal(disc.props.style.transition, "none");
+});
 
-  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 0, spinning: false })).root;
-  const faces = root.findAll(n => n.props && n.props.style && n.props.style.borderRadius === "50%");
-  assert.deepEqual(faces.map(f => f.children[0]), ["H", "T"]);
+test("CoinFlipIllustration: phase='up' lifts the coin (negative translateY) on a short transition", () => {
+  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 1620, phase: "up", size: 56 })).root;
+  const disc = coinDiscDiv(root);
+  assert.equal(disc.props.style.transform, "translateY(-48px) rotateY(1620deg)");
+  assert.match(disc.props.style.transition, /transform 0\.35s/);
+});
+
+test("CoinFlipIllustration: phase='down' brings the coin back to translateY(0) on a longer transition", () => {
+  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 1800, phase: "down" })).root;
+  const disc = coinDiscDiv(root);
+  assert.equal(disc.props.style.transform, "translateY(0px) rotateY(1800deg)");
+  assert.match(disc.props.style.transition, /transform 0\.55s/);
+});
+
+test("CoinFlipIllustration: shows both an H and a T face's glyph, sized proportionally to the coin", () => {
+  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 0, phase: "rest", size: 100 })).root;
+  const glyphs = root.findAll(n => n.type === "span" && n.props.style && n.props.style.fontFamily === "'DM Serif Display', serif");
+  assert.deepEqual(glyphs.map(g => g.children[0]), ["H", "T"]);
+  assert.ok(glyphs.every(g => g.props.style.fontSize === 39), "39 = round(100 * 0.39)");
+});
+
+test("CoinIcon: a small round gradient swatch, sized to the given prop", () => {
+  const tree = renderer.create(React.createElement(CoinIcon, { size: 20 })).toJSON();
+  assert.equal(tree.type, "span");
+  assert.equal(tree.props.style.width, 20);
+  assert.equal(tree.props.style.height, 20);
+  assert.equal(tree.props.style.borderRadius, "50%");
 });

@@ -4,7 +4,7 @@ import { Trophy, ArrowLeftRight, Pencil } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
-import { CoinFlipIllustration } from "./illustrations.js";
+import { CoinFlipIllustration, CoinIcon } from "./illustrations.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
@@ -102,6 +102,9 @@ export function SetupScreen({
   // instead of visually snapping back to a starting position) -- see CoinFlipIllustration's own
   // comment for how the angle maps to which face ends up showing.
   const [coinRotation, setCoinRotation] = useState(0);
+  // "rest" | "up" | "down" -- drives the actual toss motion (see CoinFlipIllustration), not just
+  // an in-place spin.
+  const [coinPhase, setCoinPhase] = useState("rest");
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -276,6 +279,7 @@ export function SetupScreen({
     setTossCaller("");
     setTossCall("");
     setCoinFace("");
+    setCoinPhase("rest");
   }
   // Only enabled once someone's actually called Heads or Tails -- flipping straight to a random
   // team, with no call to have gone for or against, is exactly the "why should I trust this"
@@ -290,16 +294,25 @@ export function SetupScreen({
     // a re-flip doesn't visually snap backwards) by a few full turns plus whatever's needed to land
     // on the right face: 0/360/720…deg shows Heads, 180/540/900…deg shows Tails.
     const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-    setCoinRotation(rotation => {
-      const targetMod = landed === "Heads" ? 0 : 180;
-      const delta = (targetMod - rotation % 360 + 360) % 360;
-      return rotation + 360 * 4 + delta;
-    });
+    const targetMod = landed === "Heads" ? 0 : 180;
+    const delta = (targetMod - coinRotation % 360 + 360) % 360;
+    const finalRotation = coinRotation + 360 * 4 + delta;
+    // A real toss goes up before it comes down -- two CSS transitions in sequence (launch, then
+    // fall) read as an actual arc, which a single spin-in-place transition never could. The coin
+    // keeps rotating through both legs; only the vertical motion and its easing change between
+    // them (see CoinFlipIllustration).
+    setCoinPhase("up");
+    setCoinRotation(coinRotation + (finalRotation - coinRotation) * 0.4);
+    setTimeout(() => {
+      setCoinPhase("down");
+      setCoinRotation(finalRotation);
+    }, 350);
     setTimeout(() => {
       setCoinFace(landed);
       const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
       setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
       setFlipping(false);
+      setCoinPhase("rest");
     }, 900);
   }
 
@@ -685,7 +698,12 @@ export function SetupScreen({
       fontSize: 12,
       opacity: !teamAName.trim() || !teamBName.trim() ? 0.4 : 1
     }
-  }, "🪙 No coin handy?")), coinFlipOpen && teamAName.trim() && teamBName.trim() && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(CoinIcon, {
+    size: 12,
+    style: {
+      marginRight: 5
+    }
+  }), "No coin handy?")), coinFlipOpen && teamAName.trim() && teamBName.trim() && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.cream,
       border: `1px solid ${COLORS.creamDark}`,
@@ -770,7 +788,7 @@ export function SetupScreen({
     }
   }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement(CoinFlipIllustration, {
     rotationDeg: coinRotation,
-    spinning: flipping
+    phase: coinPhase
   }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
@@ -784,11 +802,17 @@ export function SetupScreen({
       cursor: flipping ? "default" : "pointer",
       background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
       color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, flipping ? "🪙 Flipping…" : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(CoinIcon, {
+    size: 14
+  }), flipping ? "Flipping…" : coinFace ? "Flip again" : "Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,

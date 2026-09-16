@@ -7128,6 +7128,12 @@ function InningsTimer({
     size: 12
   }), label);
 }
+
+// `extraIcon`/`extraLabel`/`onExtra` add a second revealed action before Delete (further from the
+// edge, so it takes a fuller swipe to reach than the one-tap-closer extra action) -- e.g. Pin on
+// the Teams list. Omit them and this is exactly the delete-only row it always was; REVEAL only
+// widens to fit a second button when onExtra is actually given, so every existing delete-only
+// caller keeps its original swipe distance.
 // GENERATED-FN-END: InningsTimer
 // GENERATED-FN-START: OversStrip
 function OversStrip({
@@ -7490,14 +7496,20 @@ function SwipeableRow({
   children,
   onDelete,
   deleteLabel = "Delete",
-  onSwipeStart
+  onSwipeStart,
+  extraIcon: ExtraIcon,
+  extraLabel,
+  extraActiveLabel,
+  extraActive = false,
+  onExtra
 }) {
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
   const startDragX = useRef(0);
   const moved = useRef(false);
-  const REVEAL = 78;
+  const ACTION_WIDTH = 78;
+  const REVEAL = onExtra ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   function pointerX(e) {
     return e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
   }
@@ -7550,7 +7562,7 @@ function SwipeableRow({
     },
     className: "cs-btn",
     style: {
-      width: REVEAL,
+      width: ACTION_WIDTH,
       background: `linear-gradient(160deg, ${COLORS.ballLightFixed}, ${COLORS.ballFixed})`,
       color: "#fff",
       border: "none",
@@ -7566,7 +7578,31 @@ function SwipeableRow({
     }
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 16
-  }), deleteLabel)), /*#__PURE__*/React.createElement("div", {
+  }), deleteLabel), onExtra && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onExtra();
+      setDragX(0);
+    },
+    className: "cs-btn",
+    style: {
+      width: ACTION_WIDTH,
+      background: extraActive ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.creamDark,
+      color: extraActive ? "#2e1c04" : COLORS.ink,
+      border: "none",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 10.5,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(ExtraIcon, {
+    size: 16,
+    fill: extraActive ? "currentColor" : undefined
+  }), extraActive ? extraActiveLabel : extraLabel)), /*#__PURE__*/React.createElement("div", {
     onPointerDown: onPointerDown,
     onPointerMove: onPointerMove,
     onPointerUp: endDrag,
@@ -7704,15 +7740,51 @@ function LoadingBallIllustration({
   }));
 }
 
+// The same antique-gold tone as CoinFlipIllustration below, shrunk down for inline use next to
+// button text (the toss flow's "Flip"/"No coin handy?" labels) -- a plain CSS gradient circle,
+// not an SVG one, so it needs no gradient-id (two of these can render on screen at once, e.g. the
+// toggle button and the Flip button together, without any id-collision risk). No rim/highlight
+// detail at this size -- the full coin's layered treatment turns to mud below ~30px, so this
+// stays a flat swatch and only borrows the color.
+// GENERATED-FN-END: LoadingBallIllustration
+// GENERATED-FN-START: CoinIcon
+function CoinIcon({
+  size = 14,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      display: "inline-block",
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      background: "linear-gradient(160deg, #e8c37e, #a97a2a)",
+      boxShadow: "0 1px 2px rgba(106,74,22,0.5), inset 0 0 0 1px rgba(255,240,210,0.35)",
+      flexShrink: 0,
+      verticalAlign: "middle",
+      ...style
+    }
+  });
+}
+
 // A real coin, not a flickering label: two circular faces (Heads/Tails) glued back-to-back on a
 // 3D-rotated disc. `rotationDeg` is an ever-increasing absolute angle (not reset to 0 between
 // flips, so consecutive flips spin forward instead of visually snapping back) -- 0/360/720... deg
 // shows Heads, 180/540/900... deg shows Tails, per the standard rotateY card-flip technique: the
-// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored. `spinning` swaps
-// in a CSS transition so the coin visibly tumbles from its old angle to the new one; without it
-// (the static pre-flip state) the coin just sits on whichever face it's already showing.
+// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored.
+//
+// Each face is layered, not a flat gradient circle, for an actual minted-medal read: a two-tone
+// rim (the outer radial gradient breaks to a darker ring right at the edge, reading as a raised
+// lip rather than a drop shadow), an inset face with a conic sweep (light wrapping around a flat
+// disc, not a sphere -- a plain radial highlight here shades it like a ball instead of a coin),
+// a thin inner bevel border, and a tight crescent specular highlight (a small directional shine,
+// not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders at,
+// individual beads blur into noise instead of reading as beading -- detail that only survives at
+// mockup size doesn't belong here.
 function CoinFace({
   letter,
+  size,
   extraTransform = ""
 }) {
   return /*#__PURE__*/React.createElement("div", {
@@ -7720,33 +7792,87 @@ function CoinFace({
       position: "absolute",
       inset: 0,
       borderRadius: "50%",
-      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      boxShadow: "0 2px 6px rgba(184,137,43,0.45), inset 0 0 0 2px rgba(255,255,255,0.4)",
+      background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
+      boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)",
+      backfaceVisibility: "hidden",
+      transform: extraTransform
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: "9%",
+      borderRadius: "50%",
+      background: "conic-gradient(from 215deg, #e8c37e, #a97a2a 42%, #7a5518 62%, #c99248 88%, #e8c37e)",
+      boxShadow: "inset 0 2px 3px rgba(255,236,190,0.45), inset 0 -3px 6px rgba(50,34,10,0.45)",
       display: "flex",
       alignItems: "center",
-      justifyContent: "center",
-      backfaceVisibility: "hidden",
-      transform: extraTransform,
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 22,
-      fontWeight: 700,
-      color: "#2e1c04"
+      justifyContent: "center"
     }
-  }, letter);
+  }, /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      inset: "10%",
+      borderRadius: "50%",
+      boxShadow: "inset 0 1.5px 2px rgba(50,34,10,0.35), inset 0 -1px 2px rgba(255,236,190,0.3)",
+      border: "1px solid rgba(50,34,10,0.2)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      top: "11%",
+      left: "17%",
+      width: "32%",
+      height: "19%",
+      borderRadius: "50%",
+      background: "radial-gradient(ellipse at 40% 35%, rgba(255,242,210,0.75), rgba(255,242,210,0) 70%)",
+      transform: "rotate(-25deg)"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "relative",
+      zIndex: 1,
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: Math.round(size * 0.39),
+      fontWeight: 700,
+      color: "#4a3410",
+      textShadow: "0 1px 0 rgba(255,236,190,0.5), 0 -1px 1px rgba(50,34,10,0.6)"
+    }
+  }, letter)));
 }
-// GENERATED-FN-END: LoadingBallIllustration
+// `phase` drives an actual toss, not just an in-place spin: "up" lifts the coin on a short
+// ease-out (a hand launching it), "down" brings it back on a longer ease-in (gravity winning),
+// "rest" is the static pre-/post-flip state with no transition at all. The ground shadow shrinks
+// and fades while airborne and grows back on landing, the usual cheap trick for selling height
+// with a 2D element. Both phases keep spinning toward `rotationDeg` throughout -- see flipCoin in
+// setupScreen.js for how the two-stage timing is driven.
+// GENERATED-FN-END: CoinIcon
 // GENERATED-FN-START: CoinFlipIllustration
 function CoinFlipIllustration({
   rotationDeg,
-  spinning,
+  phase = "rest",
   size = 56
 }) {
+  const lift = Math.round(size * 0.85);
+  const translateY = phase === "up" ? -lift : 0;
+  const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
+  const shadowScale = phase === "up" ? 0.5 : 1;
+  const shadowOpacity = phase === "up" ? 0.15 : 0.3;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      perspective: 300,
       display: "flex",
-      justifyContent: "center",
+      flexDirection: "column",
+      alignItems: "center",
       marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      perspective: 300,
+      height: size + lift,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7754,15 +7880,29 @@ function CoinFlipIllustration({
       height: size,
       position: "relative",
       transformStyle: "preserve-3d",
-      transform: `rotateY(${rotationDeg}deg)`,
-      transition: spinning ? "transform 0.9s cubic-bezier(0.2,0.7,0.3,1)" : "none"
+      transform: `translateY(${translateY}px) rotateY(${rotationDeg}deg)`,
+      transition
     }
   }, /*#__PURE__*/React.createElement(CoinFace, {
-    letter: "H"
+    letter: "H",
+    size
   }), /*#__PURE__*/React.createElement(CoinFace, {
     letter: "T",
+    size,
     extraTransform: "rotateY(180deg)"
-  })));
+  }))), /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      width: size * 0.7,
+      height: size * 0.16,
+      borderRadius: "50%",
+      background: "rgba(20,20,20,0.35)",
+      marginTop: 4,
+      transform: `scale(${shadowScale})`,
+      opacity: shadowOpacity,
+      transition: phase === "rest" ? "none" : transition
+    }
+  }));
 }
 // GENERATED-FN-END: CoinFlipIllustration
 // One shared "still loading" row — the spinning ball + a label — for every in-place loading state
@@ -14984,7 +15124,7 @@ function MyTeamsScreen({
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to pin or delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
@@ -14993,7 +15133,12 @@ function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: () => onDeleteTeam(t.id, null),
     deleteLabel: "Delete",
-    onSwipeStart: () => setShowSwipeHint(false)
+    onSwipeStart: () => setShowSwipeHint(false),
+    extraIcon: onTogglePin ? Pin : undefined,
+    extraLabel: "Pin",
+    extraActiveLabel: "Unpin",
+    extraActive: !!t.pinned,
+    onExtra: onTogglePin ? () => onTogglePin(t) : undefined
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
@@ -15094,31 +15239,7 @@ function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      flexShrink: 0
-    }
-  }, onTogglePin && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onTogglePin(t),
-    className: "cs-btn",
-    "aria-label": t.pinned ? `Unpin ${t.name}` : `Pin ${t.name}`,
-    title: t.pinned ? "Unpin" : "Pin to top",
-    style: {
-      background: "none",
-      border: "none",
-      color: t.pinned ? COLORS.gold : COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Pin, {
-    size: 15,
-    fill: t.pinned ? "currentColor" : undefined
-  })), /*#__PURE__*/React.createElement("button", {
+  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -15134,7 +15255,7 @@ function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  }))))))))))
+  })))))))))
 ), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
     onClick: onNewTeam,
     label: "New team"
@@ -15599,6 +15720,9 @@ function SetupScreen({
   // instead of visually snapping back to a starting position) -- see CoinFlipIllustration's own
   // comment for how the angle maps to which face ends up showing.
   const [coinRotation, setCoinRotation] = useState(0);
+  // "rest" | "up" | "down" -- drives the actual toss motion (see CoinFlipIllustration), not just
+  // an in-place spin.
+  const [coinPhase, setCoinPhase] = useState("rest");
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -15773,6 +15897,7 @@ function SetupScreen({
     setTossCaller("");
     setTossCall("");
     setCoinFace("");
+    setCoinPhase("rest");
   }
   // Only enabled once someone's actually called Heads or Tails -- flipping straight to a random
   // team, with no call to have gone for or against, is exactly the "why should I trust this"
@@ -15787,16 +15912,25 @@ function SetupScreen({
     // a re-flip doesn't visually snap backwards) by a few full turns plus whatever's needed to land
     // on the right face: 0/360/720…deg shows Heads, 180/540/900…deg shows Tails.
     const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-    setCoinRotation(rotation => {
-      const targetMod = landed === "Heads" ? 0 : 180;
-      const delta = (targetMod - rotation % 360 + 360) % 360;
-      return rotation + 360 * 4 + delta;
-    });
+    const targetMod = landed === "Heads" ? 0 : 180;
+    const delta = (targetMod - coinRotation % 360 + 360) % 360;
+    const finalRotation = coinRotation + 360 * 4 + delta;
+    // A real toss goes up before it comes down -- two CSS transitions in sequence (launch, then
+    // fall) read as an actual arc, which a single spin-in-place transition never could. The coin
+    // keeps rotating through both legs; only the vertical motion and its easing change between
+    // them (see CoinFlipIllustration).
+    setCoinPhase("up");
+    setCoinRotation(coinRotation + (finalRotation - coinRotation) * 0.4);
+    setTimeout(() => {
+      setCoinPhase("down");
+      setCoinRotation(finalRotation);
+    }, 350);
     setTimeout(() => {
       setCoinFace(landed);
       const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
       setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
       setFlipping(false);
+      setCoinPhase("rest");
     }, 900);
   }
 
@@ -16182,7 +16316,12 @@ function SetupScreen({
       fontSize: 12,
       opacity: !teamAName.trim() || !teamBName.trim() ? 0.4 : 1
     }
-  }, "🪙 No coin handy?")), coinFlipOpen && teamAName.trim() && teamBName.trim() && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(CoinIcon, {
+    size: 12,
+    style: {
+      marginRight: 5
+    }
+  }), "No coin handy?")), coinFlipOpen && teamAName.trim() && teamBName.trim() && /*#__PURE__*/React.createElement("div", {
     style: {
       background: COLORS.cream,
       border: `1px solid ${COLORS.creamDark}`,
@@ -16267,7 +16406,7 @@ function SetupScreen({
     }
   }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement(CoinFlipIllustration, {
     rotationDeg: coinRotation,
-    spinning: flipping
+    phase: coinPhase
   }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
@@ -16281,11 +16420,17 @@ function SetupScreen({
       cursor: flipping ? "default" : "pointer",
       background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
       color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, flipping ? "🪙 Flipping…" : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(CoinIcon, {
+    size: 14
+  }), flipping ? "Flipping…" : coinFace ? "Flip again" : "Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
