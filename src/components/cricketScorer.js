@@ -2074,12 +2074,7 @@ export function CricketScorer() {
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
-    showTabBar: true,
-    showInstallHint: showInstallHint && !showTour,
-    onDismissInstallHint: () => {
-      setShowInstallHint(false);
-      markInstallHintSeen();
-    }
+    showTabBar: true
   })), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "live",
     direction: navDirection
@@ -2101,7 +2096,12 @@ export function CricketScorer() {
     onOpenAbout: openAbout,
     onSignOut: signOutUser,
     themePref: themePref,
-    onSetTheme: handleSetTheme
+    onSetTheme: handleSetTheme,
+    showInstallHint: showInstallHint && !showTour,
+    onDismissInstallHint: () => {
+      setShowInstallHint(false);
+      markInstallHintSeen();
+    }
   })), showTour && screen === "live" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
   }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {

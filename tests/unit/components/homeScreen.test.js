@@ -1,6 +1,6 @@
 // The app's landing screen (src/components/homeScreen.js). `Modal` (bare global) backs the
 // delete-match confirm dialog. Renders AuthBar/UpcomingFixtureCard/
-// InstallHintBanner/JoinCodeBar/SyncStatusBanner, all already tested on their own -- these tests
+// JoinCodeBar/SyncStatusBanner, all already tested on their own -- these tests
 // focus on HomeScreen's own logic (match list, search, delete confirm) and default props avoid
 // triggering UpcomingFixtureCard's own mount-effect stubs (no tournaments/fixtures passed).
 
@@ -339,12 +339,4 @@ test("HomeScreen: 'Upcoming' can actually be collapsed even when it's the only s
   act(() => { upcomingToggle.props.onClick(); });
   text = JSON.stringify(inst.toJSON());
   assert.match(text, /Hawks CC/);
-});
-
-test("HomeScreen: showInstallHint renders InstallHintBanner wired to onDismissInstallHint", () => {
-  let dismissed = false;
-  const inst = render({ showInstallHint: true, onDismissInstallHint: () => { dismissed = true; } });
-  const dismissBtn = inst.root.findByProps({ "aria-label": "Dismiss" });
-  dismissBtn.props.onClick();
-  assert.equal(dismissed, true);
 });

@@ -6,6 +6,7 @@ import { EmptyState, LoadingNote, AppMark } from "./illustrations.js";
 import { matchScoreLine, formatFixtureDateTime } from "../core/shareAndFormat.js";
 import { greetingPrefix, matchDateTimeLabel } from "../core/miscHelpers.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
+import { InstallHintBanner } from "./screenAtoms.js";
 import { AuthBar } from "./authBar.js";
 
 // The Live tab: the app-wide, unbounded view of the two live feeds (/liveMatches,
@@ -99,7 +100,9 @@ export function LiveScreen({
   onOpenAbout,
   onSignOut,
   themePref,
-  onSetTheme
+  onSetTheme,
+  showInstallHint = false,
+  onDismissInstallHint
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("matches"); // matches | tournaments
@@ -565,7 +568,9 @@ export function LiveScreen({
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
+    onDismiss: onDismissInstallHint
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,
