@@ -23,8 +23,8 @@ export const TOUR_SLIDES = [{
   body: "Runs, wides, no-balls, every dismissal type \u2014 sign-in is optional, and it keeps working with no signal once it's loaded."
 }, {
   icon: House,
-  title: "Home, Live, Cups, Teams",
-  body: "Four tabs at the bottom get you everywhere: Home for your own matches, Live for everyone else's live scores and tournaments, Cups for tournaments and series, and Teams for rosters."
+  title: "Home, Score, Cups, Teams",
+  body: "Four tabs at the bottom get you everywhere: Home for everyone else's live scores and tournaments, Score for your own matches, Cups for tournaments and series, and Teams for rosters."
 }, {
   icon: Share,
   title: "Share your score two ways",
