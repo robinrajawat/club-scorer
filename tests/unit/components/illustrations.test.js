@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import renderer from "react-test-renderer";
-import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration, EmptyState } from "../../../src/components/illustrations.js";
+import { AppMark, LoadingBallIllustration, LoadingNote, EmptyStateBallIllustration, EmptyState, CoinFlipIllustration } from "../../../src/components/illustrations.js";
 
 test("AppMark: renders the app icon image sized to the given size prop", () => {
   const tree = renderer.create(React.createElement(AppMark, { size: 32 })).toJSON();
@@ -57,4 +57,20 @@ test("EmptyState: a flex:1 div with no border/background, centering the ball ico
 test("EmptyState: an explicit minHeight is passed through, for a screen whose root isn't a flex column", () => {
   const tree = renderer.create(React.createElement(EmptyState, { minHeight: "50vh" }, "No matches yet.")).toJSON();
   assert.equal(tree.props.style.minHeight, "50vh");
+});
+
+test("CoinFlipIllustration: rotates the coin to the given angle, transitioning only while spinning, showing both an H and a T face", () => {
+  const staticTree = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 180, spinning: false })).toJSON();
+  const coinDiv = staticTree.children[0];
+  assert.equal(coinDiv.props.style.transform, "rotateY(180deg)");
+  assert.equal(coinDiv.props.style.transition, "none");
+
+  const spinningTree = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 1620, spinning: true })).toJSON();
+  const spinningCoinDiv = spinningTree.children[0];
+  assert.equal(spinningCoinDiv.props.style.transform, "rotateY(1620deg)");
+  assert.match(spinningCoinDiv.props.style.transition, /transform/);
+
+  const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 0, spinning: false })).root;
+  const faces = root.findAll(n => n.props && n.props.style && n.props.style.borderRadius === "50%");
+  assert.deepEqual(faces.map(f => f.children[0]), ["H", "T"]);
 });

@@ -134,6 +134,7 @@ const FUNCTIONS = [
   { name: "clearUndoHistory", file: "src/core/localStorageOutbox.js" },
   { name: "AppMark", file: "src/components/illustrations.js" },
   { name: "LoadingBallIllustration", file: "src/components/illustrations.js" },
+  { name: "CoinFlipIllustration", file: "src/components/illustrations.js" },
   { name: "LoadingNote", file: "src/components/illustrations.js" },
   { name: "EmptyStateBallIllustration", file: "src/components/illustrations.js" },
   { name: "EmptyState", file: "src/components/illustrations.js" },
