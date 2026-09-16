@@ -2093,6 +2093,8 @@ export function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
     onOpenAbout: openAbout,
@@ -2160,7 +2162,18 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
-    showTabBar: true
+    showTabBar: true,
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -2172,6 +2185,17 @@ export function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
     onOpenTournament: t => openTournamentDetail(t, "tournaments", t._clubId || null, t._federationId || null),
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme,
     showTabBar: true
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",

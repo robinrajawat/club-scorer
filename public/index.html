@@ -14021,6 +14021,8 @@ function LiveScreen({
   user,
   profile,
   onOpenAccount,
+  onOpenInbox,
+  inboxBadgeCount = 0,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
@@ -14432,7 +14434,55 @@ function LiveScreen({
     style: {
       color: COLORS.gold
     }
-  }, "Scorer"))), /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Scorer"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 13,
+      height: 13,
+      padding: "0 3px",
+      borderRadius: 7,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 700,
+      lineHeight: 1,
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
@@ -14442,7 +14492,7 @@ function LiveScreen({
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,
@@ -14658,7 +14708,18 @@ function MyTeamsScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
-  showTabBar = false
+  showTabBar = false,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenInbox,
+  inboxBadgeCount = 0,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme
 }) {
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
   // comment for why this is one flag across both screens rather than two separate ones.
@@ -14708,8 +14769,14 @@ function MyTeamsScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      justifyContent: "space-between",
       marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Users, {
     size: 22,
@@ -14729,6 +14796,64 @@ function MyTeamsScreen({
       fontSize: 11.5
     }
   })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 13,
+      height: 13,
+      padding: "0 3px",
+      borderRadius: 7,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 700,
+      lineHeight: 1,
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    profile: profile,
+    onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -17686,7 +17811,18 @@ function TournamentsScreen({
   onCreateSeries,
   onOpenTournament,
   onOpenRecords,
-  showTabBar = false
+  showTabBar = false,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenInbox,
+  inboxBadgeCount = 0,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme
 }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -18222,8 +18358,14 @@ function TournamentsScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      justifyContent: "space-between",
       marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 22,
@@ -18257,6 +18399,64 @@ function TournamentsScreen({
     }
   }, /*#__PURE__*/React.createElement(Info, {
     size: 17
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 13,
+      height: 13,
+      padding: "0 3px",
+      borderRadius: 7,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 700,
+      lineHeight: 1,
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    profile: profile,
+    onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme
   }))), showInfo && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
@@ -32316,6 +32516,8 @@ function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
     onOpenAbout: openAbout,
@@ -32383,7 +32585,18 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
-    showTabBar: true
+    showTabBar: true,
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme
   })), screen === "tournaments" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "tournaments",
     direction: navDirection
@@ -32395,6 +32608,17 @@ function CricketScorer() {
     onCreateTournament: handleCreateTournament,
     onCreateSeries: handleCreateSeries,
     onOpenTournament: t => openTournamentDetail(t, "tournaments", t._clubId || null, t._federationId || null),
+    user: user,
+    profile: profile,
+    onOpenAccount: openAccount,
+    onOpenInbox: () => setScreen("inbox"),
+    inboxBadgeCount: inboxBadgeCount,
+    onOpenHelp: openHelp,
+    onOpenFeedback: openFeedback,
+    onOpenAbout: openAbout,
+    onSignOut: signOutUser,
+    themePref: themePref,
+    onSetTheme: handleSetTheme,
     showTabBar: true
   })), screen === "series-detail" && viewingTournament && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "series-detail",

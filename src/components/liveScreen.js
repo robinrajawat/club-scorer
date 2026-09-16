@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronRight, Trophy } from "./icons.js";
+import { Bell, ChevronRight, Trophy } from "./icons.js";
 import { TextField } from "./formUiAtoms.js";
 import { EmptyState, LoadingNote, AppMark } from "./illustrations.js";
 import { matchScoreLine, formatFixtureDateTime } from "../core/shareAndFormat.js";
@@ -92,6 +92,8 @@ export function LiveScreen({
   user,
   profile,
   onOpenAccount,
+  onOpenInbox,
+  inboxBadgeCount = 0,
   onOpenHelp,
   onOpenFeedback,
   onOpenAbout,
@@ -503,7 +505,55 @@ export function LiveScreen({
     style: {
       color: COLORS.gold
     }
-  }, "Scorer"))), /*#__PURE__*/React.createElement(AuthBar, {
+  }, "Scorer"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 13,
+      height: 13,
+      padding: "0 3px",
+      borderRadius: 7,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 700,
+      lineHeight: 1,
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
@@ -513,7 +563,7 @@ export function LiveScreen({
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,
