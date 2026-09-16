@@ -111,7 +111,7 @@ function StarIcon({ size, fill }) {
   return /*#__PURE__*/React.createElement("svg", { "data-star": true, width: size, fill });
 }
 
-test("SwipeableRow: with extraIcon/extraLabel/onExtra, a second revealed action renders after Delete and calls onExtra when tapped", () => {
+test("SwipeableRow: with extraIcon/extraLabel/onExtra, a second panel (reached by swiping the other way) renders alongside Delete and calls onExtra when tapped", () => {
   let extraCalled = false;
   const inst = renderer.create(React.createElement(SwipeableRow, {
     onDelete: () => {}, deleteLabel: "Remove",
@@ -119,9 +119,13 @@ test("SwipeableRow: with extraIcon/extraLabel/onExtra, a second revealed action 
     onExtra: () => { extraCalled = true; }
   }, React.createElement("span", null, "row content")));
   const tree = inst.toJSON();
-  const revealed = tree.children[0].children;
-  assert.equal(revealed.length, 2, "delete button, then the extra action button");
-  assert.ok(revealed[1].children.includes("Pin"));
+  // Delete panel (swipe left) and the extra-action panel (swipe right) are separate siblings now,
+  // not two buttons stacked in one panel -- each only ever reveals from its own edge.
+  const deletePanel = tree.children[0];
+  const extraPanel = tree.children[1];
+  assert.equal(deletePanel.children.length, 1, "delete panel holds only Delete");
+  assert.equal(extraPanel.children.length, 1, "extra panel holds only the extra action");
+  assert.ok(extraPanel.children[0].children.includes("Pin"));
 
   const extraButton = inst.root.findAllByType("button")[1];
   extraButton.props.onClick();

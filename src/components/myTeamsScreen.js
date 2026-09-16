@@ -236,14 +236,14 @@ export function MyTeamsScreen({
     }
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: "right",
+      textAlign: "center",
       fontFamily: "'Inter'",
       fontSize: 10.5,
       color: COLORS.inkSoft,
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to pin or delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "→ swipe to pin · swipe to delete ←"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
