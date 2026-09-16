@@ -102,10 +102,17 @@ export function WelcomeScreen({
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 34,
-      color: COLORS.pitch,
       letterSpacing: -0.5
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#141414"
+    }
+  }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, "Scorer")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter', sans-serif",
       fontSize: 13.5,

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { Bell, ChevronRight, Trophy } from "./icons.js";
+import { Bell, ChevronRight, Trophy, ScorePad } from "./icons.js";
 import { Btn } from "./formUiAtoms.js";
-import { AppMark, LoadingNote, EmptyState } from "./illustrations.js";
+import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { SyncStatusBanner } from "./scoreboardAtoms.js";
 import { FabButton, InstallHintBanner } from "./screenAtoms.js";
@@ -297,15 +297,18 @@ export function HomeScreen({
       alignItems: "center",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(AppMark, {
-    size: 26
+  }, /*#__PURE__*/React.createElement(ScorePad, {
+    size: 22,
+    style: {
+      color: COLORS.pitch
+    }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 19,
+      fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement("div", {
+  }, "Score")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
