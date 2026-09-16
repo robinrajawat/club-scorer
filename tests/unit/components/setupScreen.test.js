@@ -14,10 +14,12 @@ import { afterEach, beforeEach } from "node:test";
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { SetupScreen } from "../../../src/components/setupScreen.js";
+import { PlayingXIPicker } from "../../../src/components/playingXIPicker.js";
 import { Btn, TeamChips, RuleChoice } from "../../../src/components/formUiAtoms.js";
 import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { Field } from "../../../src/components/screenAtoms.js";
 import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
+import { COLORS } from "../../../src/components/theme.js";
 
 beforeEach(() => {
   globalThis.window = { scrollTo: () => {} };
@@ -99,6 +101,67 @@ test("SetupScreen: Next stays disabled until team names, overs, and toss are all
   act(() => { batBtn.props.onClick(); });
 
   assert.equal(btn(inst, "Next").props.disabled, false);
+});
+
+// The flip's actual winner-derivation logic (call vs. landed face -> caller or the other team) is
+// covered directly, with no timers or rendering involved, by deriveCoinFlipWinner's own tests in
+// shareAndFormat.test.js. This test sticks to what the UI itself is responsible for: gating the
+// Flip button behind an explicit caller and an explicit call, and entering its "flipping" state
+// (disabled, mid-animation) the instant Flip is tapped -- both synchronous, so no need to run the
+// interval-driven flicker animation itself to verify them.
+test("SetupScreen: 'No coin handy?' toss flow gates Flip behind picking a caller and then a call, and disables Flip immediately once tapped", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Who's calling it/);
+  const coinToggle = inst.root.findAllByType("button").find(b => b.props.children === "🪙 No coin handy?");
+  act(() => { coinToggle.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Who's calling it/);
+
+  // No Flip button until a caller is picked.
+  assert.equal(inst.root.findAllByType("button").some(b => b.props.children === "🪙 Flip"), false);
+  const callerBtn = inst.root.findAllByType("button").find(b => b.props.children === "Riverside CC");
+  act(() => { callerBtn.props.onClick(); });
+  assert.match(JSON.stringify(inst.toJSON()), /Riverside CC calls/);
+
+  // Still no Flip button until Heads/Tails is picked.
+  assert.equal(inst.root.findAllByType("button").some(b => b.props.children === "🪙 Flip"), false);
+  const headsBtn = inst.root.findAllByType("button").find(b => b.props.children === "Heads");
+  act(() => { headsBtn.props.onClick(); });
+
+  const flipBtn = inst.root.findAllByType("button").find(b => b.props.children === "🪙 Flip");
+  assert.ok(flipBtn);
+  assert.equal(flipBtn.props.disabled, false);
+  act(() => { flipBtn.props.onClick(); });
+
+  // Flipping starts synchronously (setFlipping(true) runs before the cosmetic interval is even
+  // scheduled), so the button is already mid-flip and re-clicking it is a no-op without waiting
+  // for any part of the flicker animation to play out. Excludes the "No coin handy?" toggle,
+  // which also starts with the same coin emoji.
+  const flippingBtn = inst.root.findAllByType("button").find(b => typeof b.props.children === "string" && b.props.children.includes("🪙") && b.props.children !== "🪙 No coin handy?");
+  assert.equal(flippingBtn.props.disabled, true);
+});
+
+test("SetupScreen: toss flow -- choosing a different caller resets any coin-flip result already recorded", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const coinToggle = inst.root.findAllByType("button").find(b => b.props.children === "🪙 No coin handy?");
+  act(() => { coinToggle.props.onClick(); });
+
+  // Simulate having already recorded a winner via the manual "Won the toss" picker (same effect
+  // a completed flip would have) -- picking a caller in the coin-flip panel afterward should
+  // clear it, since the caller and the previously recorded winner might now disagree.
+  const tossField = inst.root.findAllByType(Field).find(f => f.props.label === "Won the toss");
+  const manualWinnerBtn = tossField.findAllByType("button").find(b => b.props.children === "Oakwood CC");
+  act(() => { manualWinnerBtn.props.onClick(); });
+  assert.equal(tossField.findAllByType("button").find(b => b.props.children === "Oakwood CC").props.style.color, "#fff");
+
+  const callerBtn = inst.root.findAllByType("button").find(b => b.props.children === "Riverside CC");
+  act(() => { callerBtn.props.onClick(); });
+  assert.equal(inst.root.findAllByType(Field).find(f => f.props.label === "Won the toss")
+    .findAllByType("button").find(b => b.props.children === "Oakwood CC").props.style.color, COLORS.ink);
 });
 
 test("SetupScreen: same team name on both sides shows a warning and blocks Next", () => {
@@ -595,6 +658,42 @@ test("SetupScreen: with saved squads, teamABench/teamBBench (squad minus Playing
   assert.deepEqual(started.teamABench, ["C. Patel"]);
   assert.deepEqual(started.teamBRoster, ["D. Singh", "E. Rao"]);
   assert.deepEqual(started.teamBBench, []); // squad exactly fills the XI, nothing left on the bench
+});
+
+test("SetupScreen: adding a player from the Playing XI picker grows the squad and persists via onUpdateTeam", () => {
+  let updatedTeam = null;
+  const teamARecord = { id: "t1", name: "Riverside CC", players: ["A. Sharma", "B. Kumar"] };
+  const teamBRecord = { id: "t2", name: "Oakwood CC", players: ["D. Singh", "E. Rao"] };
+  const inst = render({
+    teams: [teamARecord, teamBRecord],
+    rules: { playersPerSide: 2 },
+    onUpdateTeam: t => { updatedTeam = t; }
+  });
+
+  const [teamAChips, teamBChips] = inst.root.findAllByType(TeamChips);
+  act(() => { teamAChips.props.onSelect(teamARecord); });
+  act(() => { teamBChips.props.onSelect(teamBRecord); });
+
+  const tossField = inst.root.findAllByType(Field).find(f => f.props.label === "Won the toss");
+  const tossBtn = tossField.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { btn(inst, "Next").props.onClick(); }); // rules -> xi
+
+  // Team A's picker renders first, so the first matching input/button on this page is theirs.
+  const nameInput = input(inst, "Not on the list? Add a player…");
+  act(() => { nameInput.props.onChange({ target: { value: "F. Iyer" } }); });
+  const addBtn = inst.root.findAllByProps({ "aria-label": "Add player" })[0];
+  act(() => { addBtn.props.onClick(); });
+
+  assert.deepEqual(updatedTeam, {
+    ...teamARecord,
+    players: [{ name: "A. Sharma", number: "" }, { name: "B. Kumar", number: "" }, { name: "F. Iyer", number: "" }]
+  });
+  const [teamAPicker] = inst.root.findAllByType(PlayingXIPicker);
+  assert.deepEqual(teamAPicker.props.squad.map(p => p.name), ["A. Sharma", "B. Kumar", "F. Iyer"]);
 });
 
 test("SetupScreen: 'Substitutions allowed per team' only appears once Impact Player is turned on, and flows through to onStart", () => {

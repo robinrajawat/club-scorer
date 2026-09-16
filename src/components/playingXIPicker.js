@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { TextField } from "./formUiAtoms.js";
+import { TextField, Btn } from "./formUiAtoms.js";
+import { Plus } from "./icons.js";
 
 // Squad -> playing-XI picker: pick up to `required` players from a squad, optionally set captain/
 // vice-captain/keeper and per-match jersey numbers, with a search box once the squad's big enough
@@ -20,10 +21,27 @@ export function PlayingXIPicker({
   onSetKeeper,
   required,
   numbers,
-  onNumberChange
+  onNumberChange,
+  onAddPlayer
 }) {
   const count = selected.length;
   const atLimit = count >= required;
+  // Someone who shows up at the ground without ever having been added to the saved roster --
+  // lets them be added straight from here (writes back to the real team, same as editing the
+  // roster from the Teams tab would) instead of having to back out of match setup to do it.
+  const [newName, setNewName] = useState("");
+  const [addError, setAddError] = useState("");
+  function handleAddPlayer() {
+    const n = newName.trim();
+    if (!n) return;
+    if (squad.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) {
+      setAddError(`${n} is already on this team.`);
+      return;
+    }
+    setAddError("");
+    onAddPlayer(n);
+    setNewName("");
+  }
   // A search box only earns its space once the squad is big enough that scanning the whole pool
   // by eye stops being realistic -- a 12-15 player squad is still a quick scroll, but a 30-40
   // player one (common for a club-wide "everyone who's ever played" roster) turns into real work
@@ -291,5 +309,37 @@ export function PlayingXIPicker({
       flexWrap: "wrap",
       gap: 8
     }
-  }, poolNames.map(renderPill)));
+  }, poolNames.map(renderPill)), onAddPlayer && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: newName,
+    onChange: v => {
+      setNewName(v);
+      if (addError) setAddError("");
+    },
+    onKeyDown: e => {
+      if (e.key === "Enter") handleAddPlayer();
+    },
+    placeholder: "Not on the list? Add a player…"
+  }), /*#__PURE__*/React.createElement(Btn, {
+    onClick: handleAddPlayer,
+    ariaLabel: "Add player",
+    style: {
+      flexShrink: 0,
+      padding: "0 16px"
+    }
+  }, /*#__PURE__*/React.createElement(Plus, {
+    size: 17
+  }))), onAddPlayer && addError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.ball,
+      marginTop: 6
+    }
+  }, addError));
 }
