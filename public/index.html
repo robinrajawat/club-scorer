@@ -31560,8 +31560,9 @@ function CricketScorer() {
   // Activity notifications never require an action the way an invite/request does -- they're
   // informational -- so "needs my attention" here just means unread.
   const unreadActivityCount = myActivity.filter(item => !item.read).length;
-  // Feeds both HomeScreen's own bell icon and TabBar's Home-tab badge (see selectTab/TabBar
-  // below).
+  // Feeds TabBar's Home-tab badge (see selectTab/TabBar below) -- the Bell icon itself is
+  // currently hidden everywhere (see the comment where onOpenInbox is left unpassed), so this is
+  // the only thing still reading unreadActivityCount. Always 0 today regardless, same reason.
   const inboxBadgeCount = unreadActivityCount;
   // Loads tournaments for every federation this user owns/co-owns. Only fetches ids not already in
   // federationTournamentsById, so re-renders and screen switches don't refetch everything that's
