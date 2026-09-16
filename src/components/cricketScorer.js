@@ -2077,9 +2077,7 @@ export function CricketScorer() {
       setShowInstallHint(false);
       markInstallHintSeen();
     }
-  })), showTour && screen === "home" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
-    onDone: () => setShowTour(false)
-  }), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
+  })), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "live",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(LiveScreen, {
@@ -2101,7 +2099,9 @@ export function CricketScorer() {
     onSignOut: signOutUser,
     themePref: themePref,
     onSetTheme: handleSetTheme
-  })), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
+  })), showTour && screen === "live" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
+    onDone: () => setShowTour(false)
+  }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "setup",
     direction: navDirection
   }, /*#__PURE__*/React.createElement(SetupScreen, {
