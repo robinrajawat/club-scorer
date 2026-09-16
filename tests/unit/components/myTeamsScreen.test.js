@@ -149,29 +149,32 @@ test("MyTeamsScreen: every team is editable -- no owner/member permission split 
   assert.ok(inst.root.findByProps({ "aria-label": `Edit ${teams[0].name}` }));
 });
 
-test("MyTeamsScreen: no pin button at all when onTogglePin isn't given", () => {
+test("MyTeamsScreen: the swipe row's extra (pin) action isn't wired at all when onTogglePin isn't given", () => {
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
     teams: [team()], matches: [], onNewTeam: () => {}
   }));
-  assert.equal(inst.root.findAllByProps({ "aria-label": "Pin Riverside 1st XI" }).length, 0);
+  const row = inst.root.findByType(SwipeableRow);
+  assert.equal(row.props.onExtra, undefined);
+  assert.equal(row.props.extraIcon, undefined);
 });
 
-test("MyTeamsScreen: tapping the pin button calls onTogglePin with that team; label/title flip once pinned", () => {
+test("MyTeamsScreen: swiping to the extra action calls onTogglePin with that team; extraActive flips once pinned", () => {
   let pinned = null;
   const teams = [team()];
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
     teams, matches: [], onNewTeam: () => {}, onTogglePin: t => { pinned = t; }
   }));
-  const pinBtn = inst.root.findByProps({ "aria-label": "Pin Riverside 1st XI" });
-  assert.equal(pinBtn.props.title, "Pin to top");
-  pinBtn.props.onClick();
+  const row = inst.root.findByType(SwipeableRow);
+  assert.equal(row.props.extraActive, false);
+  assert.equal(row.props.extraLabel, "Pin");
+  assert.equal(row.props.extraActiveLabel, "Unpin");
+  row.props.onExtra();
   assert.equal(pinned.id, "t1");
 
   const alreadyPinned = renderer.create(React.createElement(MyTeamsScreen, {
     teams: [team({ pinned: true })], matches: [], onNewTeam: () => {}, onTogglePin: () => {}
   }));
-  const unpinBtn = alreadyPinned.root.findByProps({ "aria-label": "Unpin Riverside 1st XI" });
-  assert.equal(unpinBtn.props.title, "Unpin");
+  assert.equal(alreadyPinned.root.findByType(SwipeableRow).props.extraActive, true);
 });
 
 test("MyTeamsScreen: pinned teams sort to the top, preserving the given order within each group", () => {

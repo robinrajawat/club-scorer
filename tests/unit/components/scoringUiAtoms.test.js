@@ -102,6 +102,38 @@ test("SwipeableRow: renders its children and a delete button with the given labe
   const deleteButton = tree.children[0].children[0];
   assert.equal(deleteButton.type, "button");
   assert.ok(deleteButton.children.includes("Remove"));
+  assert.equal(tree.children[0].children.length, 1, "no second action without extraIcon/onExtra");
   const rowContent = tree.children[1];
   assert.equal(rowContent.children[0].children[0], "row content");
+});
+
+function StarIcon({ size, fill }) {
+  return /*#__PURE__*/React.createElement("svg", { "data-star": true, width: size, fill });
+}
+
+test("SwipeableRow: with extraIcon/extraLabel/onExtra, a second revealed action renders after Delete and calls onExtra when tapped", () => {
+  let extraCalled = false;
+  const inst = renderer.create(React.createElement(SwipeableRow, {
+    onDelete: () => {}, deleteLabel: "Remove",
+    extraIcon: StarIcon, extraLabel: "Pin", extraActiveLabel: "Unpin", extraActive: false,
+    onExtra: () => { extraCalled = true; }
+  }, React.createElement("span", null, "row content")));
+  const tree = inst.toJSON();
+  const revealed = tree.children[0].children;
+  assert.equal(revealed.length, 2, "delete button, then the extra action button");
+  assert.ok(revealed[1].children.includes("Pin"));
+
+  const extraButton = inst.root.findAllByType("button")[1];
+  extraButton.props.onClick();
+  assert.equal(extraCalled, true);
+});
+
+test("SwipeableRow: extraActive swaps in extraActiveLabel instead of extraLabel", () => {
+  const inst = renderer.create(React.createElement(SwipeableRow, {
+    onDelete: () => {}, extraIcon: StarIcon, extraLabel: "Pin", extraActiveLabel: "Unpin",
+    extraActive: true, onExtra: () => {}
+  }, React.createElement("span", null, "row content")));
+  const extraButton = inst.root.findAllByType("button")[1];
+  assert.ok(extraButton.props.children.includes("Unpin"));
+  assert.ok(!extraButton.props.children.includes("Pin"));
 });

@@ -243,7 +243,7 @@ export function MyTeamsScreen({
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to pin or delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
@@ -252,7 +252,12 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: () => onDeleteTeam(t.id, null),
     deleteLabel: "Delete",
-    onSwipeStart: () => setShowSwipeHint(false)
+    onSwipeStart: () => setShowSwipeHint(false),
+    extraIcon: onTogglePin ? Pin : undefined,
+    extraLabel: "Pin",
+    extraActiveLabel: "Unpin",
+    extraActive: !!t.pinned,
+    onExtra: onTogglePin ? () => onTogglePin(t) : undefined
   }, /*#__PURE__*/React.createElement("div", {
     className: "cs-row",
     style: {
@@ -353,31 +358,7 @@ export function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      flexShrink: 0
-    }
-  }, onTogglePin && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onTogglePin(t),
-    className: "cs-btn",
-    "aria-label": t.pinned ? `Unpin ${t.name}` : `Pin ${t.name}`,
-    title: t.pinned ? "Unpin" : "Pin to top",
-    style: {
-      background: "none",
-      border: "none",
-      color: t.pinned ? COLORS.gold : COLORS.inkSoft,
-      cursor: "pointer",
-      padding: 8,
-      borderRadius: 8,
-      display: "flex",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(Pin, {
-    size: 15,
-    fill: t.pinned ? "currentColor" : undefined
-  })), /*#__PURE__*/React.createElement("button", {
+  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -393,7 +374,7 @@ export function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  }))))))))))
+  })))))))))
 ), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
     onClick: onNewTeam,
     label: "New team"
