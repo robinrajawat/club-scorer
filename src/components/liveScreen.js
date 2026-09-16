@@ -232,9 +232,11 @@ export function LiveScreen({
 
   // A pill-row sub-selector (Live/Results, Live/Recently Finished) -- distinct from the segmented
   // control above (that one swaps WHAT you're browsing; this one swaps WHEN). `accentColor` is the
-  // active pill's own color (red for matches' Live, gold for tournaments' Live) -- Results/
-  // Recently Finished always uses the same muted ink-soft tone regardless, since "this is over"
-  // isn't a state that should compete visually with "this is live right now."
+  // active pill's own color -- COLORS.live (red, with a pulsing dot) for both matches' and
+  // tournaments' Live pill, since "happening right now" is the same status either way and gets the
+  // same status color; Fixtures uses gold (an upcoming, non-urgent state); Results/Recently
+  // Finished always uses the same muted ink-soft tone, since "this is over" isn't a state that
+  // should compete visually with "this is live right now."
   function tabPills(options, active, onSelect) {
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -624,7 +626,7 @@ export function LiveScreen({
         { key: "fixtures", label: `Fixtures (${filteredFixtures.length})`, accentColor: COLORS.gold },
         { key: "results", label: `Results (${finishedMatches.length})`, accentColor: COLORS.inkSoft }
       ], matchTab, setMatchTab) : tabPills([
-        { key: "live", label: `Live (${liveNowTournaments.length})`, accentColor: COLORS.gold },
+        { key: "live", label: `Live (${liveNowTournaments.length})`, dot: true, accentColor: COLORS.live },
         { key: "finished", label: `Recently Finished (${finishedTournaments.length})`, accentColor: COLORS.inkSoft }
       ], tourneyTab, setTourneyTab),
       emptyForTab ? /*#__PURE__*/React.createElement("div", {
