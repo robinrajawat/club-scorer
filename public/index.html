@@ -7703,7 +7703,68 @@ function LoadingBallIllustration({
     strokeLinecap: "round"
   }));
 }
+
+// A real coin, not a flickering label: two circular faces (Heads/Tails) glued back-to-back on a
+// 3D-rotated disc. `rotationDeg` is an ever-increasing absolute angle (not reset to 0 between
+// flips, so consecutive flips spin forward instead of visually snapping back) -- 0/360/720... deg
+// shows Heads, 180/540/900... deg shows Tails, per the standard rotateY card-flip technique: the
+// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored. `spinning` swaps
+// in a CSS transition so the coin visibly tumbles from its old angle to the new one; without it
+// (the static pre-flip state) the coin just sits on whichever face it's already showing.
+function CoinFace({
+  letter,
+  extraTransform = ""
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      borderRadius: "50%",
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      boxShadow: "0 2px 6px rgba(184,137,43,0.45), inset 0 0 0 2px rgba(255,255,255,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      backfaceVisibility: "hidden",
+      transform: extraTransform,
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      fontWeight: 700,
+      color: "#2e1c04"
+    }
+  }, letter);
+}
 // GENERATED-FN-END: LoadingBallIllustration
+// GENERATED-FN-START: CoinFlipIllustration
+function CoinFlipIllustration({
+  rotationDeg,
+  spinning,
+  size = 56
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      perspective: 300,
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: size,
+      height: size,
+      position: "relative",
+      transformStyle: "preserve-3d",
+      transform: `rotateY(${rotationDeg}deg)`,
+      transition: spinning ? "transform 0.9s cubic-bezier(0.2,0.7,0.3,1)" : "none"
+    }
+  }, /*#__PURE__*/React.createElement(CoinFace, {
+    letter: "H"
+  }), /*#__PURE__*/React.createElement(CoinFace, {
+    letter: "T",
+    extraTransform: "rotateY(180deg)"
+  })));
+}
+// GENERATED-FN-END: CoinFlipIllustration
 // One shared "still loading" row — the spinning ball + a label — for every in-place loading state
 // in the app (standings, tournament/live-score follow screens, the federation manage panel, the
 // clubs & federations list, etc.), instead of each spot inventing its own plain "Loading…" text
@@ -13468,8 +13529,6 @@ function HomeScreen({
   clubTeamsById = {},
   onGetShareCode,
   onGetViewCode,
-  showInstallHint = false,
-  onDismissInstallHint,
   showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -13652,9 +13711,7 @@ function HomeScreen({
   }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
     onSynced: onPendingSynced
-  })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
-    onDismiss: onDismissInstallHint
-  }), inProgressOwnMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  })), inProgressOwnMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
     }
@@ -14021,7 +14078,9 @@ function LiveScreen({
   onOpenAbout,
   onSignOut,
   themePref,
-  onSetTheme
+  onSetTheme,
+  showInstallHint = false,
+  onDismissInstallHint
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("matches"); // matches | tournaments
@@ -14487,7 +14546,9 @@ function LiveScreen({
     onSignOut: onSignOut,
     themePref: themePref,
     onSetTheme: onSetTheme
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
+    onDismiss: onDismissInstallHint
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 16,
@@ -14703,6 +14764,7 @@ function MyTeamsScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
+  onTogglePin,
   showTabBar = false,
   user,
   profile,
@@ -14722,6 +14784,10 @@ function MyTeamsScreen({
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
+  // Pinned teams first, otherwise the incoming order (already alpha, per handleSaveTeam) -- a
+  // stable sort on just "is it pinned" preserves that alpha order within each group without this
+  // screen needing to re-sort by name itself.
+  const sortedTeams = [...teams].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       paddingTop: 20,
@@ -14918,11 +14984,11 @@ function MyTeamsScreen({
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to delete"), teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
-      marginBottom: i === teams.length - 1 ? 0 : 6
+      marginBottom: i === sortedTeams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: () => onDeleteTeam(t.id, null),
@@ -15028,7 +15094,31 @@ function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("button", {
+  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      flexShrink: 0
+    }
+  }, onTogglePin && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onTogglePin(t),
+    className: "cs-btn",
+    "aria-label": t.pinned ? `Unpin ${t.name}` : `Pin ${t.name}`,
+    title: t.pinned ? "Unpin" : "Pin to top",
+    style: {
+      background: "none",
+      border: "none",
+      color: t.pinned ? COLORS.gold : COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Pin, {
+    size: 15,
+    fill: t.pinned ? "currentColor" : undefined
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -15044,7 +15134,7 @@ function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  })))))))))
+  }))))))))))
 ), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
     onClick: onNewTeam,
     label: "New team"
@@ -15505,6 +15595,10 @@ function SetupScreen({
   const [tossCall, setTossCall] = useState("");
   const [coinFace, setCoinFace] = useState("");
   const [coinFlipOpen, setCoinFlipOpen] = useState(false);
+  // Ever-increasing absolute angle (never reset to 0 between flips, so a re-flip spins forward
+  // instead of visually snapping back to a starting position) -- see CoinFlipIllustration's own
+  // comment for how the angle maps to which face ends up showing.
+  const [coinRotation, setCoinRotation] = useState(0);
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -15688,20 +15782,22 @@ function SetupScreen({
     setFlipping(true);
     setCoinFace("");
     setTossWonBy("");
-    // brief suspense before revealing — purely cosmetic, the actual pick is one call to Math.random
-    let ticks = 0;
-    const iv = setInterval(() => {
-      setCoinFace(ticks % 2 === 0 ? "Heads" : "Tails");
-      ticks++;
-      if (ticks > 8) {
-        clearInterval(iv);
-        const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-        setCoinFace(landed);
-        const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
-        setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
-        setFlipping(false);
-      }
-    }, 90);
+    // The outcome is picked once, right now -- everything after this is just the coin visibly
+    // catching up to it. Spin forward from wherever the coin currently sits (never reset to 0, so
+    // a re-flip doesn't visually snap backwards) by a few full turns plus whatever's needed to land
+    // on the right face: 0/360/720…deg shows Heads, 180/540/900…deg shows Tails.
+    const landed = Math.random() < 0.5 ? "Heads" : "Tails";
+    setCoinRotation(rotation => {
+      const targetMod = landed === "Heads" ? 0 : 180;
+      const delta = (targetMod - rotation % 360 + 360) % 360;
+      return rotation + 360 * 4 + delta;
+    });
+    setTimeout(() => {
+      setCoinFace(landed);
+      const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
+      setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
+      setFlipping(false);
+    }, 900);
   }
 
   // roster actually offered to the opening line-up pickers: the chosen Playing XI when a saved
@@ -16169,7 +16265,10 @@ function SetupScreen({
       fontWeight: 600,
       fontSize: 12.5
     }
-  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
+  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement(CoinFlipIllustration, {
+    rotationDeg: coinRotation,
+    spinning: flipping
+  }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
     onClick: flipCoin,
@@ -16186,7 +16285,7 @@ function SetupScreen({
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, flipping ? `🪙 ${coinFace || "…"}` : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
+  }, flipping ? "🪙 Flipping…" : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -32705,12 +32804,7 @@ function CricketScorer() {
     onGetShareCode: handleGetShareCodeForMatch,
     onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
-    showTabBar: true,
-    showInstallHint: showInstallHint && !showTour,
-    onDismissInstallHint: () => {
-      setShowInstallHint(false);
-      markInstallHintSeen();
-    }
+    showTabBar: true
   })), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "live",
     direction: navDirection
@@ -32732,7 +32826,12 @@ function CricketScorer() {
     onOpenAbout: openAbout,
     onSignOut: signOutUser,
     themePref: themePref,
-    onSetTheme: handleSetTheme
+    onSetTheme: handleSetTheme,
+    showInstallHint: showInstallHint && !showTour,
+    onDismissInstallHint: () => {
+      setShowInstallHint(false);
+      markInstallHintSeen();
+    }
   })), showTour && screen === "live" && /*#__PURE__*/React.createElement(FirstLaunchTour, {
     onDone: () => setShowTour(false)
   }), screen === "setup" && /*#__PURE__*/React.createElement(NavWrap, {
@@ -32778,6 +32877,9 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
+    onTogglePin: t => persistTeam({ ...t,
+      pinned: !t.pinned
+    }),
     showTabBar: false
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
@@ -32797,6 +32899,9 @@ function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
+    onTogglePin: t => persistTeam({ ...t,
+      pinned: !t.pinned
+    }),
     showTabBar: true,
     user: user,
     profile: profile,
