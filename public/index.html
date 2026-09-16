@@ -7129,11 +7129,11 @@ function InningsTimer({
   }), label);
 }
 
-// `extraIcon`/`extraLabel`/`onExtra` add a second revealed action before Delete (further from the
-// edge, so it takes a fuller swipe to reach than the one-tap-closer extra action) -- e.g. Pin on
-// the Teams list. Omit them and this is exactly the delete-only row it always was; REVEAL only
-// widens to fit a second button when onExtra is actually given, so every existing delete-only
-// caller keeps its original swipe distance.
+// `extraIcon`/`extraLabel`/`onExtra` add a second action reached by swiping the OTHER way --
+// right instead of left -- e.g. Pin on the Teams list. Delete stays on the left swipe every row
+// already knows; Pin gets its own direction rather than sharing Delete's, so the two can't be
+// mistaken for each other or chained by accident. Omit them and this is exactly the delete-only
+// row it always was: no right-swipe panel exists, and the drag clamp only ever opens leftward.
 // GENERATED-FN-END: InningsTimer
 // GENERATED-FN-START: OversStrip
 function OversStrip({
@@ -7509,7 +7509,6 @@ function SwipeableRow({
   const startDragX = useRef(0);
   const moved = useRef(false);
   const ACTION_WIDTH = 78;
-  const REVEAL = onExtra ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   function pointerX(e) {
     return e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
   }
@@ -7533,13 +7532,19 @@ function SwipeableRow({
       moved.current = true;
     }
     let next = startDragX.current + delta;
-    next = Math.max(-REVEAL - 24, Math.min(0, next));
+    next = Math.max(-ACTION_WIDTH - 24, Math.min(onExtra ? ACTION_WIDTH + 24 : 0, next));
     setDragX(next);
   }
   function endDrag() {
     if (!dragging) return;
     setDragging(false);
-    setDragX(dragX < -REVEAL * 0.55 ? -REVEAL : 0);
+    if (dragX < -ACTION_WIDTH * 0.55) {
+      setDragX(-ACTION_WIDTH);
+    } else if (onExtra && dragX > ACTION_WIDTH * 0.55) {
+      setDragX(ACTION_WIDTH);
+    } else {
+      setDragX(0);
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7578,7 +7583,14 @@ function SwipeableRow({
     }
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 16
-  }), deleteLabel), onExtra && /*#__PURE__*/React.createElement("button", {
+  }), deleteLabel)), onExtra && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      justifyContent: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       onExtra();
       setDragX(0);
@@ -7834,10 +7846,15 @@ function CoinFace({
       position: "relative",
       zIndex: 1,
       fontFamily: "'DM Serif Display', serif",
-      fontSize: Math.round(size * 0.39),
+      fontSize: Math.round(size * 0.42),
       fontWeight: 700,
-      color: "#4a3410",
-      textShadow: "0 1px 0 rgba(255,236,190,0.5), 0 -1px 1px rgba(50,34,10,0.6)"
+      color: "#2e1c04",
+      // The conic sweep behind this letter crosses several tones (cream-gold to deep umber), so a
+      // single text-shadow read fine over some of them and vanished into others. A thin dark stroke
+      // (not just a shadow) keeps the letter legible no matter which part of the sweep sits behind
+      // it -- reads as engraving, not a flat sticker, which fits the minted-medal look.
+      WebkitTextStroke: "0.6px rgba(42,26,4,0.55)",
+      textShadow: "0 1px 0 rgba(255,236,190,0.55)"
     }
   }, letter)));
 }
@@ -7854,7 +7871,7 @@ function CoinFlipIllustration({
   phase = "rest",
   size = 56
 }) {
-  const lift = Math.round(size * 0.85);
+  const lift = Math.round(size * 1.4);
   const translateY = phase === "up" ? -lift : 0;
   const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
   const shadowScale = phase === "up" ? 0.5 : 1;
@@ -15117,14 +15134,14 @@ function MyTeamsScreen({
     }
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: "right",
+      textAlign: "center",
       fontFamily: "'Inter'",
       fontSize: 10.5,
       color: COLORS.inkSoft,
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to pin or delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "→ swipe to pin · swipe to delete ←"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
