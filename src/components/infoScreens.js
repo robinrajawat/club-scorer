@@ -516,7 +516,7 @@ export function AboutScreen({
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#141414"
+      color: COLORS.pitch
     }
   }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
     style: {
