@@ -142,10 +142,15 @@ function CoinFace({
       position: "relative",
       zIndex: 1,
       fontFamily: "'DM Serif Display', serif",
-      fontSize: Math.round(size * 0.39),
+      fontSize: Math.round(size * 0.42),
       fontWeight: 700,
-      color: "#4a3410",
-      textShadow: "0 1px 0 rgba(255,236,190,0.5), 0 -1px 1px rgba(50,34,10,0.6)"
+      color: "#2e1c04",
+      // The conic sweep behind this letter crosses several tones (cream-gold to deep umber), so a
+      // single text-shadow read fine over some of them and vanished into others. A thin dark stroke
+      // (not just a shadow) keeps the letter legible no matter which part of the sweep sits behind
+      // it -- reads as engraving, not a flat sticker, which fits the minted-medal look.
+      WebkitTextStroke: "0.6px rgba(42,26,4,0.55)",
+      textShadow: "0 1px 0 rgba(255,236,190,0.55)"
     }
   }, letter)));
 }
@@ -160,7 +165,7 @@ export function CoinFlipIllustration({
   phase = "rest",
   size = 56
 }) {
-  const lift = Math.round(size * 0.85);
+  const lift = Math.round(size * 1.4);
   const translateY = phase === "up" ? -lift : 0;
   const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
   const shadowScale = phase === "up" ? 0.5 : 1;
