@@ -1577,12 +1577,15 @@ export function CricketScorer() {
     });
     return () => document.removeEventListener("wheel", onWheel);
   }, []);
-  async function handleSaveTeam(team) {
+  async function persistTeam(team) {
     const updated = teams.filter(t => t.id !== team.id);
     updated.push(team);
     updated.sort((a, b) => a.name.localeCompare(b.name));
     setTeams(updated);
     await saveTeams(updated);
+  }
+  async function handleSaveTeam(team) {
+    await persistTeam(team);
     setScreen(teamEditReturnScreen);
     setEditingTeam(null);
   }
@@ -2113,7 +2116,8 @@ export function CricketScorer() {
     },
     teams: teams,
     rules: rules,
-    presetTournament: presetTournament
+    presetTournament: presetTournament,
+    onUpdateTeam: persistTeam
   })), screen === "match" && match && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "match",
     direction: navDirection

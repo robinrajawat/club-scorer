@@ -189,6 +189,14 @@ export function tossText(toss) {
   return toss.decision ? `${toss.wonBy} won the toss, chose to ${toss.decision.toLowerCase()}` : `${toss.wonBy} won the toss`;
 }
 
+// Who wins the toss given who called it, what they called, and which face the coin actually
+// landed on -- the caller wins if the call matches, otherwise the other team does. A pure
+// function so the flip's outcome can be tested directly, without going through the cosmetic
+// flip animation in setupScreen.js.
+export function deriveCoinFlipWinner(caller, otherTeam, call, landedFace) {
+  return landedFace === call ? caller : otherTeam;
+}
+
 export function umpiresText(match) {
   const names = [match.umpire1, match.umpire2].filter(Boolean);
   if (names.length === 0) return null;

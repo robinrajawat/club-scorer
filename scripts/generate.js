@@ -65,6 +65,7 @@ const FUNCTIONS = [
   { name: "nonStandardRulesText", file: "src/core/shareAndFormat.js" },
   { name: "impactSubsText", file: "src/core/shareAndFormat.js" },
   { name: "tossText", file: "src/core/shareAndFormat.js" },
+  { name: "deriveCoinFlipWinner", file: "src/core/shareAndFormat.js" },
   { name: "umpiresText", file: "src/core/shareAndFormat.js" },
   { name: "matchResultText", file: "src/core/shareAndFormat.js" },
   { name: "matchScoreLine", file: "src/core/shareAndFormat.js" },

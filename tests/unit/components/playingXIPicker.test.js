@@ -70,3 +70,37 @@ test("PlayingXIPicker: search box appears once the squad exceeds 15 and filters 
   assert.match(text, /Player 3/);
   assert.doesNotMatch(text, /"Player 1"/);
 });
+
+test("PlayingXIPicker: without onAddPlayer, no add-player row is shown", () => {
+  const inst = renderer.create(React.createElement(PlayingXIPicker, {
+    label: "Playing XI", squad, selected: [], required: 2, onToggle: () => {}
+  }));
+  assert.equal(inst.root.findAllByProps({ "aria-label": "Add player" }).length, 0);
+});
+
+test("PlayingXIPicker: with onAddPlayer, typing a new name and tapping Add calls it and clears the field", () => {
+  let added = null;
+  const inst = renderer.create(React.createElement(PlayingXIPicker, {
+    label: "Playing XI", squad, selected: [], required: 2, onToggle: () => {},
+    onAddPlayer: name => { added = name; }
+  }));
+  const [nameInput] = inst.root.findAllByType("input");
+  act(() => { nameInput.props.onChange({ target: { value: "  MS Dhoni  " } }); });
+  act(() => { inst.root.findByProps({ "aria-label": "Add player" }).props.onClick(); });
+  assert.equal(added, "MS Dhoni");
+  const [nameInputAfter] = inst.root.findAllByType("input");
+  assert.equal(nameInputAfter.props.value, "");
+});
+
+test("PlayingXIPicker: with onAddPlayer, a name already on the squad (case-insensitive) is rejected without calling onAddPlayer", () => {
+  let added = null;
+  const inst = renderer.create(React.createElement(PlayingXIPicker, {
+    label: "Playing XI", squad, selected: [], required: 2, onToggle: () => {},
+    onAddPlayer: name => { added = name; }
+  }));
+  const [nameInput] = inst.root.findAllByType("input");
+  act(() => { nameInput.props.onChange({ target: { value: "virat kohli" } }); });
+  act(() => { inst.root.findByProps({ "aria-label": "Add player" }).props.onClick(); });
+  assert.equal(added, null);
+  assert.match(JSON.stringify(inst.toJSON()), /already on this team/);
+});

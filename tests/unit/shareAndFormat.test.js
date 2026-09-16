@@ -7,7 +7,7 @@ import {
   pad2, parseFixtureDateTime, buildFixtureIso, formatFixtureDateTime,
   icsEscape, icsLocalDateTime, buildTournamentICS, buildFixtureICS,
   csvCell, toCSV, multiSectionCSV, safeFilenamePart,
-  nonStandardRulesText, wideNoballLastOverExceptionLabel, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo,
+  nonStandardRulesText, wideNoballLastOverExceptionLabel, impactSubsText, tossText, umpiresText, matchResultText, matchScoreLine, chasingInfo, deriveCoinFlipWinner,
   buildShareText, buildFixtureShareText, buildMapsUrl,
   buildFollowUrl, buildLiveShareText
 } from "../../src/core/shareAndFormat.js";
@@ -203,6 +203,13 @@ test("tossText: describes the toss decision, or just who won it if none was reco
   assert.equal(tossText(null), null);
   assert.equal(tossText({ wonBy: "A", decision: "Bat" }), "A won the toss, chose to bat");
   assert.equal(tossText({ wonBy: "A" }), "A won the toss");
+});
+
+test("deriveCoinFlipWinner: the caller wins when the call matches the landed face, otherwise the other team does", () => {
+  assert.equal(deriveCoinFlipWinner("Riverside CC", "Oakwood CC", "Heads", "Heads"), "Riverside CC");
+  assert.equal(deriveCoinFlipWinner("Riverside CC", "Oakwood CC", "Tails", "Tails"), "Riverside CC");
+  assert.equal(deriveCoinFlipWinner("Riverside CC", "Oakwood CC", "Heads", "Tails"), "Oakwood CC");
+  assert.equal(deriveCoinFlipWinner("Riverside CC", "Oakwood CC", "Tails", "Heads"), "Oakwood CC");
 });
 
 test("umpiresText: pluralizes correctly, null when neither umpire is set", () => {

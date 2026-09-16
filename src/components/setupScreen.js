@@ -8,7 +8,7 @@ import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
 import { DEFAULT_RULES } from "../core/appLogic.js";
-import { tossText, umpiresText, nonStandardRulesText, wideNoballLastOverExceptionLabel } from "../core/shareAndFormat.js";
+import { tossText, umpiresText, nonStandardRulesText, wideNoballLastOverExceptionLabel, deriveCoinFlipWinner } from "../core/shareAndFormat.js";
 
 // The multi-page "New Match" setup flow: teams & format, toss, match rules, playing XI (only
 // shown when at least one side has a saved squad), opening line-up, then a review page before
@@ -37,7 +37,8 @@ export function SetupScreen({
   teams,
   rules,
   presetTournament,
-  clubUmpires
+  clubUmpires,
+  onUpdateTeam
 }) {
   const [teamAId, setTeamAId] = useState(null);
   const [teamAName, setTeamAName] = useState("");
@@ -87,6 +88,15 @@ export function SetupScreen({
   const [tossWonBy, setTossWonBy] = useState("");
   const [tossDecision, setTossDecision] = useState("");
   const [flipping, setFlipping] = useState(false);
+  // A plain 50/50 reveal with no call step first is why people didn't trust the old "Flip coin"
+  // button: a real toss only feels fair because someone commits to Heads/Tails BEFORE the result
+  // is known, so there's something the outcome could have gone against. This mirrors that --
+  // pick a caller, lock in Heads or Tails, then flip -- rather than just picking a winning team
+  // out of thin air on the scorer's own phone.
+  const [tossCaller, setTossCaller] = useState("");
+  const [tossCall, setTossCall] = useState("");
+  const [coinFace, setCoinFace] = useState("");
+  const [coinFlipOpen, setCoinFlipOpen] = useState(false);
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -228,18 +238,59 @@ export function SetupScreen({
       [name]: num
     }));
   }
+  // A player who shows up without ever having been added to the saved roster -- writes straight
+  // back to the real team (same as adding them from the Teams tab would) so the Playing XI picker
+  // doesn't have to support a parallel "just for this match" roster nobody else would see later.
+  function addPlayerToTeamA(name) {
+    const updatedSquad = [...teamASquad, {
+      name,
+      number: ""
+    }];
+    setTeamASquad(updatedSquad);
+    if (teamAId) {
+      const team = teams.find(t => t.id === teamAId);
+      if (team) onUpdateTeam({ ...team,
+        players: updatedSquad
+      });
+    }
+  }
+  function addPlayerToTeamB(name) {
+    const updatedSquad = [...teamBSquad, {
+      name,
+      number: ""
+    }];
+    setTeamBSquad(updatedSquad);
+    if (teamBId) {
+      const team = teams.find(t => t.id === teamBId);
+      if (team) onUpdateTeam({ ...team,
+        players: updatedSquad
+      });
+    }
+  }
+  function resetCoinFlip() {
+    setTossCaller("");
+    setTossCall("");
+    setCoinFace("");
+  }
+  // Only enabled once someone's actually called Heads or Tails -- flipping straight to a random
+  // team, with no call to have gone for or against, is exactly the "why should I trust this"
+  // problem this whole flow exists to fix.
   function flipCoin() {
-    if (!teamAName.trim() || !teamBName.trim() || flipping) return;
+    if (!teamAName.trim() || !teamBName.trim() || !tossCaller || !tossCall || flipping) return;
     setFlipping(true);
+    setCoinFace("");
     setTossWonBy("");
     // brief suspense before revealing — purely cosmetic, the actual pick is one call to Math.random
     let ticks = 0;
     const iv = setInterval(() => {
-      setTossWonBy(ticks % 2 === 0 ? teamAName.trim() : teamBName.trim());
+      setCoinFace(ticks % 2 === 0 ? "Heads" : "Tails");
       ticks++;
       if (ticks > 8) {
         clearInterval(iv);
-        setTossWonBy(Math.random() < 0.5 ? teamAName.trim() : teamBName.trim());
+        const landed = Math.random() < 0.5 ? "Heads" : "Tails";
+        setCoinFace(landed);
+        const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
+        setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
         setFlipping(false);
       }
     }, 90);
@@ -610,8 +661,11 @@ export function SetupScreen({
   }, "Toss"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
-    onClick: flipCoin,
-    disabled: !teamAName.trim() || !teamBName.trim() || flipping,
+    onClick: () => {
+      setCoinFlipOpen(o => !o);
+      resetCoinFlip();
+    },
+    disabled: !teamAName.trim() || !teamBName.trim(),
     style: {
       background: "none",
       border: `1.5px solid ${COLORS.creamDark}`,
@@ -624,7 +678,115 @@ export function SetupScreen({
       fontSize: 12,
       opacity: !teamAName.trim() || !teamBName.trim() ? 0.4 : 1
     }
-  }, flipping ? "Flipping…" : "🪙 Flip coin")), /*#__PURE__*/React.createElement(Field, {
+  }, "🪙 No coin handy?")), coinFlipOpen && teamAName.trim() && teamBName.trim() && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: COLORS.cream,
+      border: `1px solid ${COLORS.creamDark}`,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft,
+      marginBottom: 10
+    }
+  }, "Same as a real toss: one side calls it before the coin lands, so there's something the flip could actually go against."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Who's calling it?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, [teamAName, teamBName].map(n => n.trim()).map(name => /*#__PURE__*/React.createElement("button", {
+    key: name,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      setTossCaller(name);
+      setCoinFace("");
+      setTossWonBy("");
+    },
+    style: {
+      padding: "7px 12px",
+      borderRadius: 18,
+      border: "none",
+      cursor: "pointer",
+      background: tossCaller === name ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: tossCaller === name ? "#fff" : COLORS.ink,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, name))), tossCaller && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, `${tossCaller} calls…`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, ["Heads", "Tails"].map(face => /*#__PURE__*/React.createElement("button", {
+    key: face,
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      setTossCall(face);
+      setCoinFace("");
+      setTossWonBy("");
+    },
+    style: {
+      padding: "7px 12px",
+      borderRadius: 18,
+      border: "none",
+      cursor: "pointer",
+      background: tossCall === face ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.surface,
+      color: tossCall === face ? "#2e1c04" : COLORS.ink,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 12.5
+    }
+  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: flipCoin,
+    disabled: flipping,
+    style: {
+      width: "100%",
+      padding: "10px 14px",
+      borderRadius: 14,
+      border: "none",
+      cursor: flipping ? "default" : "pointer",
+      background: `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})`,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontWeight: 700,
+      fontSize: 13.5
+    }
+  }, flipping ? `🪙 ${coinFace || "…"}` : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.ink,
+      marginTop: 10,
+      textAlign: "center"
+    }
+  }, "Landed ", /*#__PURE__*/React.createElement("strong", null, coinFace), " — ", tossCaller, " called ", tossCall, coinFace === tossCall ? ", and won the toss." : `, so ${tossWonBy} won the toss.`)), /*#__PURE__*/React.createElement(Field, {
     label: "Won the toss"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1625,7 +1787,8 @@ export function SetupScreen({
     onSetKeeper: setTeamAKeeper,
     required: Math.min(matchRules.playersPerSide, teamASquad.length),
     numbers: teamAMatchNumbers,
-    onNumberChange: updateTeamANumber
+    onNumberChange: updateTeamANumber,
+    onAddPlayer: addPlayerToTeamA
   }), teamBSquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
     label: `${teamBName || "Team B"} — pick who's playing`,
     squad: teamBSquad,
@@ -1639,7 +1802,8 @@ export function SetupScreen({
     onSetKeeper: setTeamBKeeper,
     required: Math.min(matchRules.playersPerSide, teamBSquad.length),
     numbers: teamBMatchNumbers,
-    onNumberChange: updateTeamBNumber
+    onNumberChange: updateTeamBNumber,
+    onAddPlayer: addPlayerToTeamB
   })), currentPage === "openers" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
