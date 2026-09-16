@@ -2049,7 +2049,11 @@ export function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
-    onOpenInbox: () => setScreen("inbox"),
+    // Inbox is hidden for now, not removed: notifyActivity() (index.html) is defined but has zero
+    // call sites anywhere in the app, so the bell was permanently empty on every screen for every
+    // user -- worse than no bell at all. onOpenInbox left unpassed (each screen's own Bell button
+    // is already gated behind `onOpenInbox &&`) rather than touching every screen component, so
+    // reinstating it later is just passing this prop again, not undoing a removal.
     onOpenSharedLinks: () => setScreen("shared-links"),
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
@@ -2061,7 +2065,6 @@ export function CricketScorer() {
     onOpenTournaments: () => setScreen("tournaments"),
     pendingCount: pendingCount,
     onPendingSynced: refreshPendingCount,
-    inboxBadgeCount: inboxBadgeCount,
     tournamentNameById: tournamentNameById,
     tournaments: allTournamentsFlat,
     onOpenTournament: t => openTournamentDetail(t, "home", t._clubId || null, t._federationId || null),
@@ -2089,8 +2092,6 @@ export function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
-    onOpenInbox: () => setScreen("inbox"),
-    inboxBadgeCount: inboxBadgeCount,
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
     onOpenAbout: openAbout,
@@ -2176,8 +2177,6 @@ export function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
-    onOpenInbox: () => setScreen("inbox"),
-    inboxBadgeCount: inboxBadgeCount,
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
     onOpenAbout: openAbout,
@@ -2198,8 +2197,6 @@ export function CricketScorer() {
     user: user,
     profile: profile,
     onOpenAccount: openAccount,
-    onOpenInbox: () => setScreen("inbox"),
-    inboxBadgeCount: inboxBadgeCount,
     onOpenHelp: openHelp,
     onOpenFeedback: openFeedback,
     onOpenAbout: openAbout,
