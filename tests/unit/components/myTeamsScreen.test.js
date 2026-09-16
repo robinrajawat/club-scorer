@@ -148,3 +148,43 @@ test("MyTeamsScreen: every team is editable -- no owner/member permission split 
   }));
   assert.ok(inst.root.findByProps({ "aria-label": `Edit ${teams[0].name}` }));
 });
+
+test("MyTeamsScreen: no pin button at all when onTogglePin isn't given", () => {
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team()], matches: [], onNewTeam: () => {}
+  }));
+  assert.equal(inst.root.findAllByProps({ "aria-label": "Pin Riverside 1st XI" }).length, 0);
+});
+
+test("MyTeamsScreen: tapping the pin button calls onTogglePin with that team; label/title flip once pinned", () => {
+  let pinned = null;
+  const teams = [team()];
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams, matches: [], onNewTeam: () => {}, onTogglePin: t => { pinned = t; }
+  }));
+  const pinBtn = inst.root.findByProps({ "aria-label": "Pin Riverside 1st XI" });
+  assert.equal(pinBtn.props.title, "Pin to top");
+  pinBtn.props.onClick();
+  assert.equal(pinned.id, "t1");
+
+  const alreadyPinned = renderer.create(React.createElement(MyTeamsScreen, {
+    teams: [team({ pinned: true })], matches: [], onNewTeam: () => {}, onTogglePin: () => {}
+  }));
+  const unpinBtn = alreadyPinned.root.findByProps({ "aria-label": "Unpin Riverside 1st XI" });
+  assert.equal(unpinBtn.props.title, "Unpin");
+});
+
+test("MyTeamsScreen: pinned teams sort to the top, preserving the given order within each group", () => {
+  const teams = [
+    team({ id: "a", name: "Alpha CC" }),
+    team({ id: "b", name: "Bravo CC", pinned: true }),
+    team({ id: "c", name: "Charlie CC" }),
+    team({ id: "d", name: "Delta CC", pinned: true })
+  ];
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams, matches: [], onNewTeam: () => {}, onTogglePin: () => {}
+  }));
+  const text = JSON.stringify(inst.toJSON());
+  const order = ["Bravo CC", "Delta CC", "Alpha CC", "Charlie CC"].map(n => text.indexOf(n));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), "pinned teams (Bravo, Delta) appear before unpinned ones (Alpha, Charlie), each group in its original order");
+});

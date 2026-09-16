@@ -2147,6 +2147,9 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
+    onTogglePin: t => persistTeam({ ...t,
+      pinned: !t.pinned
+    }),
     showTabBar: false
   })), screen === "teams" && /*#__PURE__*/React.createElement(NavWrap, {
     navKey: "teams",
@@ -2166,6 +2169,9 @@ export function CricketScorer() {
       setScreen("team-edit");
     },
     onDeleteTeam: id => handleDeleteTeam(id, null),
+    onTogglePin: t => persistTeam({ ...t,
+      pinned: !t.pinned
+    }),
     showTabBar: true,
     user: user,
     profile: profile,
