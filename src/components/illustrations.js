@@ -50,15 +50,49 @@ export function LoadingBallIllustration({
   }));
 }
 
+// The same antique-gold tone as CoinFlipIllustration below, shrunk down for inline use next to
+// button text (the toss flow's "Flip"/"No coin handy?" labels) -- a plain CSS gradient circle,
+// not an SVG one, so it needs no gradient-id (two of these can render on screen at once, e.g. the
+// toggle button and the Flip button together, without any id-collision risk). No rim/highlight
+// detail at this size -- the full coin's layered treatment turns to mud below ~30px, so this
+// stays a flat swatch and only borrows the color.
+export function CoinIcon({
+  size = 14,
+  style
+}) {
+  return /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      display: "inline-block",
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      background: "linear-gradient(160deg, #e8c37e, #a97a2a)",
+      boxShadow: "0 1px 2px rgba(106,74,22,0.5), inset 0 0 0 1px rgba(255,240,210,0.35)",
+      flexShrink: 0,
+      verticalAlign: "middle",
+      ...style
+    }
+  });
+}
+
 // A real coin, not a flickering label: two circular faces (Heads/Tails) glued back-to-back on a
 // 3D-rotated disc. `rotationDeg` is an ever-increasing absolute angle (not reset to 0 between
 // flips, so consecutive flips spin forward instead of visually snapping back) -- 0/360/720... deg
 // shows Heads, 180/540/900... deg shows Tails, per the standard rotateY card-flip technique: the
-// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored. `spinning` swaps
-// in a CSS transition so the coin visibly tumbles from its old angle to the new one; without it
-// (the static pre-flip state) the coin just sits on whichever face it's already showing.
+// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored.
+//
+// Each face is layered, not a flat gradient circle, for an actual minted-medal read: a two-tone
+// rim (the outer radial gradient breaks to a darker ring right at the edge, reading as a raised
+// lip rather than a drop shadow), an inset face with a conic sweep (light wrapping around a flat
+// disc, not a sphere -- a plain radial highlight here shades it like a ball instead of a coin),
+// a thin inner bevel border, and a tight crescent specular highlight (a small directional shine,
+// not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders at,
+// individual beads blur into noise instead of reading as beading -- detail that only survives at
+// mockup size doesn't belong here.
 function CoinFace({
   letter,
+  size,
   extraTransform = ""
 }) {
   return /*#__PURE__*/React.createElement("div", {
@@ -66,31 +100,85 @@ function CoinFace({
       position: "absolute",
       inset: 0,
       borderRadius: "50%",
-      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
-      boxShadow: "0 2px 6px rgba(184,137,43,0.45), inset 0 0 0 2px rgba(255,255,255,0.4)",
+      background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
+      boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)",
+      backfaceVisibility: "hidden",
+      transform: extraTransform
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: "9%",
+      borderRadius: "50%",
+      background: "conic-gradient(from 215deg, #e8c37e, #a97a2a 42%, #7a5518 62%, #c99248 88%, #e8c37e)",
+      boxShadow: "inset 0 2px 3px rgba(255,236,190,0.45), inset 0 -3px 6px rgba(50,34,10,0.45)",
       display: "flex",
       alignItems: "center",
-      justifyContent: "center",
-      backfaceVisibility: "hidden",
-      transform: extraTransform,
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 22,
-      fontWeight: 700,
-      color: "#2e1c04"
+      justifyContent: "center"
     }
-  }, letter);
+  }, /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      inset: "10%",
+      borderRadius: "50%",
+      boxShadow: "inset 0 1.5px 2px rgba(50,34,10,0.35), inset 0 -1px 2px rgba(255,236,190,0.3)",
+      border: "1px solid rgba(50,34,10,0.2)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      top: "11%",
+      left: "17%",
+      width: "32%",
+      height: "19%",
+      borderRadius: "50%",
+      background: "radial-gradient(ellipse at 40% 35%, rgba(255,242,210,0.75), rgba(255,242,210,0) 70%)",
+      transform: "rotate(-25deg)"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "relative",
+      zIndex: 1,
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: Math.round(size * 0.39),
+      fontWeight: 700,
+      color: "#4a3410",
+      textShadow: "0 1px 0 rgba(255,236,190,0.5), 0 -1px 1px rgba(50,34,10,0.6)"
+    }
+  }, letter)));
 }
+// `phase` drives an actual toss, not just an in-place spin: "up" lifts the coin on a short
+// ease-out (a hand launching it), "down" brings it back on a longer ease-in (gravity winning),
+// "rest" is the static pre-/post-flip state with no transition at all. The ground shadow shrinks
+// and fades while airborne and grows back on landing, the usual cheap trick for selling height
+// with a 2D element. Both phases keep spinning toward `rotationDeg` throughout -- see flipCoin in
+// setupScreen.js for how the two-stage timing is driven.
 export function CoinFlipIllustration({
   rotationDeg,
-  spinning,
+  phase = "rest",
   size = 56
 }) {
+  const lift = Math.round(size * 0.85);
+  const translateY = phase === "up" ? -lift : 0;
+  const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
+  const shadowScale = phase === "up" ? 0.5 : 1;
+  const shadowOpacity = phase === "up" ? 0.15 : 0.3;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      perspective: 300,
       display: "flex",
-      justifyContent: "center",
+      flexDirection: "column",
+      alignItems: "center",
       marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      perspective: 300,
+      height: size + lift,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -98,15 +186,29 @@ export function CoinFlipIllustration({
       height: size,
       position: "relative",
       transformStyle: "preserve-3d",
-      transform: `rotateY(${rotationDeg}deg)`,
-      transition: spinning ? "transform 0.9s cubic-bezier(0.2,0.7,0.3,1)" : "none"
+      transform: `translateY(${translateY}px) rotateY(${rotationDeg}deg)`,
+      transition
     }
   }, /*#__PURE__*/React.createElement(CoinFace, {
-    letter: "H"
+    letter: "H",
+    size
   }), /*#__PURE__*/React.createElement(CoinFace, {
     letter: "T",
+    size,
     extraTransform: "rotateY(180deg)"
-  })));
+  }))), /*#__PURE__*/React.createElement("div", {
+    "aria-hidden": "true",
+    style: {
+      width: size * 0.7,
+      height: size * 0.16,
+      borderRadius: "50%",
+      background: "rgba(20,20,20,0.35)",
+      marginTop: 4,
+      transform: `scale(${shadowScale})`,
+      opacity: shadowOpacity,
+      transition: phase === "rest" ? "none" : transition
+    }
+  }));
 }
 
 export function LoadingNote({
