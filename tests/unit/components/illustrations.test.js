@@ -75,7 +75,7 @@ test("CoinFlipIllustration: phase='rest' is static -- no transition, no lift", (
 test("CoinFlipIllustration: phase='up' lifts the coin (negative translateY) on a short transition", () => {
   const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 1620, phase: "up", size: 56 })).root;
   const disc = coinDiscDiv(root);
-  assert.equal(disc.props.style.transform, "translateY(-48px) rotateY(1620deg)");
+  assert.equal(disc.props.style.transform, "translateY(-78px) rotateY(1620deg)");
   assert.match(disc.props.style.transition, /transform 0\.35s/);
 });
 
@@ -90,7 +90,7 @@ test("CoinFlipIllustration: shows both an H and a T face's glyph, sized proporti
   const root = renderer.create(React.createElement(CoinFlipIllustration, { rotationDeg: 0, phase: "rest", size: 100 })).root;
   const glyphs = root.findAll(n => n.type === "span" && n.props.style && n.props.style.fontFamily === "'DM Serif Display', serif");
   assert.deepEqual(glyphs.map(g => g.children[0]), ["H", "T"]);
-  assert.ok(glyphs.every(g => g.props.style.fontSize === 39), "39 = round(100 * 0.39)");
+  assert.ok(glyphs.every(g => g.props.style.fontSize === 42), "42 = round(100 * 0.42)");
 });
 
 test("CoinIcon: a small round gradient swatch, sized to the given prop", () => {

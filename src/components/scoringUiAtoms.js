@@ -215,11 +215,11 @@ export function InningsTimer({
   }), label);
 }
 
-// `extraIcon`/`extraLabel`/`onExtra` add a second revealed action before Delete (further from the
-// edge, so it takes a fuller swipe to reach than the one-tap-closer extra action) -- e.g. Pin on
-// the Teams list. Omit them and this is exactly the delete-only row it always was; REVEAL only
-// widens to fit a second button when onExtra is actually given, so every existing delete-only
-// caller keeps its original swipe distance.
+// `extraIcon`/`extraLabel`/`onExtra` add a second action reached by swiping the OTHER way --
+// right instead of left -- e.g. Pin on the Teams list. Delete stays on the left swipe every row
+// already knows; Pin gets its own direction rather than sharing Delete's, so the two can't be
+// mistaken for each other or chained by accident. Omit them and this is exactly the delete-only
+// row it always was: no right-swipe panel exists, and the drag clamp only ever opens leftward.
 export function SwipeableRow({
   children,
   onDelete,
@@ -237,7 +237,6 @@ export function SwipeableRow({
   const startDragX = useRef(0);
   const moved = useRef(false);
   const ACTION_WIDTH = 78;
-  const REVEAL = onExtra ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   function pointerX(e) {
     return e.touches && e.touches.length ? e.touches[0].clientX : e.clientX;
   }
@@ -261,13 +260,19 @@ export function SwipeableRow({
       moved.current = true;
     }
     let next = startDragX.current + delta;
-    next = Math.max(-REVEAL - 24, Math.min(0, next));
+    next = Math.max(-ACTION_WIDTH - 24, Math.min(onExtra ? ACTION_WIDTH + 24 : 0, next));
     setDragX(next);
   }
   function endDrag() {
     if (!dragging) return;
     setDragging(false);
-    setDragX(dragX < -REVEAL * 0.55 ? -REVEAL : 0);
+    if (dragX < -ACTION_WIDTH * 0.55) {
+      setDragX(-ACTION_WIDTH);
+    } else if (onExtra && dragX > ACTION_WIDTH * 0.55) {
+      setDragX(ACTION_WIDTH);
+    } else {
+      setDragX(0);
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -306,7 +311,14 @@ export function SwipeableRow({
     }
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 16
-  }), deleteLabel), onExtra && /*#__PURE__*/React.createElement("button", {
+  }), deleteLabel)), onExtra && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      justifyContent: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       onExtra();
       setDragX(0);
