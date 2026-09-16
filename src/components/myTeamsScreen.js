@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { Bell, ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
+import { Bell, ChevronLeft, Pencil, Pin, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { FabButton } from "./screenAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
@@ -23,6 +23,7 @@ export function MyTeamsScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
+  onTogglePin,
   showTabBar = false,
   user,
   profile,
@@ -42,6 +43,10 @@ export function MyTeamsScreen({
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
+  // Pinned teams first, otherwise the incoming order (already alpha, per handleSaveTeam) -- a
+  // stable sort on just "is it pinned" preserves that alpha order within each group without this
+  // screen needing to re-sort by name itself.
+  const sortedTeams = [...teams].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       paddingTop: 20,
@@ -238,11 +243,11 @@ export function MyTeamsScreen({
       opacity: 0.7,
       marginBottom: 4
     }
-  }, "← swipe to delete"), teams.map((t, i) => /*#__PURE__*/React.createElement("div", {
+  }, "← swipe to delete"), sortedTeams.map((t, i) => /*#__PURE__*/React.createElement("div", {
     key: t.id,
     style: {
       animation: `cs-slideUp 0.3s ease ${i * 0.04}s backwards`,
-      marginBottom: i === teams.length - 1 ? 0 : 6
+      marginBottom: i === sortedTeams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
     onDelete: () => onDeleteTeam(t.id, null),
@@ -348,7 +353,31 @@ export function MyTeamsScreen({
       padding: "2px 7px",
       borderRadius: 10
     }
-  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("button", {
+  }, "WK · ", t.keeper))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      flexShrink: 0
+    }
+  }, onTogglePin && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onTogglePin(t),
+    className: "cs-btn",
+    "aria-label": t.pinned ? `Unpin ${t.name}` : `Pin ${t.name}`,
+    title: t.pinned ? "Unpin" : "Pin to top",
+    style: {
+      background: "none",
+      border: "none",
+      color: t.pinned ? COLORS.gold : COLORS.inkSoft,
+      cursor: "pointer",
+      padding: 8,
+      borderRadius: 8,
+      display: "flex",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Pin, {
+    size: 15,
+    fill: t.pinned ? "currentColor" : undefined
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEditTeam(t),
     className: "cs-btn",
     "aria-label": `Edit ${t.name}`,
@@ -364,7 +393,7 @@ export function MyTeamsScreen({
     }
   }, /*#__PURE__*/React.createElement(Pencil, {
     size: 15
-  })))))))))
+  }))))))))))
 ), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
     onClick: onNewTeam,
     label: "New team"

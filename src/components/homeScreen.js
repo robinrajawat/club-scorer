@@ -5,7 +5,7 @@ import { Btn } from "./formUiAtoms.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { SyncStatusBanner } from "./scoreboardAtoms.js";
-import { FabButton, InstallHintBanner } from "./screenAtoms.js";
+import { FabButton } from "./screenAtoms.js";
 import { JoinCodeBar } from "./pickerAtoms.js";
 import { ShareMenu } from "./shareMenus.js";
 import { AuthBar } from "./authBar.js";
@@ -196,8 +196,6 @@ export function HomeScreen({
   clubTeamsById = {},
   onGetShareCode,
   onGetViewCode,
-  showInstallHint = false,
-  onDismissInstallHint,
   showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -380,9 +378,7 @@ export function HomeScreen({
   }, /*#__PURE__*/React.createElement(SyncStatusBanner, {
     count: pendingCount,
     onSynced: onPendingSynced
-  })), showInstallHint && /*#__PURE__*/React.createElement(InstallHintBanner, {
-    onDismiss: onDismissInstallHint
-  }), inProgressOwnMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
+  })), inProgressOwnMatches.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 22
     }

@@ -50,6 +50,65 @@ export function LoadingBallIllustration({
   }));
 }
 
+// A real coin, not a flickering label: two circular faces (Heads/Tails) glued back-to-back on a
+// 3D-rotated disc. `rotationDeg` is an ever-increasing absolute angle (not reset to 0 between
+// flips, so consecutive flips spin forward instead of visually snapping back) -- 0/360/720... deg
+// shows Heads, 180/540/900... deg shows Tails, per the standard rotateY card-flip technique: the
+// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored. `spinning` swaps
+// in a CSS transition so the coin visibly tumbles from its old angle to the new one; without it
+// (the static pre-flip state) the coin just sits on whichever face it's already showing.
+function CoinFace({
+  letter,
+  extraTransform = ""
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      borderRadius: "50%",
+      background: `linear-gradient(160deg, #d4a544, ${COLORS.gold})`,
+      boxShadow: "0 2px 6px rgba(184,137,43,0.45), inset 0 0 0 2px rgba(255,255,255,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      backfaceVisibility: "hidden",
+      transform: extraTransform,
+      fontFamily: "'DM Serif Display', serif",
+      fontSize: 22,
+      fontWeight: 700,
+      color: "#2e1c04"
+    }
+  }, letter);
+}
+export function CoinFlipIllustration({
+  rotationDeg,
+  spinning,
+  size = 56
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      perspective: 300,
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: size,
+      height: size,
+      position: "relative",
+      transformStyle: "preserve-3d",
+      transform: `rotateY(${rotationDeg}deg)`,
+      transition: spinning ? "transform 0.9s cubic-bezier(0.2,0.7,0.3,1)" : "none"
+    }
+  }, /*#__PURE__*/React.createElement(CoinFace, {
+    letter: "H"
+  }), /*#__PURE__*/React.createElement(CoinFace, {
+    letter: "T",
+    extraTransform: "rotateY(180deg)"
+  })));
+}
+
 export function LoadingNote({
   label = "Loading\u2026",
   size = 16,

@@ -948,6 +948,7 @@ test("CricketScorer: the Teams tab renders MyTeamsScreen directly, with the tab 
   const myTeams = inst.root.findByType(MyTeamsScreen);
   assert.equal(myTeams.props.showTabBar, true);
   assert.equal(myTeams.props.onBack, undefined, "no Back button -- it's a tab, not a drill-in");
+  assert.equal(typeof myTeams.props.onTogglePin, "function");
 });
 
 

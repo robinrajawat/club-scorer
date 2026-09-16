@@ -4,6 +4,7 @@ import { Trophy, ArrowLeftRight, Pencil } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
+import { CoinFlipIllustration } from "./illustrations.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { RuleSectionHeader } from "./tournamentsScreen.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
@@ -97,6 +98,10 @@ export function SetupScreen({
   const [tossCall, setTossCall] = useState("");
   const [coinFace, setCoinFace] = useState("");
   const [coinFlipOpen, setCoinFlipOpen] = useState(false);
+  // Ever-increasing absolute angle (never reset to 0 between flips, so a re-flip spins forward
+  // instead of visually snapping back to a starting position) -- see CoinFlipIllustration's own
+  // comment for how the angle maps to which face ends up showing.
+  const [coinRotation, setCoinRotation] = useState(0);
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -280,20 +285,22 @@ export function SetupScreen({
     setFlipping(true);
     setCoinFace("");
     setTossWonBy("");
-    // brief suspense before revealing — purely cosmetic, the actual pick is one call to Math.random
-    let ticks = 0;
-    const iv = setInterval(() => {
-      setCoinFace(ticks % 2 === 0 ? "Heads" : "Tails");
-      ticks++;
-      if (ticks > 8) {
-        clearInterval(iv);
-        const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-        setCoinFace(landed);
-        const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
-        setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
-        setFlipping(false);
-      }
-    }, 90);
+    // The outcome is picked once, right now -- everything after this is just the coin visibly
+    // catching up to it. Spin forward from wherever the coin currently sits (never reset to 0, so
+    // a re-flip doesn't visually snap backwards) by a few full turns plus whatever's needed to land
+    // on the right face: 0/360/720…deg shows Heads, 180/540/900…deg shows Tails.
+    const landed = Math.random() < 0.5 ? "Heads" : "Tails";
+    setCoinRotation(rotation => {
+      const targetMod = landed === "Heads" ? 0 : 180;
+      const delta = (targetMod - rotation % 360 + 360) % 360;
+      return rotation + 360 * 4 + delta;
+    });
+    setTimeout(() => {
+      setCoinFace(landed);
+      const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
+      setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
+      setFlipping(false);
+    }, 900);
   }
 
   // roster actually offered to the opening line-up pickers: the chosen Playing XI when a saved
@@ -761,7 +768,10 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 12.5
     }
-  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
+  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement(CoinFlipIllustration, {
+    rotationDeg: coinRotation,
+    spinning: flipping
+  }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
     onClick: flipCoin,
@@ -778,7 +788,7 @@ export function SetupScreen({
       fontWeight: 700,
       fontSize: 13.5
     }
-  }, flipping ? `🪙 ${coinFace || "…"}` : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
+  }, flipping ? "🪙 Flipping…" : coinFace ? "🪙 Flip again" : "🪙 Flip"), !flipping && coinFace && tossWonBy && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,

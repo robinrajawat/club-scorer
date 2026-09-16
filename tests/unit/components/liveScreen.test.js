@@ -309,6 +309,14 @@ test("LiveScreen: shows the account menu (AuthBar), offering sign-in since there
   assert.match(JSON.stringify(inst.toJSON()), /Sign in/);
 });
 
+test("LiveScreen: showInstallHint renders InstallHintBanner wired to onDismissInstallHint", () => {
+  let dismissed = false;
+  const inst = render({ showInstallHint: true, onDismissInstallHint: () => { dismissed = true; } });
+  const dismissBtn = inst.root.findByProps({ "aria-label": "Dismiss" });
+  dismissBtn.props.onClick();
+  assert.equal(dismissed, true);
+});
+
 test("LiveScreen: a match's tournament badge falls back to liveTournaments' name when it's not this account's own", () => {
   const inst = render({
     liveMatches: [liveMatch({ tournamentId: "t1" })],
