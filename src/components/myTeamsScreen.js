@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { COLORS } from "./theme.js";
-import { ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
+import { Bell, ChevronLeft, Pencil, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
 import { FabButton } from "./screenAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
+import { AuthBar } from "./authBar.js";
 
 // The "Teams" tab -- every team is just the account's own now (no club wrapper, no "nested inside
 // a club's own admin screen" mode, no source-chip picker across multiple clubs -- all of that went
@@ -22,7 +23,18 @@ export function MyTeamsScreen({
   onNewTeam,
   onEditTeam,
   onDeleteTeam,
-  showTabBar = false
+  showTabBar = false,
+  user,
+  profile,
+  onOpenAccount,
+  onOpenInbox,
+  inboxBadgeCount = 0,
+  onOpenHelp,
+  onOpenFeedback,
+  onOpenAbout,
+  onSignOut,
+  themePref,
+  onSetTheme
 }) {
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
   // comment for why this is one flag across both screens rather than two separate ones.
@@ -72,8 +84,14 @@ export function MyTeamsScreen({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      justifyContent: "space-between",
       marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Users, {
     size: 22,
@@ -93,6 +111,64 @@ export function MyTeamsScreen({
       fontSize: 11.5
     }
   })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, onOpenInbox && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onOpenInbox,
+    "aria-label": inboxBadgeCount > 0 ? `Inbox, ${inboxBadgeCount} pending` : "Inbox",
+    className: "cs-btn",
+    style: {
+      position: "relative",
+      width: 36,
+      height: 36,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "none",
+      border: "none",
+      borderRadius: "50%",
+      color: COLORS.pitch,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Bell, {
+    size: 19
+  }), inboxBadgeCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      minWidth: 13,
+      height: 13,
+      padding: "0 3px",
+      borderRadius: 7,
+      background: COLORS.ballFixed,
+      color: "#fff",
+      fontFamily: "'Inter'",
+      fontSize: 9,
+      fontWeight: 700,
+      lineHeight: 1,
+      boxShadow: `0 0 0 1.5px ${COLORS.creamFixed}`
+    }
+  }, inboxBadgeCount > 9 ? "9+" : inboxBadgeCount)), /*#__PURE__*/React.createElement(AuthBar, {
+    user: user,
+    profile: profile,
+    onOpenAccount: onOpenAccount,
+    onOpenHelp: onOpenHelp,
+    onOpenFeedback: onOpenFeedback,
+    onOpenAbout: onOpenAbout,
+    onSignOut: onSignOut,
+    themePref: themePref,
+    onSetTheme: onSetTheme
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
