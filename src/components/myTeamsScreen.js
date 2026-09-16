@@ -96,7 +96,7 @@ export function MyTeamsScreen({
   }, /*#__PURE__*/React.createElement(Users, {
     size: 22,
     style: {
-      color: COLORS.pitch
+      color: COLORS.gold
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
