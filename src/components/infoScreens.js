@@ -529,7 +529,7 @@ export function AboutScreen({
       color: COLORS.inkSoft,
       lineHeight: 1.4
     }
-  }, "Ball-by-ball cricket scoring for friendly club games \u2014 single-file, no build step, made by a fellow club scorer.")), /*#__PURE__*/React.createElement("div", {
+  }, "Ball-by-ball cricket scoring for friendly club games, made by a fellow club scorer.")), /*#__PURE__*/React.createElement("div", {
     style: dividerStyle
   }), /*#__PURE__*/React.createElement("div", {
     style: {
