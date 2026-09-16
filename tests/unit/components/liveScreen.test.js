@@ -229,7 +229,8 @@ test("LiveScreen: brand header with a greeting shows unconditionally; tapping it
   const inst = render({
     liveMatches: [liveMatch({ id: "done1", status: "complete" })]
   });
-  assert.match(JSON.stringify(inst.toJSON()), /Club Scorer/);
+  assert.match(JSON.stringify(inst.toJSON()), /Club/);
+  assert.match(JSON.stringify(inst.toJSON()), /Scorer/);
   assert.match(JSON.stringify(inst.toJSON()), /Good (morning|afternoon|evening)/);
 
   clickButton(inst, "Results (1)");
@@ -237,7 +238,7 @@ test("LiveScreen: brand header with a greeting shows unconditionally; tapping it
   act(() => { search.props.onChange({ target: { value: "nonexistent" } }); });
   assert.match(JSON.stringify(inst.toJSON()), /Nothing matches/);
 
-  const brandBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Club Scorer"));
+  const brandBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Club"));
   act(() => { brandBtn.props.onClick(); });
   const json = JSON.stringify(inst.toJSON());
   assert.doesNotMatch(json, /Nothing matches/, "search was cleared");

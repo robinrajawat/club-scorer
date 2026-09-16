@@ -512,10 +512,17 @@ export function AboutScreen({
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
-      color: COLORS.pitch,
       marginBottom: 4
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#141414"
+    }
+  }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, "Scorer")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,

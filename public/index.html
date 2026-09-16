@@ -11168,10 +11168,17 @@ function AboutScreen({
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 19,
-      color: COLORS.pitch,
       marginBottom: 4
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#141414"
+    }
+  }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, "Scorer")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12.5,
@@ -12507,10 +12514,17 @@ function WelcomeScreen({
     style: {
       fontFamily: "'DM Serif Display', serif",
       fontSize: 34,
-      color: COLORS.pitch,
       letterSpacing: -0.5
     }
-  }, "Club Scorer"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#141414"
+    }
+  }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, "Scorer")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter', sans-serif",
       fontSize: 13.5,
@@ -13562,15 +13576,18 @@ function HomeScreen({
       alignItems: "center",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(AppMark, {
-    size: 26
+  }, /*#__PURE__*/React.createElement(ScorePad, {
+    size: 22,
+    style: {
+      color: COLORS.pitch
+    }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 19,
+      fontSize: 24,
       color: COLORS.pitch
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement("div", {
+  }, "Score")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -14405,10 +14422,17 @@ function LiveScreen({
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontFamily: "'DM Serif Display', serif",
-      fontSize: 19,
-      color: COLORS.pitch
+      fontSize: 19
     }
-  }, "Club Scorer")), /*#__PURE__*/React.createElement(AuthBar, {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#141414"
+    }
+  }, "Club"), " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: COLORS.gold
+    }
+  }, "Scorer"))), /*#__PURE__*/React.createElement(AuthBar, {
     user: user,
     profile: profile,
     onOpenAccount: onOpenAccount,
