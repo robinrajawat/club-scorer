@@ -39,35 +39,15 @@ export function LoadingBallIllustration({
   }, /*#__PURE__*/React.createElement("circle", {
     cx: "22",
     cy: "22",
-    r: "16",
-    fill: `url(#cs-ball-grad)`,
-    stroke: COLORS.ball,
-    strokeWidth: "1"
+    r: "18",
+    stroke: COLORS.creamDark,
+    strokeWidth: "4"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M12 10 C 17 16, 17 28, 12 34",
-    stroke: "#f5ded9",
-    strokeWidth: "1.3",
-    fill: "none",
+    d: "M22 4 A18 18 0 0 1 40 22",
+    stroke: COLORS.gold,
+    strokeWidth: "4",
     strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M32 10 C 27 16, 27 28, 32 34",
-    stroke: "#f5ded9",
-    strokeWidth: "1.3",
-    fill: "none",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
-    id: "cs-ball-grad",
-    x1: "0",
-    y1: "0",
-    x2: "1",
-    y2: "1"
-  }, /*#__PURE__*/React.createElement("stop", {
-    offset: "0%",
-    stopColor: COLORS.ballLight
-  }), /*#__PURE__*/React.createElement("stop", {
-    offset: "100%",
-    stopColor: COLORS.ball
-  }))));
+  }));
 }
 
 export function LoadingNote({
@@ -100,25 +80,12 @@ export function EmptyStateBallIllustration() {
       margin: "0 auto",
       display: "block"
     }
-  }, /*#__PURE__*/React.createElement("circle", {
-    cx: "26",
-    cy: "26",
-    r: "19",
-    stroke: COLORS.willow,
-    strokeWidth: "1.6",
-    fill: "rgba(201,168,118,0.08)"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M14 15 C 20 22, 20 30, 14 37",
-    stroke: COLORS.willow,
-    strokeWidth: "1.4",
-    fill: "none",
-    strokeLinecap: "round"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M38 15 C 32 22, 32 30, 38 37",
-    stroke: COLORS.willow,
-    strokeWidth: "1.4",
-    fill: "none",
-    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+    transform: "translate(26,27) scale(1.7) translate(-12,-12)",
+    stroke: COLORS.gold,
+    strokeWidth: "1.2",
+    fill: "rgba(184,137,43,0.08)"
   }));
 }
 

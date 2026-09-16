@@ -300,7 +300,7 @@ export function HomeScreen({
   }, /*#__PURE__*/React.createElement(ScorePad, {
     size: 22,
     style: {
-      color: COLORS.pitch
+      color: COLORS.gold
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
