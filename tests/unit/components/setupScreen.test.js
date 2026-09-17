@@ -144,9 +144,9 @@ test("SetupScreen: 'No coin handy?' toss flow gates Flip behind picking a caller
   assert.equal(flippingBtn.props.disabled, true);
 });
 
-// coinRotation starts at 0, which CoinFlipIllustration always renders as Heads -- rendering the
-// coin the instant a caller and call are picked (before anyone has tapped Flip) meant it showed
-// Heads regardless of what was actually called, looking like a predetermined/wrong result.
+// displayedFace starts empty and CoinFlipIllustration renders nothing for an empty face -- but
+// rendering the coin element the instant a caller and call are picked (before anyone has tapped
+// Flip) would have meant it appeared with no face showing at all, worse than not appearing.
 test("SetupScreen: the coin itself isn't shown until Flip is actually tapped, even once a caller and call are both picked", () => {
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
