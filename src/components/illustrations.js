@@ -67,7 +67,7 @@ export function CoinIcon({
       width: size,
       height: size,
       borderRadius: "50%",
-      background: "linear-gradient(160deg, #e8c37e, #a97a2a)",
+      background: "linear-gradient(160deg, #e2c384, #ab7f28)",
       boxShadow: "0 1px 2px rgba(106,74,22,0.5), inset 0 0 0 1px rgba(255,240,210,0.35)",
       flexShrink: 0,
       verticalAlign: "middle",
@@ -95,6 +95,14 @@ export function CoinIcon({
 // shine, not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders
 // at, individual beads blur into noise instead of reading as beading -- detail that only survives
 // at mockup size doesn't belong here.
+//
+// Every gold tone here (and in CoinIcon above) is COLORS.gold's own hue/saturation (40deg, 62%),
+// each stop just relit to the same lightness the original independently-picked antique-gold
+// palette used -- sitting right next to the Heads/Tails call buttons (which use COLORS.gold
+// directly) made the coin's own, unrelated gold read as a mismatch rather than a deliberate
+// "hero element" choice. Fixed hex, not the COLORS.gold CSS var itself -- this is a physical
+// object illustration, not chrome, so it stays the same tone in light and dark mode on purpose
+// (same reasoning as ballFixed/creamFixed elsewhere in theme.js).
 function CoinFace({
   letter,
   size
@@ -104,7 +112,7 @@ function CoinFace({
       position: "absolute",
       inset: 0,
       borderRadius: "50%",
-      background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
+      background: "radial-gradient(circle, #d2a13f 0%, #d2a13f 86%, #694e19 87%, #896620 93%, #b8892b 100%)",
       boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -112,7 +120,7 @@ function CoinFace({
       position: "absolute",
       inset: "9%",
       borderRadius: "50%",
-      background: "conic-gradient(from 215deg, #e8c37e, #a97a2a 42%, #7a5518 62%, #c99248 88%, #e8c37e)",
+      background: "conic-gradient(from 215deg, #e2c384, #ab7f28 42%, #76581c 62%, #d2a13f 88%, #e2c384)",
       boxShadow: "inset 0 2px 3px rgba(255,236,190,0.45), inset 0 -3px 6px rgba(50,34,10,0.45)",
       display: "flex",
       alignItems: "center",
