@@ -59,9 +59,14 @@ test("EmptyState: an explicit minHeight is passed through, for a screen whose ro
   assert.equal(tree.props.style.minHeight, "50vh");
 });
 
-function coinDiscDiv(root) {
-  // The squashed/lifted coin itself, distinct from the ground-shadow ellipse below it (also
-  // round, but not the element carrying the translateY/scaleX transform).
+function arcDiv(root) {
+  // Carries the vertical arc (translateY), separate from the spin -- see CoinFlipIllustration's
+  // own comment for why arc and spin run on separate transforms/elements.
+  return root.find(n => n.props && n.props.style && typeof n.props.style.transform === "string" && n.props.style.transform.includes("translateY"));
+}
+
+function spinDiv(root) {
+  // Carries the spin (scaleX squash), nested inside arcDiv.
   return root.find(n => n.props && n.props.style && typeof n.props.style.transform === "string" && n.props.style.transform.includes("scaleX"));
 }
 
@@ -75,25 +80,43 @@ function coinGlyph(root) {
 // turned out unreliable on real iOS Safari/WKWebView even with -webkit- prefixes added -- both
 // faces could render at once there, overlapping into a garbled letter. A 2D squash can't produce
 // that failure mode on any engine, because there's structurally only ever one face rendered.
-test("CoinFlipIllustration: phase='rest' is static -- no transition, no lift, fully unsquashed", () => {
+// The arc (translateY, "phase") and the spin (scaleX, "squashed") run on separate elements so the
+// spin can pulse several times, fast, independently of the single slow arc motion.
+test("CoinFlipIllustration: phase='rest' is static -- no lift, no transition on the arc", () => {
   const root = renderer.create(React.createElement(CoinFlipIllustration, { face: "Tails", phase: "rest" })).root;
-  const disc = coinDiscDiv(root);
-  assert.equal(disc.props.style.transform, "translateY(0px) scaleX(1)");
-  assert.equal(disc.props.style.transition, "none");
+  const arc = arcDiv(root);
+  assert.equal(arc.props.style.transform, "translateY(0px)");
+  assert.equal(arc.props.style.transition, "none");
 });
 
-test("CoinFlipIllustration: phase='up' lifts the coin and squashes it flat (scaleX 0) on a short transition", () => {
+test("CoinFlipIllustration: phase='up' lifts the coin on a short transition", () => {
   const root = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "up", size: 56 })).root;
-  const disc = coinDiscDiv(root);
-  assert.equal(disc.props.style.transform, "translateY(-78px) scaleX(0)");
-  assert.match(disc.props.style.transition, /transform 0\.35s/);
+  const arc = arcDiv(root);
+  assert.equal(arc.props.style.transform, "translateY(-78px)");
+  assert.match(arc.props.style.transition, /transform 0\.35s/);
 });
 
-test("CoinFlipIllustration: phase='down' brings the coin back to translateY(0) and scaleX(1) on a longer transition", () => {
+test("CoinFlipIllustration: phase='down' brings the coin back to translateY(0) on a longer transition", () => {
   const root = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "down" })).root;
-  const disc = coinDiscDiv(root);
-  assert.equal(disc.props.style.transform, "translateY(0px) scaleX(1)");
-  assert.match(disc.props.style.transition, /transform 0\.55s/);
+  const arc = arcDiv(root);
+  assert.equal(arc.props.style.transform, "translateY(0px)");
+  assert.match(arc.props.style.transition, /transform 0\.55s/);
+});
+
+test("CoinFlipIllustration: squashed=true flattens the coin (scaleX 0), squashed=false shows it full-width (scaleX 1)", () => {
+  const squashedRoot = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "up", squashed: true })).root;
+  assert.equal(spinDiv(squashedRoot).props.style.transform, "scaleX(0)");
+
+  const unsquashedRoot = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "up", squashed: false })).root;
+  assert.equal(spinDiv(unsquashedRoot).props.style.transform, "scaleX(1)");
+});
+
+test("CoinFlipIllustration: the spin transitions fast regardless of arc phase, but not at all when phase='rest'", () => {
+  const upRoot = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "up", squashed: true })).root;
+  assert.match(spinDiv(upRoot).props.style.transition, /transform 0\.1s/);
+
+  const restRoot = renderer.create(React.createElement(CoinFlipIllustration, { face: "Heads", phase: "rest", squashed: false })).root;
+  assert.equal(spinDiv(restRoot).props.style.transition, "none");
 });
 
 test("CoinFlipIllustration: shows exactly one glyph at a time, matching the face prop, sized proportionally to the coin", () => {

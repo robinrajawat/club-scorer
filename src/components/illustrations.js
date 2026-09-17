@@ -156,25 +156,31 @@ function CoinFace({
     }
   }, letter)));
 }
-// `phase` drives an actual toss, not just an in-place spin: "up" lifts the coin AND squashes it
-// horizontally to nothing (scaleX 1 -> 0) on a short ease-out -- a hand launching it, spinning
-// edge-on -- "down" brings it back down and grows it back out (scaleX 0 -> 1) on a longer ease-in,
-// "rest" is the static pre-/post-flip state with no transition at all. `face` ("Heads"/"Tails"/"")
-// is swapped by the caller (flipCoin in setupScreen.js) right as "up" hands off to "down" -- i.e. at
-// the moment scaleX is at or near 0, so the swap itself is imperceptible, same trick paper flip
-// clocks and CSS "fake 3D" card flips use, chosen here specifically because it has no dependency
-// on backface-visibility/perspective/preserve-3d (see CoinFace's own comment for why those were
-// dropped). The ground shadow shrinks and fades while airborne and grows back on landing, the
-// usual cheap trick for selling height with a 2D element.
+// `phase` drives the toss's vertical arc: "up" lifts the coin on a short ease-out (a hand
+// launching it), "down" brings it back down on a longer ease-in (gravity winning), "rest" is the
+// static pre-/post-flip state with no transition at all. `squashed` drives the spin, completely
+// separately (own wrapper, own transition, own timing) -- a coin genuinely rotating, viewed
+// face-on, visually IS a horizontal squash to nothing and back on every half-turn, so a handful of
+// quick squash pulses in a row reads as spinning; `flipCoin` (setupScreen.js) fires several of
+// these during the flight, swapping `face` at the bottom of each pulse (scaleX at or near 0, so
+// the swap itself is imperceptible -- same trick paper flip clocks and CSS "fake 3D" card flips
+// use), landing on the real result only on the last one. Arc and spin run on separate transforms
+// specifically so the spin can pulse much faster than the single slow arc motion. Structurally
+// this still only ever renders one CoinFace at a time -- see its own comment for why that matters
+// (no dependency on backface-visibility/perspective/preserve-3d, which is what made the old
+// 3D-rotated version unreliable on iOS Safari/WKWebView). The ground shadow shrinks and fades
+// while airborne and grows back on landing, the usual cheap trick for selling height with a 2D
+// element.
 export function CoinFlipIllustration({
   face,
   phase = "rest",
+  squashed = false,
   size = 56
 }) {
   const lift = Math.round(size * 1.4);
   const translateY = phase === "up" ? -lift : 0;
-  const squashX = phase === "up" ? 0 : 1;
-  const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
+  const arcTransition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
+  const spinTransition = phase === "rest" ? "none" : "transform 0.1s ease-in-out";
   const shadowScale = phase === "up" ? 0.5 : 1;
   const shadowOpacity = phase === "up" ? 0.15 : 0.3;
   return /*#__PURE__*/React.createElement("div", {
@@ -193,16 +199,21 @@ export function CoinFlipIllustration({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
+      transform: `translateY(${translateY}px)`,
+      transition: arcTransition
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       width: size,
       height: size,
       position: "relative",
-      transform: `translateY(${translateY}px) scaleX(${squashX})`,
-      transition
+      transform: `scaleX(${squashed ? 0 : 1})`,
+      transition: spinTransition
     }
   }, /*#__PURE__*/React.createElement(CoinFace, {
     letter: face === "Tails" ? "T" : face === "Heads" ? "H" : "",
     size
-  }))), /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
     "aria-hidden": "true",
     style: {
       width: size * 0.7,
@@ -212,7 +223,7 @@ export function CoinFlipIllustration({
       marginTop: 4,
       transform: `scale(${shadowScale})`,
       opacity: shadowOpacity,
-      transition: phase === "rest" ? "none" : transition
+      transition: phase === "rest" ? "none" : arcTransition
     }
   }));
 }

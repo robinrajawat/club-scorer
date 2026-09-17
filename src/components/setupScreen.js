@@ -102,9 +102,13 @@ export function SetupScreen({
   // (see flipCoin below), separately from coinFace, which only updates once the flip has fully
   // settled and is used for the result text.
   const [displayedFace, setDisplayedFace] = useState("");
-  // "rest" | "up" | "down" -- drives the actual toss motion (see CoinFlipIllustration), not just
-  // an in-place spin.
+  // "rest" | "up" | "down" -- drives the coin's vertical arc (see CoinFlipIllustration), separate
+  // from the spin.
   const [coinPhase, setCoinPhase] = useState("rest");
+  // Squashed flat (mid-spin-pulse) or not -- toggled several times in quick succession during a
+  // flip to fake spinning, independently of coinPhase's slower up/down arc (see flipCoin and
+  // CoinFlipIllustration's own comment for why these run separately).
+  const [coinSquashed, setCoinSquashed] = useState(false);
   // A tournament/series' defaultRules (see handleUpdateTournament in startNewMatch — the first
   // fixture scored for a tournament silently becomes its default, so nobody has to configure this
   // up front) take priority over this device's own last-used rules, since a club playing in
@@ -281,6 +285,7 @@ export function SetupScreen({
     setCoinFace("");
     setDisplayedFace("");
     setCoinPhase("rest");
+    setCoinSquashed(false);
   }
   // Only enabled once someone's actually called Heads or Tails -- flipping straight to a random
   // team, with no call to have gone for or against, is exactly the "why should I trust this"
@@ -293,22 +298,34 @@ export function SetupScreen({
     // The outcome is picked once, right now -- everything after this is just the coin visibly
     // catching up to it.
     const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-    // A real toss goes up before it comes down -- two CSS transitions in sequence (launch, then
-    // fall) read as an actual arc, which a single spin-in-place transition never could. "up" also
-    // squashes the coin flat (see CoinFlipIllustration) -- right as that squash bottoms out and
-    // "down" takes over is where the displayed face swaps to the landed result, at the one moment
-    // the coin is edge-on and the swap itself is invisible.
+    const other = landed === "Heads" ? "Tails" : "Heads";
+    // A real toss goes up before it comes down -- a single slow translateY transition (see
+    // CoinFlipIllustration's "up"/"down" phases) reads as an actual arc.
     setCoinPhase("up");
-    setTimeout(() => {
-      setDisplayedFace(landed);
-      setCoinPhase("down");
-    }, 350);
+    setTimeout(() => setCoinPhase("down"), 350);
+    // Spinning is faked as several quick squash-to-nothing-and-back pulses (see
+    // CoinFlipIllustration's own comment for why that reads as a spin), each one swapping the
+    // displayed face right as it bottoms out -- imperceptible, since the coin is edge-on at that
+    // instant. Only the very LAST pulse has to land on the real result; the ones before it can
+    // show either face freely, same as a real spinning coin blurring past too fast to track
+    // individual rotations.
+    const spinFaces = [other, landed, other, landed, landed];
+    spinFaces.forEach((shownFace, i) => {
+      const pulseStart = i * 180;
+      setTimeout(() => setCoinSquashed(true), pulseStart);
+      setTimeout(() => {
+        setDisplayedFace(shownFace);
+        setCoinSquashed(false);
+      }, pulseStart + 90);
+    });
     setTimeout(() => {
       setCoinFace(landed);
+      setDisplayedFace(landed);
       const otherTeam = [teamAName, teamBName].map(n => n.trim()).find(n => n !== tossCaller);
       setTossWonBy(deriveCoinFlipWinner(tossCaller, otherTeam, tossCall, landed));
       setFlipping(false);
       setCoinPhase("rest");
+      setCoinSquashed(false);
     }, 900);
   }
 
@@ -786,11 +803,12 @@ export function SetupScreen({
   // `(flipping || displayedFace)` -- without this gate the coin appeared the instant both caller
   // and call were picked, before anyone had even tapped Flip, always showing Heads regardless of
   // the actual call. Now nothing renders here until the first tap of Flip; `flipping` covers the
-  // 0-350ms squash-out (before displayedFace has been set to this flip's result), and
-  // `displayedFace` keeps it visible afterwards, landed result and all.
+  // whole animation (spin pulses included, before displayedFace has settled on this flip's
+  // result), and `displayedFace` keeps it visible afterwards, landed result and all.
   /*#__PURE__*/React.createElement(CoinFlipIllustration, {
     face: displayedFace,
-    phase: coinPhase
+    phase: coinPhase,
+    squashed: coinSquashed
   }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "cs-btn cs-shine",
