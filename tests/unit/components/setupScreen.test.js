@@ -20,6 +20,7 @@ import { PlayerPicker } from "../../../src/components/pickerAtoms.js";
 import { Field } from "../../../src/components/screenAtoms.js";
 import { VenueEditModal } from "../../../src/components/venueAndDateModals.js";
 import { COLORS } from "../../../src/components/theme.js";
+import { CoinFlipIllustration } from "../../../src/components/illustrations.js";
 
 beforeEach(() => {
   globalThis.window = { scrollTo: () => {} };
@@ -141,6 +142,28 @@ test("SetupScreen: 'No coin handy?' toss flow gates Flip behind picking a caller
   // again", both fine here since only one Flip-labeled button exists at this point.
   const flippingBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Flip"));
   assert.equal(flippingBtn.props.disabled, true);
+});
+
+// coinRotation starts at 0, which CoinFlipIllustration always renders as Heads -- rendering the
+// coin the instant a caller and call are picked (before anyone has tapped Flip) meant it showed
+// Heads regardless of what was actually called, looking like a predetermined/wrong result.
+test("SetupScreen: the coin itself isn't shown until Flip is actually tapped, even once a caller and call are both picked", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const coinToggle = inst.root.findAllByType("button").find(b => hasText(b.props.children, "No coin handy?"));
+  act(() => { coinToggle.props.onClick(); });
+  const callerBtn = inst.root.findAllByType("button").find(b => b.props.children === "Riverside CC");
+  act(() => { callerBtn.props.onClick(); });
+  const tailsBtn = inst.root.findAllByType("button").find(b => b.props.children === "Tails");
+  act(() => { tailsBtn.props.onClick(); });
+
+  assert.equal(inst.root.findAllByType(CoinFlipIllustration).length, 0, "no coin before the first flip");
+
+  const flipBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Flip"));
+  act(() => { flipBtn.props.onClick(); });
+
+  assert.equal(inst.root.findAllByType(CoinFlipIllustration).length, 1, "coin appears once flipping starts");
 });
 
 test("SetupScreen: toss flow -- choosing a different caller resets any coin-flip result already recorded", () => {
