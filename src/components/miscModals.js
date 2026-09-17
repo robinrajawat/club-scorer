@@ -6,16 +6,18 @@ import { markTourSeen, computeQualificationTarget, decimalOversToLabel } from ".
 
 // A grab-bag of one-off Modal-wrapped screens that don't share enough with any other file to
 // justify their own: FirstLaunchTour (the swipeable first-run welcome tour, using TOUR_SLIDES
-// below), TournamentShareModal (create/copy/stop a read-only public tournament link), and
-// QualificationCalculatorModal (works out the NRR a team needs against a tied rival). Covered by
-// tests/unit/components/miscModals.test.js.
+// below) and QualificationCalculatorModal (works out the NRR a team needs against a tied rival).
+// Covered by tests/unit/components/miscModals.test.js.
 //
-// All three reference Modal as a bare, unimported global -- same pattern as ConfirmModal in
+// Both reference Modal as a bare, unimported global -- same pattern as ConfirmModal in
 // formUiAtoms.js -- so their own tests can stub `globalThis.Modal` with a plain pass-through
 // component rather than pulling in jsdom; see playerModals.test.js for the same pattern.
-// TournamentShareModal reads window.location.origin/pathname directly during render (not just
-// from a handler), so its test also needs a lightweight globalThis.window stub with just enough
-// shape for that -- no full jsdom needed since nothing else here touches a real DOM API.
+//
+// Used to also hold TournamentShareModal (create/copy/stop a read-only public tournament link) --
+// removed along with the rest of the app's redundant share surfaces (see shareMenus.js's own
+// comment). The tournament itself still gets auto-published/kept in sync behind the scenes
+// whenever it's Public (see handleUpdateTournament in cricketScorer.js); there's just no UI left
+// to hand anyone that link.
 
 export const TOUR_SLIDES = [{
   icon: Table2,
@@ -27,8 +29,8 @@ export const TOUR_SLIDES = [{
   body: "Four tabs at the bottom get you everywhere: Home for everyone else's live scores and tournaments, Score for your own matches, Cups for tournaments and series, and Teams for rosters."
 }, {
   icon: Share,
-  title: "Share your score two ways",
-  body: "A score code gives full scoring access \u2014 for a teammate co-scoring alongside you. A view code is read-only, for anyone just following along. They're never interchangeable."
+  title: "Invite someone to help score",
+  body: "A share code gives a teammate full scoring access alongside you \u2014 useful the moment one person alone can't keep up with every ball."
 }, {
   icon: Users,
   title: "Build a roster once, reuse it",
@@ -122,148 +124,6 @@ export function FirstLaunchTour({
       flex: isLast ? 1 : 2
     }
   }, isLast ? "Get started" : "Next")));
-}
-
-export function TournamentShareModal({
-  tournament,
-  standings,
-  matches = [],
-  onClose,
-  onUpdateTournament
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  const code = tournament.shareCode || null;
-  const link = code ? `${window.location.origin}${window.location.pathname}?tournament=${code}` : "";
-  async function handleShare() {
-    setBusy(true);
-    setError("");
-    const result = await shareTournament(tournament, standings, matches);
-    setBusy(false);
-    if (result.ok) {
-      if (!tournament.shareCode) onUpdateTournament({
-        ...tournament,
-        shareCode: result.code
-      });
-    } else {
-      setError(result.error || "Couldn't create a share link.");
-    }
-  }
-  async function handleStop() {
-    if (!code) return;
-    setBusy(true);
-    setError("");
-    const result = await stopSharingTournament(tournament.id, code);
-    setBusy(false);
-    if (result.ok) {
-      onUpdateTournament({
-        ...tournament,
-        shareCode: null
-      });
-    } else {
-      setError(result.error || "Couldn't stop sharing.");
-    }
-  }
-  function handleCopy() {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(link).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }).catch(() => {});
-    }
-  }
-  return /*#__PURE__*/React.createElement(Modal, {
-    onClose: onClose
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Share this tournament"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It updates itself automatically as results come in, so there's usually nothing to do here beyond copying the link below \u2014 \"Refresh now\" is only for forcing an update on the spot. A link that's gone unused for a long stretch may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      background: COLORS.cream,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 10,
-      padding: "10px 12px",
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, link), /*#__PURE__*/React.createElement("button", {
-    onClick: handleCopy,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.turf,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 12,
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, copied ? "Copied!" : "Copy")), error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      marginBottom: 10
-    }
-  }, error), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleShare,
-    disabled: busy,
-    style: {
-      flex: 1
-    }
-  }, busy ? "\u2026" : "Refresh now"), /*#__PURE__*/React.createElement(Btn, {
-    variant: "danger",
-    onClick: handleStop,
-    disabled: busy,
-    style: {
-      flex: 1
-    }
-  }, "Stop sharing"))) : /*#__PURE__*/React.createElement(React.Fragment, null, error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      marginBottom: 10
-    }
-  }, error), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    onClick: handleShare,
-    disabled: busy,
-    style: {
-      width: "100%"
-    }
-  }, busy ? "Creating\u2026" : "Create share link")));
 }
 
 export function QualificationCalculatorModal({

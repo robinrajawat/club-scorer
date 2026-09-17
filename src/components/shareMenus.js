@@ -1,23 +1,23 @@
 import React, { useState, useRef } from "react";
 import { COLORS } from "./theme.js";
-import { ArrowLeftRight, Check, Users, Share } from "./icons.js";
-import { buildFollowUrl, buildLiveShareText, buildShareText } from "../core/shareAndFormat.js";
+import { ArrowLeftRight, Check, Share } from "./icons.js";
 
-// Popover menu that portals to document.body so it's never clipped by an ancestor's
-// overflow:hidden or trapped by its stacking context: ShareMenu (invite a co-scorer, share a
-// read-only live link, or share a plain score summary). Reads real window/document/navigator APIs
-// directly -- getBoundingClientRect for positioning, window.innerWidth/innerHeight,
+// Popover that portals to document.body so it's never clipped by an ancestor's overflow:hidden
+// or trapped by its stacking context: invite a co-scorer to a match by sharing its code. Used to
+// also offer a read-only live-score link and a plain-text score summary, but neither saw real use
+// next to the one thing people actually reach for a share button to do -- inviting someone to
+// help score is the only option now. Reads real window/document/navigator APIs directly --
+// getBoundingClientRect for positioning, window.innerWidth/innerHeight,
 // ReactDOM.createPortal(..., document.body), and navigator.clipboard -- so like Modal, it needs a
 // real jsdom-backed DOM to test meaningfully; see tests/unit/components/shareMenus.test.js.
 //
-// handleShareLive/handleShareDetails call `shareText` (navigator.share/clipboard, defined in
-// public/index.html, not extracted -- browser-only and side-effecting, nothing to unit-test in
-// the function itself) from their onClick handlers, same as elsewhere in this app.
+// Renders nothing once the match is complete -- there's nobody left to invite to help score a
+// match that's already over, so every call site (MatchScreen, Home's match list, ResultScreen)
+// can just render this unconditionally rather than each re-deriving that same status check.
 
 export function ShareMenu({
   match,
   onGetCode,
-  onGetViewCode,
   style
 }) {
   const [open, setOpen] = useState(false);
@@ -25,7 +25,7 @@ export function ShareMenu({
   const [menuAdjust, setMenuAdjust] = useState(null); // post-measure overrides once it's known the panel doesn't fit as opened
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copiedWhich, setCopiedWhich] = useState(null); // 'code' | 'link' | null
+  const [copied, setCopied] = useState(false);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
   function toggleOpen() {
@@ -48,10 +48,10 @@ export function ShareMenu({
   }
   // The panel opens downward from the trigger by default, which is fine for the MatchScreen
   // header (always near the top of the viewport) but not for a Home-list row, which can sit
-  // anywhere down a scrolling list -- opening below can run the ~230px-tall panel off the bottom
-  // of the screen with no way to reach the lower rows. Measure it once it's actually on the page
-  // and, if it doesn't fit, flip it above the trigger; if there isn't room on either side either,
-  // pin it in view and let it scroll internally instead of spilling past the viewport edge.
+  // anywhere down a scrolling list -- opening below can run the panel off the bottom of the
+  // screen with no way to reach the lower rows. Measure it once it's actually on the page and, if
+  // it doesn't fit, flip it above the trigger; if there isn't room on either side either, pin it
+  // in view and let it scroll internally instead of spilling past the viewport edge.
   React.useLayoutEffect(() => {
     if (!open || !pos || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
@@ -74,13 +74,9 @@ export function ShareMenu({
       });
     }
   }, [open, pos]);
-  function flashCopied(which) {
-    setCopiedWhich(which);
-    setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
-  }
-  // Full-access score code (co-scoring). Deliberately separate from ensureViewCode below —
-  // never conflate these two, that conflation was the exact hole that let a "read-only" viewer
-  // gain scoring access.
+  // Full-access score code (co-scoring). Deliberately separate from any read-only view-code
+  // concept — never conflate the two, that conflation was the exact hole that once let a
+  // "read-only" viewer gain scoring access.
   async function ensureCode() {
     if (match.shareCode) return {
       ok: true,
@@ -101,58 +97,16 @@ export function ShareMenu({
       code: result.code
     };
   }
-  // Read-only view code. Resolves against match.viewCode / the liveViews collection only — this
-  // value must never be accepted by the "Invite to help score" join flow.
-  async function ensureViewCode() {
-    if (match.viewCode) return {
-      ok: true,
-      code: match.viewCode
-    };
-    setBusy(true);
-    setError("");
-    const result = await onGetViewCode();
-    setBusy(false);
-    if (!result || result.ok === false) {
-      setError(result && result.error || "Couldn't get a link.");
-      return {
-        ok: false
-      };
-    }
-    return {
-      ok: true,
-      code: result.code
-    };
-  }
   async function handleInviteCopy() {
     const res = await ensureCode();
     if (!res.ok) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(res.code).catch(() => {});
     }
-    flashCopied("code");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
-  async function handleCopyLink() {
-    const res = await ensureViewCode();
-    if (!res.ok) return;
-    const url = buildFollowUrl(res.code);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).catch(() => {});
-    }
-    flashCopied("link");
-  }
-  async function handleShareLive() {
-    const res = await ensureViewCode();
-    if (!res.ok) return;
-    const text = buildLiveShareText(match, res.code);
-    shareText(text);
-    setOpen(false);
-  }
-  // Plain score snapshot, no follow link/code involved -- unlike handleShareLive this never
-  // needs a view code, so it never touches ensureViewCode and can't fail on that account.
-  function handleShareDetails() {
-    shareText(buildShareText(match));
-    setOpen(false);
-  }
+  if (match.status === "complete") return null;
   const rowLabelStyle = {
     display: "flex",
     alignItems: "center",
@@ -205,10 +159,9 @@ export function ShareMenu({
       zIndex: 101,
       ...menuAdjust
     }
-  }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "8px 8px 10px",
-      borderBottom: "1px solid rgba(242,236,217,0.1)"
+      padding: "8px 8px 10px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: rowLabelStyle
@@ -218,7 +171,7 @@ export function ShareMenu({
     size: 12
   })), "Invite to help score"), /*#__PURE__*/React.createElement("div", {
     style: rowSubStyle
-  }, "Full access \u2014 they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
+  }, "Full access — they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleInviteCopy,
     style: {
@@ -238,7 +191,7 @@ export function ShareMenu({
       padding: "8px 10px",
       cursor: "pointer"
     }
-  }, copiedWhich === "code" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+  }, copied ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
     size: 14
   }), "Copied!") : match.shareCode) : /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
@@ -256,102 +209,7 @@ export function ShareMenu({
       padding: "8px 10px",
       cursor: busy ? "default" : "pointer"
     }
-  }, busy ? "Getting code\u2026" : "Get code & copy")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 8px 8px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: rowLabelStyle
-  }, /*#__PURE__*/React.createElement("div", {
-    style: iconChipStyle
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 12
-  })), "Share live score"), /*#__PURE__*/React.createElement("div", {
-    style: rowSubStyle
-  }, "Read-only \u2014 anyone with the link can watch, not edit."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleShareLive,
-    disabled: busy,
-    style: {
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: COLORS.turfFixed,
-      border: "none",
-      borderRadius: 10,
-      color: "#fff",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: busy ? "default" : "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 14
-  }), "Share"), /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleCopyLink,
-    disabled: busy,
-    style: {
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: "rgba(242,236,217,0.1)",
-      border: "1px solid rgba(242,236,217,0.3)",
-      borderRadius: 10,
-      color: COLORS.creamFixed,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: busy ? "default" : "pointer"
-    }
-  }, copiedWhich === "link" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
-    size: 14
-  }), "Copied!") : "Copy link"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 8px 8px",
-      borderTop: "1px solid rgba(242,236,217,0.1)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: rowLabelStyle
-  }, /*#__PURE__*/React.createElement("div", {
-    style: iconChipStyle
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 12
-  })), "Share match details"), /*#__PURE__*/React.createElement("div", {
-    style: rowSubStyle
-  }, "Just the score line \u2014 no live link, nothing to keep updating."), /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleShareDetails,
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: COLORS.turfFixed,
-      border: "none",
-      borderRadius: 10,
-      color: "#fff",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 14
-  }), "Share")), error && /*#__PURE__*/React.createElement("div", {
+  }, busy ? "Getting code…" : "Get code & copy")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 2px",
       fontSize: 11.5,

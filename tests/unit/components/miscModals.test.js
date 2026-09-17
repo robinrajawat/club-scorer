@@ -1,15 +1,13 @@
 // One-off Modal-wrapped screens (src/components/miscModals.js). Both reference Modal as a bare,
 // unimported global (same pattern as ConfirmModal), so tests stub globalThis.Modal with a plain
 // pass-through rather than pulling in jsdom -- see playerModals.test.js for the same pattern.
-// TournamentShareModal reads window.location.origin/pathname directly during render, so its own
-// tests also stub a minimal globalThis.window -- just enough shape for that, no full jsdom.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
 import React from "react";
 import renderer from "react-test-renderer";
-import { TOUR_SLIDES, FirstLaunchTour, TournamentShareModal, QualificationCalculatorModal } from "../../../src/components/miscModals.js";
+import { TOUR_SLIDES, FirstLaunchTour, QualificationCalculatorModal } from "../../../src/components/miscModals.js";
 import { Btn, TextField } from "../../../src/components/formUiAtoms.js";
 
 beforeEach(() => {
@@ -61,42 +59,6 @@ test("FirstLaunchTour: Skip finishes immediately from any slide before the last"
   assert.ok(skipBtn);
   skipBtn.props.onClick();
   assert.equal(done, true);
-});
-
-test("TournamentShareModal: offers to create a share link when the tournament has none yet", () => {
-  globalThis.window = { location: { origin: "https://example.test", pathname: "/" } };
-  try {
-    const inst = renderer.create(React.createElement(TournamentShareModal, {
-      tournament: { name: "Summer Cup" }, standings: [],
-      onClose: () => {}, onUpdateTournament: () => {}
-    }));
-    const text = JSON.stringify(inst.toJSON());
-    assert.match(text, /Create share link/);
-    assert.doesNotMatch(text, /Stop sharing/);
-  } finally {
-    delete globalThis.window;
-  }
-});
-
-test("TournamentShareModal: shows the link and Refresh/Stop sharing once a shareCode exists, calls onUpdateTournament to clear it", async () => {
-  globalThis.window = { location: { origin: "https://example.test", pathname: "/" } };
-  globalThis.stopSharingTournament = () => Promise.resolve({ ok: true });
-  try {
-    let updated = null;
-    const inst = renderer.create(React.createElement(TournamentShareModal, {
-      tournament: { name: "Summer Cup", shareCode: "ABC123" }, standings: [],
-      onClose: () => {}, onUpdateTournament: t => { updated = t; }
-    }));
-    const text = JSON.stringify(inst.toJSON());
-    assert.match(text, /https:\/\/example\.test\/\?tournament=ABC123/);
-    const stopBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Stop sharing");
-    assert.ok(stopBtn);
-    await stopBtn.props.onClick();
-    assert.equal(updated.shareCode, null);
-  } finally {
-    delete globalThis.window;
-    delete globalThis.stopSharingTournament;
-  }
 });
 
 test("QualificationCalculatorModal: prompts to pick a team, then computes a restrict-them-to target once inputs are filled", () => {

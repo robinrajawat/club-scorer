@@ -88,11 +88,11 @@ export const HELP_SECTIONS = [{
 }, {
   title: "Sharing & sync",
   entries: [{
-    q: "Score code vs. view code \u2014 what's the difference?",
-    a: "A score code (\u201cInvite to help score\u201d) gives full read-and-write scoring access \u2014 treat it like a shared password, only for someone you actually want scoring alongside you. A view code (\u201cShare live score\u201d) is read-only \u2014 anyone with the link can watch, nobody can edit, even if they have both codes."
+    q: "What does a share code do?",
+    a: "\u201cInvite to help score\u201d gives someone full read-and-write scoring access to a match \u2014 treat it like a shared password, only for someone you actually want scoring alongside you."
   }, {
     q: "Do I need an account?",
-    a: "No. Score codes and view codes work with no sign-in at all. Signing in with Google is only needed if you want your matches and teams to follow you across devices."
+    a: "No. A share code works with no sign-in at all. Signing in with Google is only needed if you want your matches and teams to follow you across devices."
   }, {
     q: "What does exporting/importing my data actually cover?",
     a: "Export (Account \u2192 Your data) gives you a JSON backup of your profile, teams, and matches saved to that account. Import restores it \u2014 into the same account, or a different one to migrate. It doesn't cover matches only ever shared via a score code."

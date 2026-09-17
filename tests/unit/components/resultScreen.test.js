@@ -1,8 +1,8 @@
 // Match-complete result screen (src/components/resultScreen.js). `saveTransition`/`saveMatch`/
 // `loadMatch` are bare-global Firestore calls, called only from button handlers, so each test
-// stubs whichever one its action needs. ShareMenu's own popover uses a real DOM portal (see
-// shareMenus.test.js) -- tests here call its onGetCode/onGetViewCode props directly via
-// findByType(ShareMenu) instead of opening the popover, so react-test-renderer alone is enough.
+// stubs whichever one its action needs. No ShareMenu here any more -- a completed match has
+// nobody left to invite to help score, so ResultScreen never renders one (see shareMenus.js's own
+// comment on why ShareMenu returns null for a completed match).
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -11,7 +11,6 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { ResultScreen } from "../../../src/components/resultScreen.js";
 import { Btn, ConfirmModal } from "../../../src/components/formUiAtoms.js";
-import { ShareMenu } from "../../../src/components/shareMenus.js";
 
 function hasText(node, str) {
   if (typeof node === "string") return node.includes(str);
@@ -167,23 +166,6 @@ test("ResultScreen: a tied super over shows a link back to the parent match, loa
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(latestMatch.id, "parent1");
-});
-
-test("ResultScreen: ShareMenu's onGetCode generates and saves a share code the first time, then reuses it", async () => {
-  let savedMatch = null;
-  globalThis.saveMatch = m => { savedMatch = m; return Promise.resolve({ ok: true, writeSeq: 1 }); };
-  let latestMatch = completeMatch();
-  const inst = renderer.create(React.createElement(ResultScreen, {
-    match: latestMatch, setMatch: m => { latestMatch = m; }, onExit: () => {}
-  }));
-  const shareMenu = inst.root.findByType(ShareMenu);
-  let result;
-  await act(async () => {
-    result = await shareMenu.props.onGetCode();
-  });
-  assert.equal(result.ok, true);
-  assert.equal(typeof result.code, "string");
-  assert.equal(savedMatch.shareCode, result.code);
 });
 
 test("ResultScreen: isTied + superOver rule hides PlayerOfMatchCard in favor of an explanatory note", () => {

@@ -377,27 +377,6 @@ export function MatchScreen({
       error: result.error || "This match changed on another device \u2014 resolve that before sharing a code."
     };
   }
-  async function handleGetViewCode() {
-    if (match.viewCode) return {
-      ok: true
-    };
-    const updated = {
-      ...match,
-      viewCode: genMatchCode()
-    };
-    setMatch(updated);
-    const result = await queueSave(updated);
-    if (result.ok) {
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || "This match changed on another device \u2014 resolve that before sharing a link."
-    };
-  }
   function checkInningEnd(updated, force) {
     const inn = updated.innings[updated.currentInningIndex];
     // Revised values (see declareRevisedTarget) only ever apply to innings 2 -- a rain
@@ -1337,8 +1316,7 @@ export function MatchScreen({
     size: 17
   })), /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
-    onGetCode: handleGetCode,
-    onGetViewCode: handleGetViewCode
+    onGetCode: handleGetCode
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {

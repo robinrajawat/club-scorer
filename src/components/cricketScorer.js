@@ -1139,10 +1139,10 @@ export function CricketScorer() {
       setMatchLoading(false);
     }
   }
-  // Generic counterparts to MatchScreen's own handleGetCode/handleGetViewCode, for sharing a match
-  // straight from its Home screen list row -- those versions are scoped to whichever ONE match is
-  // currently open (match/setMatch, singular), which doesn't exist yet here; this operates on a
-  // specific match object passed in and writes back into the plural matches list instead.
+  // Generic counterpart to MatchScreen's own handleGetCode, for sharing a match straight from its
+  // Home screen list row -- that version is scoped to whichever ONE match is currently open
+  // (match/setMatch, singular), which doesn't exist yet here; this operates on a specific match
+  // object passed in and writes back into the plural matches list instead.
   async function handleGetShareCodeForMatch(m) {
     if (m.shareCode) return {
       ok: true,
@@ -1166,31 +1166,6 @@ export function CricketScorer() {
     return {
       ok: false,
       error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a code." : undefined)
-    };
-  }
-  async function handleGetViewCodeForMatch(m) {
-    if (m.viewCode) return {
-      ok: true,
-      code: m.viewCode
-    };
-    const updated = {
-      ...m,
-      viewCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatches(prev => prev.map(x => x.id === m.id ? {
-        ...updated,
-        writeSeq: result.writeSeq
-      } : x));
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a link." : undefined)
     };
   }
   // Links a newly-created match back onto the fixture it came from, marking it played instead of
@@ -1736,12 +1711,14 @@ export function CricketScorer() {
       refreshTournamentStandingsLive(tournament.id);
       return;
     }
-    // Never shared before -- mint a code and publish for the first time, the same work
-    // TournamentShareModal's "Share" button does, just triggered automatically instead of by a
-    // tap. Empty match list is correct here: a tournament this is reachable for has either just
-    // been created (genuinely zero matches) or is being auto-healed after an edit with no
-    // shareCode yet -- either way, the very next refreshTournamentStandingsLive (triggered by any
-    // match completing) recomputes the real standings from scratch once a shareCode exists.
+    // Never shared before -- mint a code and publish for the first time automatically (there's no
+    // more manual "Share" button to trigger this by hand -- see shareMenus.js's own comment on
+    // why it was removed; publishing itself still happens regardless, since it's tied to a
+    // tournament being Public, not to that button). Empty match list is correct here: a
+    // tournament this is reachable for has either just been created (genuinely zero matches) or
+    // is being auto-healed after an edit with no shareCode yet -- either way, the very next
+    // refreshTournamentStandingsLive (triggered by any match completing) recomputes the real
+    // standings from scratch once a shareCode exists.
     const result = await shareTournament(tournament, computeStandings(tournament, []));
     if (result.ok) {
       persist({
@@ -2076,7 +2053,6 @@ export function CricketScorer() {
     federationsById: federationsById,
     clubTeamsById: clubTeamsById,
     onGetShareCode: handleGetShareCodeForMatch,
-    onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
     showTabBar: true
   })), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {

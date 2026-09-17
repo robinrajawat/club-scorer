@@ -16,19 +16,18 @@ import { hasSeenSwipeHint } from "../core/appLogic.js";
 import { TAB_BAR_HEIGHT, TAB_BAR_SAFE_BOTTOM } from "./tabBar.js";
 
 // A single match card -- swipe-to-delete, tap to open, a Share menu when this account can
-// actually share it (onGetShareCode/onGetViewCode both present). Module-level (not nested in
-// HomeScreen) since it closes over nothing but its own params -- everything it needs (onOpen,
-// setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode) comes
-// through the third argument explicitly. Exported so LiveScreen's Home tab can reuse the exact
-// same card, with the exact same owner actions, for this account's own completed matches sitting
-// alongside everyone else's public results -- see liveScreen.js's own comment on that merge.
+// actually share it (onGetShareCode present). Module-level (not nested in HomeScreen) since it
+// closes over nothing but its own params -- everything it needs (onOpen, setConfirmDeleteId,
+// setShowSwipeHint, tournamentNameById, onGetShareCode) comes through the third argument
+// explicitly. Exported so LiveScreen's Home tab can reuse the exact same card, with the exact
+// same owner actions, for this account's own completed matches sitting alongside everyone else's
+// public results -- see liveScreen.js's own comment on that merge.
 export function renderMatchCard(m, i, {
   onOpen,
   setConfirmDeleteId,
   setShowSwipeHint,
   tournamentNameById,
-  onGetShareCode,
-  onGetViewCode
+  onGetShareCode
 }) {
   return /*#__PURE__*/React.createElement("div", {
     key: m.id,
@@ -131,10 +130,9 @@ export function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", matchDateTimeLabel(m.createdAt) && ` · ${matchDateTimeLabel(m.createdAt)}`))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", matchDateTimeLabel(m.createdAt) && ` · ${matchDateTimeLabel(m.createdAt)}`))), onGetShareCode && /*#__PURE__*/React.createElement(ShareMenu, {
     match: m,
     onGetCode: () => onGetShareCode(m),
-    onGetViewCode: () => onGetViewCode(m),
     style: {
       background: "none",
       border: "none",
@@ -195,7 +193,6 @@ export function HomeScreen({
   federationsById = {},
   clubTeamsById = {},
   onGetShareCode,
-  onGetViewCode,
   showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -567,7 +564,7 @@ export function HomeScreen({
       transition: "transform 0.15s ease",
       flexShrink: 0
     }
-  }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: inProgressMatches.length > 0 ? 18 : 0
     }
@@ -676,7 +673,7 @@ export function HomeScreen({
       transition: "transform 0.15s ease",
       flexShrink: 0
     }
-  }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })))) : /*#__PURE__*/React.createElement(EmptyState, {
+  }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode })))) : /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "50vh"
   }, "Nothing to score right now.", /*#__PURE__*/React.createElement("br", null), "Start a match to see it here."), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)

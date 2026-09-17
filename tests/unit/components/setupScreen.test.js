@@ -1,10 +1,10 @@
 // The multi-page "New Match" setup flow (src/components/setupScreen.js). Every write is a prop
 // (onStart/onCancel) -- no bare Firestore globals -- but a page-change effect calls
 // window.scrollTo directly (to reset scroll position when swapping pages), so this stubs a
-// minimal globalThis.window rather than pulling in jsdom just for that one call, same as
-// TournamentShareModal's own minimal window stub. With no saved teams picked (typed names only),
-// hasSquads is false and the "xi" page is skipped entirely, so these tests walk
-// teams -> rules -> openers -> review, matching the common path most matches actually take.
+// minimal globalThis.window rather than pulling in jsdom just for that one call. With no saved
+// teams picked (typed names only), hasSquads is false and the "xi" page is skipped entirely, so
+// these tests walk teams -> rules -> openers -> review, matching the common path most matches
+// actually take.
 // PlayerPicker falls back to a plain text field (placeholder "Batsman name"/"Bowler name") when
 // there's no saved roster, found via the host <input>, same as TextField elsewhere in this suite.
 

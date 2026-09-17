@@ -7,7 +7,7 @@ import { RulesEditorFields } from "./rulesEditorFields.js";
 // match's own rules -- see TournamentDetailScreen (tournament) and MatchScreen's "This match" menu
 // (match, only offered before any ball has been bowled -- see matchScreen.js's own comment on why).
 // `Modal` is referenced as a bare global, same convention as every other Modal-wrapped screen in
-// this app (see TournamentShareModal in miscModals.js) -- tests stub it on globalThis.
+// this app (see QualificationCalculatorModal in miscModals.js) -- tests stub it on globalThis.
 // `warningText`, when given, is shown both under the header (so it's visible while editing, not
 // just at the final confirm step) and as the confirm step's own message -- the two callers use this
 // for very different things: the tournament caller explains that already-played/in-progress

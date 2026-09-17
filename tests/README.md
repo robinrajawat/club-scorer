@@ -178,7 +178,7 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   actually imports and runs the file.
 - `src/components/miscModals.js` /
   `tests/unit/components/miscModals.test.js` — `FirstLaunchTour` and
-  `TournamentShareModal`. Both reference `Modal` as a bare,
+  `QualificationCalculatorModal`. Both reference `Modal` as a bare,
   unimported global (same pattern as `ConfirmModal`), not a real
   `import` — a real import binds the identifier at module load, so
   `globalThis.Modal = StubModal` (the trick every other `Modal`-using
@@ -188,10 +188,9 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   really from `localStorageOutbox.js`) because its `finish()` calls
   `markTourSeen()` (`appLogic.js`), which calls those — real in
   `public/index.html`'s single scope, not in `appLogic.js`'s own module
-  scope under test. `TournamentShareModal` reads
-  `window.location.origin`/`pathname` directly during render, so its
-  test stubs a minimal `globalThis.window` object rather than pulling in
-  jsdom.
+  scope under test. Used to also cover `TournamentShareModal` (a
+  read-only public tournament link), removed along with the app's other
+  redundant share surfaces — see `shareMenus.js`'s own comment.
 - `src/components/venueAndDateModals.js` /
   `tests/unit/components/venueAndDateModals.test.js` — `VenueEditModal`
   (address search with a club-address shortcut) and `FixtureDateTimeModal`
@@ -327,17 +326,15 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   match-complete screen. `saveTransition`/`saveMatch`/`loadMatch` are
   bare globals called only from button handlers, so each test stubs
   just what its action needs; `ConfirmModal`'s own `Modal` bare global
-  also needs stubbing for the "Fix a mistake" test. First
-  already-extracted screen to render `ShareMenu` directly — since
-  `ShareMenu` only creates its `ReactDOM.createPortal` once its popover
-  is actually open, mounting it closed is fine under
-  `react-test-renderer`; tests exercise `onGetCode`/`onGetViewCode` by
-  grabbing the `ShareMenu` element (`findByType(ShareMenu)`) and calling
-  those props directly, without ever opening the popover (that's
-  `shareMenus.test.js`'s job). Also renders the match-recap card
-  (`buildMatchRecapDraft`, from `matchRecap.js` above) with its "Polish with
-  AI" button — `polishMatchRecap` (another bare global, not extracted) is
-  stubbed per test the same way `saveMatch`/`loadMatch` are.
+  also needs stubbing for the "Fix a mistake" test. Used to also render
+  `ShareMenu` directly, testing its `onGetCode`/`onGetViewCode` props
+  without opening the popover — dropped once `ShareMenu` itself started
+  returning `null` for a completed match (nobody left to invite to help
+  score one), which every match on this screen already is. Also renders
+  the match-recap card (`buildMatchRecapDraft`, from `matchRecap.js`
+  above) with its "Polish with AI" button — `polishMatchRecap` (another
+  bare global, not extracted) is stubbed per test the same way
+  `saveMatch`/`loadMatch` are.
 - `src/components/followScreen.js` /
   `tests/unit/components/followScreen.test.js` — `FollowScreen`, the
   public live match-following page. Subscribes via
@@ -391,13 +388,12 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   `tests/unit/components/tournamentDetailScreen.test.js` —
   `TournamentDetailScreen`, a single tournament's own screen (schedule/
   standings/stats/matches tabs, Player of the Tournament, Orange/Purple
-  Cap, share, PDF export, qualification calculator, delete).
+  Cap, PDF export, qualification calculator, delete).
   `loadTournamentMatches` runs from a mount-time `useEffect`;
   `downloadCSV` (a bare global, distinct from `RecordsScreen`'s
   `downloadMultiSectionCSV`) is stubbed only in the export test.
-  `TournamentShareModal`/`QualificationCalculatorModal`/`ConfirmModal`
-  all reference `Modal` as a bare global, so tests that open any of
-  them stub it too.
+  `QualificationCalculatorModal`/`ConfirmModal` both reference `Modal`
+  as a bare global, so tests that open either stub it too.
 - `src/components/clubPanel.js` / `tests/unit/components/clubPanel.test.js`
   — `ClubPanel`, full club administration (create/join, owner-only
   Manage mode, self-service edit-details form). The sole bare global is
@@ -437,7 +433,7 @@ if `public/index.html` doesn't match what `src/core/*.js` would produce).
   extracted, which simply travel along verbatim because they have no
   call sites outside their parent — it was refactored to take those
   values (`onOpen`, `setConfirmDeleteId`, `setShowSwipeHint`,
-  `tournamentNameById`, `onGetShareCode`, `onGetViewCode`) as an
+  `tournamentNameById`, `onGetShareCode`) as an
   explicit third parameter, with all four in-`HomeScreen` call sites
   updated to match; purely mechanical and behavior-preserving, verified
   against both the post-refactor splice snapshot and the true

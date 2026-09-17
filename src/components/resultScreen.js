@@ -4,12 +4,10 @@ import { ChevronLeft, Trophy, Undo2, Check } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { ExportPdfButton } from "./exportButtons.js";
 import { PlayerOfMatchCard, BestFielderCard } from "./matchInsightCards.js";
-import { ShareMenu } from "./shareMenus.js";
 import { InningScorecard } from "./scorecard.js";
 import { uid } from "../core/statsAndFixtures.js";
 import { matchResultText, tossText, nonStandardRulesText, impactSubsText } from "../core/shareAndFormat.js";
 import { buildMatchRecapDraft } from "../core/matchRecap.js";
-import { genMatchCode } from "../core/miscHelpers.js";
 import { newInning } from "../core/scoringEngine.js";
 import { captainFor, viceCaptainFor, keeperFor, numbersFor } from "../core/appLogic.js";
 
@@ -201,56 +199,6 @@ export function ResultScreen({
     const parent = await loadMatch(match.parentMatchId);
     if (parent) setMatch(parent);
   }
-  async function handleGetCode() {
-    if (match.shareCode) return {
-      ok: true,
-      code: match.shareCode
-    };
-    const updated = {
-      ...match,
-      shareCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
-      return {
-        ok: true,
-        code: updated.shareCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a code." : undefined)
-    };
-  }
-  async function handleGetViewCode() {
-    if (match.viewCode) return {
-      ok: true,
-      code: match.viewCode
-    };
-    const updated = {
-      ...match,
-      viewCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a link." : undefined)
-    };
-  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -288,16 +236,7 @@ export function ResultScreen({
       display: "flex",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(ShareMenu, {
-    match: match,
-    onGetCode: handleGetCode,
-    onGetViewCode: handleGetViewCode,
-    style: {
-      background: COLORS.pitchFixed,
-      border: "none",
-      color: "#fff"
-    }
-  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
+  }, /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match,
     style: {
       background: COLORS.pitchFixed,

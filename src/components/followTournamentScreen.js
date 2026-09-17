@@ -7,8 +7,10 @@ import { StandingsTable } from "./tableAtoms.js";
 import { buildMapsUrl, nonStandardRulesText } from "../core/shareAndFormat.js";
 
 // Read-only public view of a tournament's shared standings/fixtures snapshot, opened either via a
-// "?tournament=CODE" link (see TournamentShareModal, which creates these) or by tapping a card in
-// the Live tab's own tournaments feed (see openLiveTournament in cricketScorer.js) -- reachedInApp
+// "?tournament=CODE" link (auto-minted whenever a tournament is Public -- see
+// handleUpdateTournament in cricketScorer.js; there's no UI left to hand anyone that link, see
+// shareMenus.js's own comment) or by tapping a card in the Live tab's own tournaments feed (see
+// openLiveTournament in cricketScorer.js) -- reachedInApp
 // distinguishes the two: from inside the app this renders a small in-app "Back" link, while a cold
 // outside visitor with nowhere else to go gets a prominent "Go to Club Scorer" CTA button instead.
 // Covered by tests/unit/components/followTournamentScreen.test.js.
