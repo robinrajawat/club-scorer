@@ -786,7 +786,13 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 12.5
     }
-  }, face)))), tossCaller && tossCall && /*#__PURE__*/React.createElement(CoinFlipIllustration, {
+  }, face)))), tossCaller && tossCall && (flipping || coinFace) &&
+  // `(flipping || coinFace)` -- coinRotation starts at 0, which CoinFlipIllustration renders as
+  // Heads. Without this gate the coin appeared the instant both caller and call were picked,
+  // always showing Heads regardless of the actual call -- looked like the result was already
+  // decided (and wrong) before anyone had even flipped it. Now nothing renders here until the
+  // first tap of Flip.
+  /*#__PURE__*/React.createElement(CoinFlipIllustration, {
     rotationDeg: coinRotation,
     phase: coinPhase
   }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
