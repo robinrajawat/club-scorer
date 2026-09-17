@@ -102,7 +102,13 @@ function CoinFace({
       borderRadius: "50%",
       background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
       boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)",
+      // iOS Safari/WKWebView (the PWA's actual runtime) doesn't reliably honor the unprefixed
+      // property alone for culling a rotated-away face -- without -webkit-backface-visibility too,
+      // both faces can render at once, overlapping into what looks like a garbled letter instead of
+      // a clean H or T. Chromium doesn't need the prefix, which is why this never showed up testing
+      // against it.
       backfaceVisibility: "hidden",
+      WebkitBackfaceVisibility: "hidden",
       transform: extraTransform
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -180,6 +186,7 @@ export function CoinFlipIllustration({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       perspective: 300,
+      WebkitPerspective: 300,
       height: size + lift,
       display: "flex",
       alignItems: "flex-end",
@@ -191,6 +198,7 @@ export function CoinFlipIllustration({
       height: size,
       position: "relative",
       transformStyle: "preserve-3d",
+      WebkitTransformStyle: "preserve-3d",
       transform: `translateY(${translateY}px) rotateY(${rotationDeg}deg)`,
       transition
     }
