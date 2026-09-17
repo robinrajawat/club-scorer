@@ -232,7 +232,6 @@ const FUNCTIONS = [
   { name: "BetaTestersScreen", file: "src/components/infoScreens.js" },
   { name: "TOUR_SLIDES", file: "src/components/miscModals.js" },
   { name: "FirstLaunchTour", file: "src/components/miscModals.js" },
-  { name: "TournamentShareModal", file: "src/components/miscModals.js" },
   { name: "QualificationCalculatorModal", file: "src/components/miscModals.js" },
   { name: "VenueEditModal", file: "src/components/venueAndDateModals.js" },
   { name: "WEEKDAY_LABELS", file: "src/components/venueAndDateModals.js" },

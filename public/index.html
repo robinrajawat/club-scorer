@@ -7775,7 +7775,7 @@ function CoinIcon({
       width: size,
       height: size,
       borderRadius: "50%",
-      background: "linear-gradient(160deg, #e8c37e, #a97a2a)",
+      background: "linear-gradient(160deg, #e2c384, #ab7f28)",
       boxShadow: "0 1px 2px rgba(106,74,22,0.5), inset 0 0 0 1px rgba(255,240,210,0.35)",
       flexShrink: 0,
       verticalAlign: "middle",
@@ -7803,6 +7803,14 @@ function CoinIcon({
 // shine, not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders
 // at, individual beads blur into noise instead of reading as beading -- detail that only survives
 // at mockup size doesn't belong here.
+//
+// Every gold tone here (and in CoinIcon above) is COLORS.gold's own hue/saturation (40deg, 62%),
+// each stop just relit to the same lightness the original independently-picked antique-gold
+// palette used -- sitting right next to the Heads/Tails call buttons (which use COLORS.gold
+// directly) made the coin's own, unrelated gold read as a mismatch rather than a deliberate
+// "hero element" choice. Fixed hex, not the COLORS.gold CSS var itself -- this is a physical
+// object illustration, not chrome, so it stays the same tone in light and dark mode on purpose
+// (same reasoning as ballFixed/creamFixed elsewhere in theme.js).
 function CoinFace({
   letter,
   size
@@ -7812,7 +7820,7 @@ function CoinFace({
       position: "absolute",
       inset: 0,
       borderRadius: "50%",
-      background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
+      background: "radial-gradient(circle, #d2a13f 0%, #d2a13f 86%, #694e19 87%, #896620 93%, #b8892b 100%)",
       boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -7820,7 +7828,7 @@ function CoinFace({
       position: "absolute",
       inset: "9%",
       borderRadius: "50%",
-      background: "conic-gradient(from 215deg, #e8c37e, #a97a2a 42%, #7a5518 62%, #c99248 88%, #e8c37e)",
+      background: "conic-gradient(from 215deg, #e2c384, #ab7f28 42%, #76581c 62%, #d2a13f 88%, #e2c384)",
       boxShadow: "inset 0 2px 3px rgba(255,236,190,0.45), inset 0 -3px 6px rgba(50,34,10,0.45)",
       display: "flex",
       alignItems: "center",
@@ -9955,11 +9963,11 @@ const HELP_SECTIONS = [{
 }, {
   title: "Sharing & sync",
   entries: [{
-    q: "Score code vs. view code \u2014 what's the difference?",
-    a: "A score code (\u201cInvite to help score\u201d) gives full read-and-write scoring access \u2014 treat it like a shared password, only for someone you actually want scoring alongside you. A view code (\u201cShare live score\u201d) is read-only \u2014 anyone with the link can watch, nobody can edit, even if they have both codes."
+    q: "What does a share code do?",
+    a: "\u201cInvite to help score\u201d gives someone full read-and-write scoring access to a match \u2014 treat it like a shared password, only for someone you actually want scoring alongside you."
   }, {
     q: "Do I need an account?",
-    a: "No. Score codes and view codes work with no sign-in at all. Signing in with Google is only needed if you want your matches and teams to follow you across devices."
+    a: "No. A share code works with no sign-in at all. Signing in with Google is only needed if you want your matches and teams to follow you across devices."
   }, {
     q: "What does exporting/importing my data actually cover?",
     a: "Export (Account \u2192 Your data) gives you a JSON backup of your profile, teams, and matches saved to that account. Import restores it \u2014 into the same account, or a different one to migrate. It doesn't cover matches only ever shared via a score code."
@@ -10015,8 +10023,8 @@ const TOUR_SLIDES = [{
   body: "Four tabs at the bottom get you everywhere: Home for everyone else's live scores and tournaments, Score for your own matches, Cups for tournaments and series, and Teams for rosters."
 }, {
   icon: Share,
-  title: "Share your score two ways",
-  body: "A score code gives full scoring access \u2014 for a teammate co-scoring alongside you. A view code is read-only, for anyone just following along. They're never interchangeable."
+  title: "Invite someone to help score",
+  body: "A share code gives a teammate full scoring access alongside you \u2014 useful the moment one person alone can't keep up with every ball."
 }, {
   icon: Users,
   title: "Build a roster once, reuse it",
@@ -12025,7 +12033,6 @@ function InboxScreen({
 function ShareMenu({
   match,
   onGetCode,
-  onGetViewCode,
   style
 }) {
   const [open, setOpen] = useState(false);
@@ -12033,7 +12040,7 @@ function ShareMenu({
   const [menuAdjust, setMenuAdjust] = useState(null); // post-measure overrides once it's known the panel doesn't fit as opened
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copiedWhich, setCopiedWhich] = useState(null); // 'code' | 'link' | null
+  const [copied, setCopied] = useState(false);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
   function toggleOpen() {
@@ -12056,10 +12063,10 @@ function ShareMenu({
   }
   // The panel opens downward from the trigger by default, which is fine for the MatchScreen
   // header (always near the top of the viewport) but not for a Home-list row, which can sit
-  // anywhere down a scrolling list -- opening below can run the ~230px-tall panel off the bottom
-  // of the screen with no way to reach the lower rows. Measure it once it's actually on the page
-  // and, if it doesn't fit, flip it above the trigger; if there isn't room on either side either,
-  // pin it in view and let it scroll internally instead of spilling past the viewport edge.
+  // anywhere down a scrolling list -- opening below can run the panel off the bottom of the
+  // screen with no way to reach the lower rows. Measure it once it's actually on the page and, if
+  // it doesn't fit, flip it above the trigger; if there isn't room on either side either, pin it
+  // in view and let it scroll internally instead of spilling past the viewport edge.
   React.useLayoutEffect(() => {
     if (!open || !pos || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
@@ -12082,13 +12089,9 @@ function ShareMenu({
       });
     }
   }, [open, pos]);
-  function flashCopied(which) {
-    setCopiedWhich(which);
-    setTimeout(() => setCopiedWhich(w => w === which ? null : w), 1500);
-  }
-  // Full-access score code (co-scoring). Deliberately separate from ensureViewCode below —
-  // never conflate these two, that conflation was the exact hole that let a "read-only" viewer
-  // gain scoring access.
+  // Full-access score code (co-scoring). Deliberately separate from any read-only view-code
+  // concept — never conflate the two, that conflation was the exact hole that once let a
+  // "read-only" viewer gain scoring access.
   async function ensureCode() {
     if (match.shareCode) return {
       ok: true,
@@ -12109,58 +12112,16 @@ function ShareMenu({
       code: result.code
     };
   }
-  // Read-only view code. Resolves against match.viewCode / the liveViews collection only — this
-  // value must never be accepted by the "Invite to help score" join flow.
-  async function ensureViewCode() {
-    if (match.viewCode) return {
-      ok: true,
-      code: match.viewCode
-    };
-    setBusy(true);
-    setError("");
-    const result = await onGetViewCode();
-    setBusy(false);
-    if (!result || result.ok === false) {
-      setError(result && result.error || "Couldn't get a link.");
-      return {
-        ok: false
-      };
-    }
-    return {
-      ok: true,
-      code: result.code
-    };
-  }
   async function handleInviteCopy() {
     const res = await ensureCode();
     if (!res.ok) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(res.code).catch(() => {});
     }
-    flashCopied("code");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
-  async function handleCopyLink() {
-    const res = await ensureViewCode();
-    if (!res.ok) return;
-    const url = buildFollowUrl(res.code);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).catch(() => {});
-    }
-    flashCopied("link");
-  }
-  async function handleShareLive() {
-    const res = await ensureViewCode();
-    if (!res.ok) return;
-    const text = buildLiveShareText(match, res.code);
-    shareText(text);
-    setOpen(false);
-  }
-  // Plain score snapshot, no follow link/code involved -- unlike handleShareLive this never
-  // needs a view code, so it never touches ensureViewCode and can't fail on that account.
-  function handleShareDetails() {
-    shareText(buildShareText(match));
-    setOpen(false);
-  }
+  if (match.status === "complete") return null;
   const rowLabelStyle = {
     display: "flex",
     alignItems: "center",
@@ -12213,10 +12174,9 @@ function ShareMenu({
       zIndex: 101,
       ...menuAdjust
     }
-  }, match.status !== "complete" && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "8px 8px 10px",
-      borderBottom: "1px solid rgba(242,236,217,0.1)"
+      padding: "8px 8px 10px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: rowLabelStyle
@@ -12226,7 +12186,7 @@ function ShareMenu({
     size: 12
   })), "Invite to help score"), /*#__PURE__*/React.createElement("div", {
     style: rowSubStyle
-  }, "Full access \u2014 they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
+  }, "Full access — they can score too. Share the code, not a link."), match.shareCode ? /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
     onClick: handleInviteCopy,
     style: {
@@ -12246,7 +12206,7 @@ function ShareMenu({
       padding: "8px 10px",
       cursor: "pointer"
     }
-  }, copiedWhich === "code" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
+  }, copied ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
     size: 14
   }), "Copied!") : match.shareCode) : /*#__PURE__*/React.createElement("button", {
     className: "cs-btn",
@@ -12264,102 +12224,7 @@ function ShareMenu({
       padding: "8px 10px",
       cursor: busy ? "default" : "pointer"
     }
-  }, busy ? "Getting code\u2026" : "Get code & copy")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 8px 8px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: rowLabelStyle
-  }, /*#__PURE__*/React.createElement("div", {
-    style: iconChipStyle
-  }, /*#__PURE__*/React.createElement(Users, {
-    size: 12
-  })), "Share live score"), /*#__PURE__*/React.createElement("div", {
-    style: rowSubStyle
-  }, "Read-only \u2014 anyone with the link can watch, not edit."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleShareLive,
-    disabled: busy,
-    style: {
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: COLORS.turfFixed,
-      border: "none",
-      borderRadius: 10,
-      color: "#fff",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: busy ? "default" : "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 14
-  }), "Share"), /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleCopyLink,
-    disabled: busy,
-    style: {
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: "rgba(242,236,217,0.1)",
-      border: "1px solid rgba(242,236,217,0.3)",
-      borderRadius: 10,
-      color: COLORS.creamFixed,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: busy ? "default" : "pointer"
-    }
-  }, copiedWhich === "link" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Check, {
-    size: 14
-  }), "Copied!") : "Copy link"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 8px 8px",
-      borderTop: "1px solid rgba(242,236,217,0.1)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: rowLabelStyle
-  }, /*#__PURE__*/React.createElement("div", {
-    style: iconChipStyle
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 12
-  })), "Share match details"), /*#__PURE__*/React.createElement("div", {
-    style: rowSubStyle
-  }, "Just the score line \u2014 no live link, nothing to keep updating."), /*#__PURE__*/React.createElement("button", {
-    className: "cs-btn",
-    onClick: handleShareDetails,
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      background: COLORS.turfFixed,
-      border: "none",
-      borderRadius: 10,
-      color: "#fff",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 12.5,
-      padding: "8px 6px",
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 14
-  }), "Share")), error && /*#__PURE__*/React.createElement("div", {
+  }, busy ? "Getting code…" : "Get code & copy")), error && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "8px 8px 2px",
       fontSize: 11.5,
@@ -13320,28 +13185,7 @@ function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => shareText(buildFixtureShareText(t.name, f, venue)),
-    className: "cs-btn",
-    "aria-label": "Share match details",
-    title: "Share match details",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 32,
-      height: 32,
-      flexShrink: 0,
-      background: "none",
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  }))), venue ? /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB))), venue ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -13532,8 +13376,7 @@ function renderMatchCard(m, i, {
   setConfirmDeleteId,
   setShowSwipeHint,
   tournamentNameById,
-  onGetShareCode,
-  onGetViewCode
+  onGetShareCode
 }) {
   return /*#__PURE__*/React.createElement("div", {
     key: m.id,
@@ -13636,10 +13479,9 @@ function renderMatchCard(m, i, {
       color: COLORS.inkSoft,
       marginTop: 1
     }
-  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", matchDateTimeLabel(m.createdAt) && ` · ${matchDateTimeLabel(m.createdAt)}`))), onGetShareCode && onGetViewCode && /*#__PURE__*/React.createElement(ShareMenu, {
+  }, m.oversLimit, " overs · ", m.status === "complete" ? "Completed" : "In progress", m.shareCode ? " · Shared" : m.cloud ? " · Synced" : "", matchDateTimeLabel(m.createdAt) && ` · ${matchDateTimeLabel(m.createdAt)}`))), onGetShareCode && /*#__PURE__*/React.createElement(ShareMenu, {
     match: m,
     onGetCode: () => onGetShareCode(m),
-    onGetViewCode: () => onGetViewCode(m),
     style: {
       background: "none",
       border: "none",
@@ -13701,7 +13543,6 @@ function HomeScreen({
   federationsById = {},
   clubTeamsById = {},
   onGetShareCode,
-  onGetViewCode,
   showTabBar = false
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -14073,7 +13914,7 @@ function HomeScreen({
       transition: "transform 0.15s ease",
       flexShrink: 0
     }
-  }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }), "In Progress (", inProgressMatches.length, ")"), inProgressExpanded && inProgressMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode })), sortedUpcomingFixtures.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: inProgressMatches.length > 0 ? 18 : 0
     }
@@ -14182,7 +14023,7 @@ function HomeScreen({
       transition: "transform 0.15s ease",
       flexShrink: 0
     }
-  }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode, onGetViewCode })))) : /*#__PURE__*/React.createElement(EmptyState, {
+  }), "Completed (", completedMatches.length, ")"), showCompleted && completedMatches.map((m, i) => renderMatchCard(m, i, { onOpen, setConfirmDeleteId, setShowSwipeHint, tournamentNameById, onGetShareCode })))) : /*#__PURE__*/React.createElement(EmptyState, {
     minHeight: "50vh"
   }, "Nothing to score right now.", /*#__PURE__*/React.createElement("br", null), "Start a match to see it here."), matchToConfirmDelete && /*#__PURE__*/React.createElement(Modal, {
     onClose: () => setConfirmDeleteId(null)
@@ -20945,7 +20786,6 @@ function TournamentDetailScreen({
   const [potDraft, setPotDraft] = useState("");
   const [potBusy, setPotBusy] = useState(false);
   const [showQualCalc, setShowQualCalc] = useState(false);
-  const [showShare, setShowShare] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
   // A tournament-wide default venue -- fixtureRow.js already falls back to `tournament.venue` for
   // any fixture that hasn't set its own (`fixture.venue || tournament.venue`), but there was never
@@ -21127,22 +20967,7 @@ function TournamentDetailScreen({
       gap: 10,
       flexShrink: 0
     }
-  }, matches !== null && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowShare(true),
-    className: "cs-btn",
-    "aria-label": "Share tournament",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: 4,
-      display: "flex",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  })), canManage && /*#__PURE__*/React.createElement("button", {
+  }, canManage && /*#__PURE__*/React.createElement("button", {
     onClick: handleDelete,
     disabled: deleting,
     className: "cs-btn",
@@ -21284,13 +21109,6 @@ function TournamentDetailScreen({
       justifyContent: "center"
     }
   })) : /*#__PURE__*/React.createElement(React.Fragment, null,
-    showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
-    tournament: tournament,
-    standings: standings,
-    matches: matches,
-    onClose: () => setShowShare(false),
-    onUpdateTournament: onUpdateTournament
-  }),
     isTournamentComplete && /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
@@ -23332,149 +23150,6 @@ function QualificationCalculatorModal({
   }, saved_ ? "Saved!" : "Save for live tracking")));
 }
 // GENERATED-FN-END: QualificationCalculatorModal
-// GENERATED-FN-START: TournamentShareModal
-function TournamentShareModal({
-  tournament,
-  standings,
-  matches = [],
-  onClose,
-  onUpdateTournament
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  const code = tournament.shareCode || null;
-  const link = code ? `${window.location.origin}${window.location.pathname}?tournament=${code}` : "";
-  async function handleShare() {
-    setBusy(true);
-    setError("");
-    const result = await shareTournament(tournament, standings, matches);
-    setBusy(false);
-    if (result.ok) {
-      if (!tournament.shareCode) onUpdateTournament({
-        ...tournament,
-        shareCode: result.code
-      });
-    } else {
-      setError(result.error || "Couldn't create a share link.");
-    }
-  }
-  async function handleStop() {
-    if (!code) return;
-    setBusy(true);
-    setError("");
-    const result = await stopSharingTournament(tournament.id, code);
-    setBusy(false);
-    if (result.ok) {
-      onUpdateTournament({
-        ...tournament,
-        shareCode: null
-      });
-    } else {
-      setError(result.error || "Couldn't stop sharing.");
-    }
-  }
-  function handleCopy() {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(link).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }).catch(() => {});
-    }
-  }
-  return /*#__PURE__*/React.createElement(Modal, {
-    onClose: onClose
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'DM Serif Display', serif",
-      fontSize: 20,
-      color: COLORS.pitch,
-      marginBottom: 4
-    }
-  }, "Share this tournament"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginBottom: 14
-    }
-  }, "Anyone with the link can view standings and fixtures \u2014 no account needed. It updates itself automatically as results come in, so there's usually nothing to do here beyond copying the link below \u2014 \"Refresh now\" is only for forcing an update on the spot. A link that's gone unused for a long stretch may also expire on its own on some servers."), code ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      background: COLORS.cream,
-      border: `1px solid ${COLORS.willow}`,
-      borderRadius: 10,
-      padding: "10px 12px",
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      color: COLORS.ink,
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    }
-  }, link), /*#__PURE__*/React.createElement("button", {
-    onClick: handleCopy,
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.turf,
-      fontFamily: "'Inter'",
-      fontWeight: 700,
-      fontSize: 12,
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, copied ? "Copied!" : "Copy")), error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      marginBottom: 10
-    }
-  }, error), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(Btn, {
-    onClick: handleShare,
-    disabled: busy,
-    style: {
-      flex: 1
-    }
-  }, busy ? "\u2026" : "Refresh now"), /*#__PURE__*/React.createElement(Btn, {
-    variant: "danger",
-    onClick: handleStop,
-    disabled: busy,
-    style: {
-      flex: 1
-    }
-  }, "Stop sharing"))) : /*#__PURE__*/React.createElement(React.Fragment, null, error && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: COLORS.ball,
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      marginBottom: 10
-    }
-  }, error), /*#__PURE__*/React.createElement(Btn, {
-    variant: "primary",
-    onClick: handleShare,
-    disabled: busy,
-    style: {
-      width: "100%"
-    }
-  }, busy ? "Creating\u2026" : "Create share link")));
-}
-// GENERATED-FN-END: TournamentShareModal
 // GENERATED-FN-START: InningScorecard
 function InningScorecard({
   inning,
@@ -26877,27 +26552,6 @@ function MatchScreen({
       error: result.error || "This match changed on another device \u2014 resolve that before sharing a code."
     };
   }
-  async function handleGetViewCode() {
-    if (match.viewCode) return {
-      ok: true
-    };
-    const updated = {
-      ...match,
-      viewCode: genMatchCode()
-    };
-    setMatch(updated);
-    const result = await queueSave(updated);
-    if (result.ok) {
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || "This match changed on another device \u2014 resolve that before sharing a link."
-    };
-  }
   function checkInningEnd(updated, force) {
     const inn = updated.innings[updated.currentInningIndex];
     // Revised values (see declareRevisedTarget) only ever apply to innings 2 -- a rain
@@ -27837,8 +27491,7 @@ function MatchScreen({
     size: 17
   })), /*#__PURE__*/React.createElement(ShareMenu, {
     match: match,
-    onGetCode: handleGetCode,
-    onGetViewCode: handleGetViewCode
+    onGetCode: handleGetCode
   }), /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match
   }))), pendingCount > 0 && /*#__PURE__*/React.createElement(SyncStatusBanner, {
@@ -30819,56 +30472,6 @@ function ResultScreen({
     const parent = await loadMatch(match.parentMatchId);
     if (parent) setMatch(parent);
   }
-  async function handleGetCode() {
-    if (match.shareCode) return {
-      ok: true,
-      code: match.shareCode
-    };
-    const updated = {
-      ...match,
-      shareCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
-      return {
-        ok: true,
-        code: updated.shareCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a code." : undefined)
-    };
-  }
-  async function handleGetViewCode() {
-    if (match.viewCode) return {
-      ok: true,
-      code: match.viewCode
-    };
-    const updated = {
-      ...match,
-      viewCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatch({
-        ...updated,
-        writeSeq: result.writeSeq
-      });
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a link." : undefined)
-    };
-  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "24px 16px 60px",
@@ -30906,16 +30509,7 @@ function ResultScreen({
       display: "flex",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement(ShareMenu, {
-    match: match,
-    onGetCode: handleGetCode,
-    onGetViewCode: handleGetViewCode,
-    style: {
-      background: COLORS.pitchFixed,
-      border: "none",
-      color: "#fff"
-    }
-  }), /*#__PURE__*/React.createElement(ExportPdfButton, {
+  }, /*#__PURE__*/React.createElement(ExportPdfButton, {
     match: match,
     style: {
       background: COLORS.pitchFixed,
@@ -32067,10 +31661,10 @@ function CricketScorer() {
       setMatchLoading(false);
     }
   }
-  // Generic counterparts to MatchScreen's own handleGetCode/handleGetViewCode, for sharing a match
-  // straight from its Home screen list row -- those versions are scoped to whichever ONE match is
-  // currently open (match/setMatch, singular), which doesn't exist yet here; this operates on a
-  // specific match object passed in and writes back into the plural matches list instead.
+  // Generic counterpart to MatchScreen's own handleGetCode, for sharing a match straight from its
+  // Home screen list row -- that version is scoped to whichever ONE match is currently open
+  // (match/setMatch, singular), which doesn't exist yet here; this operates on a specific match
+  // object passed in and writes back into the plural matches list instead.
   async function handleGetShareCodeForMatch(m) {
     if (m.shareCode) return {
       ok: true,
@@ -32094,31 +31688,6 @@ function CricketScorer() {
     return {
       ok: false,
       error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a code." : undefined)
-    };
-  }
-  async function handleGetViewCodeForMatch(m) {
-    if (m.viewCode) return {
-      ok: true,
-      code: m.viewCode
-    };
-    const updated = {
-      ...m,
-      viewCode: genMatchCode()
-    };
-    const result = await saveMatch(updated);
-    if (result.ok) {
-      setMatches(prev => prev.map(x => x.id === m.id ? {
-        ...updated,
-        writeSeq: result.writeSeq
-      } : x));
-      return {
-        ok: true,
-        code: updated.viewCode
-      };
-    }
-    return {
-      ok: false,
-      error: result.error || (result.conflict ? "This match changed on another device \u2014 reopen it to see the latest before sharing a link." : undefined)
     };
   }
   // Links a newly-created match back onto the fixture it came from, marking it played instead of
@@ -32664,12 +32233,14 @@ function CricketScorer() {
       refreshTournamentStandingsLive(tournament.id);
       return;
     }
-    // Never shared before -- mint a code and publish for the first time, the same work
-    // TournamentShareModal's "Share" button does, just triggered automatically instead of by a
-    // tap. Empty match list is correct here: a tournament this is reachable for has either just
-    // been created (genuinely zero matches) or is being auto-healed after an edit with no
-    // shareCode yet -- either way, the very next refreshTournamentStandingsLive (triggered by any
-    // match completing) recomputes the real standings from scratch once a shareCode exists.
+    // Never shared before -- mint a code and publish for the first time automatically (there's no
+    // more manual "Share" button to trigger this by hand -- see shareMenus.js's own comment on
+    // why it was removed; publishing itself still happens regardless, since it's tied to a
+    // tournament being Public, not to that button). Empty match list is correct here: a
+    // tournament this is reachable for has either just been created (genuinely zero matches) or
+    // is being auto-healed after an edit with no shareCode yet -- either way, the very next
+    // refreshTournamentStandingsLive (triggered by any match completing) recomputes the real
+    // standings from scratch once a shareCode exists.
     const result = await shareTournament(tournament, computeStandings(tournament, []));
     if (result.ok) {
       persist({
@@ -33004,7 +32575,6 @@ function CricketScorer() {
     federationsById: federationsById,
     clubTeamsById: clubTeamsById,
     onGetShareCode: handleGetShareCodeForMatch,
-    onGetViewCode: handleGetViewCodeForMatch,
     onOpenLiveMatch: openLiveMatch,
     showTabBar: true
   })), screen === "live" && /*#__PURE__*/React.createElement(NavWrap, {

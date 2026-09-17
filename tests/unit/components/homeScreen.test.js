@@ -63,7 +63,7 @@ function baseProps(overrides = {}) {
     themePref: "system", onSetTheme: () => {}, onJoinCode: () => {}, onOpenTournaments: () => {},
     pendingCount: 0, onPendingSynced: () => {}, onOpenTournament: () => {},
     onScheduleFixture: () => {}, onStartFixture: () => {}, onEditVenue: () => {},
-    onGetShareCode: () => {}, onGetViewCode: () => {},
+    onGetShareCode: () => {},
     ...overrides
   };
 }

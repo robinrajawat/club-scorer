@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, Pencil, Share, Trophy } from "./icons.js";
+import { CalendarClock, Pencil, Trophy } from "./icons.js";
 import { Btn, AlertModal } from "./formUiAtoms.js";
 import { FixtureDateTimeModal, VenueEditModal } from "./venueAndDateModals.js";
-import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildFixtureShareText, buildMapsUrl } from "../core/shareAndFormat.js";
+import { ISO_DATETIME_RE, formatFixtureDateTime, buildFixtureICS, buildMapsUrl } from "../core/shareAndFormat.js";
 import { weatherCodeInfo } from "../core/miscHelpers.js";
 
 // An upcoming fixture card for the Home screen (search results and the always-visible Upcoming
 // section both use this): schedule date/time, edit venue (with a weather forecast once a verified
-// address + upcoming date line up), share match details, and add to calendar. Own component rather
-// than a plain render function -- it needs its own state for several inline modals, and hooks
-// can't safely live in a function invoked via .map() the way a real component instance can.
-// Covered by tests/unit/components/upcomingFixtureCard.test.js.
+// address + upcoming date line up), and add to calendar. Own component rather than a plain render
+// function -- it needs its own state for several inline modals, and hooks can't safely live in a
+// function invoked via .map() the way a real component instance can. Covered by
+// tests/unit/components/upcomingFixtureCard.test.js.
 //
 // `fetchFixtureWeather` (a bare-global network function, not extracted) runs from a mount-time
-// useEffect, same stubbing pattern as BetaTestersScreen. `downloadTextFile`/`shareText` are only
-// ever called from onClick handlers.
+// useEffect, same stubbing pattern as BetaTestersScreen. `downloadTextFile` (a bare global too) is
+// only ever called from its own onClick handler.
+//
+// Used to also have its own "Share match details" button (a plain-text blurb, separate from
+// ShareMenu's invite-to-help-score) -- removed along with the app's other redundant share
+// surfaces, see shareMenus.js's own comment.
 
 export function UpcomingFixtureCard({
   tournament: t,
@@ -118,28 +122,7 @@ export function UpcomingFixtureCard({
       color: COLORS.inkSoft,
       fontWeight: 500
     }
-  }, "vs"), " ", f.teamB)), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => shareText(buildFixtureShareText(t.name, f, venue)),
-    className: "cs-btn",
-    "aria-label": "Share match details",
-    title: "Share match details",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 32,
-      height: 32,
-      flexShrink: 0,
-      background: "none",
-      border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-      color: COLORS.turf
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  }))), venue ? /*#__PURE__*/React.createElement("div", {
+  }, "vs"), " ", f.teamB))), venue ? /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",

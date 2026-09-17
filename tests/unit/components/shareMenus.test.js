@@ -1,4 +1,4 @@
-// Portal popover menu (src/components/shareMenus.js). ShareMenu calls
+// Portal popover (src/components/shareMenus.js). ShareMenu calls
 // ReactDOM.createPortal(..., document.body) directly, along with getBoundingClientRect,
 // window.innerWidth/innerHeight, and navigator.clipboard -- real DOM APIs, same
 // as Modal. Unlike every other component test in this directory, this renders through real
@@ -52,12 +52,11 @@ function stubRect(el, rect) {
   el.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, ...rect });
 }
 
-test("ShareMenu: opens a portal menu with invite/share/copy rows, closes on scrim click", () => {
+test("ShareMenu: opens a portal menu with just the invite-to-help-score row, closes on scrim click", () => {
   act(() => {
     root.render(React.createElement(ShareMenu, {
       match: { status: "live", shareCode: "ABC123" },
-      onGetCode: () => Promise.resolve({ ok: true, code: "ABC123" }),
-      onGetViewCode: () => Promise.resolve({ ok: true, code: "VIEW1" })
+      onGetCode: () => Promise.resolve({ ok: true, code: "ABC123" })
     }));
   });
   const trigger = container.querySelector("[aria-label='Share']");
@@ -65,17 +64,20 @@ test("ShareMenu: opens a portal menu with invite/share/copy rows, closes on scri
   act(() => { trigger.dispatchEvent(new window.MouseEvent("click", { bubbles: true })); });
 
   assert.match(document.body.innerHTML, /ABC123/);
-  assert.match(document.body.innerHTML, /Share live score/);
-  assert.match(document.body.innerHTML, /Share match details/);
+  assert.match(document.body.innerHTML, /Invite to help score/);
+  // The read-only live-link and plain-text-snapshot options were dropped -- neither saw real use
+  // next to inviting a co-scorer, see shareMenus.js's own comment.
+  assert.doesNotMatch(document.body.innerHTML, /Share live score/);
+  assert.doesNotMatch(document.body.innerHTML, /Share match details/);
 
   // The full-screen scrim (the portal's first child) closes the menu when clicked.
   const scrim = [...document.body.querySelectorAll("div")].find(d => d.getAttribute("style")?.includes("position: fixed") && d.getAttribute("style")?.includes("inset: 0px"));
   assert.ok(scrim);
   act(() => { scrim.dispatchEvent(new window.MouseEvent("click", { bubbles: true })); });
-  assert.doesNotMatch(document.body.innerHTML, /Share live score/);
+  assert.doesNotMatch(document.body.innerHTML, /Invite to help score/);
 });
 
-test("ShareMenu: clicking 'Copy link' fetches a view code and copies the follow URL to the clipboard", async () => {
+test("ShareMenu: clicking the code button copies the invite code to the clipboard", async () => {
   const writeText = [];
   setNavigator({
     ...dom.window.navigator,
@@ -84,26 +86,36 @@ test("ShareMenu: clicking 'Copy link' fetches a view code and copies the follow 
   act(() => {
     root.render(React.createElement(ShareMenu, {
       match: { status: "live", shareCode: "ABC123" },
-      onGetCode: () => Promise.resolve({ ok: true, code: "ABC123" }),
-      onGetViewCode: () => Promise.resolve({ ok: true, code: "VIEW1" })
+      onGetCode: () => Promise.resolve({ ok: true, code: "ABC123" })
     }));
   });
   const trigger = container.querySelector("[aria-label='Share']");
   stubRect(trigger, { top: 40, bottom: 60, left: 10, right: 90 });
   act(() => { trigger.dispatchEvent(new window.MouseEvent("click", { bubbles: true })); });
 
-  const copyLinkBtn = [...document.body.querySelectorAll("button")].find(b => b.textContent === "Copy link");
-  assert.ok(copyLinkBtn);
+  const codeBtn = [...document.body.querySelectorAll("button")].find(b => b.textContent === "ABC123");
+  assert.ok(codeBtn);
   await act(async () => {
-    copyLinkBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    codeBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     await new Promise(r => setTimeout(r, 0));
   });
   assert.equal(writeText.length, 1);
-  assert.match(writeText[0], /VIEW1/);
+  assert.equal(writeText[0], "ABC123");
+  assert.match(document.body.innerHTML, /Copied!/);
 
-  // flashCopied's own setTimeout(1500) would otherwise fire after this test (and this file's
+  // The copy button's own setTimeout(1500) would otherwise fire after this test (and this file's
   // afterEach) has already torn globalThis.window down, throwing "window is not defined" from
   // inside React's own scheduler -- wait it out for real, while window still exists, instead of
   // leaving it to fire into a deleted DOM.
   await act(async () => { await new Promise(r => setTimeout(r, 1600)); });
+});
+
+test("ShareMenu: renders nothing once the match is complete -- nobody left to invite", () => {
+  act(() => {
+    root.render(React.createElement(ShareMenu, {
+      match: { status: "complete", shareCode: "ABC123" },
+      onGetCode: () => Promise.resolve({ ok: true, code: "ABC123" })
+    }));
+  });
+  assert.equal(container.querySelector("[aria-label='Share']"), null);
 });

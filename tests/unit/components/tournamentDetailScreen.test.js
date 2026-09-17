@@ -1,7 +1,7 @@
 // A single tournament's own screen (src/components/tournamentDetailScreen.js).
 // `loadTournamentMatches` runs from a mount-time useEffect -- a bare-global Firestore call, stubbed
 // per test. `downloadCSV` (also a bare global) is stubbed only in the export test.
-// `TournamentShareModal`/`QualificationCalculatorModal` reference Modal as a bare global.
+// `QualificationCalculatorModal` references Modal as a bare global.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -299,12 +299,9 @@ test("TournamentDetailScreen: the delete confirmation stays the plain wording on
   assert.match(modal.props.message, /Matches already scored in it are untouched/);
 });
 
-test("TournamentDetailScreen: the share button opens TournamentShareModal", async () => {
-  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+test("TournamentDetailScreen: no share button any more -- TournamentShareModal was removed", async () => {
   const inst = await renderScreen(tournamentFixture(), [completedMatch()]);
-  const shareBtn = inst.root.findByProps({ "aria-label": "Share tournament" });
-  act(() => { shareBtn.props.onClick(); });
-  assert.ok(inst.root.findByProps({ "data-stub-modal": true }));
+  assert.throws(() => inst.root.findByProps({ "aria-label": "Share tournament" }));
 });
 
 test("TournamentDetailScreen: the qualification calculator button opens QualificationCalculatorModal", async () => {

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { CalendarClock, Cap, ChevronLeft, Download, Pencil, Plus, Share, Trophy } from "./icons.js";
+import { CalendarClock, Cap, ChevronLeft, Download, Pencil, Plus, Trophy } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { LoadingNote } from "./illustrations.js";
 import { StandingsTable } from "./tableAtoms.js";
 import { ExportTournamentPdfButton } from "./exportButtons.js";
 import { TournamentPrintReport } from "./scorecard.js";
-import { TournamentShareModal, QualificationCalculatorModal } from "./miscModals.js";
+import { QualificationCalculatorModal } from "./miscModals.js";
 import { FixturesSection } from "./fixturesSection.js";
 import { VenueEditModal } from "./venueAndDateModals.js";
 import { RulesEditModal } from "./rulesEditModal.js";
@@ -15,13 +15,19 @@ import { matchResultText, safeFilenamePart, buildMapsUrl } from "../core/shareAn
 import { computeStandings, computeGroupStandings, DEFAULT_RULES } from "../core/appLogic.js";
 
 // A single tournament's own screen: schedule (via FixturesSection)/standings/stats/matches tabs,
-// Player of the Tournament, Orange/Purple Cap and Table Topper callouts, share, PDF export, a
+// Player of the Tournament, Orange/Purple Cap and Table Topper callouts, PDF export, a
 // qualification-scenario calculator, and delete. `loadTournamentMatches` runs from a mount-time
 // useEffect -- a bare-global Firestore call, not extracted, stubbed the usual way.
 // `downloadCSV` (also a bare global, for the per-tab stats export) is only called from its own
-// button handler. `TournamentShareModal`/`QualificationCalculatorModal` reference Modal as a bare
-// global internally, so tests that open either one stub it too. Covered by
-// tests/unit/components/tournamentDetailScreen.test.js.
+// button handler. `QualificationCalculatorModal` references Modal as a bare global internally, so
+// tests that open it stub it too. Covered by tests/unit/components/tournamentDetailScreen.test.js.
+//
+// No public share link any more -- a tournament's own read-only public standings page still gets
+// auto-published/kept in sync behind the scenes whenever it's Public (see handleUpdateTournament
+// in cricketScorer.js), but nothing in this screen can hand anyone its link. In practice, public
+// tournaments already surface on Home's own "Live tournaments" feed for anyone with the app open
+// -- the removed Share button covered the narrower case of someone without it, reachable just as
+// well by pointing them at the site itself rather than a specific link.
 
 export function TournamentDetailScreen({
   tournament,
@@ -47,7 +53,6 @@ export function TournamentDetailScreen({
   const [potDraft, setPotDraft] = useState("");
   const [potBusy, setPotBusy] = useState(false);
   const [showQualCalc, setShowQualCalc] = useState(false);
-  const [showShare, setShowShare] = useState(false);
   const [activeTab, setActiveTab] = useState("schedule");
   // A tournament-wide default venue -- fixtureRow.js already falls back to `tournament.venue` for
   // any fixture that hasn't set its own (`fixture.venue || tournament.venue`), but there was never
@@ -229,22 +234,7 @@ export function TournamentDetailScreen({
       gap: 10,
       flexShrink: 0
     }
-  }, matches !== null && /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowShare(true),
-    className: "cs-btn",
-    "aria-label": "Share tournament",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.pitch,
-      cursor: "pointer",
-      padding: 4,
-      display: "flex",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement(Share, {
-    size: 17
-  })), canManage && /*#__PURE__*/React.createElement("button", {
+  }, canManage && /*#__PURE__*/React.createElement("button", {
     onClick: handleDelete,
     disabled: deleting,
     className: "cs-btn",
@@ -386,13 +376,6 @@ export function TournamentDetailScreen({
       justifyContent: "center"
     }
   })) : /*#__PURE__*/React.createElement(React.Fragment, null,
-    showShare && /*#__PURE__*/React.createElement(TournamentShareModal, {
-    tournament: tournament,
-    standings: standings,
-    matches: matches,
-    onClose: () => setShowShare(false),
-    onUpdateTournament: onUpdateTournament
-  }),
     isTournamentComplete && /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
