@@ -76,24 +76,28 @@ export function CoinIcon({
   });
 }
 
-// A real coin, not a flickering label: two circular faces (Heads/Tails) glued back-to-back on a
-// 3D-rotated disc. `rotationDeg` is an ever-increasing absolute angle (not reset to 0 between
-// flips, so consecutive flips spin forward instead of visually snapping back) -- 0/360/720... deg
-// shows Heads, 180/540/900... deg shows Tails, per the standard rotateY card-flip technique: the
-// back face is pre-rotated 180deg so it lands right-side-up instead of mirrored.
+// A real coin, not a flickering label. This used to be two circular faces (Heads/Tails) glued
+// back-to-back on a 3D-rotated (rotateY) disc, hidden/shown via backface-visibility -- the
+// standard CSS flip-card technique. Dropped that after it turned out unreliable on iOS
+// Safari/WKWebView (this PWA's actual runtime): even with the -webkit- prefixes added,
+// reports kept coming in of both faces rendering at once, overlapping into a garbled letter.
+// backface-visibility + perspective + preserve-3d has a long history of exactly this kind of
+// inconsistency in WebKit, and this app has no way to test against real Safari to chase it
+// further. So: only ONE face is ever in the DOM now, full stop -- see CoinFlipIllustration below
+// for how a 2D horizontal squash (scaleX) fakes the flip instead. Structurally impossible for two
+// faces to render simultaneously, on any engine, because there's only ever one.
 //
-// Each face is layered, not a flat gradient circle, for an actual minted-medal read: a two-tone
-// rim (the outer radial gradient breaks to a darker ring right at the edge, reading as a raised
-// lip rather than a drop shadow), an inset face with a conic sweep (light wrapping around a flat
-// disc, not a sphere -- a plain radial highlight here shades it like a ball instead of a coin),
-// a thin inner bevel border, and a tight crescent specular highlight (a small directional shine,
-// not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders at,
-// individual beads blur into noise instead of reading as beading -- detail that only survives at
-// mockup size doesn't belong here.
+// The face itself is still layered, not a flat gradient circle, for an actual minted-medal read:
+// a two-tone rim (the outer radial gradient breaks to a darker ring right at the edge, reading as
+// a raised lip rather than a drop shadow), an inset face with a conic sweep (light wrapping around
+// a flat disc, not a sphere -- a plain radial highlight here shades it like a ball instead of a
+// coin), a thin inner bevel border, and a tight crescent specular highlight (a small directional
+// shine, not a full-face glow). A beaded rim was tried and dropped: at the ~56px this ever renders
+// at, individual beads blur into noise instead of reading as beading -- detail that only survives
+// at mockup size doesn't belong here.
 function CoinFace({
   letter,
-  size,
-  extraTransform = ""
+  size
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -101,15 +105,7 @@ function CoinFace({
       inset: 0,
       borderRadius: "50%",
       background: "radial-gradient(circle, #c99248 0%, #c99248 86%, #6b4a16 87%, #8a641f 93%, #b8892b 100%)",
-      boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)",
-      // iOS Safari/WKWebView (the PWA's actual runtime) doesn't reliably honor the unprefixed
-      // property alone for culling a rotated-away face -- without -webkit-backface-visibility too,
-      // both faces can render at once, overlapping into what looks like a garbled letter instead of
-      // a clean H or T. Chromium doesn't need the prefix, which is why this never showed up testing
-      // against it.
-      backfaceVisibility: "hidden",
-      WebkitBackfaceVisibility: "hidden",
-      transform: extraTransform
+      boxShadow: "0 2px 6px rgba(60,40,10,0.5), inset 0 0 0 1px rgba(50,34,10,0.35)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -160,19 +156,24 @@ function CoinFace({
     }
   }, letter)));
 }
-// `phase` drives an actual toss, not just an in-place spin: "up" lifts the coin on a short
-// ease-out (a hand launching it), "down" brings it back on a longer ease-in (gravity winning),
-// "rest" is the static pre-/post-flip state with no transition at all. The ground shadow shrinks
-// and fades while airborne and grows back on landing, the usual cheap trick for selling height
-// with a 2D element. Both phases keep spinning toward `rotationDeg` throughout -- see flipCoin in
-// setupScreen.js for how the two-stage timing is driven.
+// `phase` drives an actual toss, not just an in-place spin: "up" lifts the coin AND squashes it
+// horizontally to nothing (scaleX 1 -> 0) on a short ease-out -- a hand launching it, spinning
+// edge-on -- "down" brings it back down and grows it back out (scaleX 0 -> 1) on a longer ease-in,
+// "rest" is the static pre-/post-flip state with no transition at all. `face` ("Heads"/"Tails"/"")
+// is swapped by the caller (flipCoin in setupScreen.js) right as "up" hands off to "down" -- i.e. at
+// the moment scaleX is at or near 0, so the swap itself is imperceptible, same trick paper flip
+// clocks and CSS "fake 3D" card flips use, chosen here specifically because it has no dependency
+// on backface-visibility/perspective/preserve-3d (see CoinFace's own comment for why those were
+// dropped). The ground shadow shrinks and fades while airborne and grows back on landing, the
+// usual cheap trick for selling height with a 2D element.
 export function CoinFlipIllustration({
-  rotationDeg,
+  face,
   phase = "rest",
   size = 56
 }) {
   const lift = Math.round(size * 1.4);
   const translateY = phase === "up" ? -lift : 0;
+  const squashX = phase === "up" ? 0 : 1;
   const transition = phase === "rest" ? "none" : phase === "up" ? "transform 0.35s cubic-bezier(0.33,0,0.2,1)" : "transform 0.55s cubic-bezier(0.5,0,0.75,0.9)";
   const shadowScale = phase === "up" ? 0.5 : 1;
   const shadowOpacity = phase === "up" ? 0.15 : 0.3;
@@ -185,8 +186,6 @@ export function CoinFlipIllustration({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      perspective: 300,
-      WebkitPerspective: 300,
       height: size + lift,
       display: "flex",
       alignItems: "flex-end",
@@ -197,18 +196,12 @@ export function CoinFlipIllustration({
       width: size,
       height: size,
       position: "relative",
-      transformStyle: "preserve-3d",
-      WebkitTransformStyle: "preserve-3d",
-      transform: `translateY(${translateY}px) rotateY(${rotationDeg}deg)`,
+      transform: `translateY(${translateY}px) scaleX(${squashX})`,
       transition
     }
   }, /*#__PURE__*/React.createElement(CoinFace, {
-    letter: "H",
+    letter: face === "Tails" ? "T" : face === "Heads" ? "H" : "",
     size
-  }), /*#__PURE__*/React.createElement(CoinFace, {
-    letter: "T",
-    size,
-    extraTransform: "rotateY(180deg)"
   }))), /*#__PURE__*/React.createElement("div", {
     "aria-hidden": "true",
     style: {

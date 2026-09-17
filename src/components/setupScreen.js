@@ -98,10 +98,10 @@ export function SetupScreen({
   const [tossCall, setTossCall] = useState("");
   const [coinFace, setCoinFace] = useState("");
   const [coinFlipOpen, setCoinFlipOpen] = useState(false);
-  // Ever-increasing absolute angle (never reset to 0 between flips, so a re-flip spins forward
-  // instead of visually snapping back to a starting position) -- see CoinFlipIllustration's own
-  // comment for how the angle maps to which face ends up showing.
-  const [coinRotation, setCoinRotation] = useState(0);
+  // Which face ("Heads"/"Tails"/"") CoinFlipIllustration is currently showing -- set mid-flip
+  // (see flipCoin below), separately from coinFace, which only updates once the flip has fully
+  // settled and is used for the result text.
+  const [displayedFace, setDisplayedFace] = useState("");
   // "rest" | "up" | "down" -- drives the actual toss motion (see CoinFlipIllustration), not just
   // an in-place spin.
   const [coinPhase, setCoinPhase] = useState("rest");
@@ -279,6 +279,7 @@ export function SetupScreen({
     setTossCaller("");
     setTossCall("");
     setCoinFace("");
+    setDisplayedFace("");
     setCoinPhase("rest");
   }
   // Only enabled once someone's actually called Heads or Tails -- flipping straight to a random
@@ -290,22 +291,17 @@ export function SetupScreen({
     setCoinFace("");
     setTossWonBy("");
     // The outcome is picked once, right now -- everything after this is just the coin visibly
-    // catching up to it. Spin forward from wherever the coin currently sits (never reset to 0, so
-    // a re-flip doesn't visually snap backwards) by a few full turns plus whatever's needed to land
-    // on the right face: 0/360/720…deg shows Heads, 180/540/900…deg shows Tails.
+    // catching up to it.
     const landed = Math.random() < 0.5 ? "Heads" : "Tails";
-    const targetMod = landed === "Heads" ? 0 : 180;
-    const delta = (targetMod - coinRotation % 360 + 360) % 360;
-    const finalRotation = coinRotation + 360 * 4 + delta;
     // A real toss goes up before it comes down -- two CSS transitions in sequence (launch, then
-    // fall) read as an actual arc, which a single spin-in-place transition never could. The coin
-    // keeps rotating through both legs; only the vertical motion and its easing change between
-    // them (see CoinFlipIllustration).
+    // fall) read as an actual arc, which a single spin-in-place transition never could. "up" also
+    // squashes the coin flat (see CoinFlipIllustration) -- right as that squash bottoms out and
+    // "down" takes over is where the displayed face swaps to the landed result, at the one moment
+    // the coin is edge-on and the swap itself is invisible.
     setCoinPhase("up");
-    setCoinRotation(coinRotation + (finalRotation - coinRotation) * 0.4);
     setTimeout(() => {
+      setDisplayedFace(landed);
       setCoinPhase("down");
-      setCoinRotation(finalRotation);
     }, 350);
     setTimeout(() => {
       setCoinFace(landed);
@@ -786,14 +782,14 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 12.5
     }
-  }, face)))), tossCaller && tossCall && (flipping || coinFace) &&
-  // `(flipping || coinFace)` -- coinRotation starts at 0, which CoinFlipIllustration renders as
-  // Heads. Without this gate the coin appeared the instant both caller and call were picked,
-  // always showing Heads regardless of the actual call -- looked like the result was already
-  // decided (and wrong) before anyone had even flipped it. Now nothing renders here until the
-  // first tap of Flip.
+  }, face)))), tossCaller && tossCall && (flipping || displayedFace) &&
+  // `(flipping || displayedFace)` -- without this gate the coin appeared the instant both caller
+  // and call were picked, before anyone had even tapped Flip, always showing Heads regardless of
+  // the actual call. Now nothing renders here until the first tap of Flip; `flipping` covers the
+  // 0-350ms squash-out (before displayedFace has been set to this flip's result), and
+  // `displayedFace` keeps it visible afterwards, landed result and all.
   /*#__PURE__*/React.createElement(CoinFlipIllustration, {
-    rotationDeg: coinRotation,
+    face: displayedFace,
     phase: coinPhase
   }), tossCaller && tossCall && /*#__PURE__*/React.createElement("button", {
     type: "button",
