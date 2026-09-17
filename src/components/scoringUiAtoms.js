@@ -326,8 +326,12 @@ export function SwipeableRow({
     className: "cs-btn",
     style: {
       width: ACTION_WIDTH,
-      background: extraActive ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : COLORS.creamDark,
-      color: extraActive ? "#2e1c04" : COLORS.ink,
+      // Not-yet-active used COLORS.creamDark, the exact same tone as the row this panel is
+      // revealed behind -- swiping just uncovered an identically-colored rectangle with an icon
+      // on it, no visible button. A muted gold tint (dimmer than the active/pinned gold below, but
+      // clearly gold rather than plain tan) reads as a real action regardless of active state.
+      background: extraActive ? `linear-gradient(160deg, #d4a544, ${COLORS.gold})` : "linear-gradient(160deg, #e6cf98, #cfa955)",
+      color: extraActive ? "#2e1c04" : "#4a3410",
       border: "none",
       display: "flex",
       flexDirection: "column",
