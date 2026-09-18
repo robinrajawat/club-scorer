@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { COLORS } from "./theme.js";
-import { Trophy, ArrowLeftRight, Pencil } from "./icons.js";
+import { Trophy, ArrowLeftRight, ChevronRight, Pencil } from "./icons.js";
 import { Field } from "./screenAtoms.js";
 import { TextField, RuleChoice, TeamChips, Btn } from "./formUiAtoms.js";
 import { PlayingXIPicker } from "./playingXIPicker.js";
@@ -125,6 +125,16 @@ export function SetupScreen({
   // showing the full editor open every single time someone starts a match forces a re-scroll
   // through 7 settings that are almost always already right. "Customize" reveals it on demand.
   const [rulesExpanded, setRulesExpanded] = useState(false);
+  // Which of the rules editor's own sub-sections (Format/Extras/Special rules/Bowling limits/
+  // Batting rules) are open -- each collapses independently now, rather than the single
+  // "Customize" toggle above revealing all ~7 settings' worth of sub-sections at once. Reset
+  // (all closed) every time the editor itself is re-opened, via the "Customize" click below,
+  // rather than remembering state from a previous open -- same "starts closed, ask for what you
+  // want" instinct as rulesExpanded itself.
+  const [expandedRuleSections, setExpandedRuleSections] = useState({});
+  function toggleRuleSection(key) {
+    setExpandedRuleSections(s => ({ ...s, [key]: !s[key] }));
+  }
   useEffect(() => {
     if (maxOversTouched) return;
     const n = parseInt(overs || "0", 10);
@@ -446,6 +456,46 @@ export function SetupScreen({
     textTransform: "uppercase",
     marginBottom: 12
   };
+  // A tappable version of RuleSectionHeader (tournamentsScreen.js) for the Match Rules editor's
+  // own sub-sections -- same border/label styling, plus a chevron that opens/closes just that one
+  // section. Kept local rather than changing RuleSectionHeader itself, which also backs the
+  // Teams & Format page's plain "Format" divider above and the tournament rules editor's dividers
+  // elsewhere -- neither of those needed to become collapsible, just this screen's much longer
+  // rules stack. Same chevron-rotate pattern as Home's own "Completed" disclosure.
+  function ruleSectionToggle(key, label, first) {
+    const open = !!expandedRuleSections[key];
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => toggleRuleSection(key),
+      className: "cs-btn",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        width: "100%",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0,
+        marginTop: first ? 4 : 22,
+        paddingTop: first ? 0 : 14,
+        borderTop: first ? "none" : `1px solid ${COLORS.creamDark}`,
+        fontFamily: "'Inter'",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1,
+        color: COLORS.gold,
+        textTransform: "uppercase"
+      }
+    }, /*#__PURE__*/React.createElement(ChevronRight, {
+      size: 12,
+      style: {
+        transform: open ? "rotate(90deg)" : "none",
+        transition: "transform 0.15s ease",
+        flexShrink: 0
+      }
+    }), label);
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "20px 16px 60px",
@@ -934,7 +984,10 @@ export function SetupScreen({
     }
   }, "Match Rules"), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => setRulesExpanded(e => !e),
+    onClick: () => {
+      setRulesExpanded(e => !e);
+      setExpandedRuleSections({});
+    },
     className: "cs-btn",
     style: {
       background: "none",
@@ -962,10 +1015,7 @@ export function SetupScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Standard by default — adjust for junior or short formats."), /*#__PURE__*/React.createElement(RuleSectionHeader, {
-    label: "Format",
-    first: true
-  }), /*#__PURE__*/React.createElement(RuleChoice, {
+  }, "Standard by default — adjust for junior or short formats."), ruleSectionToggle("format", "Format", true), expandedRuleSections.format && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Balls per over",
     value: matchRules.ballsPerOver,
     onChange: v => setMatchRules(r => ({
@@ -985,9 +1035,7 @@ export function SetupScreen({
       value: 8,
       label: "8"
     }]
-  }), /*#__PURE__*/React.createElement(RuleSectionHeader, {
-    label: "Extras"
-  }), /*#__PURE__*/React.createElement(RuleChoice, {
+  })), ruleSectionToggle("extras", "Extras"), expandedRuleSections.extras && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Runs on a wide",
     value: matchRules.wideRuns,
     onChange: v => setMatchRules(r => ({
@@ -1048,9 +1096,7 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.freeHit ? "On" : "Off")), /*#__PURE__*/React.createElement(RuleSectionHeader, {
-    label: "Special rules"
-  }), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.freeHit ? "On" : "Off"))), ruleSectionToggle("special", "Special rules"), expandedRuleSections.special && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1250,9 +1296,7 @@ export function SetupScreen({
       fontWeight: 600,
       fontSize: 13
     }
-  }, matchRules.superOver ? "On" : "Off")), /*#__PURE__*/React.createElement(RuleSectionHeader, {
-    label: "Bowling limits"
-  }), /*#__PURE__*/React.createElement("div", {
+  }, matchRules.superOver ? "On" : "Off"))), ruleSectionToggle("bowling", "Bowling limits"), expandedRuleSections.bowling && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1449,7 +1493,7 @@ export function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None")))), /*#__PURE__*/React.createElement("div", {
+  }, "None"))))), expandedRuleSections.bowling && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1551,9 +1595,7 @@ export function SetupScreen({
       cursor: "pointer",
       whiteSpace: "nowrap"
     }
-  }, "None"))), /*#__PURE__*/React.createElement(RuleSectionHeader, {
-    label: "Batting rules"
-  }), /*#__PURE__*/React.createElement("div", {
+  }, "None"))), ruleSectionToggle("batting", "Batting rules"), expandedRuleSections.batting && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -1841,7 +1883,7 @@ export function SetupScreen({
     style: {
       color: COLORS.ink
     }
-  }, "New batsman ready time"), " — how long an incoming batsman has to be ready is down to your competition's own rules. There's no automatic clock; if they're not ready in time, record it as Timed Out from the Next Batsman prompt during scoring — a scorer judgment call, same as the umpire's in real play.")), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "New batsman ready time"), " — how long an incoming batsman has to be ready is down to your competition's own rules. There's no automatic clock; if they're not ready in time, record it as Timed Out from the Next Batsman prompt during scoring — a scorer judgment call, same as the umpire's in real play."))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
