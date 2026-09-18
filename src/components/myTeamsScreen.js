@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { COLORS } from "./theme.js";
 import { Bell, ChevronLeft, Pencil, Pin, Plus, Shield, Users } from "./icons.js";
 import { LoadingNote, EmptyState } from "./illustrations.js";
+import { ConfirmModal } from "./formUiAtoms.js";
 import { FabButton } from "./screenAtoms.js";
 import { SwipeableRow } from "./scoringUiAtoms.js";
 import { hasSeenSwipeHint } from "../core/appLogic.js";
@@ -40,6 +41,11 @@ export function MyTeamsScreen({
   // Same shared, learn-once flag as Home's Saved Matches list -- see hasSeenSwipeHint's own
   // comment for why this is one flag across both screens rather than two separate ones.
   const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint());
+  // Swipe-delete used to skip confirmation entirely -- the row's own Delete button fired
+  // onDeleteTeam the instant it was tapped, no step in between. Same ConfirmModal pattern as
+  // TeamEditScreen's own "Delete team" button (same destructive, unrecoverable action, just a
+  // second entry point to it) -- holds the team to delete, or null.
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(null);
   function teamMatchCount(teamId) {
     return matches.filter(m => m.teamAId === teamId || m.teamBId === teamId).length;
   }
@@ -248,7 +254,7 @@ export function MyTeamsScreen({
       marginBottom: i === sortedTeams.length - 1 ? 0 : 6
     }
   }, /*#__PURE__*/React.createElement(SwipeableRow, {
-    onDelete: () => onDeleteTeam(t.id, null),
+    onDelete: () => setConfirmDeleteTeam(t),
     deleteLabel: "Delete",
     onSwipeStart: () => setShowSwipeHint(false),
     extraIcon: onTogglePin ? Pin : undefined,
@@ -376,5 +382,14 @@ export function MyTeamsScreen({
 ), showTabBar && /*#__PURE__*/React.createElement(FabButton, {
     onClick: onNewTeam,
     label: "New team"
+  }), confirmDeleteTeam && /*#__PURE__*/React.createElement(ConfirmModal, {
+    title: `Delete ${confirmDeleteTeam.name.trim() || "this team"}?`,
+    message: "Removes this team and its roster entirely. Matches already scored with it are untouched — this only affects future ones. This can't be undone.",
+    confirmLabel: "Delete",
+    onConfirm: () => {
+      onDeleteTeam(confirmDeleteTeam.id, null);
+      setConfirmDeleteTeam(null);
+    },
+    onCancel: () => setConfirmDeleteTeam(null)
   }))
 }

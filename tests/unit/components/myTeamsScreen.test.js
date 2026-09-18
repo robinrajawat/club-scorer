@@ -7,24 +7,37 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { beforeEach, afterEach } from "node:test";
 import React from "react";
-import renderer from "react-test-renderer";
+import renderer, { act } from "react-test-renderer";
 import { MyTeamsScreen } from "../../../src/components/myTeamsScreen.js";
 import { SwipeableRow } from "../../../src/components/scoringUiAtoms.js";
+import { Btn } from "../../../src/components/formUiAtoms.js";
 import { Shield } from "../../../src/components/icons.js";
+
+function hasText(node, str) {
+  if (typeof node === "string") return node.includes(str);
+  if (Array.isArray(node)) return node.some(n => hasText(n, str));
+  if (node && typeof node === "object" && "children" in node) return hasText(node.children, str);
+  if (node && typeof node === "object" && node.props) return hasText(node.props.children, str);
+  return false;
+}
 
 // FabButton (rendered only when showTabBar is true -- see myTeamsScreen.js's own comment) calls
 // ReactDOM.createPortal(..., document.body) as a bare global, same as Modal elsewhere in this
 // suite -- react-test-renderer has no real DOM to portal into, so this stub renders the portal's
 // children in place instead. Harmless for every other test here, which doesn't pass showTabBar
 // and so never mounts FabButton at all.
+// Modal (bare global, same pattern as everywhere else) backs ConfirmModal's own delete dialog --
+// stub it here too, alongside the FabButton portal stubs, rather than per-test.
 beforeEach(() => {
   globalThis.ReactDOM = { createPortal: node => node };
   globalThis.document = { body: null };
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
 });
 
 afterEach(() => {
   delete globalThis.ReactDOM;
   delete globalThis.document;
+  delete globalThis.Modal;
 });
 
 function team(overrides = {}) {
@@ -69,7 +82,23 @@ test("MyTeamsScreen: the no-tab-bar drill-in (onBack) shows the inline 'New team
   assert.equal(inst.root.findAllByProps({ "aria-label": "New team" }).length, 1, "only the inline link, not also a FAB");
 });
 
-test("MyTeamsScreen: deleting goes through SwipeableRow's onDelete, calling onDeleteTeam", () => {
+// SwipeableRow's Delete used to call onDeleteTeam the instant it was tapped -- no confirmation,
+// unlike TeamEditScreen's own "Delete team" button, which has always confirmed first for the same
+// destructive, unrecoverable action. Now both entry points go through the same ConfirmModal step.
+test("MyTeamsScreen: deleting a team via swipe opens a confirm dialog first, not an immediate delete", () => {
+  let deletedId = "unset";
+  const teams = [team()];
+  const inst = renderer.create(React.createElement(MyTeamsScreen, {
+    teams, matches: [], onBack: () => {}, onNewTeam: () => {},
+    onDeleteTeam: id => { deletedId = id; }
+  }));
+  const row = inst.root.findByType(SwipeableRow);
+  act(() => { row.props.onDelete(); });
+  assert.equal(deletedId, "unset", "not deleted yet -- confirmation still pending");
+  assert.match(JSON.stringify(inst.toJSON()), /Delete Riverside 1st XI\?/);
+});
+
+test("MyTeamsScreen: confirming the swipe-delete dialog calls onDeleteTeam, cancelling doesn't", () => {
   let deletedId = null, deletedClubId = "unset";
   const teams = [team()];
   const inst = renderer.create(React.createElement(MyTeamsScreen, {
@@ -77,7 +106,16 @@ test("MyTeamsScreen: deleting goes through SwipeableRow's onDelete, calling onDe
     onDeleteTeam: (id, clubId) => { deletedId = id; deletedClubId = clubId; }
   }));
   const row = inst.root.findByType(SwipeableRow);
-  row.props.onDelete();
+  act(() => { row.props.onDelete(); });
+
+  const cancelBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Cancel"));
+  act(() => { cancelBtn.props.onClick(); });
+  assert.equal(deletedId, null, "cancel doesn't delete");
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Delete Riverside 1st XI\?/, "dialog closes on cancel");
+
+  act(() => { inst.root.findByType(SwipeableRow).props.onDelete(); });
+  const confirmBtn = inst.root.findAllByType(Btn).find(b => b.props.children === "Delete");
+  act(() => { confirmBtn.props.onClick(); });
   assert.equal(deletedId, "t1");
   assert.equal(deletedClubId, null);
 });
