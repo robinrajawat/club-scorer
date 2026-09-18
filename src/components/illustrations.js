@@ -236,19 +236,39 @@ export function CoinFlipIllustration({
   }));
 }
 
+// Two tiers, covering every loading moment in the app: inline (the default) sits the spinner next
+// to its label, left-aligned, for a small "still syncing in the background" note beside content
+// that's already on screen (e.g. a list heading while it refreshes). `centered` is for a loading
+// state that's the ONLY thing in its space -- a whole screen taking over, or a section of an
+// already-loaded screen still filling in -- and stacks the spinner above the label, centered.
+// Every call site used to hand-roll its own attempt at this (a `textAlign: "center"` on the
+// wrapping div, which does nothing to a block-level flex child -- LoadingNote's own row is exactly
+// that, so it silently stayed left-aligned everywhere this was tried), each landing on a different
+// size in the process. Centralizing the "centered" layout here means getting it right once instead
+// of everywhere it's used, and picking one of two sizes (28 for a section, 44 -- matching
+// LoadingBallIllustration's own default -- for a full screen or modal takeover) instead of one
+// picked ad hoc per call site.
 export function LoadingNote({
   label = "Loading\u2026",
   size = 16,
+  centered = false,
   style
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      gap: centered ? 10 : 8,
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
+      ...(centered ? {
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: "30px 0"
+      } : {}),
       ...style
     }
   }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {

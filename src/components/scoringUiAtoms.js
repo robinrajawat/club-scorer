@@ -286,7 +286,13 @@ export function SwipeableRow({
       position: "absolute",
       inset: 0,
       display: "flex",
-      justifyContent: "flex-end"
+      justifyContent: "flex-end",
+      // Both action panels are full-bleed (inset: 0) so each can lay its own button out from its
+      // own edge, but that means their empty halves overlap the OTHER panel's button. Without this
+      // the later-painted sibling (the extra/Pin panel below) intercepts clicks meant for Delete
+      // wherever the two overlap -- pointer-events: none here, re-enabled on the button itself,
+      // makes the empty space click-through so only the actual buttons are ever hit-tested.
+      pointerEvents: "none"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -307,7 +313,8 @@ export function SwipeableRow({
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 10.5,
-      cursor: "pointer"
+      cursor: "pointer",
+      pointerEvents: "auto"
     }
   }, /*#__PURE__*/React.createElement(Trash2, {
     size: 16
@@ -316,7 +323,8 @@ export function SwipeableRow({
       position: "absolute",
       inset: 0,
       display: "flex",
-      justifyContent: "flex-start"
+      justifyContent: "flex-start",
+      pointerEvents: "none"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -341,7 +349,8 @@ export function SwipeableRow({
       fontFamily: "'Inter'",
       fontWeight: 700,
       fontSize: 10.5,
-      cursor: "pointer"
+      cursor: "pointer",
+      pointerEvents: "auto"
     }
   }, /*#__PURE__*/React.createElement(ExtraIcon, {
     size: 16,

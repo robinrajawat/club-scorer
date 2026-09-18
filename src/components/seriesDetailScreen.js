@@ -4,6 +4,7 @@ import { ChevronLeft, Plus } from "./icons.js";
 import { Btn, ConfirmModal } from "./formUiAtoms.js";
 import { PlayerPicker } from "./pickerAtoms.js";
 import { FixtureRow } from "./fixtureRow.js";
+import { LoadingNote } from "./illustrations.js";
 import { uid, suggestPlayerOfTournament, allMatchPlayers } from "../core/statsAndFixtures.js";
 import { computeSeriesScore } from "../core/appLogic.js";
 
@@ -145,14 +146,10 @@ export function SeriesDetailScreen({
       color: COLORS.ink,
       marginBottom: 16
     }
-  }, scoreText), matches === null ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Loading\u2026") : /*#__PURE__*/React.createElement(React.Fragment, null, (series.fixtures || []).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, scoreText), matches === null ? /*#__PURE__*/React.createElement(LoadingNote, {
+    size: 28,
+    centered: true
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, (series.fixtures || []).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     tournament: series,

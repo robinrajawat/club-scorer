@@ -359,13 +359,16 @@ test("SetupScreen: 'Score this fixture' carries the fixture's own knockout stage
 // was more than one Organizer option -- meaning anyone with no clubs got a silently-private match
 // with no visible way to change that. Visibility is now its own always-shown choice, defaulting to
 // Public ("anyone who is interested can just follow the game"), independent of Organizer.
-test("SetupScreen: Visibility defaults to Public and is shown even with no clubs to organize under", () => {
+// It's also the first thing on the form now, on the "teams" page rather than tucked away on
+// "review" -- matching where tournament creation puts its own Visibility choice -- so these tests
+// find/toggle it right after render, before walking any further through the wizard.
+test("SetupScreen: Visibility defaults to Public and is shown as the first thing on the form, even with no clubs to organize under", () => {
   let started = null;
   const inst = render({ onStart: m => { started = m; } });
-  walkToReview(inst);
   const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
   assert.ok(visibilityChoice, "shown even though there's no Organizer picker (no clubs)");
   assert.equal(visibilityChoice.props.value, "public");
+  walkToReview(inst);
   act(() => { btn(inst, "Start Match").props.onClick(); });
   assert.equal(started.private, false);
 });
@@ -373,9 +376,9 @@ test("SetupScreen: Visibility defaults to Public and is shown even with no clubs
 test("SetupScreen: switching Visibility to Private flows through to onStart as private:true", () => {
   let started = null;
   const inst = render({ onStart: m => { started = m; } });
-  walkToReview(inst);
   const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
   act(() => { visibilityChoice.props.onChange("private"); });
+  walkToReview(inst);
   act(() => { btn(inst, "Start Match").props.onClick(); });
   assert.equal(started.private, true);
 });
@@ -386,6 +389,7 @@ test("SetupScreen: a fixture started from within a tournament inherits ITS visib
     onStart: m => { started = m; },
     presetTournament: { id: "t1", name: "Winter Cup", private: true, fixtureTeamA: "Riverside CC", fixtureTeamB: "Oakwood CC" }
   });
+  assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility"), undefined);
   const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
   act(() => { tossBtn.props.onClick(); });
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });

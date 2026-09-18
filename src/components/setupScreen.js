@@ -462,9 +462,11 @@ export function SetupScreen({
   }, "New Match"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 1,
       color: COLORS.inkSoft,
+      textTransform: "uppercase",
       marginBottom: 18
     }
   }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", SETUP_PAGE_LABELS[currentPage]), presetTournament && /*#__PURE__*/React.createElement("div", {
@@ -489,9 +491,27 @@ export function SetupScreen({
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease backwards"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Teams & Format"), /*#__PURE__*/React.createElement(Field, {
+  }, !presetTournament && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: manualPrivate ? "private" : "public",
+    onChange: v => setManualPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
+  }), !presetTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginTop: 8,
+      marginBottom: 16
+    }
+  }, manualPrivate ? "Private — this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public — while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search."), /*#__PURE__*/React.createElement(Field, {
     label: "Batting team"
   }, fromFixture ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1826,9 +1846,7 @@ export function SetupScreen({
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Playing XI"), teamASquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
+  }, teamASquad.length > 0 && /*#__PURE__*/React.createElement(PlayingXIPicker, {
     label: `${teamAName || "Team A"} — pick who's playing`,
     squad: teamASquad,
     captain: teamACaptain,
@@ -1863,9 +1881,7 @@ export function SetupScreen({
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.08s backwards"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Opening Line-up"), /*#__PURE__*/React.createElement(Field, {
+  }, /*#__PURE__*/React.createElement(Field, {
     label: `Striker (${(teamAIsBattingFirst ? teamAName : teamBName) || (teamAIsBattingFirst ? "Team A" : "Team B")})`
   }, /*#__PURE__*/React.createElement(PlayerPicker, {
     roster: teamAIsBattingFirst ? teamARoster : teamBRoster,
@@ -1930,8 +1946,6 @@ export function SetupScreen({
       animation: "cs-slideUp 0.3s ease backwards"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: sectionLabel
-  }, "Review"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 13,
@@ -1949,39 +1963,7 @@ export function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && !presetTournament && /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...cardStyle,
-      animation: "cs-slideUp 0.3s ease 0.04s backwards"
-    }
-  }, /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Visibility",
-    value: manualPrivate ? "private" : "public",
-    onChange: v => setManualPrivate(v === "private"),
-    options: [{
-      value: "public",
-      label: "Public"
-    }, {
-      value: "private",
-      label: "Private"
-    }]
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginTop: 8
-    }
-  }, manualPrivate ? "Private \u2014 this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public \u2014 while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      textAlign: "center",
-      marginBottom: 10
-    }
-  }, "Step ", currentPageIndex + 1, " of ", pageOrder.length, " \u00b7 ", SETUP_PAGE_LABELS[currentPage]), /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,

@@ -117,10 +117,14 @@ export function AuthActionScreen({
   };
   if (status === "checking") {
     return /*#__PURE__*/React.createElement("div", {
-      style: wrapStyle
+      style: {
+        ...wrapStyle,
+        alignItems: "center"
+      }
     }, /*#__PURE__*/React.createElement(LoadingNote, {
       label: "Checking link\u2026",
-      size: 26
+      size: 44,
+      centered: true
     }));
   }
   if (status === "error") {

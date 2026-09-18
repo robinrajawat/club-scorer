@@ -297,6 +297,7 @@ export function TournamentsScreen({
   const [seriesTeamA, setSeriesTeamA] = useState("");
   const [seriesTeamB, setSeriesTeamB] = useState("");
   const [seriesMatchCount, setSeriesMatchCount] = useState("3");
+  const [seriesPrivate, setSeriesPrivate] = useState(false);
   const [seriesError, setSeriesError] = useState("");
   const [seriesBusy, setSeriesBusy] = useState(false);
   const visibleTournaments = tournaments.filter(t => (statusFilter === "all" || tournamentStatus(t) === statusFilter) && (!searchTerm.trim() || t.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -376,6 +377,7 @@ export function TournamentsScreen({
     setSeriesTeamA("");
     setSeriesTeamB("");
     setSeriesMatchCount("3");
+    setSeriesPrivate(false);
     setSeriesError("");
     setCreatingSeries(true);
   }
@@ -393,7 +395,7 @@ export function TournamentsScreen({
     setSeriesBusy(true);
     setSeriesError("");
     const label = seriesName.trim() || `${seriesTeamA} vs ${seriesTeamB}`;
-    const result = await onCreateSeries(label, seriesTeamA, seriesTeamB, count);
+    const result = await onCreateSeries(label, seriesTeamA, seriesTeamB, count, seriesPrivate);
     setSeriesBusy(false);
     if (!result.ok) {
       setSeriesError(result.error || "Couldn't create the series.");
@@ -900,7 +902,18 @@ export function TournamentsScreen({
       marginBottom: 14,
       lineHeight: 1.5
     }
-  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), /*#__PURE__*/React.createElement(Field, {
+  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: seriesPrivate ? "private" : "public",
+    onChange: v => setSeriesPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Series name (optional)"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: seriesName,

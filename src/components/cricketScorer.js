@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { NavWrap } from "./screenAtoms.js";
-import { LoadingBallIllustration } from "./illustrations.js";
+import { LoadingNote } from "./illustrations.js";
 import { WelcomeScreen } from "./welcomeScreen.js";
 import { AuthActionScreen } from "./authActionScreen.js";
 import { HomeScreen } from "./homeScreen.js";
@@ -1629,7 +1629,7 @@ export function CricketScorer() {
   // That reuse is why handleUpdateTournament/handleDeleteTournament need no series-specific
   // counterpart — they already operate generically on whatever's in `tournaments`/the club
   // subcollection, kind included.
-  async function handleCreateSeries(name, teamA, teamB, matchCount) {
+  async function handleCreateSeries(name, teamA, teamB, matchCount, isPrivate) {
     const t = {
       id: uid(),
       name,
@@ -1646,11 +1646,20 @@ export function CricketScorer() {
         date: "",
         matchId: null
       })),
+      // Same explicit choice as a tournament's (see handleCreateTournament) -- now collected at
+      // creation instead of defaulting a series out of auto-publish entirely (see
+      // maybeAutoPublishTournament's own comment on why that carve-out is gone).
+      private: !!isPrivate,
       createdAt: Date.now()
     };
     const updated = [...tournaments, t];
     setTournaments(updated);
     await saveTournaments(updated);
+    maybeAutoPublishTournament(t, async t2 => {
+      const list = updated.map(x => x.id === t2.id ? t2 : x);
+      setTournaments(list);
+      await saveTournaments(list);
+    });
     return {
       ok: true,
       tournament: t
@@ -1688,15 +1697,16 @@ export function CricketScorer() {
   // Closes the friction gap between matches and tournaments: a non-private MATCH is discoverable
   // in the Home screen's Live now feed the instant it's saved, no extra step -- a non-private
   // TOURNAMENT used to stay invisible until its owner explicitly tapped "Share" once. Called after
-  // every successful tournament save (creation and every edit) except a series, which has never
-  // collected a Visibility choice at creation -- defaulting it into auto-publish here would
-  // silently make a "private by omission" series discoverable, so it's left alone. `persist` is
-  // however THIS caller already knows to save an update back to the right storage tier (club/
-  // federation/personal) -- kept as an explicit callback rather than reaching for ambient
-  // `viewingTournament*` state, which isn't guaranteed to already point at a just-created
-  // tournament by the time this (fire-and-forget, awaited-later) call resolves.
+  // every successful tournament save (creation and every edit), series included -- a series now
+  // collects its own Visibility choice at creation (see handleCreateSeries) the same way a
+  // tournament does, so it follows the same public/private rule as everything else here rather
+  // than a separate carve-out. `persist` is however THIS caller already knows to save an update
+  // back to the right storage tier (club/federation/personal) -- kept as an explicit callback
+  // rather than reaching for ambient `viewingTournament*` state, which isn't guaranteed to already
+  // point at a just-created tournament by the time this (fire-and-forget, awaited-later) call
+  // resolves.
   async function maybeAutoPublishTournament(tournament, persist) {
-    if (tournament.kind === "series" || tournament.private) return;
+    if (tournament.private) return;
     if (tournament.shareCode) {
       // BUG FIX: this used to call ONLY refreshTournamentStandingsLive, which recomputes standings
       // against whatever fixtures/venue/groups/teams already happen to be sitting in the public
@@ -1961,21 +1971,10 @@ export function CricketScorer() {
         alignItems: "center",
         justifyContent: "center"
       }
-    }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "center"
-      }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
-      style: {
-        margin: "0 auto 12px"
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'Inter'",
-        color: COLORS.inkSoft,
-        fontSize: 13
-      }
-    }, "Loading…")));
+    }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), /*#__PURE__*/React.createElement(LoadingNote, {
+      size: 44,
+      centered: true
+    }));
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: wrapStyle,
@@ -2327,23 +2326,19 @@ export function CricketScorer() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: "center",
       background: COLORS.surface,
       borderRadius: 16,
       padding: "24px 28px",
       boxShadow: "0 8px 30px rgba(0,0,0,0.25)"
     }
-  }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+  }, /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Opening match\u2026",
+    size: 44,
+    centered: true,
     style: {
-      margin: "0 auto 12px"
+      padding: 0
     }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      color: COLORS.inkSoft,
-      fontSize: 13
-    }
-  }, "Opening match\u2026"))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
+  }))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
     title: alertModal.title,
     message: alertModal.message,
     onClose: () => setAlertModal(null)

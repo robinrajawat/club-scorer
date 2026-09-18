@@ -857,8 +857,8 @@ test("CricketScorer: creating a PRIVATE tournament does not auto-publish it", as
 // tournamentMatches/{tournamentId} doc, so its name can never resolve for anyone outside its own
 // club/federation (see foreignTournamentNames) even after one of its matches gets shared. Simply
 // OPENING it (openTournamentDetail) now self-heals this the same way an edit already did, since
-// maybeAutoPublishTournament itself already no-ops for anything private, already-published, or a
-// series -- see its own comment.
+// maybeAutoPublishTournament itself already no-ops for anything private or already-published --
+// see its own comment.
 test("CricketScorer: opening an existing tournament with no share code (predates auto-publish) publishes it", async () => {
   let shared = null;
   let saved = null;
