@@ -64,6 +64,13 @@ function btn(inst, text) {
   return inst.root.findAllByType(Btn).find(b => b.props.children === text);
 }
 
+// The page's own Next/Review/Start Match button is the only variant="primary" Btn -- unlike btn()
+// above, this survives its own label changing (e.g. to "Starting…") across an act(), since it's
+// found by a prop that doesn't change rather than by the text that does.
+function primaryBtn(inst) {
+  return inst.root.findAllByType(Btn).find(b => b.props.variant === "primary");
+}
+
 // Finds the wrapping <div style={{marginTop:14}}> a toggle/nullable-number rule block renders as
 // in the match rules editor, scoped by its own label text -- lets tests disambiguate between the
 // several "Off"-labeled toggle buttons the rules editor now has.
@@ -71,7 +78,7 @@ function ruleBlock(inst, labelText) {
   return inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.marginTop === 14 && hasText(n.props.children, labelText))[0];
 }
 
-// The rules editor's own sub-sections (Format/Extras/Special rules/Bowling limits/Batting rules)
+// The rules editor's own sub-sections (Batting rules/Bowling rules/Extras rules/Special rules)
 // each collapse independently now -- "Customize" alone only reveals the section headers
 // themselves, not their fields. Opens one by its label, same as tapping its chevron row.
 function openRuleSection(inst, label) {
@@ -274,6 +281,23 @@ test("SetupScreen: walking every page to Start Match calls onStart with the asse
   assert.deepEqual(started.toss, { wonBy: "Oakwood CC", decision: "Bowl" });
 });
 
+// Regression: onStart (cricketScorer.js's startNewMatch) mints a fresh match id and is
+// synchronous, and "Start Match" had no busy/submitting guard at all -- a double-tap before the
+// screen navigated away called onStart twice, creating two matches. Same shape of bug as, and
+// fixed the same way as, TeamEditScreen's own Save Team double-tap guard.
+test("SetupScreen: double-tapping Start Match only calls onStart once", () => {
+  let calls = 0;
+  const inst = render({ onStart: () => { calls++; } });
+  walkToReview(inst);
+
+  act(() => { primaryBtn(inst).props.onClick(); });
+  assert.equal(calls, 1);
+  assert.equal(primaryBtn(inst).props.disabled, true, "disabled once a start is in flight");
+
+  act(() => { primaryBtn(inst).props.onClick(); }); // second tap
+  assert.equal(calls, 1, "not called again");
+});
+
 function walkToReview(inst) {
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
@@ -439,7 +463,7 @@ test("SetupScreen: 'Customize' reveals the rules editor, and a rule change is re
 
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
-  openRuleSection(inst, "Format");
+  openRuleSection(inst, "Bowling rules"); // "Balls per over" now lives here (merged with Format)
   // "Balls per over" options include "8" as a plain label -- pick the RuleChoice option button.
   const ballsPerOverBtn = inst.root.findAllByType("button").find(b => b.props.children === "8");
   act(() => { ballsPerOverBtn.props.onClick(); });
@@ -491,7 +515,7 @@ test("SetupScreen: the rules editor is grouped into labeled sections, in order",
   act(() => { customizeBtn.props.onClick(); });
 
   const text = JSON.stringify(inst.toJSON());
-  const sections = ["Format", "Extras", "Special rules", "Bowling limits", "Batting rules"];
+  const sections = ["Batting rules", "Bowling rules", "Extras rules", "Special rules"];
   const positions = sections.map(s => text.indexOf(`"${s}"`));
   positions.forEach((pos, i) => assert.ok(pos !== -1, `section "${sections[i]}" is rendered`));
   for (let i = 1; i < positions.length; i++) {
@@ -499,9 +523,9 @@ test("SetupScreen: the rules editor is grouped into labeled sections, in order",
   }
 });
 
-// Each of the 5 sections collapses independently now, rather than the single "Customize" toggle
-// revealing all of them (and their ~16 fields) at once -- a scorer who wants to open just Batting
-// rules no longer has to scroll past Format/Extras/Special rules/Bowling limits first.
+// Each of the 4 sections collapses independently now, rather than the single "Customize" toggle
+// revealing all of them (and their ~16 fields) at once -- a scorer who wants to open just Extras
+// rules no longer has to scroll past Batting rules/Bowling rules first.
 test("SetupScreen: rules sections collapse independently -- opening one doesn't open the others, all start closed", () => {
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
@@ -519,7 +543,7 @@ test("SetupScreen: rules sections collapse independently -- opening one doesn't 
 
   openRuleSection(inst, "Extras");
   assert.match(JSON.stringify(inst.toJSON()), /Runs on a wide/);
-  // Opening Extras doesn't also open Format or Batting rules.
+  // Opening Extras doesn't also open Bowling or Batting rules.
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Balls per over/);
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Retirement run cap/);
 
@@ -529,12 +553,12 @@ test("SetupScreen: rules sections collapse independently -- opening one doesn't 
 });
 
 // Regression: this per-section collapse work uncovered a real, pre-existing bug -- "Time cap per
-// innings" (the last field under "Bowling limits") and the entire "Batting rules" section
+// innings" (the last field under "Bowling rules") and the entire "Batting rules" section
 // (Retirement run cap/Big hit bonus/Maximum hit bonus/New batsman ready time) sat one paren
 // outside the rules editor's own visibility gate, so they rendered unconditionally regardless of
 // whether "Customize" had even been tapped. Both are properly gated now, same as every other
 // field in the editor.
-test("SetupScreen: Time cap per innings and the whole Batting rules section are gated too, not just Format/Extras/Special", () => {
+test("SetupScreen: Time cap per innings and the whole Batting rules section are gated too, not just Bowling/Extras/Special", () => {
   const inst = render();
   act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
   act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
@@ -543,19 +567,24 @@ test("SetupScreen: Time cap per innings and the whole Batting rules section are 
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
   act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
 
-  // Neither shows up even before "Customize" is tapped at all.
+  // Neither shows up even before "Customize" is tapped at all -- nor does the "Batting rules"
+  // section header itself, same as Bowling rules/Extras rules/Special rules. Regression: the
+  // header used to render unconditionally regardless of "Customize", only its own fields were
+  // ever gated, because the per-section collapse work's own Fragment closed one section too
+  // early, leaving "Batting rules" as a direct sibling outside it.
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Time cap per innings/);
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /"Batting rules"/);
 
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Customize").props.onClick(); });
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Time cap per innings/);
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
 
-  openRuleSection(inst, "Bowling limits");
+  openRuleSection(inst, "Bowling rules");
   assert.match(JSON.stringify(inst.toJSON()), /Max overs per bowler/);
   assert.match(JSON.stringify(inst.toJSON()), /Powerplay/);
   assert.match(JSON.stringify(inst.toJSON()), /Time cap per innings/);
-  // Opening Bowling limits doesn't also open Batting rules.
+  // Opening Bowling rules doesn't also open Batting rules.
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
 
   openRuleSection(inst, "Batting rules");
@@ -717,10 +746,44 @@ test("SetupScreen: presetTournament.defaultOvers pre-fills the Overs per innings
   assert.equal(oversField.props.value, "8");
 });
 
-test("SetupScreen: with no presetTournament (or no defaultOvers), Overs per innings still defaults to 20", () => {
+test("SetupScreen: with no presetTournament (or no defaultOvers), Overs per innings still defaults to 20 -- shown as T20 selected, no custom field", () => {
   const inst = render();
-  const oversField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
-  assert.equal(oversField.props.value, "20");
+  const oversChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings");
+  assert.equal(oversChoice.props.value, "t20");
+  assert.equal(inst.root.findAllByType("input").find(i => i.props.placeholder === "20"), undefined,
+    "the custom number field only shows once 'Custom' is picked");
+});
+
+// Regression coverage for the T20/ODI/Custom presets: picking T20 or ODI sets the overs value
+// directly and hides the custom field; picking Custom reveals it, prefilled with whatever the
+// value already was (not cleared), so switching from a preset to Custom starts from that number.
+test("SetupScreen: Overs per innings -- T20/ODI presets set the value directly, Custom reveals an editable field starting from the current value", () => {
+  const inst = render();
+  const oversChoiceBtn = label => inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings")
+    .props.options.find(o => o.label === label);
+
+  const odiOption = oversChoiceBtn("ODI (50 overs)");
+  act(() => {
+    inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings").props.onChange(odiOption.value);
+  });
+  let oversChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings");
+  assert.equal(oversChoice.props.value, "odi");
+  assert.equal(inst.root.findAllByType("input").find(i => i.props.placeholder === "20"), undefined);
+
+  const customOption = oversChoiceBtn("Custom");
+  act(() => {
+    inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings").props.onChange(customOption.value);
+  });
+  oversChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Overs per innings");
+  assert.equal(oversChoice.props.value, "custom");
+  const customField = inst.root.findAllByType("input").find(i => i.props.placeholder === "20");
+  assert.equal(customField.props.value, "50", "starts from ODI's value rather than clearing it");
+
+  act(() => { customField.props.onChange({ target: { value: "35" } }); });
+  assert.equal(
+    inst.root.findAllByType("input").find(i => i.props.placeholder === "20").props.value,
+    "35"
+  );
 });
 
 test("SetupScreen: with saved squads, teamABench/teamBBench (squad minus Playing XI) flow through to onStart", () => {

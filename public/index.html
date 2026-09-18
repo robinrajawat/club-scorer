@@ -15595,6 +15595,10 @@ function SetupScreen({
   const [teamAMatchNumbers, setTeamAMatchNumbers] = useState({});
   const [teamBMatchNumbers, setTeamBMatchNumbers] = useState({});
   const [overs, setOvers] = useState((presetTournament && presetTournament.defaultOvers && String(presetTournament.defaultOvers)) || "20");
+  // Whether "Custom" is the active choice for Overs per innings, rather than one of the T20/ODI
+  // presets -- can't derive this from `overs` alone (tapping "Custom" while it's still "20" from
+  // the T20 preset needs to reveal the number field without silently changing the value).
+  const [oversCustom, setOversCustom] = useState(overs !== "20" && overs !== "50");
   // Whether this match can be found in the Live tab / app-wide search -- its own explicit choice,
   // always visible, independent of Organizer. Used to be derived straight from Organizer (personal
   // always private, club/federation always public) with no visible control at all for anyone who
@@ -15603,6 +15607,10 @@ function SetupScreen({
   // A fixture started from within a tournament still just inherits the tournament's own choice --
   // one visibility per tournament, not one per fixture.
   const [manualPrivate, setManualPrivate] = useState(false);
+  // Guards "Start Match" against a double-tap: onStart (cricketScorer.js's startNewMatch) mints a
+  // fresh match id and is synchronous, so without this, two clicks before the screen navigates
+  // away create two separate matches -- same shape of bug as TeamEditScreen's own Save Team fix.
+  const [starting, setStarting] = useState(false);
   const isPrivate = presetTournament ? !!presetTournament.private : manualPrivate;
   const [venue, setVenue] = useState((presetTournament && presetTournament.venue) || "");
   // No presetTournament.venueLat/Lng to inherit alongside the venue text above -- a tournament's
@@ -16011,6 +16019,7 @@ function SetupScreen({
         cursor: "pointer",
         padding: 0,
         marginTop: first ? 4 : 22,
+        marginBottom: 10,
         paddingTop: first ? 0 : 14,
         borderTop: first ? "none" : `1px solid ${COLORS.creamDark}`,
         fontFamily: "'Inter'",
@@ -16152,14 +16161,34 @@ function SetupScreen({
     }
   }, "Both sides have the same name — playing the same squad against itself? Edit one label above (e.g. \"", teamAName.trim(), " A\" / \"", teamAName.trim(), " B\") so the app can tell them apart."), /*#__PURE__*/React.createElement(RuleSectionHeader, {
     label: "Format"
-  }), /*#__PURE__*/React.createElement(Field, {
-    label: "Overs per innings"
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Overs per innings",
+    value: oversCustom ? "custom" : overs === "50" ? "odi" : "t20",
+    onChange: v => {
+      if (v === "custom") {
+        setOversCustom(true);
+        return;
+      }
+      setOversCustom(false);
+      setOvers(v === "odi" ? "50" : "20");
+    },
+    options: [{
+      value: "t20",
+      label: "T20 (20 overs)"
+    }, {
+      value: "odi",
+      label: "ODI (50 overs)"
+    }, {
+      value: "custom",
+      label: "Custom"
+    }]
+  }), oversCustom && /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      marginBottom: 12
+    }
     // Same fix as the tournament rules editor's identical field -- a full-width text input for a
     // 1-2 digit number looked oversized next to every other numeric field on this screen.
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 64
-    }
   }, /*#__PURE__*/React.createElement(TextField, {
     value: overs,
     onChange: v => setOvers(v.replace(/[^0-9]/g, "")),
@@ -16168,7 +16197,7 @@ function SetupScreen({
       textAlign: "center",
       padding: "12px 8px"
     }
-  }))), /*#__PURE__*/React.createElement(RuleChoice, {
+  })), /*#__PURE__*/React.createElement(RuleChoice, {
     label: "Players per side",
     value: matchRules.playersPerSide,
     onChange: v => setMatchRules(r => ({
@@ -16548,587 +16577,7 @@ function SetupScreen({
       marginBottom: 16,
       lineHeight: 1.5
     }
-  }, "Standard by default — adjust for junior or short formats."), ruleSectionToggle("format", "Format", true), expandedRuleSections.format && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Balls per over",
-    value: matchRules.ballsPerOver,
-    onChange: v => setMatchRules(r => ({
-      ...r,
-      ballsPerOver: v
-    })),
-    options: [{
-      value: 4,
-      label: "4 (kids)"
-    }, {
-      value: 5,
-      label: "5"
-    }, {
-      value: 6,
-      label: "6 (standard)"
-    }, {
-      value: 8,
-      label: "8"
-    }]
-  })), ruleSectionToggle("extras", "Extras"), expandedRuleSections.extras && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Runs on a wide",
-    value: matchRules.wideRuns,
-    onChange: v => setMatchRules(r => ({
-      ...r,
-      wideRuns: v
-    })),
-    options: [{
-      value: 1,
-      label: "1 (standard)"
-    }, {
-      value: 2,
-      label: "2"
-    }, {
-      value: 3,
-      label: "3"
-    }]
-  }), /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Runs on a no-ball",
-    value: matchRules.noballRuns,
-    onChange: v => setMatchRules(r => ({
-      ...r,
-      noballRuns: v
-    })),
-    options: [{
-      value: 1,
-      label: "1 (standard)"
-    }, {
-      value: 2,
-      label: "2"
-    }, {
-      value: 3,
-      label: "3"
-    }]
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      freeHit: !r.freeHit
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.freeHit ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.freeHit ? "On" : "Off"))), ruleSectionToggle("special", "Special rules"), expandedRuleSections.special && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Wide/no-ball counts as a ball"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      wideNoballCountsAsBall: !r.wideNoballCountsAsBall
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.wideNoballCountsAsBall ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.wideNoballCountsAsBall ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.wideNoballCountsAsBall ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14,
-      padding: 12,
-      borderRadius: 12,
-      border: `1px solid ${COLORS.creamDark}`,
-      background: COLORS.cream
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-    // A generic bucket for "the last N overs behave differently", separate from any one specific
-    // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
-    // Set apart in its own bordered/tinted box (rather than just another marginTop:14 row in the
-    // flat stack of toggles above and below it) since it isn't one toggle but a small cluster of
-    // related controls -- On/off, how many overs, and the wide/no-ball exception -- that read as
-    // one segmented unit much more easily than as three rows visually indistinguishable from
-    // every unrelated rule around them.
-  }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      lastOverRules: { ...(r.lastOverRules || {}), enabled: !(r.lastOverRules && r.lastOverRules.enabled) }
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off"), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Applies to the last",
-    value: matchRules.lastOverRules.overCount || 1,
-    onChange: v => setMatchRules(r => ({
-      ...r,
-      lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
-    })),
-    options: [1, 2, 3, 4, 5].map(n => ({
-      value: n,
-      label: n === 1 ? "1 over" : `${n} overs`
-    }))
-  }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTop: `1px solid ${COLORS.creamDark}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Wide/no-ball illegal again in the last over(s)"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: !(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain) }
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.lastOverRules.wideNoballIllegalAgain ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.lastOverRules.wideNoballIllegalAgain ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.lastOverRules.wideNoballIllegalAgain ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14,
-      padding: 12,
-      borderRadius: 12,
-      border: `1px solid ${COLORS.creamDark}`,
-      background: COLORS.cream
-    }
-    // Same reasoning as the Last over rules box above -- a toggle plus its own conditional
-    // sub-control reads as one segmented unit more easily boxed than left as two more rows in the
-    // flat stack. Matches the tournament rules editor's identical cluster.
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Impact Player substitution"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      impactPlayerEnabled: !r.impactPlayerEnabled
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.impactPlayerEnabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.impactPlayerEnabled ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.impactPlayerEnabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.impactPlayerEnabled ? "On" : "Off"), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Substitutions allowed per team",
-    value: matchRules.impactPlayerMaxSubs,
-    onChange: v => setMatchRules(r => ({
-      ...r,
-      impactPlayerMaxSubs: v
-    })),
-    options: [{
-      value: 1,
-      label: "1 (standard)"
-    }, {
-      value: 2,
-      label: "2"
-    }]
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Super Over if the match ties"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      superOver: !r.superOver
-    })),
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
-      color: matchRules.superOver ? "#fff" : COLORS.ink,
-      boxShadow: matchRules.superOver ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, matchRules.superOver ? "On" : "Off"))), ruleSectionToggle("bowling", "Bowling limits"), expandedRuleSections.bowling && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Max overs per bowler"), matchRules.maxOversPerBowler === null ? /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => {
-      setMaxOversTouched(true);
-      setMatchRules(r => ({
-        ...r,
-        maxOversPerBowler: Math.max(1, Math.ceil(parseInt(overs || "20", 10) / 5))
-      }));
-    },
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: COLORS.surface,
-      color: COLORS.ink,
-      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, "No limit \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 64
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: String(matchRules.maxOversPerBowler),
-    onChange: v => {
-      setMaxOversTouched(true);
-      // Store the digits as typed, even mid-edit (including empty while the field is briefly
-      // cleared before a new number is typed) instead of snapping to a coerced number on every
-      // keystroke — that snap-back was fighting real typing (clear then type "45" was landing as
-      // "145", since the field would jump to "1" the instant it went empty and the next digits
-      // typed onto THAT rather than a blank field). Clamped for real on blur, below.
-      setMatchRules(r => ({
-        ...r,
-        maxOversPerBowler: v.replace(/[^0-9]/g, "")
-      }));
-    },
-    onBlur: () => {
-      setMatchRules(r => {
-        const n = parseInt(String(r.maxOversPerBowler), 10);
-        return { ...r, maxOversPerBowler: isNaN(n) || n < 1 ? 1 : n };
-      });
-    },
-    style: {
-      textAlign: "center"
-    }
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      fontWeight: 600,
-      color: COLORS.ink
-    }
-  }, "overs each"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft
-    }
-  }, "\u2014 suggested from your total overs, editable"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      setMaxOversTouched(true);
-      setMatchRules(r => ({
-        ...r,
-        maxOversPerBowler: null
-      }));
-    },
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      textDecoration: "underline",
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, "No limit"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Powerplay"), matchRules.powerplayOvers === null ? /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => {
-      const n = parseInt(overs || "20", 10);
-      setMatchRules(r => ({
-        ...r,
-        powerplayOvers: Math.min(n, n <= 20 ? 6 : Math.round(n / 5))
-      }));
-    },
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: COLORS.surface,
-      color: COLORS.ink,
-      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 76,
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: String(matchRules.powerplayOvers),
-    onChange: v => {
-      // Same fix as maxOversPerBowler above — store as typed, clamp on blur.
-      setMatchRules(r => ({
-        ...r,
-        powerplayOvers: v.replace(/[^0-9]/g, "")
-      }));
-    },
-    onBlur: () => {
-      setMatchRules(r => {
-        const n = parseInt(String(r.powerplayOvers), 10);
-        return { ...r, powerplayOvers: isNaN(n) || n < 1 ? 1 : n };
-      });
-    },
-    style: {
-      textAlign: "center",
-      padding: "12px 8px"
-    }
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      fontWeight: 600,
-      color: COLORS.ink
-    }
-  }, "overs"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft
-    }
-  }, "\u2014 at the start of each innings, shown as a badge while it's in effect, not enforced (there's no fielder tracking here to enforce it against)"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      powerplayOvers: null
-    })),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      textDecoration: "underline",
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, "None"))))), expandedRuleSections.bowling && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      fontWeight: 600,
-      color: COLORS.inkSoft,
-      marginBottom: 6
-    }
-  }, "Time cap per innings"), matchRules.timeCapMinutes === null ? /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "cs-btn cs-shine",
-    onClick: () => {
-      const n = parseInt(overs || "20", 10);
-      setMatchRules(r => ({
-        ...r,
-        timeCapMinutes: Math.max(10, Math.round(n * 4.5))
-      }));
-    },
-    style: {
-      padding: "8px 14px",
-      borderRadius: 20,
-      border: "none",
-      cursor: "pointer",
-      background: COLORS.surface,
-      color: COLORS.ink,
-      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 13
-    }
-  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 84,
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement(TextField, {
-    value: String(matchRules.timeCapMinutes),
-    onChange: v => {
-      // THE BUG: this used to coerce straight to a number on every keystroke, defaulting to 1 the
-      // instant the field went empty (e.g. select-all + backspace before typing a fresh value).
-      // That "1" landed in the DOM immediately, so the next digit typed appended onto it instead
-      // of replacing a blank field — typing "45" after clearing actually produced "145". Now it
-      // just stores the digits as typed (including empty mid-edit) and only clamps to a real
-      // number on blur, below — so the field behaves like a normal text input while you're
-      // actively typing into it.
-      setMatchRules(r => ({
-        ...r,
-        timeCapMinutes: v.replace(/[^0-9]/g, "")
-      }));
-    },
-    onBlur: () => {
-      setMatchRules(r => {
-        const n = parseInt(String(r.timeCapMinutes), 10);
-        return { ...r, timeCapMinutes: isNaN(n) || n < 1 ? 1 : n };
-      });
-    },
-    style: {
-      textAlign: "center",
-      padding: "12px 8px"
-    }
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 13,
-      fontWeight: 600,
-      color: COLORS.ink
-    }
-  }, "minutes"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12.5,
-      color: COLORS.inkSoft
-    }
-  }, "\u2014 a flag once you're past it, not a stop. The innings keeps going; an \u201cOVER TIME\u201d badge just shows up so whoever's scoring can decide what to do about it."), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setMatchRules(r => ({
-      ...r,
-      timeCapMinutes: null
-    })),
-    className: "cs-btn",
-    style: {
-      background: "none",
-      border: "none",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'",
-      fontWeight: 600,
-      fontSize: 11.5,
-      textDecoration: "underline",
-      cursor: "pointer",
-      whiteSpace: "nowrap"
-    }
-  }, "None"))), ruleSectionToggle("batting", "Batting rules"), expandedRuleSections.batting && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Standard by default — adjust for junior or short formats."), ruleSectionToggle("batting", "Batting rules", true), expandedRuleSections.batting && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -17416,7 +16865,587 @@ function SetupScreen({
     style: {
       color: COLORS.ink
     }
-  }, "New batsman ready time"), " — how long an incoming batsman has to be ready is down to your competition's own rules. There's no automatic clock; if they're not ready in time, record it as Timed Out from the Next Batsman prompt during scoring — a scorer judgment call, same as the umpire's in real play."))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
+  }, "New batsman ready time"), " — how long an incoming batsman has to be ready is down to your competition's own rules. There's no automatic clock; if they're not ready in time, record it as Timed Out from the Next Batsman prompt during scoring — a scorer judgment call, same as the umpire's in real play.")), ruleSectionToggle("bowling", "Bowling rules"), expandedRuleSections.bowling && /*#__PURE__*/React.createElement(React.Fragment, null, React.createElement(RuleChoice, {
+    label: "Balls per over",
+    value: matchRules.ballsPerOver,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      ballsPerOver: v
+    })),
+    options: [{
+      value: 4,
+      label: "4 (kids)"
+    }, {
+      value: 5,
+      label: "5"
+    }, {
+      value: 6,
+      label: "6 (standard)"
+    }, {
+      value: 8,
+      label: "8"
+    }]
+  }), React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Max overs per bowler"), matchRules.maxOversPerBowler === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      setMaxOversTouched(true);
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: Math.max(1, Math.ceil(parseInt(overs || "20", 10) / 5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "No limit \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.maxOversPerBowler),
+    onChange: v => {
+      setMaxOversTouched(true);
+      // Store the digits as typed, even mid-edit (including empty while the field is briefly
+      // cleared before a new number is typed) instead of snapping to a coerced number on every
+      // keystroke — that snap-back was fighting real typing (clear then type "45" was landing as
+      // "145", since the field would jump to "1" the instant it went empty and the next digits
+      // typed onto THAT rather than a blank field). Clamped for real on blur, below.
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: v.replace(/[^0-9]/g, "")
+      }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.maxOversPerBowler), 10);
+        return { ...r, maxOversPerBowler: isNaN(n) || n < 1 ? 1 : n };
+      });
+    },
+    style: {
+      textAlign: "center"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "overs each"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "\u2014 suggested from your total overs, editable"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      setMaxOversTouched(true);
+      setMatchRules(r => ({
+        ...r,
+        maxOversPerBowler: null
+      }));
+    },
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "No limit"))), React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Powerplay"), matchRules.powerplayOvers === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      const n = parseInt(overs || "20", 10);
+      setMatchRules(r => ({
+        ...r,
+        powerplayOvers: Math.min(n, n <= 20 ? 6 : Math.round(n / 5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 76,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.powerplayOvers),
+    onChange: v => {
+      // Same fix as maxOversPerBowler above — store as typed, clamp on blur.
+      setMatchRules(r => ({
+        ...r,
+        powerplayOvers: v.replace(/[^0-9]/g, "")
+      }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.powerplayOvers), 10);
+        return { ...r, powerplayOvers: isNaN(n) || n < 1 ? 1 : n };
+      });
+    },
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "overs"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "\u2014 at the start of each innings, shown as a badge while it's in effect, not enforced (there's no fielder tracking here to enforce it against)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      powerplayOvers: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None")))), expandedRuleSections.bowling && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Time cap per innings"), matchRules.timeCapMinutes === null ? /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => {
+      const n = parseInt(overs || "20", 10);
+      setMatchRules(r => ({
+        ...r,
+        timeCapMinutes: Math.max(10, Math.round(n * 4.5))
+      }));
+    },
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: COLORS.surface,
+      color: COLORS.ink,
+      boxShadow: "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, "None \u2014 tap to set one") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 84,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(TextField, {
+    value: String(matchRules.timeCapMinutes),
+    onChange: v => {
+      // THE BUG: this used to coerce straight to a number on every keystroke, defaulting to 1 the
+      // instant the field went empty (e.g. select-all + backspace before typing a fresh value).
+      // That "1" landed in the DOM immediately, so the next digit typed appended onto it instead
+      // of replacing a blank field — typing "45" after clearing actually produced "145". Now it
+      // just stores the digits as typed (including empty mid-edit) and only clamps to a real
+      // number on blur, below — so the field behaves like a normal text input while you're
+      // actively typing into it.
+      setMatchRules(r => ({
+        ...r,
+        timeCapMinutes: v.replace(/[^0-9]/g, "")
+      }));
+    },
+    onBlur: () => {
+      setMatchRules(r => {
+        const n = parseInt(String(r.timeCapMinutes), 10);
+        return { ...r, timeCapMinutes: isNaN(n) || n < 1 ? 1 : n };
+      });
+    },
+    style: {
+      textAlign: "center",
+      padding: "12px 8px"
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 13,
+      fontWeight: 600,
+      color: COLORS.ink
+    }
+  }, "minutes"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12.5,
+      color: COLORS.inkSoft
+    }
+  }, "\u2014 a flag once you're past it, not a stop. The innings keeps going; an \u201cOVER TIME\u201d badge just shows up so whoever's scoring can decide what to do about it."), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      timeCapMinutes: null
+    })),
+    className: "cs-btn",
+    style: {
+      background: "none",
+      border: "none",
+      color: COLORS.inkSoft,
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 11.5,
+      textDecoration: "underline",
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "None"))), ruleSectionToggle("extras", "Extras rules"), expandedRuleSections.extras && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a wide",
+    value: matchRules.wideRuns,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      wideRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }, {
+      value: 3,
+      label: "3"
+    }]
+  }), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Runs on a no-ball",
+    value: matchRules.noballRuns,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      noballRuns: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }, {
+      value: 3,
+      label: "3"
+    }]
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Free hit after a no-ball"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      freeHit: !r.freeHit
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.freeHit ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.freeHit ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.freeHit ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.freeHit ? "On" : "Off"))), ruleSectionToggle("special", "Special rules"), expandedRuleSections.special && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Wide/no-ball counts as a ball"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      wideNoballCountsAsBall: !r.wideNoballCountsAsBall
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.wideNoballCountsAsBall ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.wideNoballCountsAsBall ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.wideNoballCountsAsBall ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.wideNoballCountsAsBall ? "On" : "Off")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+    // A generic bucket for "the last N overs behave differently", separate from any one specific
+    // rule (today just the wide/no-ball toggle below) -- see isInLastOvers in scoringEngine.js.
+    // Set apart in its own bordered/tinted box (rather than just another marginTop:14 row in the
+    // flat stack of toggles above and below it) since it isn't one toggle but a small cluster of
+    // related controls -- On/off, how many overs, and the wide/no-ball exception -- that read as
+    // one segmented unit much more easily than as three rows visually indistinguishable from
+    // every unrelated rule around them.
+  }, "Last over rules"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), enabled: !(r.lastOverRules && r.lastOverRules.enabled) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules && matchRules.lastOverRules.enabled ? "On" : "Off"), matchRules.lastOverRules && matchRules.lastOverRules.enabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Applies to the last",
+    value: matchRules.lastOverRules.overCount || 1,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), overCount: v }
+    })),
+    options: [1, 2, 3, 4, 5].map(n => ({
+      value: n,
+      label: n === 1 ? "1 over" : `${n} overs`
+    }))
+  }), matchRules.lastOverRules && matchRules.lastOverRules.enabled && matchRules.wideNoballCountsAsBall && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTop: `1px solid ${COLORS.creamDark}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Wide/no-ball illegal again in the last over(s)"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      lastOverRules: { ...(r.lastOverRules || {}), wideNoballIllegalAgain: !(r.lastOverRules && r.lastOverRules.wideNoballIllegalAgain) }
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.lastOverRules.wideNoballIllegalAgain ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.lastOverRules.wideNoballIllegalAgain ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.lastOverRules.wideNoballIllegalAgain ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.lastOverRules.wideNoballIllegalAgain ? "On" : "Off"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 12,
+      border: `1px solid ${COLORS.creamDark}`,
+      background: COLORS.cream
+    }
+    // Same reasoning as the Last over rules box above -- a toggle plus its own conditional
+    // sub-control reads as one segmented unit more easily boxed than left as two more rows in the
+    // flat stack. Matches the tournament rules editor's identical cluster.
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Impact Player substitution"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      impactPlayerEnabled: !r.impactPlayerEnabled
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.impactPlayerEnabled ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.impactPlayerEnabled ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.impactPlayerEnabled ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.impactPlayerEnabled ? "On" : "Off"), matchRules.impactPlayerEnabled && /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Substitutions allowed per team",
+    value: matchRules.impactPlayerMaxSubs,
+    onChange: v => setMatchRules(r => ({
+      ...r,
+      impactPlayerMaxSubs: v
+    })),
+    options: [{
+      value: 1,
+      label: "1 (standard)"
+    }, {
+      value: 2,
+      label: "2"
+    }]
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      fontWeight: 600,
+      color: COLORS.inkSoft,
+      marginBottom: 6
+    }
+  }, "Super Over if the match ties"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "cs-btn cs-shine",
+    onClick: () => setMatchRules(r => ({
+      ...r,
+      superOver: !r.superOver
+    })),
+    style: {
+      padding: "8px 14px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: matchRules.superOver ? `linear-gradient(160deg, ${COLORS.turfFixed}, ${COLORS.pitchFixed})` : COLORS.surface,
+      color: matchRules.superOver ? "#fff" : COLORS.ink,
+      boxShadow: matchRules.superOver ? "0 2px 8px rgba(45,80,22,0.3)" : "0 1px 2px rgba(42,36,32,0.08)",
+      fontFamily: "'Inter'",
+      fontWeight: 600,
+      fontSize: 13
+    }
+  }, matchRules.superOver ? "On" : "Off"))))), currentPage === "xi" && (teamASquad.length > 0 || teamBSquad.length > 0) && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease 0.06s backwards"
@@ -17551,7 +17580,7 @@ function SetupScreen({
     }
   }, currentPageIndex === 0 ? "Cancel" : "Back"), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: currentPage === "review" ? !canStart : !pageValid,
+    disabled: currentPage === "review" ? !canStart || starting : !pageValid,
     style: {
       flex: 2
     },
@@ -17560,6 +17589,8 @@ function SetupScreen({
         goNext();
         return;
       }
+      if (starting) return;
+      setStarting(true);
       onStart({
         teamA: teamAName.trim(),
         teamB: teamBName.trim(),
@@ -17602,7 +17633,7 @@ function SetupScreen({
         private: isPrivate
       });
     }
-  }, currentPage === "review" ? "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
+  }, currentPage === "review" ? starting ? "Starting…" : "Start Match" : currentPageIndex === pageOrder.length - 2 ? "Review" : "Next")));
 }
 // GENERATED-FN-END: SetupScreen
 
@@ -22231,6 +22262,13 @@ function TeamEditScreen({
       if (keeper === old.name) setKeeper(newName);
     }
   }
+  const [saving, setSaving] = useState(false);
+  async function handleSave() {
+    if (saving) return;
+    setSaving(true);
+    await onSave(buildTeamPayload());
+    setSaving(false);
+  }
   function buildTeamPayload() {
     const savedPlayers = players.map(p => ({
       name: p.name.trim(),
@@ -22627,12 +22665,12 @@ function TeamEditScreen({
     }
   }, "WK"))))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !canSave,
-    onClick: () => onSave(buildTeamPayload()),
+    disabled: !canSave || saving,
+    onClick: handleSave,
     style: {
       width: "100%"
     }
-  }, "Save Team"), team && onDelete && /*#__PURE__*/React.createElement("button", {
+  }, saving ? "Saving…" : "Save Team"), team && onDelete && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setConfirmDeleteTeam(true),
     className: "cs-btn",
