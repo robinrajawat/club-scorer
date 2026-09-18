@@ -7954,6 +7954,19 @@ function CoinFlipIllustration({
     }
   }));
 }
+
+// Two tiers, covering every loading moment in the app: inline (the default) sits the spinner next
+// to its label, left-aligned, for a small "still syncing in the background" note beside content
+// that's already on screen (e.g. a list heading while it refreshes). `centered` is for a loading
+// state that's the ONLY thing in its space -- a whole screen taking over, or a section of an
+// already-loaded screen still filling in -- and stacks the spinner above the label, centered.
+// Every call site used to hand-roll its own attempt at this (a `textAlign: "center"` on the
+// wrapping div, which does nothing to a block-level flex child -- LoadingNote's own row is exactly
+// that, so it silently stayed left-aligned everywhere this was tried), each landing on a different
+// size in the process. Centralizing the "centered" layout here means getting it right once instead
+// of everywhere it's used, and picking one of two sizes (28 for a section, 44 -- matching
+// LoadingBallIllustration's own default -- for a full screen or modal takeover) instead of one
+// picked ad hoc per call site.
 // GENERATED-FN-END: CoinFlipIllustration
 // One shared "still loading" row — the spinning ball + a label — for every in-place loading state
 // in the app (standings, tournament/live-score follow screens, the federation manage panel, the
@@ -7964,16 +7977,24 @@ function CoinFlipIllustration({
 function LoadingNote({
   label = "Loading\u2026",
   size = 16,
+  centered = false,
   style
 }) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      gap: centered ? 10 : 8,
       fontFamily: "'Inter'",
       fontSize: 12.5,
       color: COLORS.inkSoft,
+      ...(centered ? {
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: "30px 0"
+      } : {}),
       ...style
     }
   }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
@@ -12381,10 +12402,14 @@ function AuthActionScreen({
   };
   if (status === "checking") {
     return /*#__PURE__*/React.createElement("div", {
-      style: wrapStyle
+      style: {
+        ...wrapStyle,
+        alignItems: "center"
+      }
     }, /*#__PURE__*/React.createElement(LoadingNote, {
       label: "Checking link\u2026",
-      size: 26
+      size: 44,
+      centered: true
     }));
   }
   if (status === "error") {
@@ -14578,16 +14603,11 @@ function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px"
-    }
-  }, /*#__PURE__*/React.createElement(LoadingNote, {
+  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading…",
-    size: 22,
-    style: { justifyContent: "center" }
-  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement(React.Fragment, null,
+    size: 28,
+    centered: true
+  }), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement(React.Fragment, null,
     /*#__PURE__*/React.createElement("div", {
       style: {
         position: "relative",
@@ -14994,10 +15014,8 @@ function MyTeamsScreen({
     }
   }, teamsLoading && teams.length === 0 ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading your teams…",
-    size: 20,
-    style: {
-      padding: "10px 4px"
-    }
+    size: 28,
+    centered: true
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
@@ -15985,7 +16003,31 @@ function SetupScreen({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 15
-  }), "Playing in: ", presetTournament.name), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
+  }), "Playing in: ", presetTournament.name), currentPage === "teams" && !presetTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease backwards"
+    }
+  }, /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: manualPrivate ? "private" : "public",
+    onChange: v => setManualPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginTop: 8
+    }
+  }, manualPrivate ? "Private — this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public — while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease backwards"
@@ -17450,31 +17492,7 @@ function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && !presetTournament && /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...cardStyle,
-      animation: "cs-slideUp 0.3s ease 0.04s backwards"
-    }
-  }, /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Visibility",
-    value: manualPrivate ? "private" : "public",
-    onChange: v => setManualPrivate(v === "private"),
-    options: [{
-      value: "public",
-      label: "Public"
-    }, {
-      value: "private",
-      label: "Private"
-    }]
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginTop: 8
-    }
-  }, manualPrivate ? "Private \u2014 this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public \u2014 while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
@@ -18269,6 +18287,7 @@ function TournamentsScreen({
   const [seriesTeamA, setSeriesTeamA] = useState("");
   const [seriesTeamB, setSeriesTeamB] = useState("");
   const [seriesMatchCount, setSeriesMatchCount] = useState("3");
+  const [seriesPrivate, setSeriesPrivate] = useState(false);
   const [seriesError, setSeriesError] = useState("");
   const [seriesBusy, setSeriesBusy] = useState(false);
   const visibleTournaments = tournaments.filter(t => (statusFilter === "all" || tournamentStatus(t) === statusFilter) && (!searchTerm.trim() || t.name.toLowerCase().includes(searchTerm.trim().toLowerCase()))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -18348,6 +18367,7 @@ function TournamentsScreen({
     setSeriesTeamA("");
     setSeriesTeamB("");
     setSeriesMatchCount("3");
+    setSeriesPrivate(false);
     setSeriesError("");
     setCreatingSeries(true);
   }
@@ -18365,7 +18385,7 @@ function TournamentsScreen({
     setSeriesBusy(true);
     setSeriesError("");
     const label = seriesName.trim() || `${seriesTeamA} vs ${seriesTeamB}`;
-    const result = await onCreateSeries(label, seriesTeamA, seriesTeamB, count);
+    const result = await onCreateSeries(label, seriesTeamA, seriesTeamB, count, seriesPrivate);
     setSeriesBusy(false);
     if (!result.ok) {
       setSeriesError(result.error || "Couldn't create the series.");
@@ -18872,7 +18892,18 @@ function TournamentsScreen({
       marginBottom: 14,
       lineHeight: 1.5
     }
-  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), /*#__PURE__*/React.createElement(Field, {
+  }, "A head-to-head set of matches between two teams \u2014 a running series score instead of a points table. Good for a 3-match ODI series or a weekend rematch."), /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: seriesPrivate ? "private" : "public",
+    onChange: v => setSeriesPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
+  }), /*#__PURE__*/React.createElement(Field, {
     label: "Series name (optional)"
   }, /*#__PURE__*/React.createElement(TextField, {
     value: seriesName,
@@ -21105,19 +21136,11 @@ function TournamentDetailScreen({
     warningText: tournamentMatches.length > 0 ? "Fixtures already started or completed keep the rules they began with — this only changes what new fixtures inherit from here on." : "Every fixture started from this tournament will use these rules.",
     onSave: (oversLimit, rules) => editTournamentRules(oversLimit, rules),
     onClose: () => setRulesModalOpen(false)
-  }), matches === null ?  /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0"
-    }
-  }, /*#__PURE__*/React.createElement(LoadingNote, {
+  }), matches === null ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading standings\u2026",
     size: 28,
-    style: {
-      flexDirection: "column",
-      justifyContent: "center"
-    }
-  })) : /*#__PURE__*/React.createElement(React.Fragment, null,
+    centered: true
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null,
     isTournamentComplete && /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,
@@ -21952,14 +21975,10 @@ function SeriesDetailScreen({
       color: COLORS.ink,
       marginBottom: 16
     }
-  }, scoreText), matches === null ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0",
-      color: COLORS.inkSoft,
-      fontFamily: "'Inter'"
-    }
-  }, "Loading\u2026") : /*#__PURE__*/React.createElement(React.Fragment, null, (series.fixtures || []).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
+  }, scoreText), matches === null ? /*#__PURE__*/React.createElement(LoadingNote, {
+    size: 28,
+    centered: true
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, (series.fixtures || []).map(f => /*#__PURE__*/React.createElement(FixtureRow, {
     key: f.id,
     fixture: f,
     tournament: series,
@@ -25310,21 +25329,11 @@ function FollowScreen({
         alignItems: "center",
         justifyContent: "center"
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "center"
-      }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
-      style: {
-        margin: "0 auto 12px"
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'Inter'",
-        color: COLORS.inkSoft,
-        fontSize: 13
-      }
-    }, "Loading live score\u2026")));
+    }, /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Loading live score\u2026",
+      size: 44,
+      centered: true
+    }));
   }
   if (status === "not-found" || status === "error") {
     return /*#__PURE__*/React.createElement("div", {
@@ -25724,10 +25733,8 @@ function FollowTournamentScreen({
       }
     }, /*#__PURE__*/React.createElement(LoadingNote, {
       label: "Loading tournament\u2026",
-      size: 32,
-      style: {
-        flexDirection: "column"
-      }
+      size: 44,
+      centered: true
     }));
   }
   if (status === "not-found" || status === "error") {
@@ -32160,7 +32167,7 @@ function CricketScorer() {
   // That reuse is why handleUpdateTournament/handleDeleteTournament need no series-specific
   // counterpart — they already operate generically on whatever's in `tournaments`/the club
   // subcollection, kind included.
-  async function handleCreateSeries(name, teamA, teamB, matchCount) {
+  async function handleCreateSeries(name, teamA, teamB, matchCount, isPrivate) {
     const t = {
       id: uid(),
       name,
@@ -32177,11 +32184,20 @@ function CricketScorer() {
         date: "",
         matchId: null
       })),
+      // Same explicit choice as a tournament's (see handleCreateTournament) -- now collected at
+      // creation instead of defaulting a series out of auto-publish entirely (see
+      // maybeAutoPublishTournament's own comment on why that carve-out is gone).
+      private: !!isPrivate,
       createdAt: Date.now()
     };
     const updated = [...tournaments, t];
     setTournaments(updated);
     await saveTournaments(updated);
+    maybeAutoPublishTournament(t, async t2 => {
+      const list = updated.map(x => x.id === t2.id ? t2 : x);
+      setTournaments(list);
+      await saveTournaments(list);
+    });
     return {
       ok: true,
       tournament: t
@@ -32219,15 +32235,16 @@ function CricketScorer() {
   // Closes the friction gap between matches and tournaments: a non-private MATCH is discoverable
   // in the Home screen's Live now feed the instant it's saved, no extra step -- a non-private
   // TOURNAMENT used to stay invisible until its owner explicitly tapped "Share" once. Called after
-  // every successful tournament save (creation and every edit) except a series, which has never
-  // collected a Visibility choice at creation -- defaulting it into auto-publish here would
-  // silently make a "private by omission" series discoverable, so it's left alone. `persist` is
-  // however THIS caller already knows to save an update back to the right storage tier (club/
-  // federation/personal) -- kept as an explicit callback rather than reaching for ambient
-  // `viewingTournament*` state, which isn't guaranteed to already point at a just-created
-  // tournament by the time this (fire-and-forget, awaited-later) call resolves.
+  // every successful tournament save (creation and every edit), series included -- a series now
+  // collects its own Visibility choice at creation (see handleCreateSeries) the same way a
+  // tournament does, so it follows the same public/private rule as everything else here rather
+  // than a separate carve-out. `persist` is however THIS caller already knows to save an update
+  // back to the right storage tier (club/federation/personal) -- kept as an explicit callback
+  // rather than reaching for ambient `viewingTournament*` state, which isn't guaranteed to already
+  // point at a just-created tournament by the time this (fire-and-forget, awaited-later) call
+  // resolves.
   async function maybeAutoPublishTournament(tournament, persist) {
-    if (tournament.kind === "series" || tournament.private) return;
+    if (tournament.private) return;
     if (tournament.shareCode) {
       // BUG FIX: this used to call ONLY refreshTournamentStandingsLive, which recomputes standings
       // against whatever fixtures/venue/groups/teams already happen to be sitting in the public

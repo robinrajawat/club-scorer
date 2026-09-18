@@ -760,17 +760,21 @@ test("TournamentsScreen: the create form has no Organizer picker any more, even 
   assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Organizer"), undefined);
 });
 
-test("TournamentsScreen: creating a series opens a Modal and calls onCreateSeries", async () => {
+test("TournamentsScreen: creating a series opens a Modal and calls onCreateSeries, Visibility defaulting to Public as the form's first field", async () => {
   globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
   let createdWith = null;
   const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
-    onCreateSeries: (label, teamA, teamB, count) => {
-      createdWith = { label, teamA, teamB, count };
+    onCreateSeries: (label, teamA, teamB, count, isPrivate) => {
+      createdWith = { label, teamA, teamB, count, isPrivate };
       return Promise.resolve({ ok: true });
     }
   })));
   act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
   act(() => { inst.root.findByProps({ "aria-label": "New head-to-head series" }).props.onClick(); });
+
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  assert.ok(visibilityChoice, "the series form has its own Visibility choice, same as tournament creation");
+  assert.equal(visibilityChoice.props.value, "public");
 
   const selects = inst.root.findAllByType("select");
   act(() => { selects[0].props.onChange({ target: { value: "Riverside CC" } }); });
@@ -781,7 +785,34 @@ test("TournamentsScreen: creating a series opens a Modal and calls onCreateSerie
     createSeriesBtn.props.onClick();
     await new Promise(r => setTimeout(r, 0));
   });
-  assert.deepEqual(createdWith, { label: "Riverside CC vs Oakwood CC", teamA: "Riverside CC", teamB: "Oakwood CC", count: 3 });
+  assert.deepEqual(createdWith, { label: "Riverside CC vs Oakwood CC", teamA: "Riverside CC", teamB: "Oakwood CC", count: 3, isPrivate: false });
+});
+
+test("TournamentsScreen: switching the series form's Visibility to Private flows through to onCreateSeries", async () => {
+  globalThis.Modal = ({ children }) => React.createElement("div", { "data-stub-modal": true }, children);
+  let createdWith = null;
+  const inst = renderer.create(React.createElement(TournamentsScreen, baseProps({
+    onCreateSeries: (label, teamA, teamB, count, isPrivate) => {
+      createdWith = { label, teamA, teamB, count, isPrivate };
+      return Promise.resolve({ ok: true });
+    }
+  })));
+  act(() => { inst.root.findByProps({ "aria-label": "New" }).props.onClick(); });
+  act(() => { inst.root.findByProps({ "aria-label": "New head-to-head series" }).props.onClick(); });
+
+  const visibilityChoice = inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Visibility");
+  act(() => { visibilityChoice.props.onChange("private"); });
+
+  const selects = inst.root.findAllByType("select");
+  act(() => { selects[0].props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { selects[1].props.onChange({ target: { value: "Oakwood CC" } }); });
+
+  const createSeriesBtn = inst.root.findAllByType(Btn).find(b => hasText(b.props.children, "Create series"));
+  await act(async () => {
+    createSeriesBtn.props.onClick();
+    await new Promise(r => setTimeout(r, 0));
+  });
+  assert.equal(createdWith.isPrivate, true);
 });
 
 test("TournamentsScreen: a created tournament calls onCreateTournament with no organizer attribution -- always personal now, even for an account that owns a club", async () => {

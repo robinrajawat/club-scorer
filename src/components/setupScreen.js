@@ -484,7 +484,31 @@ export function SetupScreen({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 15
-  }), "Playing in: ", presetTournament.name), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
+  }), "Playing in: ", presetTournament.name), currentPage === "teams" && !presetTournament && /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...cardStyle,
+      animation: "cs-slideUp 0.3s ease backwards"
+    }
+  }, /*#__PURE__*/React.createElement(RuleChoice, {
+    label: "Visibility",
+    value: manualPrivate ? "private" : "public",
+    onChange: v => setManualPrivate(v === "private"),
+    options: [{
+      value: "public",
+      label: "Public"
+    }, {
+      value: "private",
+      label: "Private"
+    }]
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Inter'",
+      fontSize: 12,
+      color: COLORS.inkSoft,
+      lineHeight: 1.5,
+      marginTop: 8
+    }
+  }, manualPrivate ? "Private — this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public — while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), currentPage === "teams" && /*#__PURE__*/React.createElement("div", {
     style: {
       ...cardStyle,
       animation: "cs-slideUp 0.3s ease backwards"
@@ -1949,31 +1973,7 @@ export function SetupScreen({
       marginTop: 12,
       lineHeight: 1.5
     }
-  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), currentPage === "review" && !presetTournament && /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...cardStyle,
-      animation: "cs-slideUp 0.3s ease 0.04s backwards"
-    }
-  }, /*#__PURE__*/React.createElement(RuleChoice, {
-    label: "Visibility",
-    value: manualPrivate ? "private" : "public",
-    onChange: v => setManualPrivate(v === "private"),
-    options: [{
-      value: "public",
-      label: "Public"
-    }, {
-      value: "private",
-      label: "Private"
-    }]
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "'Inter'",
-      fontSize: 12,
-      color: COLORS.inkSoft,
-      lineHeight: 1.5,
-      marginTop: 8
-    }
-  }, manualPrivate ? "Private \u2014 this match won't appear in the Live tab or app-wide search. A share or view code you generate yourself still works exactly as before." : "Public \u2014 while in progress and for a few days after it ends, anyone using the app can find and follow this match in the Live tab and app-wide search.")), /*#__PURE__*/React.createElement("div", {
+  }, "Check this over before you start \u2014 the batting order and openers can't be changed once the first ball is bowled.")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: "'Inter'",
       fontSize: 12,
