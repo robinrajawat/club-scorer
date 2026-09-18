@@ -71,6 +71,15 @@ function ruleBlock(inst, labelText) {
   return inst.root.findAll(n => n.type === "div" && n.props.style && n.props.style.marginTop === 14 && hasText(n.props.children, labelText))[0];
 }
 
+// The rules editor's own sub-sections (Format/Extras/Special rules/Bowling limits/Batting rules)
+// each collapse independently now -- "Customize" alone only reveals the section headers
+// themselves, not their fields. Opens one by its label, same as tapping its chevron row.
+function openRuleSection(inst, label) {
+  act(() => {
+    inst.root.findAllByType("button").find(b => hasText(b.props.children, label)).props.onClick();
+  });
+}
+
 test("SetupScreen: shows 'New Match' and starts on the Teams & Format page", () => {
   const inst = render();
   const text = JSON.stringify(inst.toJSON());
@@ -430,6 +439,7 @@ test("SetupScreen: 'Customize' reveals the rules editor, and a rule change is re
 
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
+  openRuleSection(inst, "Format");
   // "Balls per over" options include "8" as a plain label -- pick the RuleChoice option button.
   const ballsPerOverBtn = inst.root.findAllByType("button").find(b => b.props.children === "8");
   act(() => { ballsPerOverBtn.props.onClick(); });
@@ -458,6 +468,7 @@ test("SetupScreen: 'Runs on a no-ball' offers the same 1/2/3 choices as 'Runs on
 
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
+  openRuleSection(inst, "Extras");
   const ruleChoices = inst.root.findAllByType(RuleChoice);
   const wideOptions = ruleChoices.find(r => r.props.label === "Runs on a wide").props.options.map(o => o.value);
   const noballOptions = ruleChoices.find(r => r.props.label === "Runs on a no-ball").props.options.map(o => o.value);
@@ -486,6 +497,70 @@ test("SetupScreen: the rules editor is grouped into labeled sections, in order",
   for (let i = 1; i < positions.length; i++) {
     assert.ok(positions[i] > positions[i - 1], `"${sections[i]}" appears after "${sections[i - 1]}"`);
   }
+});
+
+// Each of the 5 sections collapses independently now, rather than the single "Customize" toggle
+// revealing all of them (and their ~16 fields) at once -- a scorer who wants to open just Batting
+// rules no longer has to scroll past Format/Extras/Special rules/Bowling limits first.
+test("SetupScreen: rules sections collapse independently -- opening one doesn't open the others, all start closed", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Customize").props.onClick(); });
+
+  // Every section header renders, but none of their fields do yet.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Balls per over/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Runs on a wide/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Retirement run cap/);
+
+  openRuleSection(inst, "Extras");
+  assert.match(JSON.stringify(inst.toJSON()), /Runs on a wide/);
+  // Opening Extras doesn't also open Format or Batting rules.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Balls per over/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Retirement run cap/);
+
+  // Closing it again hides its fields.
+  openRuleSection(inst, "Extras");
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Runs on a wide/);
+});
+
+// Regression: this per-section collapse work uncovered a real, pre-existing bug -- "Time cap per
+// innings" (the last field under "Bowling limits") and the entire "Batting rules" section
+// (Retirement run cap/Big hit bonus/Maximum hit bonus/New batsman ready time) sat one paren
+// outside the rules editor's own visibility gate, so they rendered unconditionally regardless of
+// whether "Customize" had even been tapped. Both are properly gated now, same as every other
+// field in the editor.
+test("SetupScreen: Time cap per innings and the whole Batting rules section are gated too, not just Format/Extras/Special", () => {
+  const inst = render();
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  act(() => { input(inst, "e.g. Riverside XI").props.onChange({ target: { value: "Oakwood CC" } }); });
+  const tossBtn = inst.root.findAllByType("button").find(b => hasText(b.props.children, "Riverside CC"));
+  act(() => { tossBtn.props.onClick(); });
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
+  act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
+
+  // Neither shows up even before "Customize" is tapped at all.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Time cap per innings/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
+
+  act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Customize").props.onClick(); });
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Time cap per innings/);
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
+
+  openRuleSection(inst, "Bowling limits");
+  assert.match(JSON.stringify(inst.toJSON()), /Max overs per bowler/);
+  assert.match(JSON.stringify(inst.toJSON()), /Powerplay/);
+  assert.match(JSON.stringify(inst.toJSON()), /Time cap per innings/);
+  // Opening Bowling limits doesn't also open Batting rules.
+  assert.doesNotMatch(JSON.stringify(inst.toJSON()), /New batsman ready time/);
+
+  openRuleSection(inst, "Batting rules");
+  assert.match(JSON.stringify(inst.toJSON()), /Retirement run cap/);
+  assert.match(JSON.stringify(inst.toJSON()), /New batsman ready time/);
 });
 
 // Regression: the collapsed "MATCH RULES" card (Step 2, shown before "Customize" is tapped) used
@@ -545,6 +620,7 @@ test("SetupScreen: Review always shows the core over/bowler-cap facts, and a 'Ho
   act(() => { btn(inst, "Back").props.onClick(); }); // openers -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
+  openRuleSection(inst, "Special rules");
   const wideNbBlock = ruleBlock(inst, "Wide/no-ball counts as a ball");
   act(() => { wideNbBlock.findAllByType("button").find(b => b.props.children === "Off").props.onClick(); });
   act(() => { btn(inst, "Next").props.onClick(); }); // rules -> openers
@@ -589,6 +665,7 @@ test("SetupScreen: Last over rules -- enabling it reveals the overs-count picker
   act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
   const customizeBtn = inst.root.findAllByType("button").find(b => b.props.children === "Customize");
   act(() => { customizeBtn.props.onClick(); });
+  openRuleSection(inst, "Special rules");
 
   // Off by default -- neither the overs picker nor the wide/no-ball sub-toggle should show.
   assert.doesNotMatch(JSON.stringify(inst.toJSON()), /Applies to the last/);
@@ -733,6 +810,7 @@ test("SetupScreen: 'Substitutions allowed per team' only appears once Impact Pla
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Bat").props.onClick(); });
   act(() => { btn(inst, "Next").props.onClick(); }); // teams -> rules
   act(() => { inst.root.findAllByType("button").find(b => b.props.children === "Customize").props.onClick(); });
+  openRuleSection(inst, "Special rules");
 
   assert.equal(inst.root.findAllByType(RuleChoice).find(r => r.props.label === "Substitutions allowed per team"), undefined);
 
