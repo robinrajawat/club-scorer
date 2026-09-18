@@ -35,6 +35,13 @@ function btn(inst, text) {
   return inst.root.findAllByType(Btn).find(b => b.props.children === text);
 }
 
+// Save Team is the only variant="primary" Btn on this screen -- unlike btn() above, this survives
+// its own label changing (e.g. to "Saving…") across an act(), since it's found by a prop that
+// doesn't change rather than by the text that does.
+function primaryBtn(inst) {
+  return inst.root.findAllByType(Btn).find(b => b.props.variant === "primary");
+}
+
 // JSON.stringify throws on a live React element (circular via _owner) -- walk .props.children by
 // hand instead when checking a live instance's rendered text, rather than the toJSON()-tree-only
 // JSON.stringify(inst.toJSON()) pattern used elsewhere in this suite.
@@ -86,6 +93,28 @@ test("TeamEditScreen: Save calls onSave with the assembled team", () => {
   assert.equal(saved.players.length, 2);
   assert.equal(saved.players[0].name, "A. Sharma");
   assert.equal(saved.players[0].number, "7");
+});
+
+// Regression: Save used to call onSave (and, for a new team, mint a fresh uid()) on every click
+// with no guard -- a double-tap before the first save's promise resolved created two teams with
+// two different ids. Same busy-guard pattern already used by tournament/series creation.
+test("TeamEditScreen: double-tapping Save Team before the first save resolves only calls onSave once", async () => {
+  let calls = 0;
+  let resolveSave;
+  const onSave = () => new Promise(resolve => { calls++; resolveSave = resolve; });
+  const inst = render({ onSave });
+  act(() => { input(inst, "e.g. Willow CC").props.onChange({ target: { value: "Riverside CC" } }); });
+  addPlayer(inst, "A. Sharma");
+
+  act(() => { primaryBtn(inst).props.onClick(); });
+  assert.equal(calls, 1);
+  assert.equal(primaryBtn(inst).props.disabled, true, "disabled while the save is in flight");
+
+  act(() => { primaryBtn(inst).props.onClick(); }); // second tap before the promise resolves
+  assert.equal(calls, 1, "not called again while still saving");
+
+  await act(async () => { resolveSave(); });
+  assert.equal(primaryBtn(inst).props.disabled, false, "re-enabled once the save settles");
 });
 
 test("TeamEditScreen: duplicate player names (case-insensitive) block Save", () => {

@@ -85,6 +85,13 @@ export function TeamEditScreen({
       if (keeper === old.name) setKeeper(newName);
     }
   }
+  const [saving, setSaving] = useState(false);
+  async function handleSave() {
+    if (saving) return;
+    setSaving(true);
+    await onSave(buildTeamPayload());
+    setSaving(false);
+  }
   function buildTeamPayload() {
     const savedPlayers = players.map(p => ({
       name: p.name.trim(),
@@ -481,12 +488,12 @@ export function TeamEditScreen({
     }
   }, "WK"))))))), /*#__PURE__*/React.createElement(Btn, {
     variant: "primary",
-    disabled: !canSave,
-    onClick: () => onSave(buildTeamPayload()),
+    disabled: !canSave || saving,
+    onClick: handleSave,
     style: {
       width: "100%"
     }
-  }, "Save Team"), team && onDelete && /*#__PURE__*/React.createElement("button", {
+  }, saving ? "Saving…" : "Save Team"), team && onDelete && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setConfirmDeleteTeam(true),
     className: "cs-btn",
