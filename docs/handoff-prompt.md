@@ -297,7 +297,8 @@ scorecard rows), a one-line color-coded ball commentary above the Overs
 strip ("X to A: FOUR!"), tournament-level venue (set once, inherited by
 every fixture), and the tournament + single-match rules editors both
 regrouped into labeled sections (Format/Extras/Bowling limits/Batting
-rules/Special rules) instead of one long unlabeled list.
+rules/Special rules) instead of one long unlabeled list. (The single-match
+editor's own grouping changed again later — see the 2026-09-18 entry below.)
 
 Reliability fixes, roughly in the order they were found chasing real user
 reports — **each was a genuine root cause, not a symptom patch:**
@@ -648,6 +649,40 @@ present — reusing `StandingsTable` from `tableAtoms.js` instead of the screen'
 click-through-tested in a real browser — validated instead via `npm test` (10 new/updated
 `followTournamentScreen.test.js` cases plus 4 new `appLogic.test.js` cases for the snapshot shape,
 652 total passing), `npm run generate:verify`, and `scripts/validate_html_structure.py`.
+
+**2026-09-18 — double-tap duplicate-creation bug, and a Match Rules editor
+rework (PRs #280, #281).** User report: pressing Save twice fast on Team
+Edit created two teams. Root cause: Save called `onSave` (and, for a new
+team, minted a fresh `uid()`) on every click with no guard, unlike
+tournament/series creation's own `busy`-state pattern. Fixed the same way
+there, and found the identical bug in Setup's own "Start Match" (`onStart`
+mints a match id and is synchronous) — fixed identically.
+
+Along the way, per-section collapse for the single-match rules editor
+(shipped in #280 the same session) turned out to have its own bug: the
+`rulesExpanded && Fragment(...)` wrapper closed one section early, so
+"Batting rules" (and "Time cap per innings") rendered outside the
+"Customize" gate — visible on screen even before Customize was ever
+tapped. Root-caused with an `acorn` AST walk (manual paren-counting kept
+giving contradictory results across the file's generated
+`React.createElement` calls) and fixed by moving the Fragment's own
+closing paren to the true end of the section list.
+
+User then asked for the sections themselves to be reorganized: "Format" was
+just one field ("Balls per over," a bowling-mechanics setting in
+substance), so it got folded into a renamed "Bowling rules," and the
+remaining 4 sections reordered to Batting/Bowling/Extras/Special. Also
+added T20 (20 overs) / ODI (50 overs) / Custom presets to "Overs per
+innings" (previously a bare number input), matching the existing
+preset-pill pattern from "Players per side"/"Balls per over."
+
+Both PRs hit the same squash-merge branch-history quirk noted in earlier
+entries below: the branch still carried the previous PR's pre-squash
+commits, so a fresh PR from it showed `mergeable_state: "dirty"` against
+`main` even though the content was already there under a different SHA.
+Resolved each time via `git merge origin/main`, keeping the branch's own
+version (a strict superset) for the conflicting files, and regenerating
+`public/index.html` from source rather than hand-merging it.
 
 For the full session-by-session narrative — every extraction batch, the
 deploy-mode switch, the tooling ported from `sakura`, and the

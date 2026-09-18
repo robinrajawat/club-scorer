@@ -1490,3 +1490,80 @@ they landed:
 - **30-minute escalating time-penalty rule** — still open, carried over
   unchanged from the 2026-09-01 entry above. Not the same thing as the
   (already-shipped) flat "time cap per innings" flag.
+
+**2026-09-18: two PRs landed this session, #280 and #281 — a duplicate-team
+bug fix plus a Match Rules editor rework.** Continued straight on from the
+previous session's per-section collapse work.
+
+- **Swipe-delete confirmation.** Teams' swipe-to-delete called `onDeleteTeam`
+  the instant "Delete" was tapped, no confirmation, unlike Team Edit's own
+  "Delete team" button. Added the same `ConfirmModal` Team Edit already uses.
+- **Batting rules leaking outside "Customize."** User screenshotted the
+  "MATCH RULES" card before ever tapping Customize, showing a "BATTING
+  RULES" chevron header alongside "Balls per over" etc. still hidden.
+  Root cause: the previous session's per-section-collapse work wrapped all
+  5 sections in `rulesExpanded && React.createElement(React.Fragment, null,
+  ...)`, but that Fragment's own closing paren landed right after the
+  Bowling-limits content, leaving "Time cap per innings" and the entire
+  "Batting rules" section (header included) as unconditional siblings.
+  Manual paren-counting on this generated `React.createElement` code gave
+  contradictory results (parenthetical text inside string literals, and
+  React.Fragment flattening ambiguity in react-test-renderer's own
+  `.props.children` defeated a couple of approaches first) — installed
+  `acorn` (`npm install --no-save acorn` into a scratch dir) and walked
+  the real AST by byte offset to find exactly where the Fragment's
+  children list actually ended, then moved one closing paren from right
+  after the Bowling-limits Fragment to right after the Batting-rules one.
+  Added a regression test asserting the section *header* itself (not just
+  its fields) stays hidden pre-Customize — the previous test suite had
+  only ever checked the fields, which is why it didn't catch this.
+- **Section spacing.** The gap between a section's chevron header and its
+  first field was noticeably tighter than the gap between fields within a
+  section (no `marginBottom` on the header button at all). Added one.
+- **Regroup into Batting/Bowling/Extras/Special.** User: "Format and
+  Bowling limits are talking about the same thing" — Format was just one
+  field, "Balls per over," which is a bowling-mechanics setting same as
+  max overs/bowler and powerplay. Folded it into a renamed "Bowling
+  rules," dropping 5 sections to 4, and reordered per the user's own
+  wording to Batting/Bowling/Extras/Special. Did the reorder via a small
+  Node+acorn script that extracted each section's exact AST span (by byte
+  offset) and reassembled them in the new order/labels, rather than
+  hand-editing thousands of lines of paren-sensitive generated JSX —
+  the AST-based approach used to diagnose the gating bug above turned out
+  to also be the safe way to *perform* this kind of surgery, not just
+  read it.
+- **T20/ODI/Custom overs presets.** "Overs per innings" was a bare number
+  `TextField` (placeholder "20"); user asked for quick T20 (20)/ODI (50)
+  presets. Reused the existing `RuleChoice` pill component (value driven
+  by a `"t20"/"odi"/"custom"` sentinel derived from the current overs
+  value plus one boolean `oversCustom` state, since RuleChoice's own
+  active-highlight logic can't distinguish "no preset picked yet" from
+  "a custom value that happens to equal a preset") instead of building a
+  new pill row from scratch — the number field only renders once "Custom"
+  is picked, pre-filled with whatever the value already was rather than
+  clearing it.
+- **Double-tap duplicate creation.** Reported live: pressing Save twice
+  fast on Team Edit created two teams. Root cause: `onSave` was called on
+  every click with no guard, and for a *new* team `buildTeamPayload()`
+  calls `uid()` fresh each time, so two rapid clicks produced two teams
+  with two different ids before the screen ever navigated away. Fixed
+  with the same `busy`-state guard tournament/series creation already
+  uses (`if (saving) return; setSaving(true); await onSave(...)`, button
+  disabled + relabeled "Saving…" while in flight). Checked for the same
+  shape of bug elsewhere in the codebase (every `uid()` call site) and
+  found one more: Setup's own "Start Match" button, same fix applied
+  there (`starting` state, "Starting…" label).
+- **Squash-merge branch-history quirk, again.** Both PRs this session hit
+  the same issue documented in earlier entries below: the branch still
+  carried the previous PR's pre-squash commits as its own history, so
+  `mergeable_state` showed `"dirty"` against `main` even though the
+  content was already merged under a different (squash) SHA. Resolved via
+  `git merge origin/main --no-edit`, taking the branch's own version for
+  the conflicting files (a strict superset of `origin/main`'s content for
+  each), and regenerating `public/index.html` from source afterward
+  rather than resolving the generated file's own conflict by hand.
+
+Both PRs verified via `npm test` (712/712 passing), `node scripts/generate.js
+--verify`, `python3 scripts/validate_html_structure.py`, and a local
+Playwright harness (screenshots of the double-tap guard, the Batting-rules
+gating, the reordered sections, and the overs presets, each before/after).
