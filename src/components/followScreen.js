@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
-import { LoadingBallIllustration } from "./illustrations.js";
+import { LoadingNote } from "./illustrations.js";
 import { BallCelebration, MilestoneToast } from "./scoringUiAtoms.js";
 import { MatchStatsPanel } from "./scorecard.js";
 import { Share, Check, Info, ChevronLeft } from "./icons.js";
@@ -267,21 +267,11 @@ export function FollowScreen({
         alignItems: "center",
         justifyContent: "center"
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "center"
-      }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
-      style: {
-        margin: "0 auto 12px"
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'Inter'",
-        color: COLORS.inkSoft,
-        fontSize: 13
-      }
-    }, "Loading live score\u2026")));
+    }, /*#__PURE__*/React.createElement(LoadingNote, {
+      label: "Loading live score\u2026",
+      size: 44,
+      centered: true
+    }));
   }
   if (status === "not-found" || status === "error") {
     return /*#__PURE__*/React.createElement("div", {

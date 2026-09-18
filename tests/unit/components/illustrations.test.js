@@ -35,6 +35,21 @@ test("LoadingNote: shows the given label next to a spinner, defaults to 'Loading
   assert.ok(customTree.children.includes("Saving…"));
 });
 
+// `centered` is what every "this section/screen has nothing else in it yet" loading moment
+// should use -- stacks the spinner above the label and actually centers both, instead of each call
+// site hand-rolling its own (frequently wrong -- a plain `textAlign: "center"` does nothing to a
+// block-level flex row, which is exactly what the default layout is) attempt at the same thing.
+test("LoadingNote: centered stacks the spinner above the label and centers both, uncentered stays a left-aligned row", () => {
+  const row = renderer.create(React.createElement(LoadingNote, {})).toJSON();
+  assert.equal(row.props.style.flexDirection, undefined);
+  assert.equal(row.props.style.alignItems, "center"); // vertically aligned within the row, not centering the row itself
+
+  const centered = renderer.create(React.createElement(LoadingNote, { centered: true })).toJSON();
+  assert.equal(centered.props.style.flexDirection, "column");
+  assert.equal(centered.props.style.alignItems, "center");
+  assert.equal(centered.props.style.justifyContent, "center");
+});
+
 test("EmptyStateBallIllustration: renders a self-contained svg with no props needed", () => {
   const tree = renderer.create(React.createElement(EmptyStateBallIllustration, {})).toJSON();
   assert.equal(tree.type, "svg");

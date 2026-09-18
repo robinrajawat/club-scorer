@@ -363,19 +363,11 @@ export function TournamentDetailScreen({
     warningText: tournamentMatches.length > 0 ? "Fixtures already started or completed keep the rules they began with — this only changes what new fixtures inherit from here on." : "Every fixture started from this tournament will use these rules.",
     onSave: (oversLimit, rules) => editTournamentRules(oversLimit, rules),
     onClose: () => setRulesModalOpen(false)
-  }), matches === null ?  /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "30px 0"
-    }
-  }, /*#__PURE__*/React.createElement(LoadingNote, {
+  }), matches === null ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading standings\u2026",
     size: 28,
-    style: {
-      flexDirection: "column",
-      justifyContent: "center"
-    }
-  })) : /*#__PURE__*/React.createElement(React.Fragment, null,
+    centered: true
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null,
     isTournamentComplete && /*#__PURE__*/React.createElement("div", {
   style: {
     background: `linear-gradient(160deg, ${COLORS.surface}, ${COLORS.cream})`,

@@ -133,10 +133,8 @@ export function FollowTournamentScreen({
       }
     }, /*#__PURE__*/React.createElement(LoadingNote, {
       label: "Loading tournament\u2026",
-      size: 32,
-      style: {
-        flexDirection: "column"
-      }
+      size: 44,
+      centered: true
     }));
   }
   if (status === "not-found" || status === "error") {

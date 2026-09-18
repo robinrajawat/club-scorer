@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { COLORS } from "./theme.js";
 import { NavWrap } from "./screenAtoms.js";
-import { LoadingBallIllustration } from "./illustrations.js";
+import { LoadingNote } from "./illustrations.js";
 import { WelcomeScreen } from "./welcomeScreen.js";
 import { AuthActionScreen } from "./authActionScreen.js";
 import { HomeScreen } from "./homeScreen.js";
@@ -1971,21 +1971,10 @@ export function CricketScorer() {
         alignItems: "center",
         justifyContent: "center"
       }
-    }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "center"
-      }
-    }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
-      style: {
-        margin: "0 auto 12px"
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: "'Inter'",
-        color: COLORS.inkSoft,
-        fontSize: 13
-      }
-    }, "Loading…")));
+    }, /*#__PURE__*/React.createElement("style", null, GLOBAL_CSS), /*#__PURE__*/React.createElement(LoadingNote, {
+      size: 44,
+      centered: true
+    }));
   }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: wrapStyle,
@@ -2337,23 +2326,19 @@ export function CricketScorer() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      textAlign: "center",
       background: COLORS.surface,
       borderRadius: 16,
       padding: "24px 28px",
       boxShadow: "0 8px 30px rgba(0,0,0,0.25)"
     }
-  }, /*#__PURE__*/React.createElement(LoadingBallIllustration, {
+  }, /*#__PURE__*/React.createElement(LoadingNote, {
+    label: "Opening match\u2026",
+    size: 44,
+    centered: true,
     style: {
-      margin: "0 auto 12px"
+      padding: 0
     }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "'Inter'",
-      color: COLORS.inkSoft,
-      fontSize: 13
-    }
-  }, "Opening match\u2026"))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
+  }))), alertModal && /*#__PURE__*/React.createElement(AlertModal, {
     title: alertModal.title,
     message: alertModal.message,
     onClose: () => setAlertModal(null)

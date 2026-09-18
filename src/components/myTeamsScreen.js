@@ -230,10 +230,8 @@ export function MyTeamsScreen({
     }
   }, teamsLoading && teams.length === 0 ? /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading your teams…",
-    size: 20,
-    style: {
-      padding: "10px 4px"
-    }
+    size: 28,
+    centered: true
   }) : teams.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, null, "No teams saved yet.", /*#__PURE__*/React.createElement("br", null), "Add one to reuse its line-up in future matches.") : /*#__PURE__*/React.createElement(React.Fragment, null, showSwipeHint && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",

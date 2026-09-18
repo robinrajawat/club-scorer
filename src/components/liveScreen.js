@@ -577,16 +577,11 @@ export function LiveScreen({
       color: COLORS.pitch,
       marginBottom: 20
     }
-  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "40px 20px"
-    }
-  }, /*#__PURE__*/React.createElement(LoadingNote, {
+  }, homeGreeting), rawEmpty && loading && /*#__PURE__*/React.createElement(LoadingNote, {
     label: "Loading…",
-    size: 22,
-    style: { justifyContent: "center" }
-  })), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement(React.Fragment, null,
+    size: 28,
+    centered: true
+  }), rawEmpty && !loading && /*#__PURE__*/React.createElement(EmptyState, null, "Nothing live right now."), !rawEmpty && /*#__PURE__*/React.createElement(React.Fragment, null,
     /*#__PURE__*/React.createElement("div", {
       style: {
         position: "relative",
