@@ -6257,7 +6257,10 @@ function crr(runs, legalBalls, ballsPerOver) {
 // applyBall — the total passed in here is already the final, correct, post-deduction number by
 // the time it gets this far (see confirmCustomRuns).
 function runsDisplay(total, overthrow, shortRun) {
-  const base = overthrow ? `${total - overthrow}+${overthrow}` : String(total);
+  // Math.max(0, ...) guards the same edge case applyBall's own battedRuns floor does -- an
+  // overthrow bigger than `total` (reachable via the custom-runs modal's short-run deduction)
+  // would otherwise print a nonsensical "-1+3" rather than "0+3".
+  const base = overthrow ? `${Math.max(0, total - overthrow)}+${overthrow}` : String(total);
   return shortRun ? `${base} SR` : base;
 }
 function applyBall(inning, event) {
@@ -6382,7 +6385,12 @@ function applyBall(inning, event) {
     // the batsman's own fours/sixes tally and now also for boundaryHitByBat (the drought toast) —
     // an overthrow has nothing to do with the batsman's own timing, same reasoning as why a wide
     // reaching the boundary was already excluded there.
-    battedRuns = event.runs - (event.overthrow || 0);
+    //
+    // Floored at 0 -- an overthrow bonus larger than the completed/short-run-adjusted total (e.g.
+    // the custom-runs modal's "0 completed, short run, 3 overthrow": total 2 sent in, overthrow 3)
+    // would otherwise go negative here and get added onto the striker's own runs below, silently
+    // *decreasing* their score on a ball the team correctly gained runs on.
+    battedRuns = Math.max(0, event.runs - (event.overthrow || 0));
     // event.bigHit marks a six that cleared the tournament's own extra-distance boundary rope
     // (the bigHitRuns house rule) -- its total is whatever bonus value the rule configures (e.g.
     // 10), not 6, so battedRuns === 6 alone would miss it entirely: no six credited, no boundary
@@ -6429,8 +6437,12 @@ function applyBall(inning, event) {
     // BUG FIX: same overthrow-vs-actually-run distinction as the "run" branch above -- event.runs
     // here is the further running beyond the fixed wide penalty, but an overthrow bonus mixed into
     // that total was never physically run by the batsmen, so it must be excluded from the parity
-    // check that decides whether they've crossed.
-    if (((event.runs || 0) - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
+    // check that decides whether they've crossed. Floored at 0, same as battedRuns above -- an
+    // overthrow bonus larger than the running portion (e.g. the custom-runs modal's "0 completed,
+    // short run, 3 overthrow") makes this difference negative, meaning nothing was actually run,
+    // so it must read as even/no-cross (0), not get treated as an odd magnitude via Math.abs() --
+    // that would wrongly rotate the strike on a ball where the batsmen never crossed at all.
+    if (Math.max(0, (event.runs || 0) - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
     // wideNoballCountsAsBall (see isWideNoballLegal) makes this ball count toward the over AND the
     // bowler's own personal figures -- without this, the innings' over-count advanced correctly
     // while the bowler's ballsBowled silently missed credit for every wide that counted, throwing
@@ -6449,8 +6461,10 @@ function applyBall(inning, event) {
     // same as before — only the penalty portion belongs in extras.
     cur.extras.noball += cur.noballRuns || 1;
     // Same reasoning as the "run" branch above — only the batted portion (excluding any overthrow
-    // bonus) counts as a genuine boundary.
-    battedRuns = (event.runs || 0) - (event.overthrow || 0);
+    // bonus) counts as a genuine boundary, and it's floored at 0 for the same reason: an overthrow
+    // larger than the completed/short-run-adjusted total must never subtract from the striker's own
+    // score.
+    battedRuns = Math.max(0, (event.runs || 0) - (event.overthrow || 0));
     if (battedRuns === 4 || battedRuns === 6) boundaryHitByBat = true;
     cur.batsmen[cur.strikerName] = {
       ...cur.batsmen[cur.strikerName],
@@ -6481,8 +6495,10 @@ function applyBall(inning, event) {
     display = `${event.kind === "bye" ? "B" : "Lb"}${runsDisplay(event.runs, event.overthrow, event.shortRun)}`;
     // BUG FIX: same overthrow-vs-actually-run distinction as the other branches above -- a bye/
     // leg-bye's overthrow bonus was never physically run by the batsmen either, so it must be
-    // excluded from the parity check that decides whether they've crossed.
-    if ((event.runs - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
+    // excluded from the parity check that decides whether they've crossed. Floored at 0, same
+    // reason as the wide branch above -- a negative difference means nothing was actually run, so
+    // it must read as even/no-cross, not get treated as an odd magnitude via Math.abs().
+    if (Math.max(0, event.runs - (event.overthrow || 0)) % 2 === 1) strikeChanges = true;
   } else if (event.kind === "wicket") {
     cur.wickets += 1;
     legalBall = event.legal !== false;
