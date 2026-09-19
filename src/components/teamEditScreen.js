@@ -89,8 +89,11 @@ export function TeamEditScreen({
   async function handleSave() {
     if (saving) return;
     setSaving(true);
-    await onSave(buildTeamPayload());
-    setSaving(false);
+    try {
+      await onSave(buildTeamPayload());
+    } finally {
+      setSaving(false);
+    }
   }
   function buildTeamPayload() {
     const savedPlayers = players.map(p => ({
