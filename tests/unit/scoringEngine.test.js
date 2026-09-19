@@ -13,7 +13,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, isInLastOvers, lastBallCommentary, retirementCapDue, retirementCapThreshold } from "../../src/core/scoringEngine.js";
+import { newInning, applyBall, ensureBatsman, ensureBowler, isWideNoballLegal, isInLastOvers, lastBallCommentary, retirementCapDue, retirementCapThreshold, runsDisplay } from "../../src/core/scoringEngine.js";
 
 const rules = { ballsPerOver: 6, wideRuns: 1, noballRuns: 1, freeHit: true };
 
@@ -448,6 +448,42 @@ test("applyBall: an overthrow bonus counts toward the team total but never towar
   const afterNoball = applyBall(nbInn, { kind: "noball", runs: 2, overthrow: 1 });
   assert.equal(afterNoball.runs, 1 /* no-ball penalty */ + 2, "team total includes the penalty and the full runs off the bat/overthrow");
   assert.equal(afterNoball.batsmen.P1.runs, 1, "striker is credited only the 1 run actually off the bat, not the 1-run overthrow bonus");
+});
+
+// BUG FIX: found while auditing the scoring engine -- an overthrow bonus bigger than the
+// completed/short-run-adjusted total (reachable via the custom-runs modal's "0 completed, short
+// run, N overthrow", which sends runs: N-1, overthrow: N) made battedRuns negative, and that
+// negative value was then ADDED to the striker's own runs, silently DECREASING their score on a
+// ball the team correctly gained runs on. Same root cause (raw subtraction, never floored) also
+// broke the wide/bye/leg-bye strike-rotation parity checks, since JS's `%` keeps the dividend's
+// sign (-1 % 2 is -1, not 1), and runsDisplay's "completed+overthrow" split string.
+test("applyBall: an overthrow bigger than the total never decreases the striker's own runs (0 completed + short run + overthrow)", () => {
+  const runInn = freshInning(10, ["P1", "P2"]);
+  runInn.batsmen.P1.runs = 10;
+  // Mirrors matchScreen.js's confirmCustomRuns: completed=0, overthrow=3, shortRun=true ->
+  // rawTotal=3, total=max(0,3-1)=2, so runs:2 is sent in alongside overthrow:3.
+  const after = applyBall(runInn, { kind: "run", runs: 2, overthrow: 3, shortRun: true });
+  assert.equal(after.runs, 2, "team total still gains the full 2");
+  assert.equal(after.batsmen.P1.runs, 10, "striker's own score is unchanged, never decreased");
+
+  const nbInn = freshInning(10, ["P1", "P2"]);
+  nbInn.batsmen.P1.runs = 10;
+  const afterNb = applyBall(nbInn, { kind: "noball", runs: 2, overthrow: 3, shortRun: true });
+  assert.equal(afterNb.batsmen.P1.runs, 10, "same floor applies to the no-ball branch");
+});
+
+test("applyBall: an overthrow bigger than the total never wrongly rotates the strike either (wide/bye/leg-bye)", () => {
+  // 0 completed runs (the overthrow -- 3 -- exceeds the total of 2) means the batsmen never
+  // actually crossed, so this must NOT rotate -- same floor-at-0 reasoning as the run/noball
+  // branches' battedRuns, not the raw difference's magnitude (Math.abs(2-3)=1 would wrongly
+  // rotate here, treating "ran -1 times" as equivalent to "ran 1 time").
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "wide", runs: 2, overthrow: 3, shortRun: true }).strikerName, "P1");
+  assert.equal(applyBall(freshInning(10, ["P1", "P2"]), { kind: "legbye", runs: 2, overthrow: 3, shortRun: true }).strikerName, "P1");
+});
+
+test("runsDisplay: an overthrow bigger than the total shows a floored '0+N', not a negative split", () => {
+  assert.equal(runsDisplay(2, 3, true), "0+3 SR");
+  assert.equal(runsDisplay(2, 1, false), "1+1");
 });
 
 test("newInning: bigHitRuns defaults to null (rule off) and carries through when set", () => {
