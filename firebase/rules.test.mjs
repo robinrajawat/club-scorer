@@ -76,11 +76,14 @@ await t('another account cannot read it', assertFails(getDoc(d(other, 'users/u1/
 await t('another account cannot write it', assertFails(setDoc(d(other, 'users/u1/matches/m5'), match({ id: 'm5' }))));
 await t('signed out cannot read it', assertFails(getDoc(d(anon, 'users/u1/matches/m5'))));
 
-// User directory: opt-in, signed-in only, own entry only.
-await t('a signed-in user reads the directory', assertSucceeds(getDoc(d(other, 'userDirectory/u1'))));
-await t('signed out cannot read the directory', assertFails(getDoc(d(anon, 'userDirectory/u1'))));
-await t('nobody writes someone else\'s entry', assertFails(setDoc(d(other, 'userDirectory/u1'), { uid: 'u1', name: 'X', email: 'b@x.test' })));
-await t('owner removes own entry', assertSucceeds(deleteDoc(d(me, 'userDirectory/u1'))));
+// Retired user directory (2026-11-18): an account may only read or delete its own leftover entry.
+await t('owner reads own leftover directory entry', assertSucceeds(getDoc(d(me, 'userDirectory/u1'))));
+await t('another signed-in user cannot read it', assertFails(getDoc(d(other, 'userDirectory/u1'))));
+await t('signed out cannot read it', assertFails(getDoc(d(anon, 'userDirectory/u1'))));
+await t('nobody lists the directory', assertFails(getDocs(collection(other, 'userDirectory'))));
+await t('nobody publishes a new entry, not even their own', assertFails(setDoc(d(other, 'userDirectory/u2'), { uid: 'u2', name: 'B', email: 'b@x.test' })));
+await t('nobody deletes someone else\'s entry', assertFails(deleteDoc(d(other, 'userDirectory/u1'))));
+await t('owner removes own entry (account deletion)', assertSucceeds(deleteDoc(d(me, 'userDirectory/u1'))));
 
 // Beta requests: own only.
 await t('owner reads own beta request', assertSucceeds(getDoc(d(me, 'betaRequests/u1'))));

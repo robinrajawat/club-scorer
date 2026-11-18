@@ -52,6 +52,12 @@
 //       Deletes one club-hosted or federation-hosted tournament plus its public mirrors. Without
 //       --confirm, only prints what would be deleted.
 //
+//   clear-user-directory [--confirm]
+//       Deletes every doc in /userDirectory, the retired directory that used to publish each
+//       signed-in account's name, email and photo (2026-11-18 data-safety audit; the app no longer
+//       writes or reads it). Run once after that change is deployed. Without --confirm, only prints
+//       how many entries exist and what they are.
+//
 //   nuke-all [--confirm-phrase "DELETE ALL MATCHES AND TOURNAMENTS"]
 //       Deletes EVERY match and EVERY tournament in the project (personal, club-hosted, and
 //       federation-hosted) plus every public mirror collection listed above, across every user.
@@ -257,6 +263,18 @@ async function cmdDeleteHostedTournament(ctx, hostCollection, hostId, tournament
 // public mirror collection -- but deliberately nothing else (clubs/teams/rosters/players/invites/
 // feedback/beta-tester data are all untouched). Reads everything up front so the dry-run output
 // and the actual deletion are guaranteed to act on the exact same snapshot.
+async function cmdClearUserDirectory(ctx, args) {
+  const snap = await ctx.db.collection("userDirectory").get();
+  console.log(`\n${args.confirm ? "Deleting" : "Would delete"} ${snap.size} user directory entr${snap.size === 1 ? "y" : "ies"}:`);
+  snap.docs.forEach(d => console.log(`  - ${d.id}  ${d.data().email || ""}`));
+  if (!args.confirm) {
+    console.log("\nDry run only -- nothing deleted. Re-run with --confirm to actually delete the above.");
+    return;
+  }
+  await deleteRefs(ctx.db, snap.docs.map(d => d.ref));
+  console.log(`\nDone. Deleted ${snap.size} entr${snap.size === 1 ? "y" : "ies"}.`);
+}
+
 async function cmdNukeAll(ctx, args) {
   const [usersPage, clubsSnap, federationsSnap, sharedMatchesSnap, liveViewsSnap, liveMatchesSnap, tournamentViewsSnap, tournamentMatchesSnap, liveTournamentsSnap] = await Promise.all([
     ctx.auth.listUsers(1000),
@@ -355,6 +373,8 @@ async function main() {
     case "delete-federation-tournament":
       if (!rest[0] || !rest[1]) fail("Usage: delete-federation-tournament <federationId> <tournamentId> [--confirm]");
       return cmdDeleteHostedTournament(ctx, "federations", rest[0], rest[1], args);
+    case "clear-user-directory":
+      return cmdClearUserDirectory(ctx, args);
     case "nuke-all":
       return cmdNukeAll(ctx, args);
     default:

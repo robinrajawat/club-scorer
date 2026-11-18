@@ -468,38 +468,16 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // Public user directory — lets a signed-in person be findable by name (see
-    // setMyProfileVisibility in index.html), so a club/federation owner inviting a co-owner or
-    // member isn't limited to "already know their exact email" the way every invite flow otherwise
-    // is. Published automatically once per sign-in now (see cricketScorer.js's own mount effect,
-    // and AccountScreen no longer carries a toggle for it) — this is a name-lookup convenience for
-    // an invite the sender could otherwise send by typing the exact email address anyway, not a
-    // data-access gate, so there's nothing this doc's mere existence unlocks: everything below
-    // still pins every field to the caller's own verified identity, exactly as it did when
-    // publishing was opt-in. A doc here is deleted only via an account being deleted outright (see
-    // deleteUserAccount in index.html) — there is no client path back to unpublished for an
-    // otherwise-active account any more.
-    //
-    // Unlike a club or federation, an account has no separate "owner" who could vouch for it, so
-    // the create/update rule instead pins every field to the caller's own verified identity: name
-    // is theirs to set freely (same as the profile display name elsewhere in the app), but email
-    // must equal their own token email and photoURL must equal their own token's `picture` claim
-    // exactly (or be absent/null) — can't spoof a photo. Nothing here can be used to impersonate or
-    // misdirect an invite to someone else, since every field a searcher would act on is
-    // independently derived from the searcher's own knowledge of the real person, not just trusted
-    // from this doc blindly --
-    // and the actual invite this feeds into still targets the plain `email` field either way,
-    // identical to typing it in by hand.
+    // Retired user directory (2026-11-18 data-safety audit). It used to publish every signed-in
+    // account's name, email and photo here, automatically on each sign-in and listable by any
+    // signed-in user, for a name search in invite flows that were removed in September. Nothing in
+    // the app reads it any more, so the app no longer writes it, and this only lets an account read
+    // or delete its own leftover entry (deleteUserAccount removes it). Existing entries are cleared
+    // with scripts/admin-data-cleanup.js clear-user-directory.
     // ---------------------------------------------------------------------
     match /userDirectory/{uid} {
-      allow get, list: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.uid == uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.email == request.auth.token.email.lower()
-        && request.resource.data.get('photoURL', null) == request.auth.token.get('picture', null);
-      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow get, delete: if request.auth != null && request.auth.uid == uid;
+      allow list, create, update: if false;
     }
 
     // ---------------------------------------------------------------------

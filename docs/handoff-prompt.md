@@ -278,6 +278,13 @@ contradicts the docs above, trust the docs.)*
    "Keep mine" on a scoring conflict overwrites the other device's version,
    but the conflict screen already shows both scores and overs and says so;
    merging ball by ball would be a feature, not a fix.
+5. *Fixed (fourth PR):* the app published every signed-in account's name,
+   email and photo to `/userDirectory` on each sign-in, listable by any
+   signed-in user, for a name search removed with invites in September.
+   It no longer writes it; the rules allow only reading/deleting your own
+   leftover entry. **Owner to-do:** publish the rules, then run
+   `node scripts/admin-data-cleanup.js --key <key.json> clear-user-directory`
+   (dry run), then again with `--confirm`.
 
 **2026-09-01:** Extraction is complete — all scoring/Firestore/standings/DLS
 logic lives in tested `src/core/*.js`, and all ~93 React components live in

@@ -670,18 +670,6 @@ export function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.filter(item => !ids.includes(item.id)));
   }
-  // My own profile is always discoverable by name now -- a name-lookup convenience, not a
-  // data-access gate (firestore.rules keeps write access pinned to the caller's own identity
-  // regardless of this). No user-facing toggle for it any more; publishes to /userDirectory once
-  // per sign-in if not already there, self-healing anyone who opted out (or never opted in) before
-  // this simplification.
-  useEffect(() => {
-    if (!user) return;
-    loadMyProfileVisibility().then(isPublic => {
-      if (!isPublic) setMyProfileVisibility(true);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
   // Activity notifications never require an action the way an invite/request does -- they're
   // informational -- so "needs my attention" here just means unread.
   const unreadActivityCount = myActivity.filter(item => !item.read).length;
