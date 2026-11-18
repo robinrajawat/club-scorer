@@ -60,6 +60,13 @@ Before touching anything, read:
   (`verify-rules`) and locally with `cd firebase && npm ci && npm test`
   (needs Java 11+; `firebase/` has its own package.json and lockfile).
   Add a check for every rules change.
+  **Publishing has silently lagged before:** on 2026-11-18 the Console still
+  held the 2026-09-04 rules (1172 lines), three merged rules changes behind
+  the repo. Before publishing, compare the Console's line count with the
+  repo's and diff against the last published version; after publishing,
+  record it below.
+  **Last published to the Console:** 2026-11-18, the rules from PR #285
+  (`firestore.rules` as of commit `819c4a5`).
 
 **Session-start check:** before starting new work, check for anything the
 previous session left mid-flight — an open PR
