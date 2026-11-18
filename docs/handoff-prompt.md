@@ -246,7 +246,7 @@ contradicts the docs above, trust the docs.)*
 
 **2026-11-18: data-safety audit.** Sync itself is sound (transactional
 `writeSeq` saves, offline outbox, conflict screen). Findings and status:
-1. *Fixed here:* `sharedMatches` accepted any write, so a stale copy could
+1. *Fixed (first PR):* `sharedMatches` accepted any write, so a stale copy could
    save over a newer one; the rules now enforce `writeSeq` (create at 1,
    then exactly +1). `liveMatches` writes are shape-checked (id matches the
    key, expiry within 181 days). Rules tests run in CI (`verify-rules`).
@@ -256,9 +256,15 @@ contradicts the docs above, trust the docs.)*
    and anyone can still overwrite or delete `/liveMatches` feed entries.
    Fully closing either needs an ownership marker or writes through a
    server.
-3. *Next:* account deletion leaves the public directory entry, beta
-   request, `meta/tournaments` and activity behind, and deletes the sign-in
-   account even when cleanup failed.
+3. *Fixed (second PR):* account deletion now erases account matches, every
+   `users/{uid}/meta` doc, the public directory entry, the beta request and
+   beta-access record (if present) and activity addressed to the account;
+   if any of that fails it keeps the sign-in account and says what failed,
+   so a retry finishes. Club/federation leave stays best-effort. Needs the
+   `betaRequests`/`betaTesters` owner-delete rules **published before
+   merging** (an account with a beta record can't finish deletion until
+   then). Test: `tests/unit/deleteUserAccount.test.js` runs the real
+   function against an in-memory stand-in.
 4. *Next:* "Keep mine" on a scoring conflict overwrites the other device's
    balls; the outbox prune can drop an unsynced match that has fallen out of
    the 50-entry local index.

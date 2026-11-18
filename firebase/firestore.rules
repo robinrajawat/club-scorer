@@ -254,6 +254,8 @@ service cloud.firestore {
       allow get: if request.auth != null && (request.auth.uid == uid || isAppAdminAuth());
       allow list: if isAppAdminAuth();
       allow write: if isAppAdminAuth();
+      // The account itself may remove its own record when it deletes the account (2026-11-18).
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // ---------------------------------------------------------------------
@@ -273,7 +275,8 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.email is string
         && request.resource.data.email.size() > 0;
-      allow delete: if isAppAdminAuth();
+      // Admins, or the account itself when it deletes the account (2026-11-18).
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAppAdminAuth());
     }
 
     match /clubs/{clubId} {

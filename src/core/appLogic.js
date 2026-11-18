@@ -864,15 +864,48 @@ async function exportUserData() {
 // which a plain Firestore query by uid could never find (same ownerless-by-design limitation as
 // exportUserData above). Matches only ever seen on a DIFFERENT device won't be reachable from
 // here; that's a real limitation of the open-code sharing model, not an oversight.
+//
+// Everything this account owns is erased (2026-11-18 data-safety audit, GDPR's right to erasure):
+// account matches, every users/{uid}/meta doc (profile, teams, tournaments), the public directory
+// entry, the beta request and beta-access record (only if they exist; deleting them needs the
+// matching firestore.rules owner-delete branches), and activity items addressed to this account.
+// If any of that fails, the sign-in account is KEPT and this throws, so trying again finds the
+// rest instead of leaving personal data behind that nobody can reach any more. Leaving clubs and
+// federations stays best-effort (logged, not blocking): it removes this uid from shared lists
+// rather than deleting this account's own data, and the federation rule it relies on may not be
+// published (see below).
 async function deleteUserAccount(localMatchIds) {
   const uid = auth.currentUser.uid;
+  const failures = [];
+  const attempt = async (label, run) => {
+    try {
+      await run();
+    } catch (e) {
+      failures.push(label);
+      console.error("delete account:", label, "failed", e);
+    }
+  };
+  const deleteAll = async query => {
+    const snap = await query.get();
+    await Promise.all(snap.docs.map(d => d.ref.delete()));
+  };
+  const deleteIfExists = async ref => {
+    const doc = await ref.get();
+    if (doc.exists) await ref.delete();
+  };
   for (const id of localMatchIds) {
     await deleteMatch(id);
   }
-  const matchesSnap = await db.collection("users").doc(uid).collection("matches").get();
-  await Promise.all(matchesSnap.docs.map(d => d.ref.delete().catch(e => console.error("delete account: match cleanup failed", e))));
-  await db.collection("users").doc(uid).collection("meta").doc("teams").delete().catch(e => console.error("delete account: teams cleanup failed", e));
-  await db.collection("users").doc(uid).collection("meta").doc("profile").delete().catch(e => console.error("delete account: profile cleanup failed", e));
+  const userRef = db.collection("users").doc(uid);
+  await attempt("matches", () => deleteAll(userRef.collection("matches")));
+  await attempt("profile, teams and tournaments", () => deleteAll(userRef.collection("meta")));
+  await attempt("public profile", () => db.collection("userDirectory").doc(uid).delete());
+  await attempt("beta request", () => deleteIfExists(db.collection("betaRequests").doc(uid)));
+  await attempt("beta access", () => deleteIfExists(db.collection("betaTesters").doc(uid)));
+  await attempt("notifications", () => deleteAll(db.collection("activity").where("forUid", "==", uid)));
+  if (failures.length) {
+    throw new Error(`Couldn't remove everything (${failures.join(", ")}). Your account is still here, so nothing is lost: try again, or contact support if this keeps happening.`);
+  }
   // Leave every club this account is a member of. Both memberUids AND coOwnerUids must be
   // cleared in the SAME write — the clubs/{clubId} update rule's self-leave branch (C) requires
   // both to change together; a memberUids-only write (as this used to do) fails that branch
