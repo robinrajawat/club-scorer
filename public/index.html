@@ -1427,11 +1427,6 @@ const LIVE_MATCH_FEED_TTL_DAYS = 1;
 // of every match anyone's ever scored.
 const RECENT_MATCH_RETENTION_DAYS = 3;
 const TOURNAMENT_VIEW_TTL_DAYS = 180;
-// clubJoinCodes (club member/co-owner email invites) already had a 7-day expiry — just as a plain
-// millis number, checked only in app code, never actually turning into deletion. Kept at the same
-// 7 days, now as a real Timestamp so a native TTL policy can auto-delete the doc once it's stale,
-// same as the three above.
-const CLUB_INVITE_TTL_DAYS = 7;
 function ttlTimestamp(days) {
   return firebase.firestore.Timestamp.fromMillis(Date.now() + days * 24 * 60 * 60 * 1000);
 }
@@ -3162,14 +3157,6 @@ async function saveTeams(teams) {
 // be removed except by deleting the club outright. Everyone else in memberUids is a plain member:
 // they can be picked for rosters/scoring but cannot rename the club, edit its description, manage
 // teams or tournaments, invite anyone, or remove members.
-//
-// Every invite in this app — becoming a member, or becoming a co-owner — is addressed to one
-// specific email address and can only be redeemed by someone signed in as that exact email.
-// Both roles go through the same unified coOwnerInvites collection now (see inviteCoOwner
-// below, role: "member" or "coOwner") — no bearer code to copy/send out-of-band, the invite
-// just shows up in the recipient's Inbox. clubJoinCodes and joinClubWithCode below stay alive
-// read/redeem-only, purely so any already-outstanding member-role code from before this
-// migration still works until it's used or expires; nothing mints a new one any more.
 // GENERATED-FN-START: isClubOwner
 function isClubOwner(club, uid) {
   return !!club && !!uid && (club.ownerUid === uid || (club.coOwnerUids || []).includes(uid));
@@ -3188,49 +3175,6 @@ async function loadClubs() {
     return [];
   }
 }
-// Owner-only.
-// Owner-only.
-// Owner-only. Stored alongside lat/lng (from the same Nominatim search as the venue field, see
-// searchAddress) so this club's ground can be offered as a ready-made suggestion when setting a
-// fixture's venue, rather than every fixture re-searching the same address from scratch.
-// Downscales/re-encodes an image client-side before it's ever stored -- a phone photo can easily
-// be 4000px/several MB, and a logo only ever renders at a few dozen px on screen, so keeping the
-// original would be enormous overkill. Caps the longest edge at maxSize and re-encodes as JPEG at
-// a fixed quality, which is more than enough fidelity for a small circular logo and keeps the
-// output predictably small regardless of the source format (HEIC exports from iOS aside -- the
-// browser's own <img> decoder handles whatever format the file actually is, this only touches the
-// canvas/output stage). Returns a base64 data URL rather than a Blob -- see uploadClubLogo below
-// for why: this gets embedded directly in the club's own Firestore document instead of uploaded
-// to Storage, so it needs to already be a string, not a binary object with its own URL.
-// Stored directly on the club document as a base64 data URL rather than uploaded to Firebase
-// Storage -- Storage now requires the Blaze (pay-as-you-go) plan as of Feb 2026, and this project
-// is staying on Spark, so a real upload would just fail (see CLUB_LOGO_UPLOAD_ENABLED). Capped at
-// 128px/quality 0.85, which comes out to only a few KB even for a busy source image -- nowhere
-// near Firestore's 1MB document limit, and a logo only ever needs to render at avatar sizes
-// (24-48px) anywhere in this app, so 128px leaves real headroom without bloating every read of
-// the club document. Owner/co-owner only, enforced by firestore.rules' existing club-update
-// rule (isClubOwner) -- no separate permission model needed the way Storage's own rules required.
-// Owner-only. A club's umpire list is just names — no accounts, no email, nothing an umpire ever
-// signs into. It exists purely so match setup can offer a pick-from-list-or-type-your-own field
-// (see the umpireList datalist on SetupScreen) instead of retyping the same few names every week,
-// and so the Record Book can tally "matches umpired" per name (see computeClubRecords). Kept as a
-// plain array on the club doc, not its own subcollection — there's no per-umpire data beyond the
-// name itself to justify one.
-// Owner/co-owner only. A club's private player pool -- people available to add onto ANY of the
-// club's own teams, kept as a plain array on the club doc (same reasoning as umpires: no
-// per-player data rich enough yet to justify a subcollection). Deliberately separate from the
-// cross-club "public directory" (loadPublicPlayers/publishPlayer) -- that one is keyed by email
-// and exists so a DIFFERENT club can find and borrow someone; most club rosters are typed in from
-// a spreadsheet or membership list where not everyone has an email on file, so the pool needs
-// none at all. Accepts one player or many (bulk paste) in a single call. arrayUnion is safe here
-// with no prior read -- each entry gets its own uid() id, so two callers adding at once can't
-// clobber each other the way a read-modify-write could; updatePoolPlayer/removePoolPlayer below
-// DO need a transaction since they target one existing entry inside the array by id.
-// Owner/co-owner only. Edits one pool entry in place — a transaction, not arrayUnion, since
-// this replaces one element inside the array rather than appending a new one.
-// Owner/co-owner only. Removing someone from the pool doesn't touch any team roster that already
-// added them — same one-way-copy relationship as removing a published player from the cross-club
-// directory (see deletePlayer): a roster row is a snapshot taken at add time, never re-synced.
 // Splits one CSV line respecting RFC 4180 quoting -- naive comma-split breaks the moment any
 // field is quoted, whether because it genuinely contains a comma (a team name like "Ikast-Brande,
 // Denmark") or because the spreadsheet app that saved it just quotes every field regardless. Only
@@ -3418,40 +3362,10 @@ function parseBulkPlayers(text) {
   return rows;
 }
 // GENERATED-FN-END: parseBulkPlayers
-// Owner-only (club or federation, per `scope`). Unified invite, addressed to one email — for a
-// club, `role` is "member" (view access only) or "coOwner" (full manage rights); a federation has
-// no plain-member tier, so it's always "coOwner" there. Replaces minting a role-specific
-// clubJoinCodes/federationCoOwnerInviteCodes doc (formerly inviteClubMemberByEmail/
-// inviteClubCoOwnerByEmail/inviteFederationCoOwnerByEmail, all retired in favor of this) with a
-// real coOwnerInvites record the recipient's own client can query by their own email — see
-// loadMyCoOwnerInvites below. No bearer code to generate, copy, or send out-of-band: the invitee
-// sees it in their Inbox the next time they open it while signed in with that exact email. See
-// docs/co-owner-invites-plan.md for the full design this mirrors (the same
-// federationJoinCodes -> federationRequests migration, applied here; member-role invites joined
-// this same collection later, see firestore.rules for the role-aware accept rules).
-// Loads every coOwnerInvites row that involves me: ones I personally sent (createdBy == my uid) or
-// ones addressed to me (my own signed-in email) — feeds the Inbox screen's co-owner-invites section
-// and its notification badge.
-//
-// BUG FIX: this used to query `where("entityId", "in", entityIds)` for "ones I sent" — filtering by
-// the club/federation I own rather than by who actually created the invite. That query can never
-// succeed under firestore.rules' coOwnerInviteCanList: Firestore can only allow a `list`/query
-// request when it can prove, from the query's OWN filter alone, that every possible result document
-// satisfies the rule — and neither OR-branch of coOwnerInviteCanList (recipient-by-email,
-// creator-by-uid) says anything about entityId, so an entityId-filtered query is categorically
-// unprovable and gets denied outright, regardless of what data actually exists (confirmed directly:
-// even a `where("entityId","==",...)` query for a real, owned club failed identically to the `in`
-// version). Querying `createdBy == my uid` instead structurally matches the rule's creator-by-uid
-// branch, so Firestore can prove it and the query succeeds.
-//
-// Real, deliberate narrowing versus the old (never-actually-working) intent: a co-owner who didn't
-// personally create a given invite still won't see it here, only its actual creator will — same gap
-// already flagged in firestore.rules' comment on coOwnerInviteCanList. Closing that would mean
-// denormalizing owner/co-owner uids onto the invite doc itself at send time.
 // Loads every activity notification addressed to me -- see /activity in firestore.rules for the
 // full model. A single, get()-free where("forUid","==",myUid) query, so no list-rule circularity
-// risk here at all (see the coOwnerInvites/federationRequests sagas above for what that would look
-// like if forUid were instead something requiring a cross-document lookup to verify).
+// risk here at all (a rule that needed a cross-document lookup to verify forUid couldn't allow a
+// list query like this).
 async function loadMyActivity() {
   if (!auth.currentUser) return [];
   try {
@@ -3504,56 +3418,6 @@ function notifyActivity(forUid, kind, scope, entityId, entityName, extra) {
     ...(extra || {})
   }).catch(e => console.error("notifyActivity failed", kind, scope, entityId, e));
 }
-// Recipient accepts or declines a still-pending invite addressed to them. Accepting adds them to
-// the target club/federation's coOwnerUids (and, for a club, memberUids too — co-owner implies
-// membership) BEFORE flipping the invite itself to "accepted", deliberately in that order — see
-// the coOwnerInviteAccepted branches on clubs/{clubId} and federations/{federationId} in
-// firestore.rules for why. Same "recipient already has implicit write access to add themselves
-// once accepted" pattern as respondFederationRequest's federation_to_club accept branch. A
-// club-scope invite with role "member" (legacy invites with no role field are treated as
-// "coOwner") only ever grants memberUids — never coOwnerUids.
-//
-// Notifies on the way out: a decline notifies just the invite's sender ("invite_response"); an
-// accept notifies every current owner-tier uid of the entity (re-read after the membership write,
-// so it reflects who actually administers it right now, the accepting person included if this was
-// a coOwner-role invite) with "joined" -- broader than just the sender, since anyone who
-// co-administers the club/federation would want to know, not only whoever happened to send this
-// particular invite. Deliberately not both: an accept already reaches the sender via the "joined"
-// broadcast (they're owner-tier), so a separate "invite_response" for the same event would just be
-// the same news twice.
-// Sender cancels their own still-pending invite.
-// Sender clearing their own resolved (accepted/declined/cancelled) invite's acknowledgement card
-// -- see the delete rule on /coOwnerInvites for why this only ever works once it's resolved.
-// Owner-only (any owner/co-owner of the club, same as every other club-level action — unlike
-// federation invites, club invites aren't locked to whoever personally sent them). Deletes the
-// join code itself, so it can never be redeemed after this, and drops it from the club's
-// pendingInvites list.
-// Redeems either kind of invite above. The code's own `role` field decides whether the caller
-// lands in memberUids only, or in memberUids + coOwnerUids — the Firestore rule re-derives and
-// checks the exact same thing server-side (see clubs/{clubId} update rule, branch B).
-// Owner-only.
-// Owner-only.
-// Any member can call this for THEMSELVES only (see clubs/{clubId} update rule, branch E) — it
-// self-heals a stale memberNames entry, e.g. one stored blank/generic because the Google account
-// had no display name set back when they joined. Silent best-effort: called automatically when a
-// club's member list is viewed and the stored name doesn't match what we'd show now, so nobody
-// has to notice and go fix it themselves.
-// Owner-only. Revokes co-ownership without removing the person from the club — they stay a plain
-// member. Can't be used on ownerUid itself (that's not a co-owner, and has no removal path short
-// of deleting the club).
-// Owner-only. Cleans up the teams and tournaments subcollections, any federation directory
-// entries, and any player profiles this club administers as home club, first — Firestore never
-// cascade-deletes subcollections on its own, and once the club doc is gone no rule would ever
-// again grant access to those orphaned docs anyway (the federation-teams delete rule needs to
-// read the club's own memberUids, and the players delete/update rules need to read the home
-// club's ownerUid, both of which require the club doc to still exist), so this has to happen
-// before, not after, the club doc itself is removed. The players/{email} cleanup specifically
-// matters: without it, a player this club published would be left with a homeClubId pointing at
-// nothing, and since editing OR deleting that doc both require isClubOwner on a club doc that no
-// longer exists, the record becomes permanently stuck -- unrecoverable by anyone, including the
-// person it describes, forever. Deleting it here (rather than trying to reassign homeClubId to
-// some other valid owner, which doesn't really exist) at least leaves the email free to be
-// published fresh by some other club later.
 async function loadClubTeams(clubId) {
   try {
     const snap = await db.collection("clubs").doc(clubId).collection("teams").get();
@@ -3566,37 +3430,6 @@ async function loadClubTeams(clubId) {
     return [];
   }
 }
-// Owner-only.
-// Owner-only.
-
-// ---------- Availability polls ----------
-// A poll asks a club team's roster who's around, either for a specific fixture date or as a
-// general "who's free this month" — captain/owner sends a link (no different, distribution-wise,
-// from "Share live score"), and anyone with it can respond with their name, Yes/No/Maybe, and an
-// optional note, no account needed. Deliberately club-team-only, not offered for a personal
-// (non-club) team: a personal team's roster is just names typed in by the one person scoring with
-// it, not other app users there'd be anyone else to poll.
-//
-// Storage is split in two, mirroring the sharedMatches/tournamentMatches split elsewhere in this
-// file: the actual poll (question, fixtureDate, responses) lives in the open-by-code
-// /availabilityPolls/{code} collection — knowledge of the code is the credential, same trust
-// model as a match code — while a lightweight pointer ({code, question, fixtureDate, createdAt},
-// no responses) lives in /clubs/{clubId}/teams/{teamId}/polls/{code}, gated by ordinary club
-// membership, so "list every poll this team has sent" never needs to query the open collection
-// directly (which firestore.rules deliberately never allows, same reasoning as sharedMatches).
-// Shared by UpcomingFixtureCard and FixtureRow: a small "N yes · N no" glance next to the Send
-// poll button, for the one poll that's actually pinned to this exact fixture (p.fixtureId ===
-// fixtureId — a real match, not a guess the way the now-removed match-card summary had to be,
-// since a match has no fixtureId to pin to but a fixture always does). Deliberately only returns
-// an entry once that poll has at least one response — an empty "0 yes · 0 no" next to a
-// just-sent poll would be noise, not signal, on a card that already shows the send button itself.
-// No auth required, by design — see the module comment above. `name` is whatever the respondent
-// picked from the roster or typed themselves; submitting again under the same name overwrites
-// their own previous answer (updating your RSVP), which is the whole point of allowing a resend.
-// Deletes every availability poll ever sent for one team — both the pointer index doc here and
-// the real poll (with all its responses) at /availabilityPolls/{code}, since Firestore never
-// cascade-deletes a subcollection just because its parent doc is about to be deleted. Shared by
-// deleteClubTeam (one team) and deleteClub (every team it's about to delete).
 
 // ---------- Federations ----------
 // A federation (e.g. "DCF") is a light umbrella tag that clubs opt into via an email-locked
@@ -3755,84 +3588,6 @@ async function loadMyOwnedFederations(uid) {
     return [];
   }
 }
-// Owner-only. Mints an invite addressed to one email — whoever redeems it (signed in as that
-// exact email, on behalf of one of their own clubs) affiliates that club with the federation.
-// A CLUB affiliates with a federation (not a user) — clubId picks which of the caller's clubs is
-// joining, and the caller must be signed in as the exact email the invite was addressed to. Bulk-
-// mirrors that club's existing teams into the federation's directory immediately, so other member
-// clubs see them right away instead of waiting for each team to be re-saved.
-// Owner-only (of the CLUB leaving).
-// ---------- Discoverability: public club/federation directories, and the request workflow that
-// replaces the old federationJoinCodes email/code flow (see firestore.rules for the full model).
-// ----------
-// Owner-only. Flips a club's discoverability. A public club mirrors a lightweight entry (name +
-// owner name only, never the roster) into /clubDirectory so a federation owner can find it by
-// search; the mirror is deleted the moment the club goes private again.
-// Owner-only. Same idea as setClubVisibility, for a federation.
-// Loads every public federation. Filtering by name happens client-side (the directory is small —
-// a handful of federations, not thousands — so a full read + client filter is simpler and more
-// forgiving than a prefix range query).
-// Loads every public club. See searchPublicFederations for why this is a full read + client filter.
-// Loads every person who's opted into the public user directory. Same "small collection, full
-// read + client-side filter" shape as searchPublicClubs/searchPublicFederations/loadPublicPlayers
-// above -- used to find someone to invite by name rather than by already knowing their email.
-// Club owner requesting to join a PUBLIC federation, or a federation owner inviting a PUBLIC
-// club — direction is "club_to_federation" or "federation_to_club". Only ever creates one pending
-// request; see firestore.rules for who's allowed to accept/decline/cancel it.
-//
-// toOwnerUids snapshots the RECEIVING side's owner/co-owner uids at send time -- see
-// firestore.rules' BUG FIX comment on this collection for why: `list` can't be gated on a live
-// get()-based ownership check (same wall coOwnerInvites hit), so this is what makes the request
-// findable by its recipient at all. For "club_to_federation" the sender already has open read
-// access to the federation doc to read this from; for "federation_to_club" the sender (a
-// federation owner) is never a member of the target club, so this reads /clubDirectory instead
-// (see its rules comment for why that mirror carries ownerUid/coOwnerUids in the first place).
-// Receiving side accepts or declines a pending request. Accepting a federation_to_club request
-// (I'm the club owner) finishes the join immediately, since I already have full write access to
-// my own club's federationIds. Accepting a club_to_federation request (I'm the federation owner)
-// only flips status — the requesting club's own owner completes the join, see
-// completeAcceptedFederationRequest.
-// Sending side cancels their own still-pending request.
-// The club owner's side of finishing an ACCEPTED club_to_federation request — see the big comment
-// on /federationRequests in firestore.rules for why this is a separate step from the federation
-// owner's accept.
-// Loads every federationRequests row touching me — ones I sent (fromUid == my uid) or ones
-// addressed to a club/federation I own/co-own as of when they were sent (toOwnerUids -- see
-// requestFederationAffiliation's comment and firestore.rules' BUG FIX comment on this collection
-// for why it's no longer a clubId/federationId query: neither field is something a get()-free
-// list rule can vouch for, so that shape was permission-denied unconditionally). Used for both the
-// notification badge count and the Requests inbox.
-// Owner-only.
-// Owner-only.
-// Owner-only. A federation owner's "remove club" action. Deliberately does NOT touch the target
-// club's own federationIds — this app never lets one club's write touch another club's document
-// (see the clubs/{clubId} rule notes), so instead the federation blocklists the club on its OWN
-// doc (kickedClubIds) and wipes its current directory entries. The kickedClubIds check in the
-// federations/{id}/teams rule then blocks that club from ever re-publishing into this federation
-// again, even though its own federationIds array still (harmlessly) lists it as affiliated — the
-// club's own owner can still self-leave any time to clear that stale tag from their side.
-// Owner/co-owner removing a DIFFERENT co-owner, or a co-owner removing THEMSELVES (self-leave) --
-// see federations/{federationId} update rule branch (C) for why both are the same write. Doesn't
-// touch the federation's clubs/teams directory.
-// Publishes/refreshes every one of this club's teams into one federation's directory. Called
-// right after joining; harmless to re-run any time to repair drift.
-// Writes/removes this club's entry in a federation's member directory (see
-// federations/{federationId}/members/{clubId} in firestore.rules for why this doc exists
-// separately from affiliatedClubIds). Called right after affiliatedClubIds itself is confirmed to
-// contain this club, on both join paths, and mirrored on both leave paths (self-leave and being
-// kicked) so the directory never outlives the actual affiliation. Best-effort: a failure here
-// leaves the club correctly affiliated but temporarily unnamed in "All member clubs", same
-// trade-off mirrorClubTeamsIntoFederation already accepts for team data.
-// Loads a federation's member directory — see syncFederationMembership/firestore.rules for what
-// this doc represents. This, not federations/{id}/teams, is the authoritative name source for
-// "All member clubs"; team data is only a fallback for clubs that affiliated before this existed.
-// Keeps a single team's directory entries in sync across every federation the team's club
-// currently belongs to. Called after every club team save/delete. Deliberately fire-and-forget
-// (not awaited by the caller) — a save/delete should feel instant even if this trailing sync is
-// still in flight, and a failure here just means the directory is briefly stale, not that the
-// team save itself failed.
-// Re-stamps this club's denormalized name onto its existing directory entries after a rename —
-// otherwise other clubs would keep seeing the old name until each team happened to be re-saved.
 
 // ---------- Tournaments ----------
 // A tournament is a name plus a list of participating team names — deliberately just names, not
