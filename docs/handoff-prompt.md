@@ -56,6 +56,10 @@ Before touching anything, read:
   here has zero effect until it's manually pasted into Firebase Console →
   Firestore Database → Rules → Publish. Say so explicitly if you touch this
   file, so it doesn't get mistaken for something CI or a push handles.
+  `firebase/rules.test.mjs` tests them in the Firestore emulator, in CI
+  (`verify-rules`) and locally with `cd firebase && npm ci && npm test`
+  (needs Java 11+; `firebase/` has its own package.json and lockfile).
+  Add a check for every rules change.
 
 **Session-start check:** before starting new work, check for anything the
 previous session left mid-flight — an open PR
@@ -218,7 +222,8 @@ a separate follow-up PR.
   `src/core/`) plus `tests/unit/components/*.test.js` (covers
   `src/components/`), and `tests/README.md`.
 - `firebase/` — `firestore.rules` and `storage.rules`, manually pasted into
-  the Firebase Console (not auto-deployed).
+  the Firebase Console (not auto-deployed), plus the emulator rules tests
+  (`rules.test.mjs`, own `package.json`).
 - `ios/` — parked native SwiftUI rewrite; don't touch without explicit
   instruction (see above).
 - `scripts/generate.js` — splices `src/core/*.js` into `public/index.html`.
@@ -238,6 +243,25 @@ a separate follow-up PR.
 
 *(Update this section at the end of every session. If it looks stale or
 contradicts the docs above, trust the docs.)*
+
+**2026-11-18: data-safety audit.** Sync itself is sound (transactional
+`writeSeq` saves, offline outbox, conflict screen). Findings and status:
+1. *Fixed here:* `sharedMatches` accepted any write, so a stale copy could
+   save over a newer one; the rules now enforce `writeSeq` (create at 1,
+   then exactly +1). `liveMatches` writes are shape-checked (id matches the
+   key, expiry within 181 days). Rules tests run in CI (`verify-rules`).
+   **The rules must be published in the Firebase Console to take effect.**
+2. *Open, owner decision:* anyone with a scoring code can still delete the
+   shared match (deleteMatch on a teammate's phone deletes it for everyone),
+   and anyone can still overwrite or delete `/liveMatches` feed entries.
+   Fully closing either needs an ownership marker or writes through a
+   server.
+3. *Next:* account deletion leaves the public directory entry, beta
+   request, `meta/tournaments` and activity behind, and deletes the sign-in
+   account even when cleanup failed.
+4. *Next:* "Keep mine" on a scoring conflict overwrites the other device's
+   balls; the outbox prune can drop an unsynced match that has fallen out of
+   the 50-entry local index.
 
 **2026-09-01:** Extraction is complete — all scoring/Firestore/standings/DLS
 logic lives in tested `src/core/*.js`, and all ~93 React components live in
