@@ -265,9 +265,12 @@ contradicts the docs above, trust the docs.)*
    merging** (an account with a beta record can't finish deletion until
    then). Test: `tests/unit/deleteUserAccount.test.js` runs the real
    function against an in-memory stand-in.
-4. *Next:* "Keep mine" on a scoring conflict overwrites the other device's
-   balls; the outbox prune can drop an unsynced match that has fallen out of
-   the 50-entry local index.
+4. *Fixed (third PR):* the outbox prune could drop the queued write of an
+   unsynced match that had fallen out of the 50-entry local index;
+   `lsSetIndex` now keeps every match still waiting to sync. *Left as is:*
+   "Keep mine" on a scoring conflict overwrites the other device's version,
+   but the conflict screen already shows both scores and overs and says so;
+   merging ball by ball would be a feature, not a fix.
 
 **2026-09-01:** Extraction is complete — all scoring/Firestore/standings/DLS
 logic lives in tested `src/core/*.js`, and all ~93 React components live in
