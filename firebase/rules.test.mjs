@@ -29,6 +29,11 @@ await env.withSecurityRulesDisabled(async (c) => {
   await setDoc(doc(db, 'users/u1/matches/m5'), match({ id: 'm5', writeSeq: 3 }));
   await setDoc(doc(db, 'userDirectory/u1'), { uid: 'u1', name: 'A', email: 'a@x.test' });
   await setDoc(doc(db, 'betaRequests/u1'), { uid: 'u1', email: 'a@x.test' });
+  await setDoc(doc(db, 'betaRequests/u2'), { uid: 'u2', email: 'b@x.test' });
+  await setDoc(doc(db, 'betaTesters/u1'), { uid: 'u1' });
+  await setDoc(doc(db, 'betaTesters/u2'), { uid: 'u2' });
+  await setDoc(doc(db, 'users/u1/meta/tournaments'), { list: [] });
+  await setDoc(doc(db, 'activity/a1'), { forUid: 'u1', actorUid: 'u2', kind: 'joined' });
 });
 
 // sharedMatches: the code is the capability (no sign-in needed), list is never allowed, and every
@@ -80,6 +85,17 @@ await t('owner removes own entry', assertSucceeds(deleteDoc(d(me, 'userDirectory
 // Beta requests: own only.
 await t('owner reads own beta request', assertSucceeds(getDoc(d(me, 'betaRequests/u1'))));
 await t('another account cannot read it', assertFails(getDoc(d(other, 'betaRequests/u1'))));
+await t('another account cannot delete it', assertFails(deleteDoc(d(other, 'betaRequests/u1'))));
+await t('owner deletes own beta request (account deletion)', assertSucceeds(deleteDoc(d(me, 'betaRequests/u1'))));
+await t('a user cannot grant themselves beta access', assertFails(setDoc(d(me, 'betaTesters/u1'), { uid: 'u1' })));
+await t('another account cannot remove someone\'s beta access', assertFails(deleteDoc(d(other, 'betaTesters/u1'))));
+await t('owner removes own beta access (account deletion)', assertSucceeds(deleteDoc(d(me, 'betaTesters/u1'))));
+
+// What account deletion removes, as the owner: every meta doc and activity addressed to them.
+await t('owner lists own meta docs', assertSucceeds(getDocs(collection(me, 'users/u1/meta'))));
+await t('owner deletes own tournaments meta', assertSucceeds(deleteDoc(d(me, 'users/u1/meta/tournaments'))));
+await t('another account cannot delete someone\'s activity item', assertFails(deleteDoc(d(other, 'activity/a1'))));
+await t('owner deletes activity addressed to them', assertSucceeds(deleteDoc(d(me, 'activity/a1'))));
 
 // Feedback: anyone files, nobody else reads.
 await t('signed out files feedback', assertSucceeds(setDoc(d(anon, 'feedback/f1'), { kind: 'error', message: 'boom' })));
