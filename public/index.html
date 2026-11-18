@@ -2145,7 +2145,13 @@ function lsGetIndex() {
 // GENERATED-FN-END: lsGetIndex
 // GENERATED-FN-START: lsSetIndex
 function lsSetIndex(idx) {
-  const result = lsSetItem(`${LS_PREFIX}matches-index`, JSON.stringify(idx.slice(0, 50)));
+  // The 50 newest, plus any older match still waiting to sync (2026-11-18 data-safety audit):
+  // pruneOrphanedPendingWrites treats a queued write whose match isn't in this index as an orphan
+  // and deletes it, so a capped-off unsynced match would lose its only copy of the not-yet-sent
+  // scoring. Keeping those pointers keeps the match visible and its queued write safe.
+  const pending = new Set(lsPendingIds());
+  const kept = idx.filter((m, i) => i < 50 || pending.has(m.id));
+  const result = lsSetItem(`${LS_PREFIX}matches-index`, JSON.stringify(kept));
   if (!result.ok) console.error("index save failed", result.error);
 }
 // GENERATED-FN-END: lsSetIndex

@@ -115,6 +115,18 @@ test("queuePendingWrite: queueing the same match id twice doesn't duplicate the 
   assert.deepEqual(lsPendingIds(), ["m1"]);
 });
 
+test("lsSetIndex: an older match still waiting to sync stays in the index past the 50 cap, so its queued write survives the prune", () => {
+  queuePendingWrite({ id: "m55", teamA: "A" });
+  const long = Array.from({ length: 60 }, (_, i) => ({ id: "m" + i }));
+  lsSetIndex(long);
+  const ids = lsGetIndex().map(m => m.id);
+  assert.equal(ids.length, 51);
+  assert.ok(ids.includes("m55"));
+  assert.ok(!ids.includes("m56"));
+  pruneOrphanedPendingWrites();
+  assert.deepEqual(lsPendingIds(), ["m55"]);
+});
+
 test("pruneOrphanedPendingWrites: drops a queued write for a match no longer in the index", () => {
   queuePendingWrite({ id: "orphan", teamA: "A" });
   queuePendingWrite({ id: "kept", teamA: "B" });
