@@ -3773,52 +3773,6 @@ async function loadMyOwnedFederations(uid) {
 // a handful of federations, not thousands — so a full read + client filter is simpler and more
 // forgiving than a prefix range query).
 // Loads every public club. See searchPublicFederations for why this is a full read + client filter.
-// Publishes/unpublishes MY OWN account into the public user directory, so a club/federation owner
-// inviting a co-owner or member can find me by name instead of needing to already know my exact
-// email address. Every field comes straight from my own signed-in identity, never user-typed --
-// see /userDirectory's rules comment for why that matters. Deleted outright when opting out
-// (rather than e.g. a `public: false` flag) so an unpublished profile leaves nothing behind to
-// find even by direct id -- same shape as setClubVisibility/setFederationVisibility.
-async function setMyProfileVisibility(isPublic) {
-  if (!auth.currentUser) return {
-    ok: false,
-    error: "Sign in first."
-  };
-  try {
-    if (isPublic) {
-      await db.collection("userDirectory").doc(auth.currentUser.uid).set({
-        uid: auth.currentUser.uid,
-        name: auth.currentUser.displayName || auth.currentUser.email || "Someone",
-        email: (auth.currentUser.email || "").toLowerCase(),
-        photoURL: auth.currentUser.photoURL || null,
-        updatedAt: Date.now()
-      });
-    } else {
-      await db.collection("userDirectory").doc(auth.currentUser.uid).delete();
-    }
-    return {
-      ok: true
-    };
-  } catch (e) {
-    console.error("setMyProfileVisibility failed", isPublic, e);
-    return {
-      ok: false,
-      error: e.message || "Couldn't update your visibility."
-    };
-  }
-}
-// Whether I've already published myself to the public user directory -- read on Account screen
-// mount to show the toggle in the right state.
-async function loadMyProfileVisibility() {
-  if (!auth.currentUser) return false;
-  try {
-    const doc = await db.collection("userDirectory").doc(auth.currentUser.uid).get();
-    return doc.exists;
-  } catch (e) {
-    console.error("loadMyProfileVisibility failed", e);
-    return false;
-  }
-}
 // Loads every person who's opted into the public user directory. Same "small collection, full
 // read + client-side filter" shape as searchPublicClubs/searchPublicFederations/loadPublicPlayers
 // above -- used to find someone to invite by name rather than by already knowing their email.
@@ -31342,18 +31296,6 @@ function CricketScorer() {
     const ids = Array.isArray(activityIds) ? activityIds : [activityIds];
     setMyActivity(items => items.filter(item => !ids.includes(item.id)));
   }
-  // My own profile is always discoverable by name now -- a name-lookup convenience, not a
-  // data-access gate (firestore.rules keeps write access pinned to the caller's own identity
-  // regardless of this). No user-facing toggle for it any more; publishes to /userDirectory once
-  // per sign-in if not already there, self-healing anyone who opted out (or never opted in) before
-  // this simplification.
-  useEffect(() => {
-    if (!user) return;
-    loadMyProfileVisibility().then(isPublic => {
-      if (!isPublic) setMyProfileVisibility(true);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
   // Activity notifications never require an action the way an invite/request does -- they're
   // informational -- so "needs my attention" here just means unread.
   const unreadActivityCount = myActivity.filter(item => !item.read).length;
