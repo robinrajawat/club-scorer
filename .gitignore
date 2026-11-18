@@ -5,3 +5,6 @@ __pycache__/
 # standing admin credentials for the whole project and must never be committed.
 *serviceAccount*.json
 *service-account*.json
+
+# Firestore emulator logs (firebase/, npm test).
+*-debug.log

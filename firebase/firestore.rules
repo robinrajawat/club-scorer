@@ -59,10 +59,22 @@ service cloud.firestore {
     // legitimate need to query this collection by tournamentId is served without that query ever
     // touching sharedMatches directly.
     // ---------------------------------------------------------------------
+    //
+    // Writes must also follow the app's optimistic-concurrency counter (2026-11-18 audit): the
+    // app only ever writes here through transactionalMatchWrite, which creates a match at
+    // writeSeq 1 and raises it by exactly one on every save. Enforcing the same thing here means a
+    // stale copy (an old app version, a buggy path, a device that missed the other scorer's balls)
+    // can never save over a newer one, even if it skips the client-side check. A legacy doc with
+    // no writeSeq reads as 0. Delete stays open for now: deleteMatch and revokeShareCode use it,
+    // and a code has no owner to tie it to (open question for the owner, see the handoff).
     match /sharedMatches/{code} {
       allow get: if true;
       allow list: if false;
-      allow write: if true;
+      allow create: if request.resource.data.get('writeSeq', 0) is int
+        && request.resource.data.get('writeSeq', 0) == 1;
+      allow update: if request.resource.data.get('writeSeq', 0) is int
+        && request.resource.data.get('writeSeq', 0) == resource.data.get('writeSeq', 0) + 1;
+      allow delete: if true;
     }
 
     // ---------------------------------------------------------------------
@@ -98,10 +110,20 @@ service cloud.firestore {
     // and carry an expiresAt TTL — short while in progress (an abandoned-mid-game safety net),
     // RECENT_MATCH_RETENTION_DAYS once complete (the real retention window).
     // ---------------------------------------------------------------------
+    //
+    // Writes are shape-checked (2026-11-18 audit): the doc's own id field must match its key, and
+    // it must carry an expiresAt within the longest retention the app uses (TOURNAMENT_VIEW_TTL_DAYS,
+    // 180 days), so anything written here, by the app or not, is removed by the TTL policy in time.
+    // This limits, but can't prevent, a stranger overwriting the feed: there is no secret in a
+    // listable doc to check against. Fully closing that needs writes through a server.
     match /liveMatches/{matchId} {
       allow get: if true;
       allow list: if true;
-      allow write: if true;
+      allow create, update: if request.resource.data.get('id', '') == matchId
+        && request.resource.data.get('expiresAt', null) is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt < request.time + duration.value(181, 'd');
+      allow delete: if true;
     }
 
     // ---------------------------------------------------------------------
